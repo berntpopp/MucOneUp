@@ -66,6 +66,41 @@
       "max_repeats": 130,
       "mean_repeats": 70,
       "median_repeats": 65
-    }
+    },
+
+    "mutations": {
+        "dupC": {
+          "allowed_repeats": ["X", "C", "B", "A"], 
+          "changes": [
+            {
+              "type": "insert",
+              "start": 2,
+              "end": 3,
+              "sequence": "G"
+            }
+          ]
+        },
+        "bigDel": {
+          "allowed_repeats": ["4", "4p", "5"],
+          "changes": [
+            {
+              "type": "delete",
+              "start": 1,
+              "end": 25
+            }
+          ]
+        },
+        "snpA": {
+          "allowed_repeats": ["1", "2", "X"],
+          "changes": [
+            {
+              "type": "replace",
+              "start": 2,
+              "end": 2,
+              "sequence": "A"
+            }
+          ]
+        }
+      }
   }
   
