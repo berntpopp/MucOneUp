@@ -31,11 +31,17 @@ def build_parser():
         type=int,
         help="Number of haplotypes to simulate. Typically 2 for diploid."
     )
+    # NEW: multiple fixed lengths
     parser.add_argument(
-        "--fixed-length",
+        "--fixed-lengths",
+        nargs="+",         # allow multiple arguments
         type=int,
         default=None,
-        help="If specified, the exact number of VNTR repeats to use. Overrides random distribution."
+        help=(
+            "One or more fixed lengths (in VNTR repeats). "
+            "If one value is provided, it will apply to all haplotypes. "
+            "If multiple, must match --num-haplotypes."
+        )
     )
     parser.add_argument(
         "--seed",
@@ -57,12 +63,28 @@ def main():
         print(f"[ERROR] Could not load config: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Process --fixed-lengths logic
+    fixed_lengths = None
+    if args.fixed_lengths is not None:
+        if len(args.fixed_lengths) == 1:
+            # Replicate one length for all haplotypes
+            fixed_lengths = [args.fixed_lengths[0]] * args.num_haplotypes
+        elif len(args.fixed_lengths) == args.num_haplotypes:
+            # Match each haplotype
+            fixed_lengths = args.fixed_lengths
+        else:
+            print(
+                "[ERROR] Number of --fixed-lengths values must be either 1 or exactly equal to --num-haplotypes.",
+                file=sys.stderr
+            )
+            sys.exit(1)
+
     # Simulate
     try:
         results = simulate_diploid(
             config=config,
             num_haplotypes=args.num_haplotypes,
-            fixed_length=args.fixed_length,
+            fixed_lengths=fixed_lengths,
             seed=args.seed
         )
     except Exception as e:
@@ -85,8 +107,6 @@ def main():
         try:
             with open(args.structure_output, "w") as struct_fh:
                 for i, (sequence, chain) in enumerate(results, start=1):
-                    # chain is a list of strings like ["1", "2", "5", "9"]
-                    # We join them with "-" for a textual representation
                     chain_str = "-".join(chain)
                     struct_fh.write(f"haplotype_{i}\t{chain_str}\n")
         except Exception as e:

@@ -4,18 +4,28 @@ import random
 from .distribution import sample_repeat_count
 from .probabilities import pick_next_repeat
 
-
-def simulate_diploid(config, num_haplotypes=2, fixed_length=None, seed=None):
+def simulate_diploid(config, num_haplotypes=2, fixed_lengths=None, seed=None):
     """
     Main entry point to simulate multiple haplotypes using the config and parameters.
     Returns a list of (haplotype_sequence, haplotype_structure_chain).
+
+    :param config: dict with repeats, probabilities, constants, length_model
+    :param num_haplotypes: number of haplotypes to generate
+    :param fixed_lengths: list of integers (same length as num_haplotypes), or None
+    :param seed: seed for reproducibility
     """
     if seed is not None:
         random.seed(seed)
 
     haplotypes = []
-    for _ in range(num_haplotypes):
-        repeat_count = fixed_length if fixed_length is not None else sample_repeat_count(config["length_model"])
+    for i in range(num_haplotypes):
+        # Decide which length to use for this haplotype
+        if fixed_lengths is not None:
+            repeat_count = fixed_lengths[i]
+        else:
+            # fallback: random distribution
+            repeat_count = sample_repeat_count(config["length_model"])
+
         seq, chain = simulate_single_haplotype(config, repeat_count)
         haplotypes.append((seq, chain))
 
@@ -26,10 +36,7 @@ def simulate_single_haplotype(config, target_length):
     """
     Builds a single haplotype by chaining repeats
     according to probabilities, respecting a target length.
-
-    Returns:
-        assembled_seq (str): full DNA sequence (left flank + repeats + right flank)
-        repeat_chain (list of str): the sequence of repeat labels used
+    The last 4 repeats must be 6->7->8->9 (or 6p->7->8->9).
     """
     left_const = config["constants"]["left"]
     right_const = config["constants"]["right"]
@@ -37,28 +44,56 @@ def simulate_single_haplotype(config, target_length):
     repeats_dict = config["repeats"]
     probabilities = config["probabilities"]
 
-    # We'll build the final DNA sequence in this variable
     assembled_seq = left_const
-
-    # Keep track of which repeat symbols we add
     repeat_chain = []
 
-    current_symbol = "1"  # Example assumption: always start from repeat '1'
+    current_symbol = "1"  # Typically start from repeat '1'
     total_repeats = 0
 
     while True:
-        # Add the current symbol to the chain
         repeat_chain.append(current_symbol)
-
-        # Add the sequence for the current repeat
         assembled_seq += repeats_dict[current_symbol]
         total_repeats += 1
 
-        # If we've reached or exceeded the target_length, we force or bias an END
+        # If we've reached the target length minus 4, we forcibly pick 6 or 6p,
+        # then manually chain 7->8->9->END in the next steps.
+        if total_repeats == target_length - 4:
+            # 1) Choose between '6' or '6p'. You can do a 50/50,
+            #    or read from a parameter if you like.
+            next_symbol = random.choice(["6", "6p"])
+
+            # Add this forced repeat
+            repeat_chain.append(next_symbol)
+            assembled_seq += repeats_dict[next_symbol]
+            total_repeats += 1
+
+            # 2) Next is always 7
+            repeat_chain.append("7")
+            assembled_seq += repeats_dict["7"]
+            total_repeats += 1
+
+            # 3) Next is always 8
+            repeat_chain.append("8")
+            assembled_seq += repeats_dict["8"]
+            total_repeats += 1
+
+            # 4) Next is always 9
+            repeat_chain.append("9")
+            assembled_seq += repeats_dict["9"]
+            total_repeats += 1
+
+            # Finally, attach right flank
+            assembled_seq += right_const
+            break
+
+        # If we've reached or exceeded target_length (and haven't forced the last 4 yet)
+        # we forcibly end. This covers edge cases (like if target_length < 4).
         if total_repeats >= target_length:
-            next_symbol = pick_next_repeat(probabilities, current_symbol, force_end=True)
-        else:
-            next_symbol = pick_next_repeat(probabilities, current_symbol)
+            assembled_seq += right_const
+            break
+
+        # Otherwise pick next_symbol via probabilities
+        next_symbol = pick_next_repeat(probabilities, current_symbol)
 
         if next_symbol == "END":
             assembled_seq += right_const
