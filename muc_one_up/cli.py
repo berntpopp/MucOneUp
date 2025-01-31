@@ -6,6 +6,7 @@ import sys
 import random
 from .simulate import simulate_diploid
 from .mutate import apply_mutations
+from .translate import run_orf_finder_in_memory  # <-- NEW import
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -51,7 +52,7 @@ def build_parser():
         default=None,
         help="Random seed for reproducible simulations."
     )
-    # NEW: mutation arguments
+    # mutation arguments
     parser.add_argument(
         "--mutation-name",
         default=None,
@@ -68,6 +69,16 @@ def build_parser():
             "If omitted, the mutation (if any) is applied once at a random allowed repeat."
         )
     )
+    # NEW: orf-output argument
+    parser.add_argument(
+        "--orf-output",
+        default=None,
+        help=(
+            "If provided, run orfipy_core on the final haplotype sequences in-memory, "
+            "and write peptide FASTA to this file."
+        )
+    )
+
     return parser
 
 def main():
@@ -110,9 +121,7 @@ def main():
         print(f"[ERROR] Simulation failed: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # -------------------------------------------------------------------------
     # MUTATION LOGIC
-    # -------------------------------------------------------------------------
     if args.mutation_name:
         # 1) If user provided specific targets => apply once per target
         if args.mutation_targets:
@@ -137,21 +146,18 @@ def main():
             except Exception as e:
                 print(f"[ERROR] Failed to apply mutation '{args.mutation_name}': {e}", file=sys.stderr)
                 sys.exit(1)
-
-        # 2) Otherwise, pick a random haplotype & repeat that is allowed for this mutation
         else:
+            # No specific targets => pick a random allowed repeat
             try:
-                # Quick validation
                 if "mutations" not in config or args.mutation_name not in config["mutations"]:
                     raise ValueError(f"Mutation '{args.mutation_name}' not in config['mutations']")
 
                 mutation_def = config["mutations"][args.mutation_name]
-                allowed_repeats = set(mutation_def["allowed_repeats"])  # for fast 'in' checks
+                allowed_repeats = set(mutation_def["allowed_repeats"])
 
-                possible_targets = []  # collect all (hap_idx, repeat_idx) that are allowed
+                possible_targets = []
                 for hap_idx, (seq, chain) in enumerate(results, start=1):
                     for rep_idx, sym in enumerate(chain, start=1):
-                        # strip off 'm' if present in the chain
                         pure_sym = sym.replace("m", "")
                         if pure_sym in allowed_repeats:
                             possible_targets.append((hap_idx, rep_idx))
@@ -161,9 +167,7 @@ def main():
                         f"No repeats match 'allowed_repeats' for mutation '{args.mutation_name}'"
                     )
 
-                # pick one random target
                 random_target = random.choice(possible_targets)
-                # apply mutation once
                 results = apply_mutations(
                     config=config,
                     results=results,
@@ -173,11 +177,8 @@ def main():
             except Exception as e:
                 print(f"[ERROR] Failed to apply mutation '{args.mutation_name}': {e}", file=sys.stderr)
                 sys.exit(1)
-    # -------------------------------------------------------------------------
-    # end MUTATION LOGIC
 
-    # results is a list of (sequence, chain) for each haplotype
-    # Write FASTA
+    # Write final FASTA
     try:
         with open(args.output, "w") as out_fh:
             for i, (sequence, chain) in enumerate(results, start=1):
@@ -197,6 +198,16 @@ def main():
         except Exception as e:
             print(f"[ERROR] Failed to write VNTR structure file: {e}", file=sys.stderr)
             sys.exit(1)
+
+    # NEW: If user requested ORF output, run orfipy_core in memory
+    if args.orf_output:
+        try:
+            print(f"[INFO] Generating ORFs in-memory with orfipy_core => {args.orf_output}")
+            run_orf_finder_in_memory(results, args.orf_output, min_len=30)
+        except Exception as e:
+            print(f"[ERROR] ORF Finding failed: {e}", file=sys.stderr)
+            sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
