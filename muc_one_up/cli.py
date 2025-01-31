@@ -7,6 +7,8 @@ import random
 from .simulate import simulate_diploid
 from .mutate import apply_mutations
 from .translate import run_orf_finder_in_memory
+# Import the read simulation pipeline from the new module
+from .read_simulation import simulate_reads as simulate_reads_pipeline
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -83,24 +85,29 @@ def build_parser():
         "--orf-min-aa",
         type=int,
         default=100,
-        help=(
-            "Minimum peptide length (in amino acids) to report (default=100)."
-        )
+        help="Minimum peptide length (in amino acids) to report (default=100)."
     )
-    # new: optional prefix filter. If user provides no argument => 'MTSSV'.
-    # If user provides an argument => that argument. If omitted => no filtering
+    # new: optional prefix filter. If used without a value, defaults to 'MTSSV'.
     parser.add_argument(
         "--orf-aa-prefix",
         nargs='?',
-        const='MTSSV',  # if user types '--orf-aa-prefix' with no value => 'MTSSV'
-        default=None,   # if user doesn't use the flag => None => no prefix filter
+        const='MTSSV',
+        default=None,
         help=(
             "Filter resulting peptides to only those beginning with this prefix. "
             "If used without a value, defaults to 'MTSSV'. "
             "If omitted entirely, no prefix filter is applied."
         )
     )
-
+    # NEW: read simulation flag.
+    parser.add_argument(
+        "--simulate-reads",
+        action="store_true",
+        help=(
+            "If provided, run the read simulation pipeline on the simulated FASTA. "
+            "This pipeline will produce an aligned and indexed BAM and gzipped paired FASTQ files."
+        )
+    )
     return parser
 
 def main():
@@ -127,7 +134,7 @@ def main():
                   file=sys.stderr)
             sys.exit(1)
 
-    # Simulate
+    # Simulate haplotypes
     try:
         results = simulate_diploid(
             config=config,
@@ -163,7 +170,6 @@ def main():
                 print(f"[ERROR] Mutation failed: {e}", file=sys.stderr)
                 sys.exit(1)
         else:
-            # random target
             try:
                 if "mutations" not in config or args.mutation_name not in config["mutations"]:
                     raise ValueError(f"Mutation '{args.mutation_name}' not in config['mutations']")
@@ -210,17 +216,25 @@ def main():
 
     # ORF logic
     if args.orf_output:
-        # orf_min_aa => int
-        # orf_aa_prefix => either None or some str (including default=MTSSV if user typed flag with no value)
         try:
             run_orf_finder_in_memory(
                 results,
                 output_pep=args.orf_output,
                 orf_min_aa=args.orf_min_aa,
-                required_prefix=args.orf_aa_prefix  # can be None or "MTSSV" or custom
+                required_prefix=args.orf_aa_prefix
             )
         except Exception as e:
             print(f"[ERROR] ORF finding failed: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    # NEW: Run read simulation pipeline if requested.
+    if args.simulate_reads:
+        try:
+            # The read simulation module expects the same configuration file
+            # and uses the simulated FASTA (args.output) as input.
+            simulate_reads_pipeline(config, args.output)
+        except Exception as e:
+            print(f"[ERROR] Read simulation pipeline failed: {e}", file=sys.stderr)
             sys.exit(1)
 
 if __name__ == "__main__":

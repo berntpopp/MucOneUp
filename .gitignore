@@ -161,4 +161,14 @@ cython_debug/
 
 # output files
 *.fa
+*.fasta
 *.txt
+*.fq
+*.2bit
+*.psl
+*.bam
+*.bai
+*.fq.gz
+
+# reference folder
+reference/
