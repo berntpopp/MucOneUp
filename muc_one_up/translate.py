@@ -65,28 +65,42 @@ def find_orfs_in_memory(seq, min_len=30, max_len=1000000, strand='b',
         between_stops=False
     ))
 
-def predict_orfs_in_haplotypes(results, min_len=30):
+def predict_orfs_in_haplotypes(
+    results, 
+    min_len=30, 
+    orf_min_aa=100, 
+    required_prefix=None
+):
     """
     Given 'results' = list of (sequence, chain) for each haplotype,
-    find ORFs for each haplotype and translate them to peptides.
+    find ORFs for each haplotype and translate them to peptides,
+    then apply filters:
+      - minimal peptide length >= 'orf_min_aa'
+      - optional prefix filter if 'required_prefix' is not None
 
     :param results: list of (dna_seq, repeat_chain)
-    :param min_len: minimal ORF length (in nt)
-    :return: dict haplotype_id -> list of (orf_id, peptide_seq, start, stop, strand, description)
+    :param min_len: minimal ORF length in nucleotides (passed to orfipy)
+    :param orf_min_aa: minimal peptide length in amino acids (default=100)
+    :param required_prefix: if not None, only keep peptides starting with this string
+    :return: dict haplotype_id -> list of (orf_id, peptide_seq, start, stop, strand, desc)
     """
     haplotype_orfs = {}
+    # Convert 'orf_min_aa' to minimal nt length for orfipy
+    min_nt_length = orf_min_aa * 3
+    
     for i, (dna_seq, chain) in enumerate(results, start=1):
         hap_id = f"haplotype_{i}"
+        # find ORFs, using min_nt_length for orfipy
         orfs = find_orfs_in_memory(
             seq=dna_seq,
-            min_len=min_len,
+            min_len=min_nt_length,
             max_len=1000000,
             strand='b',
-            starts=['ATG'],   # or all possible starts
+            starts=['ATG','TTG','CTG'],  # or all possible starts
             stops=['TAA','TAG','TGA'],
             include_stop=False
         )
-        # Translate each ORF
+        # Translate and apply filters
         orf_list = []
         orf_count = 0
         for (start, stop, strand, desc) in orfs:
@@ -98,6 +112,13 @@ def predict_orfs_in_haplotypes(results, min_len=30):
                 dna_sub = reverse_complement(dna_seq[start:stop])
 
             peptide = dna_to_protein(dna_sub, include_stop=False)
+            # Filter by actual AA length
+            if len(peptide) < orf_min_aa:
+                continue
+            # If required_prefix is given, filter by prefix
+            if required_prefix and not peptide.startswith(required_prefix):
+                continue
+
             orf_id = f"{hap_id}_ORF{orf_count}"
             orf_list.append((orf_id, peptide, start, stop, strand, desc))
 
@@ -117,12 +138,29 @@ def write_peptides_to_fasta(haplotype_orfs, output_pep):
                 out_fh.write(f">{orf_id} strand={strand} {desc}\n")
                 out_fh.write(peptide + "\n")
 
-
-def run_orf_finder_in_memory(results, output_pep, min_len=30):
+def run_orf_finder_in_memory(
+    results, 
+    output_pep, 
+    min_len=30, 
+    orf_min_aa=100, 
+    required_prefix=None
+):
     """
     High-level function that:
      1) Predicts ORFs (in-memory) for each haplotype in 'results'
-     2) Writes them to 'output_pep' in FASTA format
+     2) Applies optional min AA length and prefix filters
+     3) Writes them to 'output_pep' in FASTA format
+
+    :param results: list of (dna_seq, chain)
+    :param output_pep: filename for the predicted peptide FASTA
+    :param min_len: initial minimal ORF length in nt for orfipy (overridden by orf_min_aa*3)
+    :param orf_min_aa: minimal peptide length in amino acids (default=100)
+    :param required_prefix: if not None, only keep peptides that start with this
     """
-    haplotype_orfs = predict_orfs_in_haplotypes(results, min_len=min_len)
+    haplotype_orfs = predict_orfs_in_haplotypes(
+        results,
+        min_len=min_len, 
+        orf_min_aa=orf_min_aa,
+        required_prefix=required_prefix
+    )
     write_peptides_to_fasta(haplotype_orfs, output_pep)

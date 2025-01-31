@@ -6,7 +6,7 @@ import sys
 import random
 from .simulate import simulate_diploid
 from .mutate import apply_mutations
-from .translate import run_orf_finder_in_memory  # <-- NEW import
+from .translate import run_orf_finder_in_memory
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -69,13 +69,35 @@ def build_parser():
             "If omitted, the mutation (if any) is applied once at a random allowed repeat."
         )
     )
-    # NEW: orf-output argument
+    # orf-output argument
     parser.add_argument(
         "--orf-output",
         default=None,
         help=(
-            "If provided, run orfipy_core on the final haplotype sequences in-memory, "
+            "If provided, run orfipy_core on the final haplotype sequences in memory, "
             "and write peptide FASTA to this file."
+        )
+    )
+    # new: minimal protein length in AA
+    parser.add_argument(
+        "--orf-min-aa",
+        type=int,
+        default=100,
+        help=(
+            "Minimum peptide length (in amino acids) to report (default=100)."
+        )
+    )
+    # new: optional prefix filter. If user provides no argument => 'MTSSV'.
+    # If user provides an argument => that argument. If omitted => no filtering
+    parser.add_argument(
+        "--orf-aa-prefix",
+        nargs='?',
+        const='MTSSV',  # if user types '--orf-aa-prefix' with no value => 'MTSSV'
+        default=None,   # if user doesn't use the flag => None => no prefix filter
+        help=(
+            "Filter resulting peptides to only those beginning with this prefix. "
+            "If used without a value, defaults to 'MTSSV'. "
+            "If omitted entirely, no prefix filter is applied."
         )
     )
 
@@ -97,16 +119,12 @@ def main():
     fixed_lengths = None
     if args.fixed_lengths is not None:
         if len(args.fixed_lengths) == 1:
-            # Replicate one length for all haplotypes
             fixed_lengths = [args.fixed_lengths[0]] * args.num_haplotypes
         elif len(args.fixed_lengths) == args.num_haplotypes:
-            # Match each haplotype
             fixed_lengths = args.fixed_lengths
         else:
-            print(
-                "[ERROR] Number of --fixed-lengths values must be either 1 or exactly equal to --num-haplotypes.",
-                file=sys.stderr
-            )
+            print("[ERROR] --fixed-lengths must have either 1 value or N=--num-haplotypes",
+                  file=sys.stderr)
             sys.exit(1)
 
     # Simulate
@@ -123,19 +141,17 @@ def main():
 
     # MUTATION LOGIC
     if args.mutation_name:
-        # 1) If user provided specific targets => apply once per target
         if args.mutation_targets:
             mutation_positions = []
             for t in args.mutation_targets:
                 try:
-                    hap_i_str, rep_i_str = t.split(",")
-                    hap_i = int(hap_i_str)
-                    rep_i = int(rep_i_str)
+                    hap_str, rep_str = t.split(",")
+                    hap_i = int(hap_str)
+                    rep_i = int(rep_str)
                     mutation_positions.append((hap_i, rep_i))
                 except ValueError:
                     print(f"[ERROR] Invalid --mutation-targets format: '{t}'", file=sys.stderr)
                     sys.exit(1)
-
             try:
                 results = apply_mutations(
                     config=config,
@@ -144,48 +160,41 @@ def main():
                     targets=mutation_positions
                 )
             except Exception as e:
-                print(f"[ERROR] Failed to apply mutation '{args.mutation_name}': {e}", file=sys.stderr)
+                print(f"[ERROR] Mutation failed: {e}", file=sys.stderr)
                 sys.exit(1)
         else:
-            # No specific targets => pick a random allowed repeat
+            # random target
             try:
                 if "mutations" not in config or args.mutation_name not in config["mutations"]:
                     raise ValueError(f"Mutation '{args.mutation_name}' not in config['mutations']")
-
-                mutation_def = config["mutations"][args.mutation_name]
-                allowed_repeats = set(mutation_def["allowed_repeats"])
-
+                mut_def = config["mutations"][args.mutation_name]
+                allowed_repeats = set(mut_def["allowed_repeats"])
                 possible_targets = []
                 for hap_idx, (seq, chain) in enumerate(results, start=1):
                     for rep_idx, sym in enumerate(chain, start=1):
                         pure_sym = sym.replace("m", "")
                         if pure_sym in allowed_repeats:
                             possible_targets.append((hap_idx, rep_idx))
-
                 if not possible_targets:
-                    raise ValueError(
-                        f"No repeats match 'allowed_repeats' for mutation '{args.mutation_name}'"
-                    )
-
-                random_target = random.choice(possible_targets)
+                    raise ValueError(f"No repeats match 'allowed_repeats' for '{args.mutation_name}'")
+                rand_target = random.choice(possible_targets)
                 results = apply_mutations(
                     config=config,
                     results=results,
                     mutation_name=args.mutation_name,
-                    targets=[random_target]
+                    targets=[rand_target]
                 )
             except Exception as e:
-                print(f"[ERROR] Failed to apply mutation '{args.mutation_name}': {e}", file=sys.stderr)
+                print(f"[ERROR] Random-target mutation failed: {e}", file=sys.stderr)
                 sys.exit(1)
 
     # Write final FASTA
     try:
         with open(args.output, "w") as out_fh:
             for i, (sequence, chain) in enumerate(results, start=1):
-                out_fh.write(f">haplotype_{i}\n")
-                out_fh.write(sequence + "\n")
+                out_fh.write(f">haplotype_{i}\n{sequence}\n")
     except Exception as e:
-        print(f"[ERROR] Failed to write FASTA: {e}", file=sys.stderr)
+        print(f"[ERROR] Writing FASTA failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Optionally write VNTR structure
@@ -196,18 +205,23 @@ def main():
                     chain_str = "-".join(chain)
                     struct_fh.write(f"haplotype_{i}\t{chain_str}\n")
         except Exception as e:
-            print(f"[ERROR] Failed to write VNTR structure file: {e}", file=sys.stderr)
+            print(f"[ERROR] Writing structure file failed: {e}", file=sys.stderr)
             sys.exit(1)
 
-    # NEW: If user requested ORF output, run orfipy_core in memory
+    # ORF logic
     if args.orf_output:
+        # orf_min_aa => int
+        # orf_aa_prefix => either None or some str (including default=MTSSV if user typed flag with no value)
         try:
-            print(f"[INFO] Generating ORFs in-memory with orfipy_core => {args.orf_output}")
-            run_orf_finder_in_memory(results, args.orf_output, min_len=30)
+            run_orf_finder_in_memory(
+                results,
+                output_pep=args.orf_output,
+                orf_min_aa=args.orf_min_aa,
+                required_prefix=args.orf_aa_prefix  # can be None or "MTSSV" or custom
+            )
         except Exception as e:
-            print(f"[ERROR] ORF Finding failed: {e}", file=sys.stderr)
+            print(f"[ERROR] ORF finding failed: {e}", file=sys.stderr)
             sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
