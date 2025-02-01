@@ -104,7 +104,7 @@
       },
 
       "tools": {
-        "reseq": "timeout 30s mamba run --no-capture-output -n wessim reseq",
+        "reseq": "mamba run --no-capture-output -n wessim reseq",
         "faToTwoBit": "mamba run --no-capture-output -n wessim faToTwoBit",
         "samtools": "mamba run --no-capture-output -n wessim samtools",
         "pblat": "mamba run --no-capture-output -n wessim pblat",

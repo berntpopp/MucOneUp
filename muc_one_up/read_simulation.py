@@ -4,7 +4,7 @@ read_simulation.py
 
 This module integrates a read‐simulation pipeline into the muconeup project.
 It uses external tools (reseq, faToTwoBit, samtools, pblat, bwa) and a ported version
-of w‐Wessim2 (originally written in Python 2) to simulate Illumina reads from a simulated
+of w‑Wessim2 (originally written in Python 2) to simulate Illumina reads from a simulated
 MUC1 haplotype FASTA.
 
 The pipeline performs the following steps:
@@ -33,38 +33,70 @@ import time
 from datetime import datetime
 import gzip
 import logging
+import signal
 
 # Configure logging.
 logging.basicConfig(level=logging.DEBUG,
                     format="%(asctime)s - %(levelname)s - %(message)s")
 
-### Helper function to run external commands ###
-def run_command(cmd, shell=False):
+# ------------------------------------------------------------------------------
+# Helper function to run external commands with timeout support.
+def run_command(cmd, shell=False, timeout=None):
     """
-    Run a command using subprocess.run and exit if an error occurs.
-    If the first element of the command (if cmd is a list) contains spaces,
-    we assume it's a compound command (e.g. "mamba run -n wessim reseq")
-    and switch to shell mode.
+    Run a command using subprocess.Popen in its own process group so that
+    we can kill the entire group on a timeout. If the command does not finish
+    in time, the process group is killed and a warning is logged.
+
+    Parameters:
+      cmd: command (list or string) to run.
+      shell: whether to run the command in the shell.
+      timeout: number of seconds to wait before killing the command.
+               If None, wait indefinitely.
     """
+    # If cmd is a list and the first element contains spaces, join and use shell.
     if isinstance(cmd, list) and not shell and " " in cmd[0]:
         shell = True
         cmd = " ".join(cmd)
     cmd_str = cmd if isinstance(cmd, str) else " ".join(cmd)
-    logging.info(f"Running command: {cmd_str}")
+    logging.info(f"Running command: {cmd_str} (timeout={timeout})")
+
     try:
-        result = subprocess.run(cmd, shell=shell, check=True,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                universal_newlines=True)
-        if result.stdout:
-            logging.debug(f"stdout: {result.stdout}")
-        if result.stderr:
-            logging.debug(f"stderr: {result.stderr}")
-    except subprocess.CalledProcessError as e:
-        logging.exception(f"Error running command: {cmd_str}")
+        # Create a new process group so we can kill the whole group if needed.
+        proc = subprocess.Popen(
+            cmd,
+            shell=shell,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            preexec_fn=os.setsid  # Only on POSIX systems.
+        )
+    except Exception as e:
+        logging.exception(f"Failed to start command: {cmd_str}")
         sys.exit(1)
 
-### Helper: Ensure a field is exactly desired_length in characters.
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+        if stdout:
+            logging.debug(f"stdout: {stdout}")
+        if stderr:
+            logging.debug(f"stderr: {stderr}")
+    except subprocess.TimeoutExpired:
+        logging.warning(f"Command timed out after {timeout} seconds. Killing process group.")
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        except Exception as e:
+            logging.exception("Error killing process group")
+        stdout, stderr = proc.communicate()
+    except Exception as e:
+        logging.exception(f"Error during command execution: {cmd_str}")
+        sys.exit(1)
+
+    if proc.returncode != 0:
+        logging.error(f"Command exited with non-zero exit code {proc.returncode}: {cmd_str}")
+        sys.exit(proc.returncode)
+
+# ------------------------------------------------------------------------------
+# Helper: Ensure a field is exactly desired_length in characters.
 def fix_field(field, desired_length, pad_char):
     """
     If the provided field is longer than desired_length, trim it;
@@ -75,23 +107,27 @@ def fix_field(field, desired_length, pad_char):
     else:
         return field.ljust(desired_length, pad_char)
 
-### Step 1: Replace Ns using reseq replaceN ###
+# ------------------------------------------------------------------------------
+# Step 1: Replace Ns using reseq replaceN.
 def replace_Ns(input_fa, output_fa, tools):
     cmd = [tools["reseq"], "replaceN", "-r", input_fa, "-R", output_fa]
-    run_command(cmd)
+    run_command(cmd, timeout=60)
 
-### Step 2: Generate systematic errors using reseq illuminaPE ###
+# ------------------------------------------------------------------------------
+# Step 2: Generate systematic errors using reseq illuminaPE.
 def generate_systematic_errors(input_fa, reseq_model, output_fq, tools):
     cmd = [tools["reseq"], "illuminaPE", "-r", input_fa, "-s", reseq_model,
            "--stopAfterEstimation", "--writeSysError", output_fq]
-    run_command(cmd)
+    run_command(cmd, timeout=30)
 
-### Step 3: Convert FASTA to 2bit using faToTwoBit ###
+# ------------------------------------------------------------------------------
+# Step 3: Convert FASTA to 2bit using faToTwoBit.
 def fa_to_twobit(input_fa, output_2bit, tools):
     cmd = [tools["faToTwoBit"], input_fa, output_2bit]
-    run_command(cmd)
+    run_command(cmd, timeout=60)
 
-### Step 4: Extract a subset reference from a BAM ###
+# ------------------------------------------------------------------------------
+# Step 4: Extract a subset reference from a BAM.
 def extract_subset_reference(sample_bam, output_fa, tools):
     """
     First, run samtools collate to generate an intermediate BAM file.
@@ -100,18 +136,20 @@ def extract_subset_reference(sample_bam, output_fa, tools):
     """
     intermediate_bam = output_fa + ".collated.bam"
     cmd_collate = f"{tools['samtools']} collate -u {sample_bam} -o {intermediate_bam}"
-    run_command(cmd_collate, shell=True)
+    run_command(cmd_collate, shell=True, timeout=60)
     cmd_fasta = f"{tools['samtools']} fasta {intermediate_bam} > {output_fa}"
-    run_command(cmd_fasta, shell=True)
+    run_command(cmd_fasta, shell=True, timeout=60)
     return intermediate_bam
 
-### Step 5: Run pblat ###
+# ------------------------------------------------------------------------------
+# Step 5: Run pblat.
 def run_pblat(twobit_file, subset_reference, output_psl, tools, threads=24, minScore=95, minIdentity=95):
     cmd = [tools["pblat"], twobit_file, subset_reference, output_psl,
            f"-threads={threads}", f"-minScore={minScore}", f"-minIdentity={minIdentity}"]
-    run_command(cmd)
+    run_command(cmd, timeout=120)
 
-### --- Functions for the w-wessim2 port (Step 6) --- ###
+# ------------------------------------------------------------------------------
+# Functions for the w‑Wessim2 port (Step 6)
 def read_fasta_to_dict(fasta_file):
     """Read a FASTA file into a dictionary {chrom: sequence}."""
     ref_dict = {}
@@ -179,6 +217,7 @@ def read_psl_file(psl_file):
     """
     matches = []
     with open(psl_file, 'r') as fh:
+        # Skip the header lines.
         for _ in range(5):
             fh.readline()
         for line in fh:
@@ -261,14 +300,14 @@ def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
     if not matches:
         logging.error("No matches found in PSL file.")
         sys.exit(1)
-    # Ensure the output directory exists
+    # Ensure the output directory exists.
     output_dir = os.path.dirname(output_fragments)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
     with open(output_fragments, 'w') as out_f:
         i = 0
         attempts = 0
-        max_attempts = read_number * 10  # Avoid infinite looping
+        max_attempts = read_number * 10  # Avoid infinite looping.
         while i < read_number and attempts < max_attempts:
             attempts += 1
             match = pick_on_match(matches)
@@ -279,7 +318,7 @@ def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
             if len(seq) < min_fragment:
                 logging.debug(f"Fragment length {len(seq)} is below min_fragment {min_fragment}. Skipping.")
                 continue
-            # Use the full fragment sequence
+            # Use the full fragment sequence.
             frag_seq = seq
             frag_seq_rc = comp(seq)[::-1]
             frag_len = len(frag_seq)
@@ -309,13 +348,31 @@ def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
     t1 = time.time()
     logging.info(f"Done processing {i} fragments in {t1-t0:.2f} secs")
 
-### Step 7: Create reads using reseq seqToIllumina ###
+# ------------------------------------------------------------------------------
+# Step 7: Create reads using reseq seqToIllumina.
 def create_reads(input_fragments, reseq_model, output_reads, threads, tools):
+    """
+    Create reads from fragments using reseq seqToIllumina.
+    
+    Note: Some versions of reseq seqToIllumina hang even though they produce the
+    desired output file. We wrap this call so that if the command times out (and is
+    killed), we check that the output file exists and is non-empty. If so, we log a
+    warning and continue as if the command had succeeded.
+    """
     cmd = [tools["reseq"], "seqToIllumina", "-j", str(threads),
-           "-s", reseq_model, "-i", input_fragments, "-o", output_reads, "; exit 0"]
-    run_command(cmd)
+           "-s", reseq_model, "-i", input_fragments, "-o", output_reads]
+    try:
+        run_command(cmd, timeout=30)
+    except SystemExit as e:
+        # If the command was killed (for example, with exit code -15)
+        # check if the output file exists and is non-empty.
+        if os.path.exists(output_reads) and os.path.getsize(output_reads) > 0:
+            logging.warning("seqToIllumina command timed out but output file exists. Continuing with exit code 0.")
+        else:
+            raise
 
-### Step 8: Split interleaved FASTQ into paired gzipped FASTQ files ###
+# ------------------------------------------------------------------------------
+# Step 8: Split interleaved FASTQ into paired gzipped FASTQ files.
 def split_reads(interleaved_fastq, output_fastq1, output_fastq2):
     """
     Split an interleaved FASTQ (each record is 4 lines) into two gzipped files:
@@ -338,14 +395,13 @@ def split_reads(interleaved_fastq, output_fastq1, output_fastq2):
                 record_index += 1
     logging.info("Splitting complete.")
 
-### Step 9: Align reads using bwa mem and samtools ###
+# ------------------------------------------------------------------------------
+# Step 9: Align reads using bwa mem and samtools.
 def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
     """
     Align paired-end reads with bwa mem, sort with samtools, and index the resulting BAM.
-    If the bwa (or samtools) command (from the configuration) is a compound command,
-    run it using bash -c.
+    If the bwa (or samtools) command is a compound command, we run it using bash -c.
     """
-    # Process the bwa command.
     bwa_exe = tools["bwa"]
     if " " in bwa_exe:
         bwa_cmd = "bash -c '" + " ".join([bwa_exe, "mem", human_reference, read1, read2]) + "'"
@@ -354,7 +410,6 @@ def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
         bwa_cmd = [bwa_exe, "mem", human_reference, read1, read2]
         bwa_shell = False
 
-    # Process the samtools sort command.
     samtools_exe = tools["samtools"]
     if " " in samtools_exe:
         samtools_sort_cmd = "bash -c '" + " ".join([samtools_exe, "sort", "-o", output_bam, "-"]) + "'"
@@ -368,15 +423,16 @@ def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
         bwa_proc = subprocess.Popen(bwa_cmd, shell=bwa_shell, stdout=subprocess.PIPE, universal_newlines=True)
         sort_proc = subprocess.Popen(samtools_sort_cmd, shell=samtools_shell, stdin=bwa_proc.stdout,
                                      stdout=subprocess.PIPE, universal_newlines=True)
-        bwa_proc.stdout.close()
+        bwa_proc.stdout.close()  # Allow bwa_proc to receive a SIGPIPE if sort_proc exits.
         sort_proc.communicate()
     except Exception as e:
         logging.exception("Error during alignment")
         sys.exit(1)
     index_cmd = [tools["samtools"], "index", output_bam]
-    run_command(index_cmd)
+    run_command(index_cmd, timeout=60)
 
-### Cleanup helper ###
+# ------------------------------------------------------------------------------
+# Cleanup helper.
 def cleanup_files(file_list):
     """Remove files in the provided list if they exist."""
     for f in file_list:
@@ -387,7 +443,8 @@ def cleanup_files(file_list):
         except Exception as e:
             logging.warning(f"Unable to remove intermediate file {f}: {e}")
 
-### Master orchestration function ###
+# ------------------------------------------------------------------------------
+# Master orchestration function.
 def simulate_reads(config, input_fa):
     """
     Run the complete read simulation pipeline.
@@ -400,7 +457,7 @@ def simulate_reads(config, input_fa):
     rs_config = config.get("read_simulation", {})
     
     base = os.path.splitext(input_fa)[0]
-    # Intermediate files
+    # Intermediate files.
     noNs_fa      = base + "_noNs.fasta"
     syser_fq     = base + "_noNs_syserrors.fq"
     twobit_file  = noNs_fa + ".2bit"
@@ -408,7 +465,7 @@ def simulate_reads(config, input_fa):
     psl_file     = base + "_subset.psl"
     fragments_fa = base + "_w_wessim2.fa"
     reads_fq     = base + "_w_wessim2.fq"
-    # Final outputs (paired FASTQs are gzipped)
+    # Final outputs (paired FASTQs are gzipped).
     reads_fq1    = base + "_w_wessim2_1.fq.gz"
     reads_fq2    = base + "_w_wessim2_2.fq.gz"
     output_bam   = base + "_wessim.bam"
@@ -459,7 +516,8 @@ def simulate_reads(config, input_fa):
     intermediates = [noNs_fa, syser_fq, twobit_file, subset_ref, psl_file, fragments_fa, reads_fq, collated_bam]
     cleanup_files(intermediates)
 
-### Standalone CLI entry point ###
+# ------------------------------------------------------------------------------
+# Standalone CLI entry point.
 if __name__ == "__main__":
     import json
     if len(sys.argv) != 3:
