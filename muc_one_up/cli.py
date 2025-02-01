@@ -298,9 +298,8 @@ def main():
             logging.info("Applying mutation: %s", args.mutation_name)
             if dual_mutation_mode:
                 normal_results = results
-                mutation_positions = None
+                mutation_positions = []
                 if args.mutation_targets:
-                    mutation_positions = []
                     for t in args.mutation_targets:
                         try:
                             hap_str, rep_str = t.split(",")
@@ -310,12 +309,29 @@ def main():
                         except ValueError:
                             logging.error("Invalid --mutation-targets format: '%s'", t)
                             sys.exit(1)
+                else:
+                    # No targets provided: pick a random allowed target for the second mutation.
+                    if "mutations" not in config or mutation_pair[1] not in config["mutations"]:
+                        logging.error("Mutation '%s' not found in config['mutations'].", mutation_pair[1])
+                        sys.exit(1)
+                    mut_def = config["mutations"][mutation_pair[1]]
+                    allowed_repeats = set(mut_def["allowed_repeats"])
+                    possible_targets = []
+                    for hap_idx, (seq, chain) in enumerate(results, start=1):
+                        for rep_idx, sym in enumerate(chain, start=1):
+                            pure_sym = sym.replace("m", "")
+                            if pure_sym in allowed_repeats:
+                                possible_targets.append((hap_idx, rep_idx))
+                    if not possible_targets:
+                        logging.error("No repeats match 'allowed_repeats' for mutation '%s'", mutation_pair[1])
+                        sys.exit(1)
+                    mutation_positions.append(random.choice(possible_targets))
                 try:
                     mutated_results = apply_mutations(
                         config=config,
                         results=[(seq, chain.copy()) for seq, chain in results],
                         mutation_name=mutation_pair[1],
-                        targets=mutation_positions if mutation_positions else None
+                        targets=mutation_positions
                     )
                     logging.info("Dual mutation applied for mutated version.")
                 except Exception as e:
@@ -397,42 +413,98 @@ def main():
 
         # Optionally write VNTR structure file.
         if args.output_structure:
-            struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt")
-            try:
-                with open(struct_out, "w") as struct_fh:
-                    for i, (sequence, chain) in enumerate(results, start=1):
-                        chain_str = "-".join(chain)
-                        struct_fh.write(f"haplotype_{i}\t{chain_str}\n")
-                logging.info("Structure file written to %s", struct_out)
-            except Exception as e:
-                logging.error("Writing structure file failed: %s", e)
-                sys.exit(1)
+            if dual_mutation_mode:
+                normal_struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt", variant="normal")
+                mut_struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt", variant="mut")
+                try:
+                    with open(normal_struct_out, "w") as nf:
+                        for i, (sequence, chain) in enumerate(normal_results, start=1):
+                            chain_str = "-".join(chain)
+                            nf.write(f"haplotype_{i}\t{chain_str}\n")
+                    with open(mut_struct_out, "w") as mf:
+                        for i, (sequence, chain) in enumerate(mutated_results, start=1):
+                            chain_str = "-".join(chain)
+                            mf.write(f"haplotype_{i}\t{chain_str}\n")
+                    logging.info("Structure files written: %s and %s", normal_struct_out, mut_struct_out)
+                except Exception as e:
+                    logging.error("Writing structure file failed: %s", e)
+                    sys.exit(1)
+            else:
+                struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt")
+                try:
+                    with open(struct_out, "w") as struct_fh:
+                        for i, (sequence, chain) in enumerate(results, start=1):
+                            chain_str = "-".join(chain)
+                            struct_fh.write(f"haplotype_{i}\t{chain_str}\n")
+                    logging.info("Structure file written to %s", struct_out)
+                except Exception as e:
+                    logging.error("Writing structure file failed: %s", e)
+                    sys.exit(1)
 
         # ORF logic.
         if args.output_orfs:
-            orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa")
-            try:
-                run_orf_finder_in_memory(
-                    results,
-                    output_pep=orf_out,
-                    orf_min_aa=args.orf_min_aa,
-                    required_prefix=args.orf_aa_prefix
-                )
-                logging.info("ORF finding completed; peptide FASTA written to %s", orf_out)
-            except Exception as e:
-                logging.error("ORF finding failed: %s", e)
-                sys.exit(1)
+            if dual_mutation_mode:
+                normal_orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa", variant="normal")
+                mut_orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa", variant="mut")
+                try:
+                    run_orf_finder_in_memory(
+                        normal_results,
+                        output_pep=normal_orf_out,
+                        orf_min_aa=args.orf_min_aa,
+                        required_prefix=args.orf_aa_prefix
+                    )
+                    run_orf_finder_in_memory(
+                        mutated_results,
+                        output_pep=mut_orf_out,
+                        orf_min_aa=args.orf_min_aa,
+                        required_prefix=args.orf_aa_prefix
+                    )
+                    logging.info("ORF finding completed; peptide FASTA outputs written: %s and %s", normal_orf_out, mut_orf_out)
+                except Exception as e:
+                    logging.error("ORF finding failed: %s", e)
+                    sys.exit(1)
+            else:
+                orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa")
+                try:
+                    run_orf_finder_in_memory(
+                        results,
+                        output_pep=orf_out,
+                        orf_min_aa=args.orf_min_aa,
+                        required_prefix=args.orf_aa_prefix
+                    )
+                    logging.info("ORF finding completed; peptide FASTA written to %s", orf_out)
+                except Exception as e:
+                    logging.error("ORF finding failed: %s", e)
+                    sys.exit(1)
 
         # Run read simulation pipeline if requested.
         if args.simulate_reads:
-            sim_fa_for_reads = numbered_filename(out_dir, out_base, sim_index, "simulated.fa")
-            try:
-                logging.info("Starting read simulation pipeline for iteration %d.", sim_index)
-                simulate_reads_pipeline(config, sim_fa_for_reads)
-                logging.info("Read simulation pipeline completed for iteration %d.", sim_index)
-            except Exception as e:
-                logging.error("Read simulation pipeline failed: %s", e)
-                sys.exit(1)
+            if dual_mutation_mode:
+                normal_fa_for_reads = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="normal")
+                mut_fa_for_reads = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="mut")
+                try:
+                    logging.info("Starting read simulation pipeline for iteration %d (normal variant).", sim_index)
+                    simulate_reads_pipeline(config, normal_fa_for_reads)
+                    logging.info("Read simulation pipeline completed for iteration %d (normal variant).", sim_index)
+                except Exception as e:
+                    logging.error("Read simulation pipeline (normal variant) failed: %s", e)
+                    sys.exit(1)
+                try:
+                    logging.info("Starting read simulation pipeline for iteration %d (mutated variant).", sim_index)
+                    simulate_reads_pipeline(config, mut_fa_for_reads)
+                    logging.info("Read simulation pipeline completed for iteration %d (mutated variant).", sim_index)
+                except Exception as e:
+                    logging.error("Read simulation pipeline (mutated variant) failed: %s", e)
+                    sys.exit(1)
+            else:
+                sim_fa_for_reads = numbered_filename(out_dir, out_base, sim_index, "simulated.fa")
+                try:
+                    logging.info("Starting read simulation pipeline for iteration %d.", sim_index)
+                    simulate_reads_pipeline(config, sim_fa_for_reads)
+                    logging.info("Read simulation pipeline completed for iteration %d.", sim_index)
+                except Exception as e:
+                    logging.error("Read simulation pipeline failed: %s", e)
+                    sys.exit(1)
 
         sim_index += 1
 
