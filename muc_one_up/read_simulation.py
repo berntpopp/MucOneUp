@@ -35,6 +35,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime
+import threading
 
 # Configure logging.
 logging.basicConfig(
@@ -46,11 +47,14 @@ logging.basicConfig(
 def run_command(cmd, shell=False, timeout=None):
     """
     Run a command in its own process group so that it can be killed on timeout.
+    Capture both stdout and stderr live and log them line-by-line.
 
     :param cmd: Command (list or string) to run.
     :param shell: Whether to run the command in the shell.
     :param timeout: Timeout in seconds (None means wait indefinitely).
+    :return: The process return code.
     """
+    # If cmd is a list and the first element contains spaces, join it and use shell.
     if isinstance(cmd, list) and not shell and " " in cmd[0]:
         shell = True
         cmd = " ".join(cmd)
@@ -70,26 +74,33 @@ def run_command(cmd, shell=False, timeout=None):
         logging.exception("Failed to start command: %s", cmd_str)
         sys.exit(1)
 
+    def log_stream(stream, log_func):
+        """Read lines from a stream and log them using log_func."""
+        for line in iter(stream.readline, ""):
+            log_func(line.rstrip())
+        stream.close()
+
+    stdout_thread = threading.Thread(target=log_stream, args=(proc.stdout, logging.info))
+    stderr_thread = threading.Thread(target=log_stream, args=(proc.stderr, logging.error))
+    stdout_thread.start()
+    stderr_thread.start()
+
     try:
-        stdout, stderr = proc.communicate(timeout=timeout)
-        if stdout:
-            logging.debug("stdout: %s", stdout)
-        if stderr:
-            logging.debug("stderr: %s", stderr)
+        proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
         except Exception as e:
             logging.exception("Error killing process group")
-        stdout, stderr = proc.communicate()
-    except Exception as e:
-        logging.exception("Error during command execution: %s", cmd_str)
-        sys.exit(1)
+        proc.wait()
+    stdout_thread.join()
+    stderr_thread.join()
 
     if proc.returncode != 0:
         logging.error("Command exited with non-zero exit code %d: %s", proc.returncode, cmd_str)
         sys.exit(proc.returncode)
+    return proc.returncode
 
 
 def fix_field(field, desired_length, pad_char):
@@ -137,7 +148,7 @@ def fa_to_twobit(input_fa, output_2bit, tools):
 def extract_subset_reference(sample_bam, output_fa, tools):
     """
     Extract a subset reference from a BAM file.
-    
+
     :param sample_bam: Input BAM filename.
     :param output_fa: Output FASTA filename.
     :param tools: Dict of tool commands.
