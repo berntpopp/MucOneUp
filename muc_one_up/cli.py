@@ -7,8 +7,9 @@ It supports:
   - Generating multiple simulation iterations using a fixed-length range.
     If the --simulate-series flag is provided, a simulation is run for each value in the range(s);
     an optional step size can be provided (default is 1, meaning every value).
-    Without the flag, a single simulation iteration is produced by choosing one random value per range.
+    Without the flag, a fixed-length range produces a single simulation iteration by choosing one random value per range.
   - Optionally producing dual outputs (normal and mutated) if a comma-separated mutation pair is provided.
+  - Printing the version of the tool.
 """
 
 import argparse
@@ -24,13 +25,20 @@ from .read_simulation import simulate_reads as simulate_reads_pipeline
 from .simulate import simulate_diploid
 from .translate import run_orf_finder_in_memory
 from .fasta_writer import write_fasta  # Helper for writing FASTA files
-
+from .version import __version__  # Import version from the single source
 
 def build_parser():
     """Build and return the argument parser."""
     parser = argparse.ArgumentParser(
         prog="MucOneUp",
         description="Tool to simulate MUC1 VNTR diploid references."
+    )
+    # Add a version flag.
+    parser.add_argument(
+        "-v", "--version",
+        action="version",
+        version="%(prog)s " + __version__,
+        help="Print the version number and exit."
     )
     parser.add_argument(
         "--config",
