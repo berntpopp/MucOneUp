@@ -4,8 +4,10 @@ cli.py
 
 This module implements the command-line interface for MucOneUp.
 It supports:
-  - Generating multiple simulation iterations using a fixed-length range (when --simulate-series is used)
-    or a single simulation using a random pick from the range (default).
+  - Generating multiple simulation iterations using a fixed-length range.
+    If the --simulate-series flag is provided, a simulation is run for each value in the range(s);
+    an optional step size can be provided (default is 1, meaning every value).
+    Without the flag, a single simulation iteration is produced by choosing one random value per range.
   - Optionally producing dual outputs (normal and mutated) if a comma-separated mutation pair is provided.
 """
 
@@ -45,7 +47,7 @@ def build_parser():
     parser.add_argument(
         "--out-dir",
         default=".",
-        help=("Output folder where all files will be written. Default is the current directory.")
+        help="Output folder where all files will be written. Default is the current directory."
     )
     parser.add_argument(
         "--num-haplotypes",
@@ -59,8 +61,8 @@ def build_parser():
         nargs="+",
         type=str,
         default=None,
-        help=("One or more fixed lengths (in VNTR repeats). If one value is provided, it will apply to all haplotypes. "
-              "If multiple, must match --num-haplotypes. Values may be a single integer (e.g. '60') or a range (e.g. '20-40').")
+        help=("One or more fixed lengths (in VNTR repeats). If one value is provided, it applies to all haplotypes. "
+              "If multiple, the number must match --num-haplotypes. Values may be a single integer (e.g. '60') or a range (e.g. '20-40').")
     )
     parser.add_argument(
         "--seed",
@@ -68,12 +70,15 @@ def build_parser():
         default=None,
         help="Random seed for reproducible simulations."
     )
-    # New flag to control sequence (series) simulation.
+    # New flag to control series simulation with an optional step size.
     parser.add_argument(
         "--simulate-series",
-        action="store_true",
-        help=("If provided, generate a simulation for each value in a fixed-length range (or Cartesian product if multiple haplotypes use ranges). "
-              "Without this flag, a fixed-length range results in a single simulation iteration, with each haplotype's length chosen randomly from its range.")
+        nargs="?",
+        const=1,
+        type=int,
+        help=("If provided, generate a simulation for each value in the fixed-length range(s). "
+              "Optionally supply a step size (e.g. '--simulate-series 5' to use a step of 5). "
+              "If omitted, the step defaults to 1 (i.e. every value). Without this flag, a fixed-length range results in a single simulation iteration with a random pick from each range.")
     )
     # Mutation arguments.
     parser.add_argument(
@@ -86,9 +91,8 @@ def build_parser():
         "--mutation-targets",
         nargs="+",
         default=None,
-        help=("One or more 'haplotype_index,repeat_index' pairs, e.g. '1,5' '2,7'. If provided, each pair indicates the haplotype "
-              "and repeat number at which to apply the named mutation once. If omitted, the mutation (if any) is applied once "
-              "at a random allowed repeat.")
+        help=("One or more 'haplotype_index,repeat_index' pairs (1-based). E.g., '1,5 2,7'. "
+              "If provided, each pair indicates which haplotype and repeat to mutate. If omitted, the mutation is applied at a random allowed repeat.")
     )
     # Flags for additional outputs.
     parser.add_argument(
@@ -114,20 +118,20 @@ def build_parser():
         const='MTSSV',
         default=None,
         help=("Filter resulting peptides to only those beginning with this prefix. "
-              "If used without a value, defaults to 'MTSSV'. If omitted entirely, no prefix filter is applied.")
+              "If used without a value, defaults to 'MTSSV'. If omitted, no prefix filter is applied.")
     )
     # Read simulation flag.
     parser.add_argument(
         "--simulate-reads",
         action="store_true",
         help=("If provided, run the read simulation pipeline on the simulated FASTA. "
-              "This pipeline will produce an aligned and indexed BAM and gzipped paired FASTQ files.")
+              "This pipeline produces an aligned and indexed BAM and gzipped paired FASTQ files.")
     )
     parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "NONE"],
-        help=("Set logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE). Default is INFO.")
+        help="Set logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE). Default is INFO."
     )
     return parser
 
@@ -135,7 +139,6 @@ def build_parser():
 def configure_logging(level_str):
     """
     Configure root logging based on the provided level string.
-
     If level_str is 'NONE', disable logging.
     """
     if level_str.upper() == "NONE":
@@ -155,8 +158,9 @@ def configure_logging(level_str):
 
 def parse_fixed_lengths(fixed_lengths_args, num_haplotypes):
     """
-    Parse the fixed-length values provided as strings. Each value may be a single integer
-    or a range in the format "start-end". Returns a list of lists, one per haplotype.
+    Parse the fixed-length values provided as strings.
+    Each value may be a single integer or a range in the format "start-end".
+    Returns a list of lists, one per haplotype.
     """
     if len(fixed_lengths_args) not in (1, num_haplotypes):
         logging.error("--fixed-lengths must have either 1 value or N=--num-haplotypes")
@@ -196,13 +200,6 @@ def numbered_filename(out_dir: str, out_base: str, iteration: int, file_type: st
     """
     Build a filename by combining the output directory, base name, iteration number,
     variant suffix, and a file type suffix.
-
-    :param out_dir: The output folder.
-    :param out_base: The base name for outputs.
-    :param iteration: Simulation iteration number.
-    :param file_type: A string describing the file type (e.g., 'simulated.fa', 'vntr_structure.txt').
-    :param variant: Optional variant suffix (e.g., 'mut' or 'normal').
-    :return: A string filename.
     """
     iter_str = f".{iteration:03d}"
     variant_str = f".{variant}" if variant else ""
@@ -236,11 +233,26 @@ def main():
     # If a range is provided, check the --simulate-series flag.
     if args.fixed_lengths is not None:
         fixed_matrix = parse_fixed_lengths(args.fixed_lengths, args.num_haplotypes)
-        if args.simulate_series:
-            # Generate a simulation for each value in the Cartesian product.
+        if args.simulate_series is not None:
+            # Use the provided step value (default 1 if no value was given)
+            step = args.simulate_series
+            new_fixed_matrix = []
+            for lst in fixed_matrix:
+                if len(lst) > 1:
+                    start = lst[0]
+                    end = lst[-1]
+                    # Generate values from start to end using the step.
+                    new_lst = list(range(start, end + 1, step))
+                    # Ensure the end value is included.
+                    if new_lst[-1] != end:
+                        new_lst.append(end)
+                    new_fixed_matrix.append(new_lst)
+                else:
+                    new_fixed_matrix.append(lst)
+            fixed_matrix = new_fixed_matrix
             simulation_configs = build_cartesian_fixed_length_configs(fixed_matrix)
-            logging.info("Series mode enabled: %d simulation iterations generated from fixed-length ranges.",
-                         len(simulation_configs))
+            logging.info("Series mode enabled with step %d: %d simulation iterations generated from fixed-length ranges.",
+                         step, len(simulation_configs))
         else:
             # Without series mode, choose one value per haplotype randomly.
             simulation_configs = [[random.choice(lst) for lst in fixed_matrix]]
@@ -277,7 +289,6 @@ def main():
         if args.mutation_name:
             logging.info("Applying mutation: %s", args.mutation_name)
             if dual_mutation_mode:
-                # In dual simulation mode, keep the normal (unmutated) result.
                 normal_results = results
                 mutation_positions = None
                 if args.mutation_targets:
@@ -294,7 +305,6 @@ def main():
                 try:
                     mutated_results = apply_mutations(
                         config=config,
-                        # Use a copy of each haplotype's chain to avoid modifying normal_results.
                         results=[(seq, chain.copy()) for seq, chain in results],
                         mutation_name=mutation_pair[1],
                         targets=mutation_positions if mutation_positions else None
