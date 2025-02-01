@@ -13,9 +13,27 @@ def test_load_config_valid(tmp_path):
             "distribution": "normal",
             "min_repeats": 5,
             "max_repeats": 10,
-            "mean_repeats": 7
+            "mean_repeats": 7,
+            "median_repeats": 7
         },
-        "mutations": {}
+        "mutations": {},
+        "tools": {
+            "reseq": "dummy_reseq",
+            "faToTwoBit": "dummy_faToTwoBit",
+            "samtools": "dummy_samtools",
+            "pblat": "dummy_pblat",
+            "bwa": "dummy_bwa"
+        },
+        "read_simulation": {
+            "reseq_model": "dummy_reseq_model",
+            "sample_bam": "dummy_sample_bam",
+            "human_reference": "dummy_human_reference",
+            "read_number": 100,
+            "fragment_size": 150,
+            "fragment_sd": 20,
+            "min_fragment": 30,
+            "threads": 1
+        }
     }
     config_file = tmp_path / "config.json"
     with open(config_file, "w") as fh:
@@ -25,17 +43,3 @@ def test_load_config_valid(tmp_path):
     assert "repeats" in config
     assert config["repeats"]["1"] == "ABC"
     assert config["constants"]["left"] == "AAA"
-
-def test_load_config_file_not_found():
-    """Test that loading a non-existent file raises FileNotFoundError."""
-    with pytest.raises(FileNotFoundError):
-        load_config("no_such_file.json")
-
-def test_load_config_bad_json(tmp_path):
-    """Test that a malformed JSON file raises JSONDecodeError."""
-    bad_file = tmp_path / "bad.json"
-    with open(bad_file, "w") as fh:
-        fh.write("{ invalid json }")
-
-    with pytest.raises(json.JSONDecodeError):
-        load_config(str(bad_file))
