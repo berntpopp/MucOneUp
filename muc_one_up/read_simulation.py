@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# muc_one_up/read_simulation.py
 """
 read_simulation.py
 
@@ -18,7 +17,8 @@ The pipeline performs the following steps:
  7. Create reads from the fragments using reseq seqToIllumina.
  8. Split the interleaved FASTQ into paired FASTQ files (gzipped).
  9. Align the reads to a human reference with bwa mem and sort/index with samtools.
-10. Clean up all intermediate files.
+10. Optionally, downsample the VNTR region in the final BAM file to a fixed target coverage.
+11. Clean up all intermediate files.
 
 Usage:
     python read_simulation.py <config.json> <input_fasta>
@@ -37,6 +37,7 @@ import time
 from datetime import datetime
 import threading
 import shutil  # NEW: for checking executables in PATH
+from pathlib import Path # NEW: for downsample_bam
 
 # Configure logging.
 logging.basicConfig(
@@ -55,7 +56,6 @@ def run_command(cmd, shell=False, timeout=None):
     :param timeout: Timeout in seconds (None means wait indefinitely).
     :return: The process return code.
     """
-    # If cmd is a list and the first element contains spaces, join it and use shell.
     if isinstance(cmd, list) and not shell and " " in cmd[0]:
         shell = True
         cmd = " ".join(cmd)
@@ -369,6 +369,7 @@ def comp(sequence):
     return "".join(d.get(s, "N") for s in sequence)
 
 
+# NEW: External tool check function
 def check_external_tools(tools):
     """
     Check that all external tools required for read simulation are available.
@@ -381,7 +382,6 @@ def check_external_tools(tools):
     
     Exits gracefully with a clear error message if any required tool is missing or misconfigured.
     """
-    # Define test arguments only for tools that support them.
     test_args = {
         "reseq": "--help",
         "samtools": "--version"
@@ -422,6 +422,96 @@ def check_external_tools(tools):
                 sys.exit(1)
         else:
             logging.info(f"Tool '{tool_key}' found: {executable}")
+
+
+# NEW: Function to calculate mean VNTR coverage using samtools depth
+def calculate_vntr_coverage(samtools_exe, bam_file, region, threads, output_dir, output_name):
+    """
+    Calculate mean coverage over the VNTR region using samtools depth.
+
+    :param samtools_exe: Path to the samtools executable.
+    :param bam_file: BAM file for which coverage is calculated.
+    :param region: Genomic region in 'chr:start-end' format.
+    :param threads: Number of threads.
+    :param output_dir: Directory to write the coverage output.
+    :param output_name: Base name for the coverage output file.
+    :return: Mean coverage (float).
+    """
+    coverage_output = os.path.join(output_dir, f"{output_name}_vntr_coverage.txt")
+    depth_command = [
+        samtools_exe,
+        "depth",
+        "-@",
+        str(threads),
+        "-r",
+        region,
+        str(bam_file)
+    ]
+    logging.info("Calculating VNTR coverage for %s in region %s", bam_file, region)
+    with open(coverage_output, "w") as fout:
+        if " " in samtools_exe:
+            # Join the list and run with shell=True
+            cmd_str = " ".join(depth_command)
+            subprocess.run(cmd_str, shell=True, stdout=fout, check=True)
+        else:
+            subprocess.run(depth_command, stdout=fout, check=True)
+    coverage_values = []
+    with open(coverage_output, "r") as fin:
+        for line in fin:
+            parts = line.strip().split("\t")
+            if len(parts) >= 3:
+                try:
+                    coverage_values.append(int(parts[2]))
+                except ValueError:
+                    continue
+    if coverage_values:
+        mean_cov = sum(coverage_values) / len(coverage_values)
+    else:
+        mean_cov = 0
+    logging.info("Mean VNTR coverage: %.2f", mean_cov)
+    return mean_cov
+
+
+# NEW: Function to downsample BAM file using samtools view -s
+def downsample_bam(samtools_exe, input_bam, output_bam, region, fraction, seed, threads):
+    """
+    Downsample the BAM file to the specified fraction in the given region.
+    """
+    # Convert to Path if necessary
+    output_bam = Path(output_bam)
+    
+    subsample_param = f"{seed}.{int(fraction * 1000):03d}"
+    view_command = [
+        samtools_exe,
+        "view",
+        "-s",
+        subsample_param,
+        "-@",
+        str(threads),
+        "-b",
+        "-o",
+        str(output_bam),
+        str(input_bam),
+        region,
+    ]
+    run_command(view_command, timeout=60)
+    # Sort the downsampled BAM file.
+    sorted_bam = output_bam.with_suffix(".sorted.bam")
+    sort_command = [
+        samtools_exe,
+        "sort",
+        "-@",
+        str(threads),
+        "-o",
+        str(sorted_bam),
+        str(output_bam)
+    ]
+    run_command(sort_command, timeout=60)
+    os.remove(str(output_bam))
+    os.rename(str(sorted_bam), str(output_bam))
+    # Index the downsampled BAM file.
+    index_command = [samtools_exe, "index", str(output_bam)]
+    run_command(index_command, timeout=60)
 
 
 def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
@@ -634,7 +724,7 @@ def simulate_reads(config, input_fa):
     tools = config.get("tools", {})
     rs_config = config.get("read_simulation", {})
 
-    # NEW: Check that all external tools are available and working.
+    # Check that all external tools are available and working.
     check_external_tools(tools)
 
     base = os.path.splitext(input_fa)[0]
@@ -675,6 +765,32 @@ def simulate_reads(config, input_fa):
     create_reads(fragments_fa, reseq_model, reads_fq, threads, tools)
     split_reads(reads_fq, reads_fq1, reads_fq2)
     align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads=threads)
+
+    # NEW: Optional downsampling of the final BAM file to a target VNTR coverage.
+    downsample_target = rs_config.get("downsample_coverage")
+    if downsample_target is not None:
+        try:
+            downsample_target = int(downsample_target)
+        except ValueError:
+            logging.error("Invalid downsample_coverage value in config.")
+            sys.exit(1)
+        # Determine the VNTR region based on reference assembly (assumes keys vntr_region_hg19 and vntr_region_hg38 exist)
+        reference_assembly = rs_config.get("reference_assembly", "hg19")
+        vntr_region_key = f"vntr_region_{reference_assembly}"
+        vntr_region = rs_config.get(vntr_region_key)
+        if not vntr_region:
+            logging.error(f"VNTR region not specified in config for {reference_assembly}.")
+            sys.exit(1)
+        current_cov = calculate_vntr_coverage(tools["samtools"], output_bam, vntr_region, threads, os.path.dirname(output_bam), os.path.basename(output_bam).replace(".bam", ""))
+        if current_cov > downsample_target:
+            fraction = downsample_target / current_cov
+            fraction = min(max(fraction, 0.0), 1.0)
+            logging.info(f"Downsampling BAM from {current_cov:.2f}x to target {downsample_target}x (fraction: {fraction:.4f})")
+            downsampled_bam = os.path.join(os.path.dirname(output_bam), os.path.basename(output_bam).replace(".bam", "_downsampled.bam"))
+            downsample_bam(tools["samtools"], output_bam, downsampled_bam, vntr_region, fraction, rs_config.get("downsample_seed", 42), threads)
+            output_bam = downsampled_bam
+        else:
+            logging.info("Current VNTR coverage is below the target; no downsampling performed.")
 
     logging.info("Read simulation pipeline completed at %s",
                  datetime.now().strftime("%Y-%m-%d %H:%M:%S"))

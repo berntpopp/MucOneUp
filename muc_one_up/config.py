@@ -93,7 +93,12 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "fragment_size": {"type": "number"},
                 "fragment_sd": {"type": "number"},
                 "min_fragment": {"type": "number"},
-                "threads": {"type": "number"}
+                "threads": {"type": "number"},
+                "downsample_coverage": {"type": "number"},
+                "downsample_seed": {"type": "number"},
+                "reference_assembly": {"type": "string"},
+                "vntr_region_hg19": {"type": "string"},
+                "vntr_region_hg38": {"type": "string"}
             },
             "required": [
                 "reseq_model", "sample_bam", "human_reference", "read_number",
