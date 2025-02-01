@@ -1,4 +1,14 @@
-# muc_one_up/cli.py
+#!/usr/bin/env python3
+"""
+cli.py
+
+This module implements the command-line interface for MucOneUp.
+It supports:
+  - Generating multiple simulation iterations using a fixed-length range (when --simulate-series is used)
+    or a single simulation using a random pick from the range (default).
+  - Optionally producing dual outputs (normal and mutated) if a comma-separated mutation pair is provided.
+"""
+
 import argparse
 import json
 import logging
@@ -11,7 +21,7 @@ from .mutate import apply_mutations
 from .read_simulation import simulate_reads as simulate_reads_pipeline
 from .simulate import simulate_diploid
 from .translate import run_orf_finder_in_memory
-from .fasta_writer import write_fasta  # Assumes this helper writes FASTA files
+from .fasta_writer import write_fasta  # Helper for writing FASTA files
 
 
 def build_parser():
@@ -25,7 +35,7 @@ def build_parser():
         required=True,
         help="Path to JSON configuration file."
     )
-    # New output flags replacing previous individual output flags.
+    # Base name and output directory for all output files.
     parser.add_argument(
         "--out-base",
         default="muc1_simulated",
@@ -58,7 +68,14 @@ def build_parser():
         default=None,
         help="Random seed for reproducible simulations."
     )
-    # Mutation arguments remain largely unchanged.
+    # New flag to control sequence (series) simulation.
+    parser.add_argument(
+        "--simulate-series",
+        action="store_true",
+        help=("If provided, generate a simulation for each value in a fixed-length range (or Cartesian product if multiple haplotypes use ranges). "
+              "Without this flag, a fixed-length range results in a single simulation iteration, with each haplotype's length chosen randomly from its range.")
+    )
+    # Mutation arguments.
     parser.add_argument(
         "--mutation-name",
         default=None,
@@ -73,7 +90,7 @@ def build_parser():
               "and repeat number at which to apply the named mutation once. If omitted, the mutation (if any) is applied once "
               "at a random allowed repeat.")
     )
-    # New flags to control whether to output structure and ORF files.
+    # Flags for additional outputs.
     parser.add_argument(
         "--output-structure",
         action="store_true",
@@ -84,7 +101,7 @@ def build_parser():
         action="store_true",
         help="If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme."
     )
-    # New ORF parameters remain the same.
+    # ORF parameters.
     parser.add_argument(
         "--orf-min-aa",
         type=int,
@@ -99,7 +116,7 @@ def build_parser():
         help=("Filter resulting peptides to only those beginning with this prefix. "
               "If used without a value, defaults to 'MTSSV'. If omitted entirely, no prefix filter is applied.")
     )
-    # Read simulation flag remains unchanged.
+    # Read simulation flag.
     parser.add_argument(
         "--simulate-reads",
         action="store_true",
@@ -197,10 +214,10 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    # Configure logging
+    # Configure logging.
     configure_logging(args.log_level)
 
-    # Load config
+    # Load configuration.
     try:
         with open(args.config) as fh:
             config = json.load(fh)
@@ -215,18 +232,23 @@ def main():
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    # Process --fixed-lengths logic
+    # Process --fixed-lengths.
+    # If a range is provided, check the --simulate-series flag.
     if args.fixed_lengths is not None:
         fixed_matrix = parse_fixed_lengths(args.fixed_lengths, args.num_haplotypes)
-        sequence_mode = any(len(lst) > 1 for lst in fixed_matrix)
-        if sequence_mode:
+        if args.simulate_series:
+            # Generate a simulation for each value in the Cartesian product.
             simulation_configs = build_cartesian_fixed_length_configs(fixed_matrix)
+            logging.info("Series mode enabled: %d simulation iterations generated from fixed-length ranges.",
+                         len(simulation_configs))
         else:
-            simulation_configs = [[lst[0] for lst in fixed_matrix]]
+            # Without series mode, choose one value per haplotype randomly.
+            simulation_configs = [[random.choice(lst) for lst in fixed_matrix]]
+            logging.info("Single simulation iteration generated using a random choice from each fixed-length range.")
     else:
-        simulation_configs = [None]  # Use random lengths
+        simulation_configs = [None]  # Use random lengths if not provided.
 
-    # Process mutation-name: check for comma-separated pair.
+    # Process --mutation-name to support dual simulation.
     dual_mutation_mode = False
     mutation_pair = None
     if args.mutation_name:
@@ -255,6 +277,7 @@ def main():
         if args.mutation_name:
             logging.info("Applying mutation: %s", args.mutation_name)
             if dual_mutation_mode:
+                # In dual simulation mode, keep the normal (unmutated) result.
                 normal_results = results
                 mutation_positions = None
                 if args.mutation_targets:
@@ -271,11 +294,12 @@ def main():
                 try:
                     mutated_results = apply_mutations(
                         config=config,
+                        # Use a copy of each haplotype's chain to avoid modifying normal_results.
                         results=[(seq, chain.copy()) for seq, chain in results],
                         mutation_name=mutation_pair[1],
                         targets=mutation_positions if mutation_positions else None
                     )
-                    logging.info("Dual mutation: mutation applied for mutated version.")
+                    logging.info("Dual mutation applied for mutated version.")
                 except Exception as e:
                     logging.error("Mutation failed: %s", e)
                     sys.exit(1)
@@ -333,12 +357,11 @@ def main():
                         logging.error("Random-target mutation failed: %s", e)
                         sys.exit(1)
 
-        # Write final FASTA outputs using normalized naming.
+        # Write FASTA outputs with normalized, numbered filenames.
         if dual_mutation_mode:
             normal_out = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="normal")
             mut_out = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="mut")
             try:
-                # Extract only the assembled sequence (first element of each tuple)
                 write_fasta([seq for seq, chain in normal_results], normal_out)
                 write_fasta([seq for seq, chain in mutated_results], mut_out)
                 logging.info("Dual FASTA outputs written: %s and %s", normal_out, mut_out)
@@ -354,7 +377,7 @@ def main():
                 logging.error("Writing FASTA failed: %s", e)
                 sys.exit(1)
 
-        # Optionally write VNTR structure file if flag is set.
+        # Optionally write VNTR structure file.
         if args.output_structure:
             struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt")
             try:
@@ -367,7 +390,7 @@ def main():
                 logging.error("Writing structure file failed: %s", e)
                 sys.exit(1)
 
-        # ORF logic: if flag is set, run ORF prediction.
+        # ORF logic.
         if args.output_orfs:
             orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa")
             try:
