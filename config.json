@@ -64,8 +64,8 @@
       "distribution": "normal",
       "min_repeats": 20,
       "max_repeats": 130,
-      "mean_repeats": 70,
-      "median_repeats": 65
+      "mean_repeats": 35,
+      "median_repeats": 25
     },
 
     "mutations": {
@@ -116,10 +116,10 @@
         "sample_bam": "/mnt/c/development/hassansaei/VNtyper/download/LB24-4178wdh-ready_35c0b621-13ca-448b-9118-2e3690b5be77.chr1_155183824_155194915.bam",
         "human_reference": "/mnt/c/development/_reference/GRCh38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz",
         "read_number": 10000,
-        "fragment_size": 170,
+        "fragment_size": 250,
         "fragment_sd": 35,
         "min_fragment": 20,
-        "threads": 24
+        "threads": 8
       }
   }
   
