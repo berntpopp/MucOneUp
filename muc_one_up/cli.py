@@ -21,6 +21,7 @@ import random
 import sys
 import os
 import itertools
+import time  # NEW: imported for simulation statistics timing
 
 from .mutate import apply_mutations
 from .read_simulation import simulate_reads as simulate_reads_pipeline
@@ -28,6 +29,7 @@ from .simulate import simulate_diploid
 from .translate import run_orf_finder_in_memory
 from .fasta_writer import write_fasta  # Helper for writing FASTA files
 from .version import __version__  # Import version from the single source
+from .simulation_statistics import generate_simulation_statistics, write_statistics_report  # NEW: import simulation statistics module
 
 # (Other functions remain unchanged.)
 
@@ -282,6 +284,7 @@ def main():
 
     sim_index = 1
     for fixed_conf in simulation_configs:
+        iteration_start = time.time()  # NEW: record iteration start time
         try:
             results = simulate_diploid(
                 config=config,
@@ -535,6 +538,48 @@ def main():
                 except Exception as e:
                     logging.error("Read simulation pipeline failed: %s", e)
                     sys.exit(1)
+
+        # ----------------------------------------------------------------
+        # NEW: Generate simulation statistics report for this iteration.
+        iteration_end = time.time()
+        vntr_coverage_stats = {}  # This can be filled with VNTR coverage data if available
+        if dual_mutation_mode:
+            normal_stats_report = generate_simulation_statistics(
+                start_time=iteration_start,
+                end_time=iteration_end,
+                simulation_results=normal_results,
+                config=config,
+                mutation_info={"mutation_name": "normal"},
+                vntr_coverage=vntr_coverage_stats
+            )
+            mutated_stats_report = generate_simulation_statistics(
+                start_time=iteration_start,
+                end_time=iteration_end,
+                simulation_results=mutated_results,
+                config=config,
+                mutation_info={"mutation_name": mutation_pair[1]},
+                vntr_coverage=vntr_coverage_stats
+            )
+            stats_file_normal = numbered_filename(out_dir, out_base, sim_index, "simulation_stats.json", variant="normal")
+            stats_file_mut = numbered_filename(out_dir, out_base, sim_index, "simulation_stats.json", variant="mut")
+            write_statistics_report(normal_stats_report, stats_file_normal)
+            write_statistics_report(mutated_stats_report, stats_file_mut)
+        else:
+            simulation_results_for_stats = results
+            mutation_info = {}
+            if args.mutation_name:
+                mutation_info = {"mutation_name": args.mutation_name, "mutation_targets": args.mutation_targets}
+            stats_report = generate_simulation_statistics(
+                start_time=iteration_start,
+                end_time=iteration_end,
+                simulation_results=simulation_results_for_stats,
+                config=config,
+                mutation_info=mutation_info,
+                vntr_coverage=vntr_coverage_stats
+            )
+            stats_output_file = numbered_filename(out_dir, out_base, sim_index, "simulation_stats.json")
+            write_statistics_report(stats_report, stats_output_file)
+        # ----------------------------------------------------------------
 
         sim_index += 1
 
