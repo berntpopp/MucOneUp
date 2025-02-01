@@ -2,9 +2,13 @@
 
 **MucOneUp** is a Python tool for simulating **MUC1 VNTR diploid references**. It builds customized references that:
 
-1. **Generate** haplotypes containing a variable‐length VNTR region with specified probabilities.  
-2. **Force** a canonical terminal block (`6` or `6p` → `7 → 8 → 9`) before the right‐hand constant.  
-3. Optionally **introduce mutations** (inserts, deletes, or replaces) in selected repeats.
+1. **Generate** haplotypes containing a variable‐length VNTR region using a probability model or fixed‐lengths.  
+2. **Force** a canonical terminal block (`6` or `6p` → `7 → 8 → 9`) before appending the right‐hand constant.  
+3. Optionally **introduce mutations** (inserts, deletes, or replacements) in selected repeats.  
+4. **Generate series of simulations** when fixed-length ranges are provided (via the `--simulate-series` flag) so that a simulation is run for each possible length (or combination of lengths for multiple haplotypes).  
+5. **Run dual simulations** (normal and mutated) when a comma-separated mutation name is provided.
+
+---
 
 ## Table of Contents
 
@@ -41,11 +45,11 @@ Once installed, you’ll have a command-line program called **`muconeup`** avail
 ## Quick Start
 
 1. **Create** or update a **JSON config** (see [Config File Layout](#config-file-layout)) describing your repeats, probabilities, mutations, etc.  
-2. **Run** the tool, specifying your config and any other parameters:
+2. **Run** the tool by specifying your config along with desired parameters. For example:
    ```bash
-   muconeup --config config.json --output muc1_simulated.fa --structure-output muc1_struct.txt
+   muconeup --config config.json --out-base muc1_simulated --output muc1_simulated.fa --output-structure muc1_struct.txt
    ```
-3. Inspect the resulting:
+3. Inspect the resulting outputs:
    - **`muc1_simulated.fa`**: multi-FASTA file of haplotype sequences.  
    - **`muc1_struct.txt`**: textual representation of each haplotype’s chain of repeats.
 
@@ -53,61 +57,63 @@ Once installed, you’ll have a command-line program called **`muconeup`** avail
 
 ## Usage
 
-Below are the available **command-line arguments**. Use `--help` for more details:
-
-```bash
-muconeup --help
-```
+Below are the available **command-line arguments**. Use `muconeup --help` for more details.
 
 ### Command-Line Arguments
 
-| Argument                 | Description                                                                                                                                                                                                                          |
-|--------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--config <path>`       | **Required**. Path to the JSON config file containing repeats, probabilities, constants, length model, mutations, etc.                                                                                                               |
-| `--output <filename>`   | Filename for the **simulated FASTA** output. Defaults to `muc1_simulated.fa`.                                                                                                                                                       |
-| `--structure-output <filename>` | (Optional) Text file listing the chain of repeats for each haplotype.                                                                                                                                |
-| `--num-haplotypes N`     | Number of haplotypes to simulate. Typically `2` for diploid. Defaults to 2.                                                                                                                                                         |
-| `--fixed-lengths <ints>` | One or more integers specifying the VNTR repeat length for each haplotype. If only one integer is provided, it applies to **all** haplotypes. If multiple are provided, the number must match `--num-haplotypes`. Otherwise, random. |
-| `--seed <int>`          | Random seed for reproducible simulations (affects both VNTR building and random mutation target selection, if used).                                                                                                                  |
-| `--mutation-name <str>` | (Optional) Name of a mutation from the config to apply. If omitted, no mutation is applied.                                                                                                                                           |
-| `--mutation-targets <pairs>` | (Optional) One or more `haplotype_index,repeat_index` pairs (1-based). E.g., `1,5 2,7`. If provided, each pair indicates which haplotype and which repeat to mutate. If **omitted**, the mutation is randomly applied once to a valid repeat. |
+| Argument                       | Description                                                                                                                                                                                                                                                                                                                                      |
+|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--config <path>`              | **Required**. Path to the JSON config file containing repeats, probabilities, constants, length model, mutations, tools, and read simulation settings.                                                                                                                                                                                          |
+| `--out-base <basename>`         | Base name for all output files. All outputs (simulation FASTA, VNTR structure, ORF FASTA, read simulation outputs) will be named using this base. Default is `muc1_simulated`.                                                                                                                                                           |
+| `--out-dir <folder>`           | Output folder where all files will be written. Defaults to the current directory.                                                                                                                                                                                                                                                              |
+| `--num-haplotypes N`           | Number of haplotypes to simulate. Typically `2` for diploid. Defaults to 2.                                                                                                                                                                                                                                                                       |
+| `--fixed-lengths <vals>`       | One or more fixed lengths (or ranges) for each haplotype’s VNTR repeats. Values may be a single integer (e.g. `60`) or a range (e.g. `20-40`). When a range is provided, the default behavior is to pick one value at random from each range. Use the `--simulate-series` flag (see below) to run a simulation for every value (or combination) in the range. |
+| `--simulate-series`            | (Optional) When specified and fixed-length ranges are provided, the program will generate a simulation iteration for every possible length (or combination of lengths for multiple haplotypes) instead of choosing a single random value. This flag is useful when you want to explore the entire parameter space.                             |
+| `--seed <int>`                 | Random seed for reproducible simulations (affects VNTR building and mutation target selection).                                                                                                                                                                                                                                                   |
+| `--mutation-name <str>`        | (Optional) Name of a mutation from the config to apply. To run dual simulations (normal and mutated), provide a comma-separated pair (e.g. `normal,dupC`). If a single value is provided, only one simulation is mutated.                                                                                                                  |
+| `--mutation-targets <pairs>`   | (Optional) One or more `haplotype_index,repeat_index` pairs (1-based). E.g., `1,5 2,7`. If provided, each pair indicates which haplotype and repeat to mutate. If omitted, the mutation is applied at a random allowed repeat.                                                                                                               |
+| `--output-structure`           | (Optional) If provided, output a VNTR structure file (text) listing the chain of repeats for each haplotype.                                                                                                                                                                                                                                      |
+| `--output-orfs`                | (Optional) If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme.                                                                                                                                                                                                                                     |
+| `--orf-min-aa <int>`           | Minimum peptide length (in amino acids) to report from ORF prediction. Defaults to 100.                                                                                                                                                                                                                                                           |
+| `--orf-aa-prefix <str>`        | (Optional) Filter resulting peptides to only those beginning with this prefix. If used without a value, defaults to `MTSSV`. If omitted, no prefix filtering is applied.                                                                                                                                                                     |
+| `--simulate-reads`             | (Optional) If provided, run the read simulation pipeline on the simulated FASTA. This pipeline produces an aligned/indexed BAM and gzipped paired FASTQ files.                                                                                                                                                                              |
+| `--log-level <level>`          | Set logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE). Default is INFO.                                                                                                                                                                                                                                                              |
 
 ### Example Commands
 
-1. **Generate two diploid haplotypes** with random VNTR lengths based on the config’s distribution:
+1. **Generate two diploid haplotypes** with random VNTR lengths (sampled from the length model defined in your config):
    ```bash
-   muconeup \
-     --config config.json \
-     --output muc1_sim.fa \
-     --structure-output muc1_struct.txt
+   muconeup --config config.json --out-base muc1_sim --output muc1_sim.fa --output-structure muc1_struct.txt
    ```
 
 2. **Force a fixed length of 60 repeats** for each haplotype:
    ```bash
-   muconeup \
-     --config config.json \
-     --output muc1_fixed.fa \
-     --structure-output muc1_fixed.txt \
-     --num-haplotypes 2 \
-     --fixed-lengths 60
+   muconeup --config config.json --out-base muc1_fixed --output muc1_fixed.fa --output-structure muc1_fixed.txt --num-haplotypes 2 --fixed-lengths 60
    ```
 
-3. **Apply a known mutation** (`dupC`) at a specific repeat (haplotype #1, repeat #5):
+3. **Generate a single simulation using a fixed-length range** (a random value is chosen from the range for each haplotype):
    ```bash
-   muconeup \
-     --config config.json \
-     --output muc1_mutated.fa \
-     --structure-output muc1_mutated.txt \
-     --mutation-name dupC \
-     --mutation-targets 1,5
+   muconeup --config config.json --out-base muc1_random_range --fixed-lengths 20-40
    ```
 
-4. **Apply a known mutation** (`snpA`) to a **random allowed** repeat:
+4. **Generate a series of simulations** using a fixed-length range (each possible value in the range, or combination thereof, produces an output file):
    ```bash
-   muconeup \
-     --config config.json \
-     --output muc1_random.fa \
-     --mutation-name snpA
+   muconeup --config config.json --out-base muc1_series --simulate-series --fixed-lengths 20-40
+   ```
+
+5. **Apply a known mutation** (`dupC`) at a specific repeat (haplotype #1, repeat #5):
+   ```bash
+   muconeup --config config.json --out-base muc1_mutated --mutation-name dupC --mutation-targets 1,5
+   ```
+
+6. **Run dual simulation** (normal and mutated) with a mutation (`dupC`):
+   ```bash
+   muconeup --config config.json --out-base muc1_dual --mutation-name normal,dupC
+   ```
+
+7. **Apply a known mutation** (`snpA`) to a **random allowed** repeat:
+   ```bash
+   muconeup --config config.json --out-base muc1_random_mut --mutation-name snpA
    ```
 
 ---
@@ -118,49 +124,41 @@ The **muc_one_up** Python package is organized into modules. Here is a brief sum
 
 ```
 muc_one_up/
-├── cli.py           # Defines the main CLI logic and argument parsing
-├── config.py        # Loads and validates the JSON config
+├── cli.py           # Main CLI logic and argument parsing (now supporting series simulation and dual mutation modes)
+├── config.py        # Loads and validates the JSON configuration file
 ├── distribution.py  # Samples the target VNTR length from a specified distribution
-├── fasta_writer.py  # Helper (optional) for writing FASTA (unused in the final code, but example)
+├── fasta_writer.py  # Helper for writing FASTA files
 ├── mutate.py        # Logic to apply specified mutations to haplotypes
-├── probabilities.py # Weighted random picks for next repeats, etc.
-├── simulate.py      # Core simulation code to build haplotypes:
-│                   #    - chain repeats with given probabilities
-│                   #    - forcibly insert final block 6->7->8->9
-└── __init__.py      # Package initialization, version info
+├── probabilities.py # Provides weighted random selections for repeat transitions
+├── simulate.py      # Core simulation code for building haplotypes (chains of repeats with terminal block insertion)
+├── read_simulation.py  # Integrates an external read simulation pipeline to generate reads from simulated FASTA files
+├── translate.py     # Translates DNA to protein and performs ORF predictions using orfipy
+└── __init__.py      # Package initialization and version information
 ```
 
 ### High-Level Logic
 
-1. **CLI** (`cli.py`):  
-   - Parses user arguments (config path, output file, lengths, mutation name/targets, etc.).  
-   - Loads the config.  
-   - Calls **`simulate_diploid`** to build the haplotypes.  
-   - (Optional) calls **`apply_mutations`** if user requested a specific mutation.  
-   - Writes the resulting haplotypes to a multi-FASTA and optionally a textual structure file.
+1. **CLI (cli.py):**
+   - Parses command-line arguments and loads the configuration.
+   - If fixed-length ranges are provided, either picks a random value for each haplotype (default) or—if `--simulate-series` is specified—runs a simulation for every possible length (or combination of lengths for multiple haplotypes).
+   - Simulates haplotypes via **simulate_diploid()**.
+   - Optionally applies mutations using **apply_mutations()**. Dual simulation is supported when a comma-separated mutation name is provided.
+   - Writes output files (FASTA, VNTR structure, ORFs) with numbered filenames.
+   - Optionally runs the read simulation pipeline.
 
-2. **Simulation** (`simulate.py`):  
-   - For each haplotype, picks a **target_length** (either from `--fixed-lengths` or from a probability distribution in `config["length_model"]`).  
-   - Builds the VNTR chain by sampling repeats from `config["probabilities"]`, **excluding** end repeats (`6`, `6p`, `9`) until the final 4 repeats.  
-   - Forces the block `6/6p -> 7 -> 8 -> 9` at `(target_length - 4)`.  
-   - Appends **left** and **right** constants from config.  
+2. **Simulation (simulate.py):**
+   - Constructs haplotypes by sampling repeats according to probability distributions.
+   - Forces the final block of repeats (`6`/`6p` → `7` → `8` → `9`).
+   - Appends left and right constant flanks from the config.
 
-3. **Mutations** (`mutate.py`):  
-   - If a user requests `--mutation-name`, either:  
-     - Apply at user-supplied `--mutation-targets`, or  
-     - Randomly pick **one** haplotype + repeat that is “allowed” to mutate.  
-   - A “mutation” can **insert**, **delete**, or **replace** bases within that repeat.  
-   - If the current repeat symbol is **not** in the mutation’s `allowed_repeats`, the code **forces** a new symbol (randomly picked from `allowed_repeats`).  
-   - Rebuilds the haplotype sequence to keep it consistent.  
-   - Adds an “m” suffix (e.g. `Xm`) to the mutated repeat symbol in the structure output.
+3. **Mutations (mutate.py):**
+   - Applies mutations (insertion, deletion, or replacement) at specified repeats.
+   - Ensures that if the current repeat symbol isn’t allowed, it is changed to an allowed one.
+   - Rebuilds the haplotype sequence and marks mutated repeats with an “m” suffix.
 
-4. **Config** (`config.py`):  
-   - Loads a JSON file with keys:
-     - **`repeats`**: A dictionary mapping repeat symbols to sequences.  
-     - **`constants`**: left and right flanks of MUC1.  
-     - **`probabilities`**: For each repeat symbol, the probability distribution of valid “next” repeats.  
-     - **`length_model`**: Info for random length sampling (e.g., normal distribution, min/max).  
-     - **`mutations`**: Named mutations, each with `allowed_repeats` and a list of changes.  
+4. **Configuration (config.py):**
+   - Loads and validates the configuration JSON against a predefined schema.
+   - The config file includes definitions for repeats, constants, probabilities, length model, mutations, external tool commands, and read simulation settings.
 
 ---
 
@@ -209,6 +207,23 @@ A simplified example:
       ]
     }
     // Additional mutations...
+  },
+  "tools": {
+    "reseq": "mamba run --no-capture-output -n wessim reseq",
+    "faToTwoBit": "mamba run --no-capture-output -n wessim faToTwoBit",
+    "samtools": "mamba run --no-capture-output -n wessim samtools",
+    "pblat": "mamba run --no-capture-output -n wessim pblat",
+    "bwa": "mamba run --no-capture-output -n wessim bwa"
+  },
+  "read_simulation": {
+    "reseq_model": "reference/Hs-Nova-TruSeq.reseq",
+    "sample_bam": "/path/to/sample.bam",
+    "human_reference": "/path/to/GRCh38.fna.gz",
+    "read_number": 10000,
+    "fragment_size": 250,
+    "fragment_sd": 35,
+    "min_fragment": 20,
+    "threads": 8
   }
 }
 ```
@@ -218,4 +233,3 @@ A simplified example:
 ## License
 
 This project is released under the **MIT License**. See [LICENSE](LICENSE) for details.
-
