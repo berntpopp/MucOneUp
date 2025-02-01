@@ -10,6 +10,8 @@ It supports:
     Without the flag, a fixed-length range produces a single simulation iteration by choosing one random value per range.
   - Optionally producing dual outputs (normal and mutated) if a comma-separated mutation pair is provided.
   - Printing the version of the tool.
+  - Running ORF prediction and, when activated via --output-orfs, scanning the resulting ORF FASTA
+    for toxic protein sequence features and generating a statistics output.
 """
 
 import argparse
@@ -26,6 +28,8 @@ from .simulate import simulate_diploid
 from .translate import run_orf_finder_in_memory
 from .fasta_writer import write_fasta  # Helper for writing FASTA files
 from .version import __version__  # Import version from the single source
+
+# (Other functions remain unchanged.)
 
 def build_parser():
     """Build and return the argument parser."""
@@ -50,7 +54,7 @@ def build_parser():
         "--out-base",
         default="muc1_simulated",
         help=("Base name for all output files. All outputs (simulation FASTA, VNTR structure, ORF FASTA, "
-              "and read simulation outputs) will be named based on this base name. Default is 'muc1_simulated'.")
+              "read simulation outputs) will be named based on this base name. Default is 'muc1_simulated'.")
     )
     parser.add_argument(
         "--out-dir",
@@ -111,7 +115,9 @@ def build_parser():
     parser.add_argument(
         "--output-orfs",
         action="store_true",
-        help="If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme."
+        help=("If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme. "
+              "Additionally, the resulting ORF file will be scanned for toxic protein sequence features and "
+              "a statistics file will be generated.")
     )
     # ORF parameters.
     parser.add_argument(
@@ -238,20 +244,16 @@ def main():
         os.makedirs(out_dir)
 
     # Process --fixed-lengths.
-    # If a range is provided, check the --simulate-series flag.
     if args.fixed_lengths is not None:
         fixed_matrix = parse_fixed_lengths(args.fixed_lengths, args.num_haplotypes)
         if args.simulate_series is not None:
-            # Use the provided step value (default 1 if no value was given)
             step = args.simulate_series
             new_fixed_matrix = []
             for lst in fixed_matrix:
                 if len(lst) > 1:
                     start = lst[0]
                     end = lst[-1]
-                    # Generate values from start to end using the step.
                     new_lst = list(range(start, end + 1, step))
-                    # Ensure the end value is included.
                     if new_lst[-1] != end:
                         new_lst.append(end)
                     new_fixed_matrix.append(new_lst)
@@ -262,7 +264,6 @@ def main():
             logging.info("Series mode enabled with step %d: %d simulation iterations generated from fixed-length ranges.",
                          step, len(simulation_configs))
         else:
-            # Without series mode, choose one value per haplotype randomly.
             simulation_configs = [[random.choice(lst) for lst in fixed_matrix]]
             logging.info("Single simulation iteration generated using a random choice from each fixed-length range.")
     else:
@@ -310,7 +311,6 @@ def main():
                             logging.error("Invalid --mutation-targets format: '%s'", t)
                             sys.exit(1)
                 else:
-                    # No targets provided: pick a random allowed target for the second mutation.
                     if "mutations" not in config or mutation_pair[1] not in config["mutations"]:
                         logging.error("Mutation '%s' not found in config['mutations'].", mutation_pair[1])
                         sys.exit(1)
@@ -391,7 +391,7 @@ def main():
                         logging.error("Random-target mutation failed: %s", e)
                         sys.exit(1)
 
-        # Write FASTA outputs with normalized, numbered filenames.
+        # Write FASTA outputs.
         if dual_mutation_mode:
             normal_out = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="normal")
             mut_out = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="mut")
@@ -411,7 +411,7 @@ def main():
                 logging.error("Writing FASTA failed: %s", e)
                 sys.exit(1)
 
-        # Optionally write VNTR structure file.
+        # Write VNTR structure file.
         if args.output_structure:
             if dual_mutation_mode:
                 normal_struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt", variant="normal")
@@ -476,6 +476,36 @@ def main():
                 except Exception as e:
                     logging.error("ORF finding failed: %s", e)
                     sys.exit(1)
+
+            # ----------------------------------------------------------------
+            # Toxic Protein Detection Integration:
+            # After ORF prediction, run the toxic protein detector on the generated ORF FASTA file(s)
+            # and write a JSON statistics file with detection metrics for each ORF.
+            try:
+                from .toxic_protein_detector import scan_orf_fasta
+            except ImportError as e:
+                logging.error("Failed to import toxic_protein_detector module: %s", e)
+                sys.exit(1)
+            # Optionally, use constant flanks from the config if available.
+            left_const_val = config.get("constants", {}).get("left")
+            right_const_val = config.get("constants", {}).get("right")
+            if dual_mutation_mode:
+                normal_stats = scan_orf_fasta(normal_orf_out, left_const=left_const_val, right_const=right_const_val)
+                mut_stats = scan_orf_fasta(mut_orf_out, left_const=left_const_val, right_const=right_const_val)
+                stats_file_normal = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt", variant="normal")
+                stats_file_mut = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt", variant="mut")
+                with open(stats_file_normal, "w") as nf:
+                    json.dump(normal_stats, nf, indent=4)
+                with open(stats_file_mut, "w") as mf:
+                    json.dump(mut_stats, mf, indent=4)
+                logging.info("Toxic protein detection stats written: %s and %s", stats_file_normal, stats_file_mut)
+            else:
+                stats_file = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt")
+                stats = scan_orf_fasta(orf_out, left_const=left_const_val, right_const=right_const_val)
+                with open(stats_file, "w") as sf:
+                    json.dump(stats, sf, indent=4)
+                logging.info("Toxic protein detection stats written: %s", stats_file)
+            # ----------------------------------------------------------------
 
         # Run read simulation pipeline if requested.
         if args.simulate_reads:

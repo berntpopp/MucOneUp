@@ -6,7 +6,8 @@
 2. **Force** a canonical terminal block (`6` or `6p` → `7 → 8 → 9`) before appending the right‐hand constant.  
 3. Optionally **introduce mutations** (inserts, deletes, or replacements) in selected repeats.  
 4. **Generate series of simulations** when fixed-length ranges are provided (via the `--simulate-series` flag) so that a simulation is run for each possible length (or combination of lengths for multiple haplotypes).  
-5. **Run dual simulations** (normal and mutated) when a comma-separated mutation name is provided.
+5. **Run dual simulations** (normal and mutated) when a comma-separated mutation name is provided.  
+6. **Detect Toxic Protein Features:** When ORF prediction is activated (via the `--output-orfs` flag), the tool scans the resulting ORF FASTA file for toxic protein sequence features by analyzing the repeat structure and amino acid composition of the variable region. A quantitative “deviation” (or similarity) score is computed relative to a wild–type model, and if the overall score exceeds a user–defined cutoff, the protein is flagged as toxic.
 
 ---
 
@@ -17,6 +18,7 @@
 - [Usage](#usage)  
   - [Command-Line Arguments](#command-line-arguments)  
   - [Example Commands](#example-commands)  
+- [Toxic Protein Detection](#toxic-protein-detection)
 - [Project Structure and Logic](#project-structure-and-logic)  
   - [Modules](#modules)  
   - [Config File Layout](#config-file-layout)  
@@ -50,8 +52,8 @@ Once installed, you’ll have a command-line program called **`muconeup`** avail
    muconeup --config config.json --out-base muc1_simulated --output muc1_simulated.fa --output-structure muc1_struct.txt
    ```
 3. Inspect the resulting outputs:
-   - **`muc1_simulated.fa`**: multi-FASTA file of haplotype sequences.  
-   - **`muc1_struct.txt`**: textual representation of each haplotype’s chain of repeats.
+   - **`muc1_simulated.fa`**: Multi-FASTA file of haplotype sequences.  
+   - **`muc1_struct.txt`**: Textual representation of each haplotype’s chain of repeats.
 
 ---
 
@@ -64,7 +66,7 @@ Below are the available **command-line arguments**. Use `muconeup --help` for mo
 | Argument                       | Description                                                                                                                                                                                                                                                                                                                                      |
 |--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `--config <path>`              | **Required**. Path to the JSON config file containing repeats, probabilities, constants, length model, mutations, tools, and read simulation settings.                                                                                                                                                                                          |
-| `--out-base <basename>`         | Base name for all output files. All outputs (simulation FASTA, VNTR structure, ORF FASTA, read simulation outputs) will be named using this base. Default is `muc1_simulated`.                                                                                                                                                           |
+| `--out-base <basename>`        | Base name for all output files. All outputs (simulation FASTA, VNTR structure, ORF FASTA, read simulation outputs, and ORF toxic protein statistics) will be named using this base. Default is `muc1_simulated`.                                                                                                                             |
 | `--out-dir <folder>`           | Output folder where all files will be written. Defaults to the current directory.                                                                                                                                                                                                                                                              |
 | `--num-haplotypes N`           | Number of haplotypes to simulate. Typically `2` for diploid. Defaults to 2.                                                                                                                                                                                                                                                                       |
 | `--fixed-lengths <vals>`       | One or more fixed lengths (or ranges) for each haplotype’s VNTR repeats. Values may be a single integer (e.g. `60`) or a range (e.g. `20-40`). When a range is provided, the default behavior is to pick one value at random from each range. Use the `--simulate-series` flag (see below) to run a simulation for every value (or combination) in the range. |
@@ -73,7 +75,7 @@ Below are the available **command-line arguments**. Use `muconeup --help` for mo
 | `--mutation-name <str>`        | (Optional) Name of a mutation from the config to apply. To run dual simulations (normal and mutated), provide a comma-separated pair (e.g. `normal,dupC`). If a single value is provided, only one simulation is mutated.                                                                                                                  |
 | `--mutation-targets <pairs>`   | (Optional) One or more `haplotype_index,repeat_index` pairs (1-based). E.g., `1,5 2,7`. If provided, each pair indicates which haplotype and repeat to mutate. If omitted, the mutation is applied at a random allowed repeat.                                                                                                               |
 | `--output-structure`           | (Optional) If provided, output a VNTR structure file (text) listing the chain of repeats for each haplotype.                                                                                                                                                                                                                                      |
-| `--output-orfs`                | (Optional) If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme.                                                                                                                                                                                                                                     |
+| `--output-orfs`                | (Optional) If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme. Additionally, the ORF FASTA is scanned for toxic protein features and a JSON statistics file is generated.                                                                                                                   |
 | `--orf-min-aa <int>`           | Minimum peptide length (in amino acids) to report from ORF prediction. Defaults to 100.                                                                                                                                                                                                                                                           |
 | `--orf-aa-prefix <str>`        | (Optional) Filter resulting peptides to only those beginning with this prefix. If used without a value, defaults to `MTSSV`. If omitted, no prefix filtering is applied.                                                                                                                                                                     |
 | `--simulate-reads`             | (Optional) If provided, run the read simulation pipeline on the simulated FASTA. This pipeline produces an aligned/indexed BAM and gzipped paired FASTQ files.                                                                                                                                                                              |
@@ -118,13 +120,38 @@ Below are the available **command-line arguments**. Use `muconeup --help` for mo
 
 ---
 
+## Toxic Protein Detection
+
+When the ORF prediction is enabled (using the `--output-orfs` flag), **MucOneUp** automatically scans the resulting ORF FASTA file for toxic protein sequence features. This new feature works as follows:
+
+1. **Extracting the Variable Region:**  
+   The ORF sequence is trimmed by removing the constant left/right flanks (if provided in the configuration), isolating the variable region (i.e. the repeat region).
+
+2. **Detecting and Quantifying Repeats:**  
+   A sliding window—whose length equals that of a consensus repeat motif (e.g. `"RCHLGPGHQAGPGLHR"`)—moves across the variable region. For each window, the similarity (using a simple Hamming distance approach) is computed, and windows exceeding a set identity threshold (e.g. 80%) are considered as valid repeats. From these, the number of repeats and the average repeat identity score are calculated.
+
+3. **Amino Acid Composition Analysis:**  
+   The tool computes the frequency of key residues (such as R, C, and H) in the variable region and compares these frequencies to a wild–type model (by default, an approximation is generated by repeating the consensus motif). A composition similarity score is calculated as:
+   ```
+   S_composition = 1 - (sum(|f_mut - f_wt|) / sum(f_wt))
+   ```
+   where a score near 1 indicates high similarity (i.e. normal) and lower scores indicate divergence (i.e. toxicity).
+
+4. **Combining Metrics:**  
+   The overall similarity (or deviation) score is computed as a weighted sum of the repeat score and the composition similarity. In this implementation, a **higher overall score indicates divergence from the wild–type** (i.e. a toxic protein), while a lower score indicates similarity to the wild–type (normal). If the overall score exceeds a user–defined toxic detection cutoff (e.g. 0.5), the ORF is flagged as toxic.
+
+5. **Output:**  
+   The detection metrics for each ORF (including repeat count, average repeat identity, repeat score, composition similarity, overall score, and the toxic flag) are saved in a JSON file (with file extension `orf_stats.txt`) alongside the ORF FASTA output.
+
+---
+
 ## Project Structure and Logic
 
 The **muc_one_up** Python package is organized into modules. Here is a brief summary:
 
 ```
 muc_one_up/
-├── cli.py           # Main CLI logic and argument parsing (now supporting series simulation and dual mutation modes)
+├── cli.py           # Main CLI logic and argument parsing (now supporting series simulation, dual mutation modes, and toxic protein detection)
 ├── config.py        # Loads and validates the JSON configuration file
 ├── distribution.py  # Samples the target VNTR length from a specified distribution
 ├── fasta_writer.py  # Helper for writing FASTA files
@@ -132,7 +159,8 @@ muc_one_up/
 ├── probabilities.py # Provides weighted random selections for repeat transitions
 ├── simulate.py      # Core simulation code for building haplotypes (chains of repeats with terminal block insertion)
 ├── read_simulation.py  # Integrates an external read simulation pipeline to generate reads from simulated FASTA files
-├── translate.py     # Translates DNA to protein and performs ORF predictions using orfipy
+├── translate.py     # Translates DNA to protein and performs ORF prediction using orfipy
+├── toxic_protein_detector.py   # **New Feature**: Scans ORF FASTA outputs to detect toxic protein sequence features based on repeat structure and amino acid composition
 └── __init__.py      # Package initialization and version information
 ```
 
@@ -144,6 +172,7 @@ muc_one_up/
    - Simulates haplotypes via **simulate_diploid()**.
    - Optionally applies mutations using **apply_mutations()**. Dual simulation is supported when a comma-separated mutation name is provided.
    - Writes output files (FASTA, VNTR structure, ORFs) with numbered filenames.
+   - When ORF prediction is activated (via `--output-orfs`), the resulting ORF FASTA is further scanned for toxic protein features using **toxic_protein_detector.py**. The detection statistics are saved as a JSON file.
    - Optionally runs the read simulation pipeline.
 
 2. **Simulation (simulate.py):**
