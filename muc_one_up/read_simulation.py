@@ -36,6 +36,7 @@ import sys
 import time
 from datetime import datetime
 import threading
+import shutil  # NEW: for checking executables in PATH
 
 # Configure logging.
 logging.basicConfig(
@@ -121,6 +122,10 @@ def fix_field(field, desired_length, pad_char):
 def replace_Ns(input_fa, output_fa, tools):
     """
     Replace Ns in the simulated FASTA using reseq replaceN.
+
+    :param input_fa: Input FASTA filename.
+    :param output_fa: Output FASTA filename.
+    :param tools: Dictionary of tool commands.
     """
     cmd = [tools["reseq"], "replaceN", "-r", input_fa, "-R", output_fa]
     run_command(cmd, timeout=60)
@@ -129,6 +134,11 @@ def replace_Ns(input_fa, output_fa, tools):
 def generate_systematic_errors(input_fa, reseq_model, output_fq, tools):
     """
     Generate systematic errors using reseq illuminaPE.
+
+    :param input_fa: Input FASTA filename.
+    :param reseq_model: Reseq model file.
+    :param output_fq: Output FASTQ filename.
+    :param tools: Dictionary of tool commands.
     """
     cmd = [
         tools["reseq"], "illuminaPE", "-r", input_fa, "-s", reseq_model,
@@ -140,6 +150,10 @@ def generate_systematic_errors(input_fa, reseq_model, output_fq, tools):
 def fa_to_twobit(input_fa, output_2bit, tools):
     """
     Convert a FASTA file to 2bit format using faToTwoBit.
+
+    :param input_fa: Input FASTA filename.
+    :param output_2bit: Output 2bit filename.
+    :param tools: Dictionary of tool commands.
     """
     cmd = [tools["faToTwoBit"], input_fa, output_2bit]
     run_command(cmd, timeout=60)
@@ -151,7 +165,7 @@ def extract_subset_reference(sample_bam, output_fa, tools):
 
     :param sample_bam: Input BAM filename.
     :param output_fa: Output FASTA filename.
-    :param tools: Dict of tool commands.
+    :param tools: Dictionary of tool commands.
     :return: Intermediate collated BAM filename.
     """
     intermediate_bam = output_fa + ".collated.bam"
@@ -170,7 +184,7 @@ def run_pblat(twobit_file, subset_reference, output_psl, tools, threads=24,
     :param twobit_file: Input 2bit filename.
     :param subset_reference: Subset reference FASTA.
     :param output_psl: Output PSL filename.
-    :param tools: Dict of tool commands.
+    :param tools: Dictionary of tool commands.
     :param threads: Number of threads.
     :param minScore: Minimal score.
     :param minIdentity: Minimal identity.
@@ -186,8 +200,8 @@ def read_fasta_to_dict(fasta_file):
     """
     Read a FASTA file into a dictionary mapping chromosome names to sequences.
 
-    :param fasta_file: Path to FASTA file.
-    :return: Dict {chrom: sequence}.
+    :param fasta_file: Path to the FASTA file.
+    :return: Dictionary mapping chromosome names to sequences.
     """
     ref_dict = {}
     chrom = None
@@ -291,7 +305,7 @@ def pick_on_match(matches):
     """
     Randomly pick one match from the provided list.
 
-    :param matches: List of matches.
+    :param matches: List of match tuples.
     :return: A single match tuple.
     """
     match = random.choice(matches)
@@ -353,6 +367,61 @@ def comp(sequence):
         "N": "N", "n": "n"
     }
     return "".join(d.get(s, "N") for s in sequence)
+
+
+def check_external_tools(tools):
+    """
+    Check that all external tools required for read simulation are available.
+
+    For each tool (e.g. reseq, faToTwoBit, samtools, pblat, bwa), this function:
+      - Validates that the executable is in the system PATH.
+      - Runs a basic test command (using '--help' or '--version') for tools that support it.
+        Currently, only "reseq" and "samtools" are tested.
+      - For tools that do not support a test parameter (e.g. bwa, pblat, faToTwoBit), only verifies they are found.
+    
+    Exits gracefully with a clear error message if any required tool is missing or misconfigured.
+    """
+    # Define test arguments only for tools that support them.
+    test_args = {
+        "reseq": "--help",
+        "samtools": "--version"
+    }
+    
+    for tool_key, cmd_str in tools.items():
+        tokens = cmd_str.split()
+        executable = tokens[0]
+        if shutil.which(executable) is None:
+            logging.error(
+                f"Required tool '{tool_key}' not found: {executable}. Please ensure it is installed and in your PATH."
+            )
+            sys.exit(1)
+        
+        if tool_key in test_args:
+            test_command = f"{cmd_str} {test_args[tool_key]}"
+            try:
+                result = subprocess.run(
+                    test_command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=30
+                )
+                if result.returncode != 0:
+                    logging.error(
+                        f"Test command for tool '{tool_key}' failed:\n"
+                        f"  Command: {test_command}\n"
+                        f"  Error Output: {result.stderr.decode().strip()}"
+                    )
+                    sys.exit(1)
+                else:
+                    logging.info(f"Tool '{tool_key}' is available and working.")
+            except Exception as e:
+                logging.error(
+                    f"Exception when testing tool '{tool_key}' with command '{test_command}': {e}"
+                )
+                sys.exit(1)
+        else:
+            logging.info(f"Tool '{tool_key}' found: {executable}")
 
 
 def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
@@ -443,7 +512,7 @@ def create_reads(input_fragments, reseq_model, output_reads, threads, tools):
     :param reseq_model: Reseq model file.
     :param output_reads: Output reads FASTQ.
     :param threads: Number of threads.
-    :param tools: Tools dictionary.
+    :param tools: Dictionary of tool commands.
     """
     cmd = [
         tools["reseq"], "seqToIllumina", "-j", str(threads),
@@ -454,7 +523,7 @@ def create_reads(input_fragments, reseq_model, output_reads, threads, tools):
     except SystemExit as e:
         if os.path.exists(output_reads) and os.path.getsize(output_reads) > 0:
             logging.warning(
-                "seqToIllumina command timed out but output file exists. Continuing."
+                "seqToTwoIllumina command timed out but output file exists. Continuing."
             )
         else:
             raise
@@ -494,7 +563,7 @@ def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
     :param read2: FASTQ filename for read2.
     :param human_reference: Human reference FASTA.
     :param output_bam: Output BAM filename.
-    :param tools: Tools dictionary.
+    :param tools: Dictionary of tool commands.
     :param threads: Number of threads.
     """
     bwa_exe = tools["bwa"]
@@ -559,11 +628,14 @@ def simulate_reads(config, input_fa):
     """
     Run the complete read simulation pipeline.
 
-    :param config: Dict containing "tools" and "read_simulation" sections.
+    :param config: Dictionary containing "tools" and "read_simulation" sections.
     :param input_fa: Input simulated FASTA file (e.g., muc1_simulated.fa).
     """
     tools = config.get("tools", {})
     rs_config = config.get("read_simulation", {})
+
+    # NEW: Check that all external tools are available and working.
+    check_external_tools(tools)
 
     base = os.path.splitext(input_fa)[0]
     noNs_fa = base + "_noNs.fasta"
