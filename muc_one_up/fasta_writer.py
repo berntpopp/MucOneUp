@@ -1,11 +1,21 @@
 # muc_one_up/fasta_writer.py
 
-def write_fasta(sequences, filenames, prefix="haplotype"):
+import logging
+
+
+def write_fasta(sequences, filename, prefix="haplotype"):
     """
-    Generic function to write sequences to a FASTA file.
-    `sequences`: list of strings
-    `filenames`: path or file-like
+    Write a list of sequences to a FASTA file.
+
+    :param sequences: List of sequence strings.
+    :param filename: Output filename for the FASTA file.
+    :param prefix: Header prefix for each sequence (default "haplotype").
     """
-    with open(filenames, "w") as fh:
-        for i, seq in enumerate(sequences, start=1):
-            fh.write(f">{prefix}_{i}\n{seq}\n")
+    try:
+        with open(filename, "w") as fh:
+            for i, seq in enumerate(sequences, start=1):
+                fh.write(f">{prefix}_{i}\n{seq}\n")
+        logging.info("FASTA file written to %s", filename)
+    except Exception as e:
+        logging.error("Error writing FASTA file: %s", e)
+        raise

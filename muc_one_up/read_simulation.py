@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# muc_one_up/read_simulation.py
 """
 read_simulation.py
 
@@ -15,7 +16,7 @@ The pipeline performs the following steps:
  5. Run pblat to align the 2bit file to the subset reference.
  6. Simulate fragments (port of w‑Wessim2) from the “noNs” FASTA.
  7. Create reads from the fragments using reseq seqToIllumina.
- 8. Split the interleaved FASTQ into paired FASTQ files (written as gzipped files).
+ 8. Split the interleaved FASTQ into paired FASTQ files (gzipped).
  9. Align the reads to a human reference with bwa mem and sort/index with samtools.
 10. Clean up all intermediate files.
 
@@ -24,115 +25,123 @@ Usage:
 where <input_fasta> is typically the output from muconeup (e.g. muc1_simulated.fa).
 """
 
-import subprocess
-import os
-import sys
-import random
-import math
-import time
-from datetime import datetime
 import gzip
 import logging
+import math
+import os
+import random
 import signal
+import subprocess
+import sys
+import time
+from datetime import datetime
 
 # Configure logging.
-logging.basicConfig(level=logging.DEBUG,
-                    format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-# ------------------------------------------------------------------------------
-# Helper function to run external commands with timeout support.
+
 def run_command(cmd, shell=False, timeout=None):
     """
-    Run a command using subprocess.Popen in its own process group so that
-    we can kill the entire group on a timeout. If the command does not finish
-    in time, the process group is killed and a warning is logged.
+    Run a command in its own process group so that it can be killed on timeout.
 
-    Parameters:
-      cmd: command (list or string) to run.
-      shell: whether to run the command in the shell.
-      timeout: number of seconds to wait before killing the command.
-               If None, wait indefinitely.
+    :param cmd: Command (list or string) to run.
+    :param shell: Whether to run the command in the shell.
+    :param timeout: Timeout in seconds (None means wait indefinitely).
     """
-    # If cmd is a list and the first element contains spaces, join and use shell.
     if isinstance(cmd, list) and not shell and " " in cmd[0]:
         shell = True
         cmd = " ".join(cmd)
     cmd_str = cmd if isinstance(cmd, str) else " ".join(cmd)
-    logging.info(f"Running command: {cmd_str} (timeout={timeout})")
+    logging.info("Running command: %s (timeout=%s)", cmd_str, timeout)
 
     try:
-        # Create a new process group so we can kill the whole group if needed.
         proc = subprocess.Popen(
             cmd,
             shell=shell,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
-            preexec_fn=os.setsid  # Only on POSIX systems.
+            preexec_fn=os.setsid
         )
     except Exception as e:
-        logging.exception(f"Failed to start command: {cmd_str}")
+        logging.exception("Failed to start command: %s", cmd_str)
         sys.exit(1)
 
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
         if stdout:
-            logging.debug(f"stdout: {stdout}")
+            logging.debug("stdout: %s", stdout)
         if stderr:
-            logging.debug(f"stderr: {stderr}")
+            logging.debug("stderr: %s", stderr)
     except subprocess.TimeoutExpired:
-        logging.warning(f"Command timed out after {timeout} seconds. Killing process group.")
+        logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
         except Exception as e:
             logging.exception("Error killing process group")
         stdout, stderr = proc.communicate()
     except Exception as e:
-        logging.exception(f"Error during command execution: {cmd_str}")
+        logging.exception("Error during command execution: %s", cmd_str)
         sys.exit(1)
 
     if proc.returncode != 0:
-        logging.error(f"Command exited with non-zero exit code {proc.returncode}: {cmd_str}")
+        logging.error("Command exited with non-zero exit code %d: %s", proc.returncode, cmd_str)
         sys.exit(proc.returncode)
 
-# ------------------------------------------------------------------------------
-# Helper: Ensure a field is exactly desired_length in characters.
+
 def fix_field(field, desired_length, pad_char):
     """
-    If the provided field is longer than desired_length, trim it;
-    if shorter, pad on the right with pad_char.
+    Ensure a field is exactly desired_length characters long.
+
+    :param field: Input string.
+    :param desired_length: Desired length.
+    :param pad_char: Character to pad with.
+    :return: String of length desired_length.
     """
     if len(field) > desired_length:
         return field[:desired_length]
     else:
         return field.ljust(desired_length, pad_char)
 
-# ------------------------------------------------------------------------------
-# Step 1: Replace Ns using reseq replaceN.
+
 def replace_Ns(input_fa, output_fa, tools):
+    """
+    Replace Ns in the simulated FASTA using reseq replaceN.
+    """
     cmd = [tools["reseq"], "replaceN", "-r", input_fa, "-R", output_fa]
     run_command(cmd, timeout=60)
 
-# ------------------------------------------------------------------------------
-# Step 2: Generate systematic errors using reseq illuminaPE.
+
 def generate_systematic_errors(input_fa, reseq_model, output_fq, tools):
-    cmd = [tools["reseq"], "illuminaPE", "-r", input_fa, "-s", reseq_model,
-           "--stopAfterEstimation", "--writeSysError", output_fq]
+    """
+    Generate systematic errors using reseq illuminaPE.
+    """
+    cmd = [
+        tools["reseq"], "illuminaPE", "-r", input_fa, "-s", reseq_model,
+        "--stopAfterEstimation", "--writeSysError", output_fq
+    ]
     run_command(cmd, timeout=30)
 
-# ------------------------------------------------------------------------------
-# Step 3: Convert FASTA to 2bit using faToTwoBit.
+
 def fa_to_twobit(input_fa, output_2bit, tools):
+    """
+    Convert a FASTA file to 2bit format using faToTwoBit.
+    """
     cmd = [tools["faToTwoBit"], input_fa, output_2bit]
     run_command(cmd, timeout=60)
 
-# ------------------------------------------------------------------------------
-# Step 4: Extract a subset reference from a BAM.
+
 def extract_subset_reference(sample_bam, output_fa, tools):
     """
-    First, run samtools collate to generate an intermediate BAM file.
-    Then, run samtools fasta on that file to generate the subset FASTA.
-    Returns the name of the intermediate BAM file.
+    Extract a subset reference from a BAM file.
+    
+    :param sample_bam: Input BAM filename.
+    :param output_fa: Output FASTA filename.
+    :param tools: Dict of tool commands.
+    :return: Intermediate collated BAM filename.
     """
     intermediate_bam = output_fa + ".collated.bam"
     cmd_collate = f"{tools['samtools']} collate -u {sample_bam} -o {intermediate_bam}"
@@ -141,38 +150,58 @@ def extract_subset_reference(sample_bam, output_fa, tools):
     run_command(cmd_fasta, shell=True, timeout=60)
     return intermediate_bam
 
-# ------------------------------------------------------------------------------
-# Step 5: Run pblat.
-def run_pblat(twobit_file, subset_reference, output_psl, tools, threads=24, minScore=95, minIdentity=95):
-    cmd = [tools["pblat"], twobit_file, subset_reference, output_psl,
-           f"-threads={threads}", f"-minScore={minScore}", f"-minIdentity={minIdentity}"]
+
+def run_pblat(twobit_file, subset_reference, output_psl, tools, threads=24,
+              minScore=95, minIdentity=95):
+    """
+    Run pblat to align a 2bit file to a subset reference.
+
+    :param twobit_file: Input 2bit filename.
+    :param subset_reference: Subset reference FASTA.
+    :param output_psl: Output PSL filename.
+    :param tools: Dict of tool commands.
+    :param threads: Number of threads.
+    :param minScore: Minimal score.
+    :param minIdentity: Minimal identity.
+    """
+    cmd = [
+        tools["pblat"], twobit_file, subset_reference, output_psl,
+        f"-threads={threads}", f"-minScore={minScore}", f"-minIdentity={minIdentity}"
+    ]
     run_command(cmd, timeout=120)
 
-# ------------------------------------------------------------------------------
-# Functions for the w‑Wessim2 port (Step 6)
+
 def read_fasta_to_dict(fasta_file):
-    """Read a FASTA file into a dictionary {chrom: sequence}."""
+    """
+    Read a FASTA file into a dictionary mapping chromosome names to sequences.
+
+    :param fasta_file: Path to FASTA file.
+    :return: Dict {chrom: sequence}.
+    """
     ref_dict = {}
     chrom = None
     seq_lines = []
-    with open(fasta_file, 'r') as fh:
+    with open(fasta_file, "r") as fh:
         for line in fh:
             line = line.strip()
-            if line.startswith('>'):
+            if line.startswith(">"):
                 if chrom is not None:
-                    ref_dict[chrom] = ''.join(seq_lines)
+                    ref_dict[chrom] = "".join(seq_lines)
                 chrom = line[1:].split()[0]
                 seq_lines = []
             else:
                 seq_lines.append(line)
         if chrom is not None:
-            ref_dict[chrom] = ''.join(seq_lines)
+            ref_dict[chrom] = "".join(seq_lines)
     return ref_dict
+
 
 def read_syser_file(syser_file):
     """
-    Reads the systematic errors file.
-    Returns dictionaries: tendendict_f, tendendict_r, ratesdict_f, ratesdict_r.
+    Read the systematic errors file and return four dictionaries.
+
+    :param syser_file: Path to the syser file.
+    :return: Tuple (tendendict_f, tendendict_r, ratesdict_f, ratesdict_r).
     """
     tendendict_f = {}
     tendendict_r = {}
@@ -180,44 +209,48 @@ def read_syser_file(syser_file):
     ratesdict_r = {}
     direction = None
     rat = False
-    with open(syser_file, 'r') as fh:
+    with open(syser_file, "r") as fh:
         for line in fh:
             line = line.strip()
-            if line.startswith('@') and len(line) < 500:
-                space_index = line.find(' ')
-                id = line[1:space_index] if space_index != -1 else line[1:]
-                if 'forward' in line:
-                    direction = 'f'
-                elif 'reverse' in line:
-                    direction = 'r'
+            if line.startswith("@") and len(line) < 500:
+                space_index = line.find(" ")
+                identifier = line[1:space_index] if space_index != -1 else line[1:]
+                if "forward" in line:
+                    direction = "f"
+                elif "reverse" in line:
+                    direction = "r"
                 else:
                     logging.error("Direction not found in syser header")
                 continue
-            elif line == '+':
+            elif line == "+":
                 rat = True
                 continue
             else:
                 if rat:
-                    if direction == 'f':
-                        ratesdict_f[id] = line
-                    elif direction == 'r':
-                        ratesdict_r[id] = line[::-1]
+                    if direction == "f":
+                        ratesdict_f[identifier] = line
+                    elif direction == "r":
+                        ratesdict_r[identifier] = line[::-1]
                     rat = False
                 else:
-                    if direction == 'f':
-                        tendendict_f[id] = line
-                    elif direction == 'r':
-                        tendendict_r[id] = line[::-1]
+                    if direction == "f":
+                        tendendict_f[identifier] = line
+                    elif direction == "r":
+                        tendendict_r[identifier] = line[::-1]
     return tendendict_f, tendendict_r, ratesdict_f, ratesdict_r
+
 
 def read_psl_file(psl_file):
     """
-    Read a PSL file (skipping header) and return a list of matches.
-    Each match is a tuple: (chrom, start, end, strand)
+    Read a PSL file (skipping header lines) and return a list of matches.
+
+    Each match is a tuple: (chrom, start, end, strand).
+
+    :param psl_file: Path to the PSL file.
+    :return: List of match tuples.
     """
     matches = []
-    with open(psl_file, 'r') as fh:
-        # Skip the header lines.
+    with open(psl_file, "r") as fh:
         for _ in range(5):
             fh.readline()
         for line in fh:
@@ -239,27 +272,46 @@ def read_psl_file(psl_file):
                 continue
             strand = parts[8]
             matches.append((chrom, start, end, strand))
-    logging.debug(f"Found {len(matches)} matches in PSL file.")
+    logging.debug("Found %d matches in PSL file.", len(matches))
     return matches
 
+
 def pick_on_match(matches):
-    """Randomly pick one match from the list."""
+    """
+    Randomly pick one match from the provided list.
+
+    :param matches: List of matches.
+    :return: A single match tuple.
+    """
     match = random.choice(matches)
-    logging.debug(f"Picked match: {match}")
+    logging.debug("Picked match: %s", match)
     return match
 
+
 def get_insert_length(mu, sigma, lower):
-    """Return an insert length sampled from a Gaussian (>= lower)."""
+    """
+    Return an insert length sampled from a Gaussian distribution (>= lower).
+
+    :param mu: Mean insert length.
+    :param sigma: Standard deviation.
+    :param lower: Minimum allowed length.
+    :return: Integer insert length.
+    """
     while True:
         length = int(random.gauss(mu, sigma))
         if length >= lower:
-            logging.debug(f"Selected insert length: {length}")
+            logging.debug("Selected insert length: %d", length)
             return length
+
 
 def pick_fragment(match, ins, bind):
     """
-    Given a match (chrom, probe_start, probe_end, strand) and desired insert length,
-    randomly pick a fragment.
+    Randomly pick a fragment based on a match and desired insert length.
+
+    :param match: Tuple (chrom, probe_start, probe_end, strand).
+    :param ins: Desired insert length.
+    :param bind: Minimum fraction (%) for overlap.
+    :return: Tuple (chrom, fragment_start, fragment_end, strand).
     """
     probechrom, probestart, probeend, strand = match
     probelength = probeend - probestart
@@ -273,24 +325,39 @@ def pick_fragment(match, ins, bind):
     else:
         seqstart = random.randint(rangestart, rangeend - ins)
     fragment = (probechrom, seqstart, seqstart + ins, strand)
-    logging.debug(f"Picked fragment: {fragment}")
+    logging.debug("Picked fragment: %s", fragment)
     return fragment
 
+
 def comp(sequence):
-    """Return the complement of a DNA sequence (preserving case)."""
-    d = {'A':'T','T':'A','C':'G','G':'C',
-         'a':'t','t':'a','c':'g','g':'c',
-         'N':'N','n':'n'}
-    return ''.join(d.get(s, 'N') for s in sequence)
+    """
+    Return the complement of a DNA sequence (preserving case).
+
+    :param sequence: DNA sequence.
+    :return: Complemented sequence.
+    """
+    d = {
+        "A": "T", "T": "A", "C": "G", "G": "C",
+        "a": "t", "t": "a", "c": "g", "g": "c",
+        "N": "N", "n": "n"
+    }
+    return "".join(d.get(s, "N") for s in sequence)
+
 
 def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
                        fragment_sd, min_fragment, bind, output_fragments):
     """
-    Simulate fragments (port of w‑Wessim2).
-    Reads the reference FASTA, syser file, and BLAT PSL file; then writes simulated
-    paired fragment sequences in FASTA format to output_fragments.
-    The header for each fragment includes two fields (systematic errors and quality)
-    that must be exactly the same length as the fragment sequence.
+    Simulate fragments (port of w‑Wessim2) and write paired fragment sequences to a FASTA file.
+
+    :param ref_fa: Reference FASTA file.
+    :param syser_file: Systematic errors file.
+    :param psl_file: PSL file.
+    :param read_number: Number of fragments to simulate.
+    :param fragment_size: Desired fragment size.
+    :param fragment_sd: Standard deviation for fragment size.
+    :param min_fragment: Minimum acceptable fragment length.
+    :param bind: Minimum fraction (%) for overlap.
+    :param output_fragments: Output FASTA filename for fragments.
     """
     t0 = time.time()
     logging.info("Simulating fragments...")
@@ -300,14 +367,13 @@ def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
     if not matches:
         logging.error("No matches found in PSL file.")
         sys.exit(1)
-    # Ensure the output directory exists.
     output_dir = os.path.dirname(output_fragments)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    with open(output_fragments, 'w') as out_f:
+    with open(output_fragments, "w") as out_f:
         i = 0
         attempts = 0
-        max_attempts = read_number * 10  # Avoid infinite looping.
+        max_attempts = read_number * 10
         while i < read_number and attempts < max_attempts:
             attempts += 1
             match = pick_on_match(matches)
@@ -316,72 +382,85 @@ def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
             chrom, frag_start, frag_end, strand = fragment
             seq = ref_dict.get(chrom, "")[frag_start:frag_end]
             if len(seq) < min_fragment:
-                logging.debug(f"Fragment length {len(seq)} is below min_fragment {min_fragment}. Skipping.")
+                logging.debug("Fragment length %d is below min_fragment %d. Skipping.",
+                              len(seq), min_fragment)
                 continue
-            # Use the full fragment sequence.
             frag_seq = seq
             frag_seq_rc = comp(seq)[::-1]
             frag_len = len(frag_seq)
-            # Get systematic error strings from the dictionaries.
             tendenseq_f = tendendict_f.get(chrom, "N" * frag_len)
             ratesseq_f = ratesdict_f.get(chrom, "!" * frag_len)
             tendenseq_r = tendendict_r.get(chrom, "N" * frag_len)
             ratesseq_r = ratesdict_r.get(chrom, "!" * frag_len)
-            # Ensure they are exactly the same length as the fragment.
             tendenseq_f_fixed = fix_field(tendenseq_f, frag_len, "N")
             ratesseq_f_fixed = fix_field(ratesseq_f, frag_len, "!")
             tendenseq_r_fixed = fix_field(tendenseq_r, frag_len, "N")
             ratesseq_r_fixed = fix_field(ratesseq_r, frag_len, "!")
-            # Write header and sequence.
-            if strand == '+':
-                out_f.write(f">{i+1} 1;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n{frag_seq}\n")
-                out_f.write(f">{i+1} 2;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n{frag_seq_rc}\n")
-            elif strand == '-':
-                out_f.write(f">{i+1} 1;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n{frag_seq_rc}\n")
-                out_f.write(f">{i+1} 2;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n{frag_seq}\n")
+            if strand == "+":
+                out_f.write(
+                    f">{i+1} 1;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n{frag_seq}\n"
+                )
+                out_f.write(
+                    f">{i+1} 2;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n{frag_seq_rc}\n"
+                )
+            elif strand == "-":
+                out_f.write(
+                    f">{i+1} 1;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n{frag_seq_rc}\n"
+                )
+                out_f.write(
+                    f">{i+1} 2;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n{frag_seq}\n"
+                )
             i += 1
-            if (i+1) % 1000000 == 0:
+            if (i + 1) % 1000000 == 0:
                 t1 = time.time()
-                logging.info(f"{i+1} fragments processed in {t1-t0:.2f} secs")
+                logging.info("%d fragments processed in %.2f secs", i + 1, t1 - t0)
         if i < read_number:
-            logging.warning(f"Only generated {i} fragments after {attempts} attempts. Expected {read_number}.")
+            logging.warning("Only generated %d fragments after %d attempts. Expected %d.",
+                            i, attempts, read_number)
     t1 = time.time()
-    logging.info(f"Done processing {i} fragments in {t1-t0:.2f} secs")
+    logging.info("Done processing %d fragments in %.2f secs", i, t1 - t0)
 
-# ------------------------------------------------------------------------------
-# Step 7: Create reads using reseq seqToIllumina.
+
 def create_reads(input_fragments, reseq_model, output_reads, threads, tools):
     """
     Create reads from fragments using reseq seqToIllumina.
-    
-    Note: Some versions of reseq seqToIllumina hang even though they produce the
-    desired output file. We wrap this call so that if the command times out (and is
-    killed), we check that the output file exists and is non-empty. If so, we log a
-    warning and continue as if the command had succeeded.
+
+    If the command times out but the output file exists and is non-empty,
+    a warning is logged and the process continues.
+
+    :param input_fragments: Input fragments FASTA.
+    :param reseq_model: Reseq model file.
+    :param output_reads: Output reads FASTQ.
+    :param threads: Number of threads.
+    :param tools: Tools dictionary.
     """
-    cmd = [tools["reseq"], "seqToIllumina", "-j", str(threads),
-           "-s", reseq_model, "-i", input_fragments, "-o", output_reads]
+    cmd = [
+        tools["reseq"], "seqToIllumina", "-j", str(threads),
+        "-s", reseq_model, "-i", input_fragments, "-o", output_reads
+    ]
     try:
         run_command(cmd, timeout=30)
     except SystemExit as e:
-        # If the command was killed (for example, with exit code -15)
-        # check if the output file exists and is non-empty.
         if os.path.exists(output_reads) and os.path.getsize(output_reads) > 0:
-            logging.warning("seqToIllumina command timed out but output file exists. Continuing with exit code 0.")
+            logging.warning(
+                "seqToIllumina command timed out but output file exists. Continuing."
+            )
         else:
             raise
 
-# ------------------------------------------------------------------------------
-# Step 8: Split interleaved FASTQ into paired gzipped FASTQ files.
+
 def split_reads(interleaved_fastq, output_fastq1, output_fastq2):
     """
-    Split an interleaved FASTQ (each record is 4 lines) into two gzipped files:
-    one for read1 and one for read2.
+    Split an interleaved FASTQ (4 lines per record) into two gzipped FASTQ files.
+
+    :param interleaved_fastq: Input interleaved FASTQ filename.
+    :param output_fastq1: Output FASTQ filename for read1.
+    :param output_fastq2: Output FASTQ filename for read2.
     """
-    logging.info(f"Splitting {interleaved_fastq} into {output_fastq1} and {output_fastq2}")
-    with open(interleaved_fastq, 'r') as inf, \
-         gzip.open(output_fastq1, 'wt') as out1, \
-         gzip.open(output_fastq2, 'wt') as out2:
+    logging.info("Splitting %s into %s and %s", interleaved_fastq, output_fastq1, output_fastq2)
+    with open(interleaved_fastq, "r") as inf, \
+         gzip.open(output_fastq1, "wt") as out1, \
+         gzip.open(output_fastq2, "wt") as out2:
         record = []
         record_index = 0
         for line in inf:
@@ -395,12 +474,17 @@ def split_reads(interleaved_fastq, output_fastq1, output_fastq2):
                 record_index += 1
     logging.info("Splitting complete.")
 
-# ------------------------------------------------------------------------------
-# Step 9: Align reads using bwa mem and samtools.
+
 def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
     """
-    Align paired-end reads with bwa mem, sort with samtools, and index the resulting BAM.
-    If the bwa (or samtools) command is a compound command, we run it using bash -c.
+    Align paired-end reads with bwa mem, sort with samtools, and index the BAM file.
+
+    :param read1: FASTQ filename for read1.
+    :param read2: FASTQ filename for read2.
+    :param human_reference: Human reference FASTA.
+    :param output_bam: Output BAM filename.
+    :param tools: Tools dictionary.
+    :param threads: Number of threads.
     """
     bwa_exe = tools["bwa"]
     if " " in bwa_exe:
@@ -412,7 +496,10 @@ def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
 
     samtools_exe = tools["samtools"]
     if " " in samtools_exe:
-        samtools_sort_cmd = "bash -c '" + " ".join([samtools_exe, "sort", "-o", output_bam, "-"]) + "'"
+        samtools_sort_cmd = (
+            "bash -c '" +
+            " ".join([samtools_exe, "sort", "-o", output_bam, "-"]) + "'"
+        )
         samtools_shell = True
     else:
         samtools_sort_cmd = [samtools_exe, "sort", "-o", output_bam, "-"]
@@ -420,10 +507,20 @@ def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
 
     logging.info("Aligning reads...")
     try:
-        bwa_proc = subprocess.Popen(bwa_cmd, shell=bwa_shell, stdout=subprocess.PIPE, universal_newlines=True)
-        sort_proc = subprocess.Popen(samtools_sort_cmd, shell=samtools_shell, stdin=bwa_proc.stdout,
-                                     stdout=subprocess.PIPE, universal_newlines=True)
-        bwa_proc.stdout.close()  # Allow bwa_proc to receive a SIGPIPE if sort_proc exits.
+        bwa_proc = subprocess.Popen(
+            bwa_cmd,
+            shell=bwa_shell,
+            stdout=subprocess.PIPE,
+            universal_newlines=True
+        )
+        sort_proc = subprocess.Popen(
+            samtools_sort_cmd,
+            shell=samtools_shell,
+            stdin=bwa_proc.stdout,
+            stdout=subprocess.PIPE,
+            universal_newlines=True
+        )
+        bwa_proc.stdout.close()
         sort_proc.communicate()
     except Exception as e:
         logging.exception("Error during alignment")
@@ -431,93 +528,82 @@ def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
     index_cmd = [tools["samtools"], "index", output_bam]
     run_command(index_cmd, timeout=60)
 
-# ------------------------------------------------------------------------------
-# Cleanup helper.
+
 def cleanup_files(file_list):
-    """Remove files in the provided list if they exist."""
+    """
+    Remove files in the provided list if they exist.
+
+    :param file_list: List of filenames.
+    """
     for f in file_list:
         try:
             if os.path.exists(f):
                 os.remove(f)
-                logging.info(f"Removed intermediate file: {f}")
+                logging.info("Removed intermediate file: %s", f)
         except Exception as e:
-            logging.warning(f"Unable to remove intermediate file {f}: {e}")
+            logging.warning("Unable to remove intermediate file %s: %s", f, e)
 
-# ------------------------------------------------------------------------------
-# Master orchestration function.
+
 def simulate_reads(config, input_fa):
     """
     Run the complete read simulation pipeline.
-    
-    Parameters:
-      - config: a dictionary containing "tools" and "read_simulation" sections.
-      - input_fa: input simulated FASTA file (e.g., muc1_simulated.fa).
+
+    :param config: Dict containing "tools" and "read_simulation" sections.
+    :param input_fa: Input simulated FASTA file (e.g., muc1_simulated.fa).
     """
     tools = config.get("tools", {})
     rs_config = config.get("read_simulation", {})
-    
+
     base = os.path.splitext(input_fa)[0]
-    # Intermediate files.
-    noNs_fa      = base + "_noNs.fasta"
-    syser_fq     = base + "_noNs_syserrors.fq"
-    twobit_file  = noNs_fa + ".2bit"
-    subset_ref   = base + "_subset.fasta"
-    psl_file     = base + "_subset.psl"
+    noNs_fa = base + "_noNs.fasta"
+    syser_fq = base + "_noNs_syserrors.fq"
+    twobit_file = noNs_fa + ".2bit"
+    subset_ref = base + "_subset.fasta"
+    psl_file = base + "_subset.psl"
     fragments_fa = base + "_w_wessim2.fa"
-    reads_fq     = base + "_w_wessim2.fq"
-    # Final outputs (paired FASTQs are gzipped).
-    reads_fq1    = base + "_w_wessim2_1.fq.gz"
-    reads_fq2    = base + "_w_wessim2_2.fq.gz"
-    output_bam   = base + "_wessim.bam"
-    
-    # Parameters from configuration.
-    reseq_model     = rs_config.get("reseq_model")
-    sample_bam      = rs_config.get("sample_bam")
+    reads_fq = base + "_w_wessim2.fq"
+    reads_fq1 = base + "_w_wessim2_1.fq.gz"
+    reads_fq2 = base + "_w_wessim2_2.fq.gz"
+    output_bam = base + "_wessim.bam"
+
+    reseq_model = rs_config.get("reseq_model")
+    sample_bam = rs_config.get("sample_bam")
     human_reference = rs_config.get("human_reference")
-    read_number     = int(rs_config.get("read_number", 10000))
-    fragment_size   = int(rs_config.get("fragment_size", 170))
-    fragment_sd     = int(rs_config.get("fragment_sd", 35))
-    min_fragment    = int(rs_config.get("min_fragment", 20))
-    threads         = int(rs_config.get("threads", 24))
-    bind            = int(rs_config.get("bind", 50))  # minimum fraction (%)
-    
-    logging.info("Starting read simulation pipeline at " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    
-    # Step 1: Replace Ns.
+    read_number = int(rs_config.get("read_number", 10000))
+    fragment_size = int(rs_config.get("fragment_size", 170))
+    fragment_sd = int(rs_config.get("fragment_sd", 35))
+    min_fragment = int(rs_config.get("min_fragment", 20))
+    threads = int(rs_config.get("threads", 24))
+    bind = int(rs_config.get("bind", 50))
+
+    logging.info("Starting read simulation pipeline at %s",
+                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
     replace_Ns(input_fa, noNs_fa, tools)
-    # Step 2: Generate systematic errors.
     generate_systematic_errors(noNs_fa, reseq_model, syser_fq, tools)
-    # Step 3: Convert FASTA to 2bit.
     fa_to_twobit(noNs_fa, twobit_file, tools)
-    # Step 4: Extract subset reference.
     collated_bam = extract_subset_reference(sample_bam, subset_ref, tools)
-    # Step 5: Run pblat.
     run_pblat(twobit_file, subset_ref, psl_file, tools, threads=threads)
-    # Step 6: Simulate fragments.
     simulate_fragments(noNs_fa, syser_fq, psl_file, read_number,
                        fragment_size, fragment_sd, min_fragment, bind, fragments_fa)
-    # Check that fragments file exists and is non-empty.
     if not os.path.exists(fragments_fa) or os.path.getsize(fragments_fa) == 0:
-        logging.error(f"Fragments file {fragments_fa} was not created or is empty.")
+        logging.error("Fragments file %s was not created or is empty.", fragments_fa)
         sys.exit(1)
-    # Step 7: Create reads from fragments.
     create_reads(fragments_fa, reseq_model, reads_fq, threads, tools)
-    # Step 8: Split interleaved FASTQ into paired gzipped FASTQ files.
     split_reads(reads_fq, reads_fq1, reads_fq2)
-    # Step 9: Align the paired reads.
     align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads=threads)
-    
-    logging.info("Read simulation pipeline completed at " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    logging.info("Read simulation pipeline completed at %s",
+                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     logging.info("Final outputs:")
-    logging.info("  Aligned and indexed BAM: " + output_bam)
-    logging.info("  Paired FASTQ files (gzipped): " + reads_fq1 + " and " + reads_fq2)
-    
-    # Cleanup intermediate files.
-    intermediates = [noNs_fa, syser_fq, twobit_file, subset_ref, psl_file, fragments_fa, reads_fq, collated_bam]
+    logging.info("  Aligned and indexed BAM: %s", output_bam)
+    logging.info("  Paired FASTQ files (gzipped): %s and %s", reads_fq1, reads_fq2)
+
+    intermediates = [noNs_fa, syser_fq, twobit_file, subset_ref, psl_file, fragments_fa,
+                     reads_fq, collated_bam]
     cleanup_files(intermediates)
 
-# ------------------------------------------------------------------------------
-# Standalone CLI entry point.
+
 if __name__ == "__main__":
     import json
     if len(sys.argv) != 3:

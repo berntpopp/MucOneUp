@@ -1,27 +1,32 @@
 # muc_one_up/probabilities.py
+
 import random
+import logging
+
 
 def pick_next_repeat(probabilities, current_symbol, force_end=False):
     """
-    Given a probability table (like config["probabilities"]) and the current_symbol,
-    randomly picks the next symbol.
-    
-    If force_end=True, we bias the pick in favor of 'END' if available,
-    or any path that leads quickly to 'END'.
+    Randomly pick the next symbol from the probability table for the current symbol.
+
+    If force_end=True, bias the pick in favor of 'END' if available.
+
+    :param probabilities: Dict representing the probability table.
+    :param current_symbol: The current repeat symbol.
+    :param force_end: Boolean flag to force end.
+    :return: The next symbol as a string.
     """
     if current_symbol not in probabilities:
-        # fallback: if it's not in the table, just force 'END'
+        logging.debug("Current symbol '%s' not in probabilities; returning 'END'.", current_symbol)
         return "END"
 
     next_options = probabilities[current_symbol]
 
-    # If we must force an end but there's no direct 'END', consider rewriting logic or
-    # picking something that leads quickly to 'END'. For now we do a simple approach:
     if force_end and "END" in next_options:
+        logging.debug("Force_end=True and 'END' available; returning 'END'.")
         return "END"
 
-    # Weighted random choice among next_options
-    # e.g. { "X": 0.8, "5": 0.2 }
-    items = list(next_options.items())  # [(symbol, prob), ...]
+    items = list(next_options.items())
     symbols, weights = zip(*items)
-    return random.choices(symbols, weights=weights, k=1)[0]
+    chosen = random.choices(symbols, weights=weights, k=1)[0]
+    logging.debug("Picked next symbol '%s' from current symbol '%s'.", chosen, current_symbol)
+    return chosen
