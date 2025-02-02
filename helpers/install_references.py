@@ -4,7 +4,8 @@ Install Reference Sequences for muconeup
 
 This script downloads and installs external reference files required for the muconeup
 pipeline. It downloads files specified in a configuration file, verifies file integrity
-via MD5, extracts compressed files if needed, and optionally indexes FASTA files using BWA.
+via MD5, extracts compressed files if needed, optionally indexes FASTA files using BWA,
+and (if configured) generates a sequence dictionary using GATK.
 
 Usage:
     python install_references.py --output-dir /path/to/destination [--config /path/to/config.json] [--skip-indexing]
@@ -17,6 +18,7 @@ A sample configuration is provided below.
 """
 
 import argparse
+import gzip
 import hashlib
 import json
 import logging
@@ -135,7 +137,7 @@ def extract_gzip(file_path: Path) -> Path:
     extracted_path = file_path.with_suffix("")
     logging.info("Extracting %s to %s", file_path.name, extracted_path.name)
     try:
-        with file_path.open("rb") as f_in, extracted_path.open("wb") as f_out:
+        with gzip.open(file_path, "rb") as f_in, extracted_path.open("wb") as f_out:
             shutil.copyfileobj(f_in, f_out)
         logging.info("Extraction complete: %s", extracted_path.name)
         return extracted_path
@@ -145,14 +147,14 @@ def extract_gzip(file_path: Path) -> Path:
 
 
 def execute_index_command(command_template: str, fasta_path: Path) -> None:
-    """Execute an indexing command on a FASTA file.
+    """Execute a command on a FASTA file.
 
     Args:
         command_template (str): Command template with a {path} placeholder.
         fasta_path (Path): Path to the FASTA file.
     """
     command = command_template.format(path=str(fasta_path))
-    logging.info("Executing indexing command: %s", command)
+    logging.info("Executing command: %s", command)
     try:
         subprocess.run(
             command.split(),
@@ -160,12 +162,12 @@ def execute_index_command(command_template: str, fasta_path: Path) -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
-        logging.info("Indexing completed for %s", fasta_path.name)
+        logging.info("Command completed for %s", fasta_path.name)
     except subprocess.CalledProcessError as err:
-        logging.error("Indexing command failed for %s: %s", fasta_path, err.stderr.decode().strip())
+        logging.error("Command failed for %s: %s", fasta_path, err.stderr.decode().strip())
         sys.exit(1)
     except Exception as err:
-        logging.error("Error executing indexing command for %s: %s", fasta_path, err)
+        logging.error("Error executing command for %s: %s", fasta_path, err)
         sys.exit(1)
 
 
@@ -223,7 +225,7 @@ def process_reference(
 
     Args:
         ref_name (str): Identifier for the reference.
-        ref_info (Dict[str, Any]): Reference details (url, target_path, index_command).
+        ref_info (Dict[str, Any]): Reference details (url, target_path, index_command, seq_dict_command).
         output_dir (Path): Base directory for downloads.
         skip_indexing (bool): Flag to skip indexing.
         bwa_path (str): Path to the BWA executable.
@@ -247,7 +249,7 @@ def process_reference(
     else:
         installed_path = target_path
 
-    # If an indexing command is specified and indexing is not skipped, run it.
+    # Run indexing command if provided and not skipped.
     index_command = ref_info.get("index_command")
     if index_command and not skip_indexing:
         # Replace "bwa" with the executable from the config if needed.
@@ -255,6 +257,12 @@ def process_reference(
         execute_index_command(command, installed_path)
     elif index_command:
         logging.info("Skipping indexing for %s", ref_name)
+
+    # Run sequence dictionary command if provided.
+    seq_dict_command = ref_info.get("seq_dict_command")
+    if seq_dict_command:
+        logging.info("Executing sequence dictionary command for %s", ref_name)
+        execute_index_command(seq_dict_command, installed_path)
 
     return str(installed_path.resolve())
 
