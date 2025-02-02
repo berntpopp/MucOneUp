@@ -2,11 +2,12 @@
 """
 bam_anonymizer.py
 
-This script subsets a BAM file to a specific region, then reheaders and
-anonymizes the resulting BAM using GATK's ReadAnonymizer tool. Finally, it
-performs a reheader step to remove @pg and @rg lines from the output BAM.
-The final anonymized and reheadered BAM is written with a name based on the
-provided target design.
+This script subsets a BAM file to a specific region, replaces the read group
+information with generic values using GATK AddOrReplaceReadGroups, anonymizes
+the resulting BAM using GATK's ReadAnonymizer, and reheaders the anonymized
+BAM to remove unwanted header lines (such as @PG, @RG, and @CO). The final
+output BAM is named exactly according to the provided target design (e.g.
+twist_v2.bam).
 
 Example usage:
     python bam_anonymizer.py \
@@ -17,7 +18,7 @@ Example usage:
 
 Required external tools:
   - samtools (for subsetting, reheadering, and indexing BAM files)
-  - gatk (for the ReadAnonymizer tool)
+  - gatk (for the ReadAnonymizer and AddOrReplaceReadGroups tools)
 
 The default subsetting region is set to the hg38 MUC1 VNTR region:
     chr1:155184000-155194000
@@ -38,48 +39,58 @@ def subset_bam(input_bam: str, region: str, output_bam: str) -> None:
 
     Args:
         input_bam: Path to the input BAM file.
-        region: Region to subset (e.g. "chr1:155184000-155194000").
+        region: Genomic region to subset (e.g. "chr1:155184000-155194000").
         output_bam: Path for the output subset BAM.
     """
     logging.info("Subsetting BAM: %s to region: %s", input_bam, region)
     view_cmd = [
-        "samtools",
-        "view",
-        "-b",  # output BAM format
-        "-P",  # keep paired reads together
-        input_bam,
-        region,
-        "-o",
-        output_bam,
+        "samtools", "view", "-b", "-P", input_bam, region, "-o", output_bam
     ]
     logging.debug("Running command: %s", " ".join(view_cmd))
     subprocess.run(view_cmd, check=True)
-
-    # Index the subset BAM file.
     index_cmd = ["samtools", "index", output_bam]
     logging.debug("Indexing subset BAM with command: %s", " ".join(index_cmd))
     subprocess.run(index_cmd, check=True)
 
 
-def run_gatk_read_anonymizer(input_bam: str, output_bam: str, reference: str) -> None:
+def run_gatk_add_or_replace_read_groups(input_bam: str, output_bam: str) -> None:
     """
-    Run GATK's ReadAnonymizer to remove sensitive genetic information.
+    Replace the read groups in the BAM with generic values using GATK AddOrReplaceReadGroups.
 
     Args:
-        input_bam: Path to the input BAM file (typically the subset BAM).
-        output_bam: Path for the output anonymized BAM file.
+        input_bam: Path to the input BAM (e.g. the subset BAM).
+        output_bam: Path for the output BAM with generic read group information.
+    """
+    logging.info("Replacing read groups on: %s", input_bam)
+    cmd = [
+        "gatk", "AddOrReplaceReadGroups",
+        "-I", input_bam,
+        "-O", output_bam,
+        "-RGID", "4",
+        "-RGLB", "lib1",
+        "-RGPL", "ILLUMINA",
+        "-RGPU", "unit1",
+        "-RGSM", "20"
+    ]
+    logging.debug("Running command: %s", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+
+
+def run_gatk_read_anonymizer(input_bam: str, output_bam: str, reference: str) -> None:
+    """
+    Anonymize the BAM file using GATK's ReadAnonymizer.
+
+    Args:
+        input_bam: Path to the input BAM file (after replacing read groups).
+        output_bam: Path for the output anonymized BAM.
         reference: Path to the reference FASTA file.
     """
     logging.info("Running GATK ReadAnonymizer on: %s", input_bam)
     gatk_cmd = [
-        "gatk",
-        "ReadAnonymizer",
-        "-I",
-        input_bam,
-        "-O",
-        output_bam,
-        "-R",
-        reference,
+        "gatk", "ReadAnonymizer",
+        "-I", input_bam,
+        "-O", output_bam,
+        "-R", reference,
     ]
     logging.debug("Running command: %s", " ".join(gatk_cmd))
     subprocess.run(gatk_cmd, check=True)
@@ -87,11 +98,11 @@ def run_gatk_read_anonymizer(input_bam: str, output_bam: str, reference: str) ->
 
 def run_samtools_reheader(input_bam: str, output_bam: str) -> None:
     """
-    Reheader the BAM to remove @pg and @rg lines, then index it.
+    Reheader the BAM file to remove @PG, @RG, and @CO lines and index it.
 
     Args:
-        input_bam: Path to the input BAM file (e.g. output from GATK ReadAnonymizer).
-        output_bam: Path for the reheadered output BAM file.
+        input_bam: Path to the input BAM file (e.g. the anonymized BAM).
+        output_bam: Path for the reheadered output BAM.
     """
     logging.info("Reheadering BAM: %s", input_bam)
     cmd_reheader = [
@@ -103,8 +114,6 @@ def run_samtools_reheader(input_bam: str, output_bam: str) -> None:
     logging.debug("Reheader command: %s", " ".join(cmd_reheader))
     with open(output_bam, 'w') as fout:
         subprocess.run(cmd_reheader, stdout=fout, check=True)
-
-    # Index the reheadered BAM file.
     index_cmd = ["samtools", "index", output_bam]
     logging.debug("Indexing reheadered BAM with command: %s", " ".join(index_cmd))
     subprocess.run(index_cmd, check=True)
@@ -122,6 +131,33 @@ def index_bam(bam_file: str) -> None:
     subprocess.run(index_cmd, check=True)
 
 
+def remove_file_and_index(file_path: str) -> None:
+    """
+    Remove a file and any index files that may exist.
+    Checks for both the standard naming scheme (file.bam.bai) and an alternative
+    where the .bam extension is replaced by .bai.
+    
+    Args:
+        file_path: Path to the file to remove.
+    """
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            logging.debug("Removed file: %s", file_path)
+    except Exception as e:
+        logging.warning("Could not remove file %s: %s", file_path, e)
+
+    # Check for possible index names.
+    possible_indices = [file_path + ".bai", file_path.replace(".bam", ".bai")]
+    for idx in possible_indices:
+        try:
+            if os.path.exists(idx):
+                os.remove(idx)
+                logging.debug("Removed index file: %s", idx)
+        except Exception as e:
+            logging.warning("Could not remove index file %s: %s", idx, e)
+
+
 def parse_args() -> argparse.Namespace:
     """
     Parse command-line arguments.
@@ -131,67 +167,35 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Subset a BAM file to a region and anonymize it using GATK ReadAnonymizer. "
-            "Then reheader the anonymized BAM to remove @pg and @rg lines. "
+            "Subset a BAM file to a region, replace read groups with generic values, "
+            "anonymize it using GATK ReadAnonymizer, and reheader to remove unwanted header lines. "
             "The final output file is named based on the provided target design."
         )
     )
-    parser.add_argument(
-        "--input-bam",
-        required=True,
-        help="Path to the input BAM file.",
-    )
-    parser.add_argument(
-        "--target-design",
-        required=True,
-        help=(
-            "Target design name to be used for naming the output file "
-            "(e.g. twist_v2)."
-        ),
-    )
-    parser.add_argument(
-        "--ref",
-        required=True,
-        help="Path to the reference FASTA file (required by GATK ReadAnonymizer).",
-    )
-    parser.add_argument(
-        "--region",
-        default="chr1:155184000-155194000",
-        help=(
-            "Genomic region to subset from the BAM file. "
-            "Default is 'chr1:155184000-155194000' (hg38 MUC1 VNTR region)."
-        ),
-    )
-    parser.add_argument(
-        "--output-dir",
-        default=".",
-        help="Directory to write output files. Default is current directory.",
-    )
-    parser.add_argument(
-        "--keep-intermediates",
-        action="store_true",
-        help=(
-            "Keep intermediate files (e.g. the subset BAM and its index) for debugging purposes."
-        ),
-    )
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Set logging level. Default is INFO.",
-    )
+    parser.add_argument("--input-bam", required=True,
+                        help="Path to the input BAM file.")
+    parser.add_argument("--target-design", required=True,
+                        help="Target design name to be used for naming the output file (e.g. twist_v2).")
+    parser.add_argument("--ref", required=True,
+                        help="Path to the reference FASTA file (required by GATK tools).")
+    parser.add_argument("--region", default="chr1:155184000-155194000",
+                        help="Genomic region to subset from the BAM file. Default is 'chr1:155184000-155194000' (hg38 MUC1 VNTR region).")
+    parser.add_argument("--output-dir", default=".",
+                        help="Directory to write output files. Default is current directory.")
+    parser.add_argument("--keep-intermediates", action="store_true",
+                        help="Keep intermediate files for debugging purposes.")
+    parser.add_argument("--log-level", default="INFO",
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                        help="Set logging level. Default is INFO.")
     return parser.parse_args()
 
 
 def main() -> None:
     """Main function for the BAM anonymization pipeline."""
     args = parse_args()
-    logging.basicConfig(
-        level=args.log_level.upper(),
-        format="%(asctime)s [%(levelname)s] %(message)s",
-    )
+    logging.basicConfig(level=args.log_level.upper(),
+                        format="%(asctime)s [%(levelname)s] %(message)s")
 
-    # Verify that the input BAM and reference exist.
     if not os.path.isfile(args.input_bam):
         logging.error("Input BAM file not found: %s", args.input_bam)
         sys.exit(1)
@@ -199,47 +203,37 @@ def main() -> None:
         logging.error("Reference FASTA file not found: %s", args.ref)
         sys.exit(1)
 
-    # Ensure the output directory exists.
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Define file paths.
+    # Define intermediate and final file paths.
     subset_bam_path = os.path.join(args.output_dir, f"{args.target_design}_subset.bam")
-    # This file is produced by GATK ReadAnonymizer (but will be reheadered next).
+    rg_bam_path = os.path.join(args.output_dir, f"{args.target_design}_rg.bam")
+    anon_bam_path = os.path.join(args.output_dir, f"{args.target_design}_anon.bam")
     final_bam_path = os.path.join(args.output_dir, f"{args.target_design}.bam")
-    # Final output after reheadering.
-    reheadered_bam_path = os.path.join(args.output_dir, f"{args.target_design}_reheader.bam")
 
     try:
-        # 1. Subset the BAM file to the specified region.
+        # 1. Subset the input BAM to the specified region.
         subset_bam(args.input_bam, args.region, subset_bam_path)
 
-        # 2. Run GATK ReadAnonymizer on the subset BAM.
-        run_gatk_read_anonymizer(subset_bam_path, final_bam_path, args.ref)
+        # 2. Replace read groups with generic values.
+        run_gatk_add_or_replace_read_groups(subset_bam_path, rg_bam_path)
 
-        # 3. Perform final reheadering on the anonymized BAM.
-        run_samtools_reheader(final_bam_path, reheadered_bam_path)
-        # Optionally, remove the non-reheadered file.
-        os.remove(final_bam_path)
-        final_bam_path = reheadered_bam_path
+        # 3. Anonymize the BAM file.
+        run_gatk_read_anonymizer(rg_bam_path, anon_bam_path, args.ref)
 
-        logging.info("Anonymized and reheadered BAM file created successfully: %s", final_bam_path)
+        # 4. Reheader the anonymized BAM.
+        run_samtools_reheader(anon_bam_path, final_bam_path)
+
+        logging.info("Final anonymized BAM file created successfully: %s", final_bam_path)
     except subprocess.CalledProcessError as err:
         logging.error("A subprocess failed: %s", err)
         sys.exit(1)
     finally:
         if args.keep_intermediates:
-            logging.info("Keeping intermediate files (--keep-intermediates set): %s", subset_bam_path)
+            logging.info("Keeping intermediate files (--keep-intermediates set).")
         else:
-            # Remove the temporary subset BAM file and its index.
-            if os.path.exists(subset_bam_path):
-                try:
-                    os.remove(subset_bam_path)
-                    subset_index = subset_bam_path + ".bai"
-                    if os.path.exists(subset_index):
-                        os.remove(subset_index)
-                    logging.debug("Removed intermediate files.")
-                except Exception as err:
-                    logging.warning("Could not remove temporary file(s): %s", err)
+            for f in [subset_bam_path, rg_bam_path, anon_bam_path]:
+                remove_file_and_index(f)
 
 
 if __name__ == "__main__":
