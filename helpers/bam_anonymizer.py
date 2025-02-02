@@ -9,6 +9,9 @@ BAM to remove unwanted header lines (such as @PG, @RG, and @CO). The final
 output BAM is named exactly according to the provided target design (e.g.
 twist_v2.bam).
 
+After processing, a pseudonymisation output CSV is written with columns:
+  old_name, old_md5, new_name, new_md5
+
 Example usage:
     python bam_anonymizer.py \
         --input-bam /path/to/input.bam \
@@ -27,10 +30,33 @@ You may override the region via the --region argument.
 """
 
 import argparse
+import csv
+import hashlib
 import logging
 import os
 import subprocess
 import sys
+
+
+def compute_md5(filepath: str, chunk_size: int = 1048576) -> str:
+    """
+    Compute the MD5 hex digest of the given file in a memory-efficient way.
+
+    Args:
+        filepath: Path to the file.
+        chunk_size: Number of bytes to read at a time (default: 1MB).
+
+    Returns:
+        The MD5 hexadecimal digest as a string.
+    """
+    md5 = hashlib.md5()
+    with open(filepath, 'rb') as f:
+        while True:
+            data = f.read(chunk_size)
+            if not data:
+                break
+            md5.update(data)
+    return md5.hexdigest()
 
 
 def subset_bam(input_bam: str, region: str, output_bam: str) -> None:
@@ -225,6 +251,19 @@ def main() -> None:
         run_samtools_reheader(anon_bam_path, final_bam_path)
 
         logging.info("Final anonymized BAM file created successfully: %s", final_bam_path)
+
+        # 5. Compute MD5 checksums and write pseudonymisation output.
+        old_name = os.path.basename(args.input_bam)
+        new_name = os.path.basename(final_bam_path)
+        old_md5 = compute_md5(args.input_bam)
+        new_md5 = compute_md5(final_bam_path)
+        # Prefix the CSV file with the target design to avoid collisions.
+        ps_output = os.path.join(args.output_dir, f"{args.target_design}_pseudonymisation_output.csv")
+        with open(ps_output, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(["old_name", "old_md5", "new_name", "new_md5"])
+            writer.writerow([old_name, old_md5, new_name, new_md5])
+        logging.info("Pseudonymisation output written to: %s", ps_output)
     except subprocess.CalledProcessError as err:
         logging.error("A subprocess failed: %s", err)
         sys.exit(1)
