@@ -166,8 +166,8 @@ cython_debug/
 *.fq
 *.2bit
 *.psl
-*.bam
-*.bai
+/*.bam
+/*.bai
 *.fq.gz
 
 # reference folder
