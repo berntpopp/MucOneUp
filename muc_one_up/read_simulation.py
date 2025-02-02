@@ -144,7 +144,7 @@ def generate_systematic_errors(input_fa, reseq_model, output_fq, tools):
         tools["reseq"], "illuminaPE", "-r", input_fa, "-s", reseq_model,
         "--stopAfterEstimation", "--writeSysError", output_fq
     ]
-    run_command(cmd, timeout=30)
+    run_command(cmd, timeout=60)
 
 
 def fa_to_twobit(input_fa, output_2bit, tools):

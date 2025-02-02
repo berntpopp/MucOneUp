@@ -219,8 +219,8 @@
 
       "read_simulation": {
         "reseq_model": "reference/Hs-Nova-TruSeq.reseq",
-        "sample_bam": "/mnt/c/development/hassansaei/VNtyper/download/LB24-4178wdh-ready_35c0b621-13ca-448b-9118-2e3690b5be77.chr1_155183824_155194915.bam",
-        "human_reference": "/mnt/c/development/_reference/GRCh38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz",
+        "sample_bam": "data/twist_v2.bam",
+        "human_reference": "reference/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna",
         "read_number": 10000,
         "fragment_size": 250,
         "fragment_sd": 35,
