@@ -3,8 +3,12 @@
     "references": {
       "GRCh38_no_alt_analysis_set": {
         "url": "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz",
-        "target_path": "GRCh38_no_alt_analysis_set.fna.gz",
+        "target_path": "GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz",
         "index_command": "bwa index {path}"
+      },
+      "GRCh38_no_alt_analysis_index": {
+        "url": "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.fai",
+        "target_path": "GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.fai"
       },
       "Hs-Nova-TruSeq": {
         "url": "https://github.com/schmeing/ReSeq-profiles/raw/master/profiles/Hs-Nova-TruSeq.reseq",
