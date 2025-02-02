@@ -104,11 +104,11 @@
       },
 
       "tools": {
-        "reseq": "mamba run --no-capture-output -n wessim reseq",
-        "faToTwoBit": "mamba run --no-capture-output -n wessim faToTwoBit",
-        "samtools": "mamba run --no-capture-output -n wessim samtools",
-        "pblat": "mamba run --no-capture-output -n wessim pblat",
-        "bwa": "mamba run --no-capture-output -n wessim bwa"
+        "reseq": "mamba run --no-capture-output -n env_wessim reseq",
+        "faToTwoBit": "mamba run --no-capture-output -n env_wessim faToTwoBit",
+        "samtools": "mamba run --no-capture-output -n env_wessim samtools",
+        "pblat": "mamba run --no-capture-output -n env_wessim pblat",
+        "bwa": "mamba run --no-capture-output -n env_wessim bwa"
       },
 
       "read_simulation": {
