@@ -14,7 +14,7 @@
 Additionally, the **read simulation** pipeline has been integrated with a port of [w‑Wessim2](https://github.com/GeorgetteTanner/w-Wessim2). This pipeline simulates Illumina reads from the simulated FASTA by:
 - Replacing Ns and generating systematic errors using external tools.
 - Converting the FASTA to 2bit format.
-- Extracting a reference subset from a sample BAM file.
+- Extracting a subset reference from a sample BAM.
 - Running pblat for alignment.
 - Generating fragments and creating reads using the w‑Wessim2 port.
 - Splitting interleaved FASTQ into paired FASTQ files and aligning the reads to a human reference.
@@ -46,6 +46,15 @@ Additionally, the **read simulation** pipeline has been integrated with a port o
    pip install .
    ```
    This will install the `muc_one_up` Python package locally.
+
+> **Optional (Conda/Mamba Environment for Read Simulation):**  
+> To install all required external tools for the read simulation pipeline using conda/mamba, run:
+> 
+> ```bash
+> mamba env create -f conda/env_wessim.yaml
+> ```
+> 
+> After creating the environment, update the `tools` section in your configuration file to reference the executables from the newly created environment. Alternatively, you can install the tools locally.
 
 Once installed, you’ll have a command-line program called **`muconeup`** available.
 
@@ -184,7 +193,7 @@ The **muc_one_up** Python package is organized into modules. Here is a brief sum
 
 ```
 muc_one_up/
-├── cli.py           # Main CLI logic and argument parsing (now supporting series simulation, dual mutation modes, toxic protein detection, and simulation statistics)
+├── cli.py           # Main CLI logic and argument parsing (now supporting series simulation, dual mutation modes, toxic protein detection, simulation statistics, and read simulation)
 ├── config.py        # Loads and validates the JSON configuration file
 ├── distribution.py  # Samples the target VNTR length from a specified distribution
 ├── fasta_writer.py  # Helper for writing FASTA files
