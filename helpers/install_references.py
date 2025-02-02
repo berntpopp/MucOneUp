@@ -8,7 +8,7 @@ via MD5, extracts compressed files if needed, optionally indexes FASTA files usi
 and (if configured) generates a sequence dictionary using GATK.
 
 Usage:
-    python install_references.py --output-dir /path/to/destination [--config /path/to/config.json] [--skip-indexing]
+    python install_references.py --output-dir /path/to/destination [--config /path/to/config.json] [--skip-indexing] [--force]
 
 Example:
     python install_references.py --output-dir ./references
@@ -79,22 +79,16 @@ def load_config(config_path: Path) -> Dict[str, Any]:
 
 
 def download_file(url: str, dest_path: Path) -> None:
-    """Download a file from a URL if it does not already exist.
+    """Download a file from a URL.
 
     Args:
         url (str): URL to download from.
         dest_path (Path): Destination file path.
     """
-    if dest_path.exists():
-        logging.info("File already exists at %s. Skipping download.", dest_path)
-        return
-
     logging.info("Downloading %s to %s", url, dest_path)
     try:
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        # Show progress via report_progress
         urlretrieve(url, dest_path, reporthook=report_progress)
-        # Ensure a newline after download completes
         sys.stdout.write("\n")
         logging.info("Downloaded file: %s", dest_path.name)
     except Exception as err:
@@ -156,7 +150,6 @@ def execute_index_command(command_template: str, fasta_path: Path) -> None:
     command = command_template.format(path=str(fasta_path))
     logging.info("Executing command: %s", command)
     try:
-        # Use subprocess.run with split to execute the command.
         subprocess.run(
             command.split(),
             check=True,
@@ -183,7 +176,6 @@ def setup_logging(output_dir: Path) -> None:
 
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    # Remove existing handlers
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
 
@@ -221,7 +213,8 @@ def process_reference(
     output_dir: Path,
     skip_indexing: bool,
     bwa_path: str,
-    gatk_path: str
+    gatk_path: str,
+    force: bool
 ) -> str:
     """Download, verify, extract, index (if needed), and generate a sequence dictionary (if configured) for a single reference.
 
@@ -232,6 +225,7 @@ def process_reference(
         skip_indexing (bool): Flag to skip indexing.
         bwa_path (str): Path to the BWA executable.
         gatk_path (str): Path to the GATK executable.
+        force (bool): If True, re-run all steps regardless of existing files.
 
     Returns:
         str: Absolute path to the installed reference file.
@@ -243,30 +237,60 @@ def process_reference(
         sys.exit(1)
 
     target_path = output_dir / target_rel_path
+    if force and target_path.exists():
+        logging.info("Force enabled, removing existing file: %s", target_path)
+        target_path.unlink()
+
     download_file(url, target_path)
     calculate_md5(target_path)
 
-    # If the file is gzip-compressed, extract it.
+    # If the file is gzip-compressed, check for extracted file and extract if needed.
     if target_path.suffix == ".gz":
-        installed_path = extract_gzip(target_path)
+        extracted_path = target_path.with_suffix("")
+        if extracted_path.exists() and not force:
+            logging.info("Extracted file %s already exists, skipping extraction.", extracted_path.name)
+            installed_path = extracted_path
+        else:
+            if force and extracted_path.exists():
+                logging.info("Force enabled, removing existing extracted file: %s", extracted_path)
+                extracted_path.unlink()
+            installed_path = extract_gzip(target_path)
     else:
         installed_path = target_path
 
     # Run indexing command if provided and not skipped.
     index_command = ref_info.get("index_command")
     if index_command and not skip_indexing:
-        command = index_command.replace("bwa", bwa_path)
-        execute_index_command(command, installed_path)
+        # Determine one of the expected index files (e.g. .amb).
+        index_file = installed_path.parent / (installed_path.name + ".amb")
+        if index_file.exists() and not force:
+            logging.info("Index files already exist for %s. Skipping indexing.", installed_path.name)
+        else:
+            if force and index_file.exists():
+                # Remove all expected index files.
+                for ext in [".amb", ".ann", ".bwt", ".pac", ".sa"]:
+                    f = installed_path.parent / (installed_path.name + ext)
+                    if f.exists():
+                        logging.info("Force enabled, removing existing index file: %s", f)
+                        f.unlink()
+            command = index_command.replace("bwa", bwa_path)
+            execute_index_command(command, installed_path)
     elif index_command:
         logging.info("Skipping indexing for %s", ref_name)
 
     # Run sequence dictionary command if provided.
     seq_dict_command = ref_info.get("seq_dict_command")
     if seq_dict_command:
-        logging.info("Executing sequence dictionary command for %s", ref_name)
-        # Replace 'gatk' with the configured gatk_path.
-        seq_dict_command = seq_dict_command.replace("gatk", gatk_path)
-        execute_index_command(seq_dict_command, installed_path)
+        seq_dict_file = installed_path.parent / (installed_path.name + ".dict")
+        if seq_dict_file.exists() and not force:
+            logging.info("Sequence dictionary already exists for %s. Skipping creation.", installed_path.name)
+        else:
+            if force and seq_dict_file.exists():
+                logging.info("Force enabled, removing existing sequence dictionary: %s", seq_dict_file)
+                seq_dict_file.unlink()
+            logging.info("Executing sequence dictionary command for %s", ref_name)
+            seq_dict_command = seq_dict_command.replace("gatk", gatk_path)
+            execute_index_command(seq_dict_command, installed_path)
 
     return str(installed_path.resolve())
 
@@ -293,6 +317,11 @@ def main() -> None:
         action="store_true",
         help="Skip indexing of FASTA reference files."
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Redo everything despite existing files and overwrite them."
+    )
     args = parser.parse_args()
 
     setup_logging(args.output_dir)
@@ -309,7 +338,13 @@ def main() -> None:
     for ref_name, ref_info in references.items():
         logging.info("Processing reference: %s", ref_name)
         installed_path = process_reference(
-            ref_name, ref_info, args.output_dir, args.skip_indexing, bwa_path, gatk_path
+            ref_name,
+            ref_info,
+            args.output_dir,
+            args.skip_indexing,
+            bwa_path,
+            gatk_path,
+            args.force,
         )
         installed_refs[ref_name] = installed_path
 
