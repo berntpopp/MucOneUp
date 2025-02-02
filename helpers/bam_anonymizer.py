@@ -3,8 +3,10 @@
 bam_anonymizer.py
 
 This script subsets a BAM file to a specific region, then reheaders and
-anonymizes the resulting BAM using GATK's ReadAnonymizer tool. The final
-anonymized BAM is written with a name based on the provided target design.
+anonymizes the resulting BAM using GATK's ReadAnonymizer tool. Finally, it
+performs a reheader step to remove @pg and @rg lines from the output BAM.
+The final anonymized and reheadered BAM is written with a name based on the
+provided target design.
 
 Example usage:
     python bam_anonymizer.py \
@@ -14,7 +16,7 @@ Example usage:
         --keep-intermediates
 
 Required external tools:
-  - samtools (for subsetting and indexing BAM files)
+  - samtools (for subsetting, reheadering, and indexing BAM files)
   - gatk (for the ReadAnonymizer tool)
 
 The default subsetting region is set to the hg38 MUC1 VNTR region:
@@ -83,6 +85,31 @@ def run_gatk_read_anonymizer(input_bam: str, output_bam: str, reference: str) ->
     subprocess.run(gatk_cmd, check=True)
 
 
+def run_samtools_reheader(input_bam: str, output_bam: str) -> None:
+    """
+    Reheader the BAM to remove @pg and @rg lines, then index it.
+
+    Args:
+        input_bam: Path to the input BAM file (e.g. output from GATK ReadAnonymizer).
+        output_bam: Path for the reheadered output BAM file.
+    """
+    logging.info("Reheadering BAM: %s", input_bam)
+    cmd_reheader = [
+        "samtools", "reheader",
+        "-P",
+        "-c", "grep -v ^@PG | grep -v ^@RG | grep -v ^@CO",
+        input_bam
+    ]
+    logging.debug("Reheader command: %s", " ".join(cmd_reheader))
+    with open(output_bam, 'w') as fout:
+        subprocess.run(cmd_reheader, stdout=fout, check=True)
+
+    # Index the reheadered BAM file.
+    index_cmd = ["samtools", "index", output_bam]
+    logging.debug("Indexing reheadered BAM with command: %s", " ".join(index_cmd))
+    subprocess.run(index_cmd, check=True)
+
+
 def index_bam(bam_file: str) -> None:
     """
     Index the provided BAM file using samtools.
@@ -105,7 +132,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Subset a BAM file to a region and anonymize it using GATK ReadAnonymizer. "
-            "The output file is named based on the provided target design."
+            "Then reheader the anonymized BAM to remove @pg and @rg lines. "
+            "The final output file is named based on the provided target design."
         )
     )
     parser.add_argument(
@@ -175,10 +203,11 @@ def main() -> None:
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Define file paths.
-    # Create a temporary subset file in the output directory.
     subset_bam_path = os.path.join(args.output_dir, f"{args.target_design}_subset.bam")
-    # Final output: the anonymized BAM file.
+    # This file is produced by GATK ReadAnonymizer (but will be reheadered next).
     final_bam_path = os.path.join(args.output_dir, f"{args.target_design}.bam")
+    # Final output after reheadering.
+    reheadered_bam_path = os.path.join(args.output_dir, f"{args.target_design}_reheader.bam")
 
     try:
         # 1. Subset the BAM file to the specified region.
@@ -187,16 +216,19 @@ def main() -> None:
         # 2. Run GATK ReadAnonymizer on the subset BAM.
         run_gatk_read_anonymizer(subset_bam_path, final_bam_path, args.ref)
 
-        # 3. Index the final anonymized BAM.
-        index_bam(final_bam_path)
+        # 3. Perform final reheadering on the anonymized BAM.
+        run_samtools_reheader(final_bam_path, reheadered_bam_path)
+        # Optionally, remove the non-reheadered file.
+        os.remove(final_bam_path)
+        final_bam_path = reheadered_bam_path
 
-        logging.info("Anonymized BAM file created successfully: %s", final_bam_path)
+        logging.info("Anonymized and reheadered BAM file created successfully: %s", final_bam_path)
     except subprocess.CalledProcessError as err:
         logging.error("A subprocess failed: %s", err)
         sys.exit(1)
     finally:
         if args.keep_intermediates:
-            logging.info("Keeping intermediate files (--keep-intermediates set): %s and its index", subset_bam_path)
+            logging.info("Keeping intermediate files (--keep-intermediates set): %s", subset_bam_path)
         else:
             # Remove the temporary subset BAM file and its index.
             if os.path.exists(subset_bam_path):
