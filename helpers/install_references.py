@@ -156,6 +156,7 @@ def execute_index_command(command_template: str, fasta_path: Path) -> None:
     command = command_template.format(path=str(fasta_path))
     logging.info("Executing command: %s", command)
     try:
+        # Use subprocess.run with split to execute the command.
         subprocess.run(
             command.split(),
             check=True,
@@ -219,9 +220,10 @@ def process_reference(
     ref_info: Dict[str, Any],
     output_dir: Path,
     skip_indexing: bool,
-    bwa_path: str
+    bwa_path: str,
+    gatk_path: str
 ) -> str:
-    """Download, verify, extract, and index (if needed) a single reference.
+    """Download, verify, extract, index (if needed), and generate a sequence dictionary (if configured) for a single reference.
 
     Args:
         ref_name (str): Identifier for the reference.
@@ -229,6 +231,7 @@ def process_reference(
         output_dir (Path): Base directory for downloads.
         skip_indexing (bool): Flag to skip indexing.
         bwa_path (str): Path to the BWA executable.
+        gatk_path (str): Path to the GATK executable.
 
     Returns:
         str: Absolute path to the installed reference file.
@@ -252,7 +255,6 @@ def process_reference(
     # Run indexing command if provided and not skipped.
     index_command = ref_info.get("index_command")
     if index_command and not skip_indexing:
-        # Replace "bwa" with the executable from the config if needed.
         command = index_command.replace("bwa", bwa_path)
         execute_index_command(command, installed_path)
     elif index_command:
@@ -262,6 +264,8 @@ def process_reference(
     seq_dict_command = ref_info.get("seq_dict_command")
     if seq_dict_command:
         logging.info("Executing sequence dictionary command for %s", ref_name)
+        # Replace 'gatk' with the configured gatk_path.
+        seq_dict_command = seq_dict_command.replace("gatk", gatk_path)
         execute_index_command(seq_dict_command, installed_path)
 
     return str(installed_path.resolve())
@@ -294,6 +298,7 @@ def main() -> None:
     setup_logging(args.output_dir)
     config = load_config(args.config)
     bwa_path = config.get("bwa_path", "bwa")
+    gatk_path = config.get("gatk_path", "gatk")
     references = config.get("references", {})
 
     if not references:
@@ -304,7 +309,7 @@ def main() -> None:
     for ref_name, ref_info in references.items():
         logging.info("Processing reference: %s", ref_name)
         installed_path = process_reference(
-            ref_name, ref_info, args.output_dir, args.skip_indexing, bwa_path
+            ref_name, ref_info, args.output_dir, args.skip_indexing, bwa_path, gatk_path
         )
         installed_refs[ref_name] = installed_path
 
