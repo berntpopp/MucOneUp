@@ -176,28 +176,72 @@
 
     "mutations": {
         "dupC": {
-          "allowed_repeats": ["X", "C", "B", "A"], 
+          "allowed_repeats": ["X"], 
           "changes": [
             {
               "type": "insert",
-              "start": 2,
-              "end": 3,
+              "start": 60,
+              "end": 61,
               "sequence": "C"
             }
           ]
         },
+        "insCCCC": {
+          "allowed_repeats": ["X"], 
+          "changes": [
+            {
+              "type": "insert",
+              "start": 60,
+              "end": 61,
+              "sequence": "CCCC"
+            }
+          ]
+        },
+        "insG": {
+          "allowed_repeats": ["X"], 
+          "changes": [
+            {
+              "type": "insert",
+              "start": 59,
+              "end": 60,
+              "sequence": "G"
+            }
+          ]
+        },
+        "dupA": {
+          "allowed_repeats": ["X"], 
+          "changes": [
+            {
+              "type": "insert",
+              "start": 60,
+              "end": 61,
+              "sequence": "A"
+            }
+          ]
+        },
+        "delinsAT": {
+          "allowed_repeats": ["X"], 
+          "changes": [
+            {
+              "type": "delete_insert",
+              "start": 54,
+              "end": 56,
+              "sequence": "AT"
+            }
+          ]
+        },
         "bigDel": {
-          "allowed_repeats": ["4", "4p", "5"],
+          "allowed_repeats": ["X"],
           "changes": [
             {
               "type": "delete",
               "start": 1,
-              "end": 25
+              "end": 26
             }
           ]
         },
-        "snpA": {
-          "allowed_repeats": ["1", "2", "X"],
+        "snpA_testing": {
+          "allowed_repeats": ["X"],
           "changes": [
             {
               "type": "replace",
