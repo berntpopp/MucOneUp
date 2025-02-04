@@ -37,7 +37,7 @@ import time
 from datetime import datetime
 import threading
 import shutil  # NEW: for checking executables in PATH
-from pathlib import Path # NEW: for downsample_bam
+from pathlib import Path  # NEW: for downsample_bam
 
 # Configure logging.
 logging.basicConfig(
@@ -450,7 +450,6 @@ def calculate_vntr_coverage(samtools_exe, bam_file, region, threads, output_dir,
     logging.info("Calculating VNTR coverage for %s in region %s", bam_file, region)
     with open(coverage_output, "w") as fout:
         if " " in samtools_exe:
-            # Join the list and run with shell=True
             cmd_str = " ".join(depth_command)
             subprocess.run(cmd_str, shell=True, stdout=fout, check=True)
         else:
@@ -472,14 +471,59 @@ def calculate_vntr_coverage(samtools_exe, bam_file, region, threads, output_dir,
     return mean_cov
 
 
-# NEW: Function to downsample BAM file using samtools view -s
+# NEW: Function to calculate mean target (non-VNTR) coverage using samtools depth with BED file
+def calculate_target_coverage(samtools_exe, bam_file, bed_file, threads, output_dir, output_name):
+    """
+    Calculate mean coverage over the target (non-VNTR) regions using samtools depth and a BED file.
+
+    :param samtools_exe: Path to the samtools executable.
+    :param bam_file: BAM file for which coverage is calculated.
+    :param bed_file: BED file specifying the target regions.
+    :param threads: Number of threads.
+    :param output_dir: Directory to write the coverage output.
+    :param output_name: Base name for the coverage output file.
+    :return: Mean coverage (float).
+    """
+    coverage_output = os.path.join(output_dir, f"{output_name}_target_coverage.txt")
+    depth_command = [
+        samtools_exe,
+        "depth",
+        "-@",
+        str(threads),
+        "-b",
+        bed_file,
+        str(bam_file)
+    ]
+    logging.info("Calculating target (non-VNTR) coverage for %s using bed file %s", bam_file, bed_file)
+    with open(coverage_output, "w") as fout:
+        if " " in samtools_exe:
+            cmd_str = " ".join(depth_command)
+            subprocess.run(cmd_str, shell=True, stdout=fout, check=True)
+        else:
+            subprocess.run(depth_command, stdout=fout, check=True)
+    coverage_values = []
+    with open(coverage_output, "r") as fin:
+        for line in fin:
+            parts = line.strip().split("\t")
+            if len(parts) >= 3:
+                try:
+                    coverage_values.append(int(parts[2]))
+                except ValueError:
+                    continue
+    if coverage_values:
+        mean_cov = sum(coverage_values) / len(coverage_values)
+    else:
+        mean_cov = 0
+    logging.info("Mean target coverage: %.2f", mean_cov)
+    return mean_cov
+
+
+# NEW: Function to downsample BAM file using samtools view -s for a specified region
 def downsample_bam(samtools_exe, input_bam, output_bam, region, fraction, seed, threads):
     """
     Downsample the BAM file to the specified fraction in the given region.
     """
-    # Convert to Path if necessary
     output_bam = Path(output_bam)
-    
     subsample_param = f"{seed}.{int(fraction * 1000):03d}"
     view_command = [
         samtools_exe,
@@ -495,7 +539,6 @@ def downsample_bam(samtools_exe, input_bam, output_bam, region, fraction, seed, 
         region,
     ]
     run_command(view_command, timeout=60)
-    # Sort the downsampled BAM file.
     sorted_bam = output_bam.with_suffix(".sorted.bam")
     sort_command = [
         samtools_exe,
@@ -509,7 +552,43 @@ def downsample_bam(samtools_exe, input_bam, output_bam, region, fraction, seed, 
     run_command(sort_command, timeout=60)
     os.remove(str(output_bam))
     os.rename(str(sorted_bam), str(output_bam))
-    # Index the downsampled BAM file.
+    index_command = [samtools_exe, "index", str(output_bam)]
+    run_command(index_command, timeout=60)
+
+
+# NEW: Function to downsample entire BAM file (without region restriction) using samtools view -s
+def downsample_entire_bam(samtools_exe, input_bam, output_bam, fraction, seed, threads):
+    """
+    Downsample the entire BAM file to the specified fraction.
+    """
+    output_bam = Path(output_bam)
+    subsample_param = f"{seed}.{int(fraction * 1000):03d}"
+    view_command = [
+        samtools_exe,
+        "view",
+        "-s",
+        subsample_param,
+        "-@",
+        str(threads),
+        "-b",
+        "-o",
+        str(output_bam),
+        str(input_bam)
+    ]
+    run_command(view_command, timeout=60)
+    sorted_bam = output_bam.with_suffix(".sorted.bam")
+    sort_command = [
+        samtools_exe,
+        "sort",
+        "-@",
+        str(threads),
+        "-o",
+        str(sorted_bam),
+        str(output_bam)
+    ]
+    run_command(sort_command, timeout=60)
+    os.remove(str(output_bam))
+    os.rename(str(sorted_bam), str(output_bam))
     index_command = [samtools_exe, "index", str(output_bam)]
     run_command(index_command, timeout=60)
 
@@ -766,7 +845,7 @@ def simulate_reads(config, input_fa):
     split_reads(reads_fq, reads_fq1, reads_fq2)
     align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads=threads)
 
-    # NEW: Optional downsampling of the final BAM file to a target VNTR coverage.
+    # NEW: Optional downsampling of the final BAM file to a target coverage.
     downsample_target = rs_config.get("downsample_coverage")
     if downsample_target is not None:
         try:
@@ -774,23 +853,40 @@ def simulate_reads(config, input_fa):
         except ValueError:
             logging.error("Invalid downsample_coverage value in config.")
             sys.exit(1)
-        # Determine the VNTR region based on reference assembly (assumes keys vntr_region_hg19 and vntr_region_hg38 exist)
-        reference_assembly = rs_config.get("reference_assembly", "hg19")
-        vntr_region_key = f"vntr_region_{reference_assembly}"
-        vntr_region = rs_config.get(vntr_region_key)
-        if not vntr_region:
-            logging.error(f"VNTR region not specified in config for {reference_assembly}.")
+        # Normalize mode to lower-case and strip whitespace
+        mode = rs_config.get("downsample_mode", "vntr").strip().lower()
+        if mode == "vntr":
+            reference_assembly = rs_config.get("reference_assembly", "hg19")
+            vntr_region_key = f"vntr_region_{reference_assembly}"
+            vntr_region = rs_config.get(vntr_region_key)
+            if not vntr_region:
+                logging.error(f"VNTR region not specified in config for {reference_assembly}.")
+                sys.exit(1)
+            current_cov = calculate_vntr_coverage(tools["samtools"], output_bam, vntr_region, threads, os.path.dirname(output_bam), os.path.basename(output_bam).replace(".bam", ""))
+            region_info = vntr_region
+        elif mode == "non_vntr":
+            bed_file = rs_config.get("sample_target_bed")
+            if not bed_file:
+                logging.error("For non-VNTR downsampling, 'sample_target_bed' must be provided in config.")
+                sys.exit(1)
+            current_cov = calculate_target_coverage(tools["samtools"], output_bam, bed_file, threads, os.path.dirname(output_bam), os.path.basename(output_bam).replace(".bam", ""))
+            region_info = f"BED file: {bed_file}"
+        else:
+            logging.error("Invalid downsample_mode in config; use 'vntr' or 'non_vntr'.")
             sys.exit(1)
-        current_cov = calculate_vntr_coverage(tools["samtools"], output_bam, vntr_region, threads, os.path.dirname(output_bam), os.path.basename(output_bam).replace(".bam", ""))
         if current_cov > downsample_target:
             fraction = downsample_target / current_cov
             fraction = min(max(fraction, 0.0), 1.0)
-            logging.info(f"Downsampling BAM from {current_cov:.2f}x to target {downsample_target}x (fraction: {fraction:.4f})")
+            logging.info("Downsampling BAM from %.2fx to target %dx (fraction: %.4f) based on %s",
+                         current_cov, downsample_target, fraction, region_info)
             downsampled_bam = os.path.join(os.path.dirname(output_bam), os.path.basename(output_bam).replace(".bam", "_downsampled.bam"))
-            downsample_bam(tools["samtools"], output_bam, downsampled_bam, vntr_region, fraction, rs_config.get("downsample_seed", 42), threads)
+            if mode == "vntr":
+                downsample_bam(tools["samtools"], output_bam, downsampled_bam, vntr_region, fraction, rs_config.get("downsample_seed", 42), threads)
+            else:
+                downsample_entire_bam(tools["samtools"], output_bam, downsampled_bam, fraction, rs_config.get("downsample_seed", 42), threads)
             output_bam = downsampled_bam
         else:
-            logging.info("Current VNTR coverage is below the target; no downsampling performed.")
+            logging.info("Current coverage (%.2fx) is below the target; no downsampling performed.", current_cov)
 
     logging.info("Read simulation pipeline completed at %s",
                  datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
