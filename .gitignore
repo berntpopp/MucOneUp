@@ -175,3 +175,7 @@ reference/
 
 # outout folder
 output/
+
+# bed files
+data/bed/_muc1_regions/
+data/bed/_original_files/
