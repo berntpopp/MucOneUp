@@ -23,24 +23,25 @@ Additionally, the **read simulation** pipeline has been integrated with a port o
 
 ## Table of Contents
 
-- [Installation](#installation)  
-- [Quick Start](#quick-start)  
-- [Usage](#usage)  
-  - [Command-Line Arguments](#command-line-arguments)  
-  - [Example Commands](#example-commands)  
+- [Installation](#installation)
+- [Installing Required Reference Files](#installing-required-reference-files)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+  - [Command-Line Arguments](#command-line-arguments)
+  - [Example Commands](#example-commands)
 - [Toxic Protein Detection](#toxic-protein-detection)
 - [Simulation Statistics](#simulation-statistics)
 - [Read Simulation Integration](#read-simulation-integration)
-- [Project Structure and Logic](#project-structure-and-logic)  
-  - [Modules](#modules)  
-  - [Config File Layout](#config-file-layout)  
+- [Project Structure and Logic](#project-structure-and-logic)
+  - [Modules](#modules)
+  - [Config File Layout](#config-file-layout)
 - [License](#license)
 
 ---
 
 ## Installation
 
-1. **Clone or download** this repository.  
+1. **Clone or download** this repository.
 2. **Install** in a Python 3.7+ environment:
    ```bash
    pip install .
@@ -60,15 +61,83 @@ Once installed, you’ll have a command-line program called **`muconeup`** avail
 
 ---
 
+## Installing Required Reference Files
+
+In order to run the read simulation pipeline, **MucOneUp** requires several external reference files (such as a human reference FASTA and a reseq model file). A helper script is provided to automate the download, extraction, and (optional) indexing of these reference files. Follow these steps to install the required references and update your configuration accordingly:
+
+### Step 1. Run the Reference Installation Helper
+
+A helper script is provided in the `helpers` directory. This script downloads the required reference files based on a JSON configuration (by default, `helpers/install_references_config.json`).
+
+For example, to install the references into a directory named `./references`, run:
+
+```bash
+python helpers/install_references.py --output-dir ./references
+```
+
+This command will:
+- **Download** the reference files (e.g. the GRCh38 human reference and a reseq model file).
+- **Verify** the downloads via MD5 checksum.
+- **Extract** any gzip-compressed files automatically.
+- **Index** FASTA files using BWA if an indexing command is provided in the configuration.  
+  *(If you prefer not to index the FASTA files automatically, use the `--skip-indexing` flag.)*
+
+After the script completes, an `installed_references.json` file is generated in the output directory. This file maps each reference name to its absolute file path.
+
+### Step 2. Update Your Configuration
+
+Once the references are installed, update your **MucOneUp** configuration file (`config.json`) so that the fields in the `tools` and `read_simulation` sections point to the correct local paths. For example, if your reference FASTA file (e.g. GRCh38) is now located at:
+
+```
+/path/to/references/GRCh38_no_alt_analysis_set.fna.gz
+```
+
+update the `human_reference` field in the `read_simulation` section accordingly. Similarly, update the path for the reseq model file and any other reference paths you are using. For example:
+
+```json
+{
+  "tools": {
+    "reseq": "mamba run --no-capture-output -n env_wessim reseq",
+    "faToTwoBit": "mamba run --no-capture-output -n env_wessim faToTwoBit",
+    "samtools": "mamba run --no-capture-output -n env_wessim samtools",
+    "pblat": "mamba run --no-capture-output -n env_wessim pblat",
+    "bwa": "mamba run --no-capture-output -n env_wessim bwa"
+  },
+  "read_simulation": {
+    "reseq_model": "/path/to/references/Hs-Nova-TruSeq.reseq",
+    "sample_bam": "data/twist_v2.bam",
+    "human_reference": "/path/to/references/GRCh38_no_alt_analysis_set.fna.gz",
+    "read_number": 10000,
+    "fragment_size": 250,
+    "fragment_sd": 35,
+    "min_fragment": 20,
+    "threads": 8,
+    "downsample_coverage": 200,
+    "downsample_seed": 42,
+    "reference_assembly": "hg38",
+    "vntr_region_hg19": "chr1:155160500-155162000",
+    "vntr_region_hg38": "chr1:155188000-155192500"
+  }
+}
+```
+
+Be sure to replace `/path/to/references` with the absolute path where your references were installed (as reported in the `installed_references.json` file).
+
+### Step 3. Verify Reference Installation
+
+Before running the full simulation or read simulation pipeline, check that the reference files are accessible and correctly referenced in your config. Review the contents of the `installed_references.json` file and ensure that each required file exists at the specified path.
+
+---
+
 ## Quick Start
 
-1. **Create** or update a **JSON config** (see [Config File Layout](#config-file-layout)) describing your repeats, probabilities, mutations, etc.  
+1. **Create** or update a **JSON config** (see [Config File Layout](#config-file-layout)) describing your repeats, probabilities, mutations, etc.
 2. **Run** the tool by specifying your config along with desired parameters. For example:
    ```bash
    muconeup --config config.json --out-base muc1_simulated --output muc1_simulated.fa --output-structure muc1_struct.txt
    ```
 3. Inspect the resulting outputs:
-   - **`muc1_simulated.fa`**: Multi-FASTA file of haplotype sequences.  
+   - **`muc1_simulated.fa`**: Multi-FASTA file of haplotype sequences.
    - **`muc1_struct.txt`**: Textual representation of each haplotype’s chain of repeats.
    - **`simulation_stats.json`** (or with variant suffixes in dual simulation mode): JSON file(s) containing detailed simulation statistics.
 
@@ -193,11 +262,11 @@ The **muc_one_up** Python package is organized into modules. Here is a brief sum
 
 ```
 muc_one_up/
-├── cli.py           # Main CLI logic and argument parsing (now supporting series simulation, dual mutation modes, toxic protein detection, simulation statistics, and read simulation)
+├── cli.py           # Main CLI logic and argument parsing (supports series simulation, dual mutation modes, toxic protein detection, simulation statistics, and read simulation)
 ├── config.py        # Loads and validates the JSON configuration file
 ├── distribution.py  # Samples the target VNTR length from a specified distribution
 ├── fasta_writer.py  # Helper for writing FASTA files
-├── mutate.py        # Logic to apply specified mutations to haplotypes
+├── mutate.py        # Logic to apply specified mutations (including complex types like delete_insert) to haplotypes
 ├── probabilities.py # Provides weighted random selections for repeat transitions
 ├── simulate.py      # Core simulation code for building haplotypes (chains of repeats with terminal block insertion)
 ├── read_simulation.py  # Integrates an external read simulation pipeline (using w‑Wessim2) to generate reads from simulated FASTA files
@@ -225,9 +294,10 @@ muc_one_up/
    - Appends left and right constant flanks from the config.
 
 3. **Mutations (mutate.py):**
-   - Applies mutations (insertion, deletion, or replacement) at specified repeats.
+   - Applies mutations (insertion, deletion, replacement, and now combined deletion–insertion via `"delete_insert"`) at specified repeats.
    - Ensures that if the current repeat symbol isn’t allowed, it is changed to an allowed one.
    - Rebuilds the haplotype sequence and marks mutated repeats with an “m” suffix.
+   - Records the mutated VNTR unit sequences for separate output.
 
 4. **Configuration (config.py):**
    - Loads and validates the configuration JSON against a predefined schema.
@@ -239,7 +309,7 @@ muc_one_up/
 
 A simplified example:
 
-```jsonc
+```json
 {
   "repeats": {
     "1": "CACAGCATTCTTCTC...", 
@@ -279,7 +349,7 @@ A simplified example:
         }
       ]
     }
-    // Additional mutations...
+    // Additional mutations (e.g. "delinsAT" with type "delete_insert")...
   },
   "tools": {
     "reseq": "mamba run --no-capture-output -n wessim reseq",
@@ -300,6 +370,8 @@ A simplified example:
   }
 }
 ```
+
+*Note: When using the reference installation helper (see above), update your configuration to reference the absolute paths of the downloaded files (as indicated in the `installed_references.json` file).*
 
 ---
 
