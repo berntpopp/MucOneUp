@@ -688,7 +688,7 @@ def create_reads(input_fragments, reseq_model, output_reads, threads, tools):
         "-s", reseq_model, "-i", input_fragments, "-o", output_reads
     ]
     try:
-        run_command(cmd, timeout=30)
+        run_command(cmd, timeout=120)
     except SystemExit as e:
         if os.path.exists(output_reads) and os.path.getsize(output_reads) > 0:
             logging.warning(
