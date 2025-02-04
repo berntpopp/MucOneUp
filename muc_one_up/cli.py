@@ -31,7 +31,6 @@ from .fasta_writer import write_fasta  # Helper for writing FASTA files
 from .version import __version__  # Import version from the single source
 from .simulation_statistics import generate_simulation_statistics, write_statistics_report  # NEW: import simulation statistics module
 
-# (Other functions remain unchanged.)
 
 def build_parser():
     """Build and return the argument parser."""
@@ -281,7 +280,7 @@ def main():
                 logging.error("In dual simulation mode, the first mutation-name must be 'normal'.")
                 sys.exit(1)
             dual_mutation_mode = True
-
+        # If a mutation is provided (even a single value), we will later capture mutated VNTR units.
     sim_index = 1
     for fixed_conf in simulation_configs:
         iteration_start = time.time()  # NEW: record iteration start time
@@ -296,6 +295,9 @@ def main():
         except Exception as e:
             logging.error("Simulation failed: %s", e)
             sys.exit(1)
+
+        # Initialize mutated_units as None.
+        mutated_units = None
 
         # MUTATION LOGIC
         if args.mutation_name:
@@ -330,7 +332,7 @@ def main():
                         sys.exit(1)
                     mutation_positions.append(random.choice(possible_targets))
                 try:
-                    mutated_results = apply_mutations(
+                    mutated_results, mutated_units = apply_mutations(
                         config=config,
                         results=[(seq, chain.copy()) for seq, chain in results],
                         mutation_name=mutation_pair[1],
@@ -353,7 +355,7 @@ def main():
                             logging.error("Invalid --mutation-targets format: '%s'", t)
                             sys.exit(1)
                     try:
-                        results = apply_mutations(
+                        results, mutated_units = apply_mutations(
                             config=config,
                             results=results,
                             mutation_name=args.mutation_name,
@@ -383,7 +385,7 @@ def main():
                                 f"No repeats match 'allowed_repeats' for '{args.mutation_name}'"
                             )
                         rand_target = random.choice(possible_targets)
-                        results = apply_mutations(
+                        results, mutated_units = apply_mutations(
                             config=config,
                             results=results,
                             mutation_name=args.mutation_name,
@@ -412,6 +414,20 @@ def main():
                 logging.info("FASTA output written to %s", out_file)
             except Exception as e:
                 logging.error("Writing FASTA failed: %s", e)
+                sys.exit(1)
+
+        # Write mutated VNTR unit FASTA if a mutation was applied.
+        if args.mutation_name and mutated_units is not None:
+            variant_suffix = "mut" if dual_mutation_mode else ""
+            mutated_unit_out = numbered_filename(out_dir, out_base, sim_index, "mutated_unit.fa", variant=variant_suffix)
+            try:
+                with open(mutated_unit_out, "w") as muf:
+                    for hap_idx, muts in mutated_units.items():
+                        for rep_idx, unit_seq in muts:
+                            muf.write(f">haplotype_{hap_idx}_repeat_{rep_idx}\n{unit_seq}\n")
+                logging.info("Mutated VNTR unit FASTA output written: %s", mutated_unit_out)
+            except Exception as e:
+                logging.error("Writing mutated VNTR unit FASTA failed: %s", e)
                 sys.exit(1)
 
         # Write VNTR structure file.
@@ -489,7 +505,6 @@ def main():
             except ImportError as e:
                 logging.error("Failed to import toxic_protein_detector module: %s", e)
                 sys.exit(1)
-            # Optionally, use constant flanks from the config if available.
             left_const_val = config.get("constants", {}).get("left")
             right_const_val = config.get("constants", {}).get("right")
             if dual_mutation_mode:

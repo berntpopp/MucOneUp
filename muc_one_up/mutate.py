@@ -1,18 +1,20 @@
-# muc_one_up/mutate.py
-
 import random
 import logging
 
 
 def apply_mutations(config, results, mutation_name, targets):
     """
-    Apply a single named mutation to one or more haplotypes at specific repeat indices.
+    Apply a single named mutation to one or more haplotypes at specific repeat indices,
+    and record the mutated VNTR unit(s).
 
     :param config: The entire config dict.
     :param results: List of (sequence, chain) for each haplotype.
     :param mutation_name: Key in config["mutations"].
     :param targets: List of (haplotype_idx, repeat_idx) (1-based indexing).
-    :return: Updated results (same structure).
+    :return: Tuple (updated_results, mutated_units) where:
+             - updated_results: List of (sequence, chain) for each haplotype after mutation.
+             - mutated_units: Dict mapping haplotype index (1-based) to a list of tuples
+               (repeat_index, mutated_unit_sequence).
     :raises ValueError: if configuration or target indices are invalid.
     """
     if "mutations" not in config:
@@ -28,6 +30,7 @@ def apply_mutations(config, results, mutation_name, targets):
     changes = mutation_def["changes"]
 
     updated_results = list(results)
+    mutated_units = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
 
     # Apply the mutation to each specified target.
     for (hap_i, rep_i) in targets:
@@ -65,8 +68,8 @@ def apply_mutations(config, results, mutation_name, targets):
 
         current_symbol = chain[repeat_index]
 
-        # Apply the specified changes.
-        seq, chain = apply_changes_to_repeat(
+        # Apply the specified changes and capture the mutated unit.
+        seq, chain, mutated_repeat = apply_changes_to_repeat(
             seq, chain, repeat_index, changes, config, mutation_name
         )
 
@@ -78,7 +81,10 @@ def apply_mutations(config, results, mutation_name, targets):
             mutation_name, hap_i, rep_i
         )
 
-    return updated_results
+        # Record the mutated unit sequence.
+        mutated_units.setdefault(hap_i, []).append((rep_i, mutated_repeat))
+
+    return updated_results, mutated_units
 
 
 def rebuild_haplotype_sequence(chain, config):
@@ -113,7 +119,7 @@ def apply_changes_to_repeat(seq, chain, repeat_index, changes, config, mutation_
     :param changes: List of change dictionaries.
     :param config: Configuration dict.
     :param mutation_name: Name of the mutation.
-    :return: Tuple (new_seq, chain) after applying the changes.
+    :return: Tuple (new_seq, chain, mutated_repeat) after applying the changes.
     """
     repeats_dict = config["repeats"]
     left_const_len = len(config["constants"]["left"])
@@ -148,14 +154,12 @@ def apply_changes_to_repeat(seq, chain, repeat_index, changes, config, mutation_
         if ctype == "insert":
             if not (0 <= start_idx <= repeat_length):
                 raise ValueError(
-                    f"Insert out of bounds in mutation '{mutation_name}': "
-                    f"start={start}, repeat length={repeat_length}"
+                    f"Insert out of bounds in mutation '{mutation_name}': start={start}, repeat length={repeat_length}"
                 )
         elif ctype in ("delete", "replace"):
             if start_idx < 0 or end_idx >= repeat_length or start_idx > end_idx:
                 raise ValueError(
-                    f"{ctype.capitalize()} out of bounds in mutation '{mutation_name}': "
-                    f"start={start}, end={end}, repeat length={repeat_length}"
+                    f"{ctype.capitalize()} out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
                 )
         else:
             raise ValueError(
@@ -171,4 +175,4 @@ def apply_changes_to_repeat(seq, chain, repeat_index, changes, config, mutation_
 
     mutated_repeat = "".join(repeat_chars)
     new_seq = seq[:start_pos] + mutated_repeat + seq[end_pos + 1:]
-    return new_seq, chain
+    return new_seq, chain, mutated_repeat

@@ -32,60 +32,75 @@ def mutation_config():
 
 def test_apply_mutations_forced_change(mutation_config):
     """
-    If current_symbol is not in allowed_repeats, we forcibly change it to a random allowed symbol.
-    Then we also apply the mutation. 'X' is 5 bases => 'XXXXX'.
-    The replacement at start=2 => 'XZXXX'. Then the final 'm' => 'Xm'.
+    Test that if the current symbol is not allowed then it is forcibly changed
+    and the mutation applied. In this case, the chain has "C" but only "X" is allowed.
+    After replacement, the mutated unit should be "XZXXX" and the chain marker becomes "Xm".
     """
-    # "testMut" only allows "X", but our chain has "C". We'll see if it forces "X".
+    # Original haplotype: left constant "TTTT", repeat "CCCCC", right constant not appended because repeat != "9".
     results = [
-        ("TTTTCCCCC", ["C"]),  # single haplotype with chain=[C]
+        ("TTTTCCCCC", ["C"]),
     ]
-    updated = apply_mutations(
+    updated, mutated_units = apply_mutations(
         config=mutation_config,
         results=results,
         mutation_name="testMut",
         targets=[(1, 1)]
     )
+    # Verify updated results
     assert len(updated) == 1
     new_seq, new_chain = updated[0]
-    # The chain symbol should now be "Xm" (forced from 'C' -> 'X' -> plus 'm')
+    # Forced change: "C" should be replaced with "X" and then mutated marker appended ("Xm")
     assert new_chain[0] == "Xm"
-
-    # Because the code does not append the right constant unless final symbol == '9', 
-    # new_seq will be:
-    #  left const (TTTT) + mutated 'X' => 'XZXXX' + no right const
-    # => 'TTTTXZXXX'
-    #
-    # Check that 'XZXXX' substring is present:
+    # Verify that the mutated unit "XZXXX" appears in the new sequence (i.e. left constant + mutated unit)
     assert "XZXXX" in new_seq
-    # Ensure we do NOT see "XXXXX" unmutated
+    # Ensure we no longer see the unmodified "XXXXX"
     assert "XXXXX" not in new_seq
 
+    # Verify that the mutated_units dict has a record for haplotype 1, repeat 1.
+    assert 1 in mutated_units
+    found = False
+    for rep_idx, unit_seq in mutated_units[1]:
+        if rep_idx == 1:
+            assert unit_seq == "XZXXX"
+            found = True
+    assert found
+
 def test_apply_mutations_replace_ok(mutation_config):
-    """Test a normal replace in an allowed repeat (X)."""
+    """Test a normal replacement mutation in an allowed repeat (X)."""
     results = [
-        ("TTTTXXXXXGGGG", ["X"]),  # chain has X => no forced change
+        ("TTTTXXXXXGGGG", ["X"]),  # chain has allowed symbol "X"
     ]
-    updated = apply_mutations(
+    updated, mutated_units = apply_mutations(
         config=mutation_config,
         results=results,
         mutation_name="testMut",
         targets=[(1, 1)]
     )
     new_seq, new_chain = updated[0]
-    # The chain symbol becomes "Xm" after mutation
+    # After mutation, chain symbol becomes "Xm"
     assert new_chain[0] == "Xm"
-    # The mutation replaces base 2 with "Z", so 'XXXXX' => 'XZXXX'
+    # With the replacement at base position 2, "XXXXX" should become "XZXXX"
     assert "XZXXX" in new_seq
-    # Right const is "GGGG" so final seq is TTTT + XZXXX + GGGG = TTTTXZXXXGGGG
+    # The right constant ("GGGG") should remain unchanged.
     assert new_seq.endswith("GGGG")
+    # Verify mutated_units contains the expected mutated repeat.
+    assert 1 in mutated_units
+    found = False
+    for rep_idx, unit_seq in mutated_units[1]:
+        if rep_idx == 1:
+            assert unit_seq == "XZXXX"
+            found = True
+    assert found
 
 def test_apply_mutations_out_of_range(mutation_config):
-    """If start/end are out of bounds for the repeat, we should get a ValueError."""
+    """
+    If the change parameters are out of bounds for the repeat, a ValueError should be raised.
+    """
+    # Set change to be out-of-bounds (for a 5-base repeat)
     mutation_config["mutations"]["testMut"]["changes"] = [
         {
             "type": "replace",
-            "start": 100,  # out of range for 5-base repeat
+            "start": 100,
             "end": 101,
             "sequence": "ABC"
         }
