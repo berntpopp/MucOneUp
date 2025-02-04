@@ -156,22 +156,34 @@ def apply_changes_to_repeat(seq, chain, repeat_index, changes, config, mutation_
                 raise ValueError(
                     f"Insert out of bounds in mutation '{mutation_name}': start={start}, repeat length={repeat_length}"
                 )
-        elif ctype in ("delete", "replace"):
+            repeat_chars[start_idx:start_idx] = list(insertion_str)
+        elif ctype == "delete":
             if start_idx < 0 or end_idx >= repeat_length or start_idx > end_idx:
                 raise ValueError(
-                    f"{ctype.capitalize()} out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
+                    f"Delete out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
                 )
+            del repeat_chars[start_idx:end_idx + 1]
+        elif ctype == "replace":
+            if start_idx < 0 or end_idx >= repeat_length or start_idx > end_idx:
+                raise ValueError(
+                    f"Replace out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
+                )
+            repeat_chars[start_idx:end_idx + 1] = list(insertion_str)
+        elif ctype == "delete_insert":
+            # For delete_insert, we interpret the provided start and end as the boundaries that
+            # are to be retained, deleting the bases strictly between them.
+            if start_idx < 0 or end_idx >= repeat_length or start_idx >= end_idx:
+                raise ValueError(
+                    f"delete_insert out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
+                )
+            # Delete bases strictly between start_idx and end_idx.
+            del repeat_chars[start_idx+1:end_idx]
+            # Insert the provided sequence at position start_idx+1.
+            repeat_chars[start_idx+1:start_idx+1] = list(insertion_str)
         else:
             raise ValueError(
                 f"Unknown mutation type '{ctype}' in mutation '{mutation_name}'"
             )
-
-        if ctype == "insert":
-            repeat_chars[start_idx:start_idx] = list(insertion_str)
-        elif ctype == "delete":
-            del repeat_chars[start_idx:end_idx + 1]
-        elif ctype == "replace":
-            repeat_chars[start_idx:end_idx + 1] = list(insertion_str)
 
     mutated_repeat = "".join(repeat_chars)
     new_seq = seq[:start_pos] + mutated_repeat + seq[end_pos + 1:]
