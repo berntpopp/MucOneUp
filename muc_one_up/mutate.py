@@ -30,10 +30,12 @@ def apply_mutations(config, results, mutation_name, targets):
     changes = mutation_def["changes"]
 
     updated_results = list(results)
-    mutated_units = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
+    mutated_units = (
+        {}
+    )  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
 
     # Apply the mutation to each specified target.
-    for (hap_i, rep_i) in targets:
+    for hap_i, rep_i in targets:
         hap_index = hap_i - 1
         repeat_index = rep_i - 1
 
@@ -45,9 +47,7 @@ def apply_mutations(config, results, mutation_name, targets):
         seq, chain = updated_results[hap_index]
 
         if repeat_index < 0 or repeat_index >= len(chain):
-            raise ValueError(
-                f"Repeat index {rep_i} out of range (1..{len(chain)})."
-            )
+            raise ValueError(f"Repeat index {rep_i} out of range (1..{len(chain)}).")
 
         current_symbol = chain[repeat_index]
 
@@ -60,7 +60,10 @@ def apply_mutations(config, results, mutation_name, targets):
             new_symbol = random.choice(allowed_repeats)
             logging.debug(
                 "Forcing change at haplotype %d, repeat %d: %s -> %s",
-                hap_i, rep_i, current_symbol, new_symbol
+                hap_i,
+                rep_i,
+                current_symbol,
+                new_symbol,
             )
             chain[repeat_index] = new_symbol
             seq = rebuild_haplotype_sequence(chain, config)
@@ -78,7 +81,9 @@ def apply_mutations(config, results, mutation_name, targets):
         updated_results[hap_index] = (seq, chain)
         logging.info(
             "Applied mutation '%s' at haplotype %d, repeat %d",
-            mutation_name, hap_i, rep_i
+            mutation_name,
+            hap_i,
+            rep_i,
         )
 
         # Record the mutated unit sequence.
@@ -162,13 +167,13 @@ def apply_changes_to_repeat(seq, chain, repeat_index, changes, config, mutation_
                 raise ValueError(
                     f"Delete out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
                 )
-            del repeat_chars[start_idx:end_idx + 1]
+            del repeat_chars[start_idx : end_idx + 1]
         elif ctype == "replace":
             if start_idx < 0 or end_idx >= repeat_length or start_idx > end_idx:
                 raise ValueError(
                     f"Replace out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
                 )
-            repeat_chars[start_idx:end_idx + 1] = list(insertion_str)
+            repeat_chars[start_idx : end_idx + 1] = list(insertion_str)
         elif ctype == "delete_insert":
             # For delete_insert, we interpret the provided start and end as the boundaries that
             # are to be retained, deleting the bases strictly between them.
@@ -177,14 +182,14 @@ def apply_changes_to_repeat(seq, chain, repeat_index, changes, config, mutation_
                     f"delete_insert out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
                 )
             # Delete bases strictly between start_idx and end_idx.
-            del repeat_chars[start_idx+1:end_idx]
+            del repeat_chars[start_idx + 1 : end_idx]
             # Insert the provided sequence at position start_idx+1.
-            repeat_chars[start_idx+1:start_idx+1] = list(insertion_str)
+            repeat_chars[start_idx + 1 : start_idx + 1] = list(insertion_str)
         else:
             raise ValueError(
                 f"Unknown mutation type '{ctype}' in mutation '{mutation_name}'"
             )
 
     mutated_repeat = "".join(repeat_chars)
-    new_seq = seq[:start_pos] + mutated_repeat + seq[end_pos + 1:]
+    new_seq = seq[:start_pos] + mutated_repeat + seq[end_pos + 1 :]
     return new_seq, chain, mutated_repeat

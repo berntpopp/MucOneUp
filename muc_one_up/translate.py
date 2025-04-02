@@ -6,22 +6,70 @@ import logging
 
 # Standard genetic code table.
 CODON_TABLE = {
-    "ATA": "I", "ATC": "I", "ATT": "I", "ATG": "M",
-    "ACA": "T", "ACC": "T", "ACG": "T", "ACT": "T",
-    "AAC": "N", "AAT": "N", "AAA": "K", "AAG": "K",
-    "AGC": "S", "AGT": "S", "AGA": "R", "AGG": "R",
-    "CTA": "L", "CTC": "L", "CTG": "L", "CTT": "L",
-    "CCA": "P", "CCC": "P", "CCG": "P", "CCT": "P",
-    "CAC": "H", "CAT": "H", "CAA": "Q", "CAG": "Q",
-    "CGA": "R", "CGC": "R", "CGG": "R", "CGT": "R",
-    "GTA": "V", "GTC": "V", "GTG": "V", "GTT": "V",
-    "GCA": "A", "GCC": "A", "GCG": "A", "GCT": "A",
-    "GAC": "D", "GAT": "D", "GAA": "E", "GAG": "E",
-    "GGA": "G", "GGC": "G", "GGG": "G", "GGT": "G",
-    "TCA": "S", "TCC": "S", "TCG": "S", "TCT": "S",
-    "TTC": "F", "TTT": "F", "TTA": "L", "TTG": "L",
-    "TAC": "Y", "TAT": "Y", "TAA": "_", "TAG": "_",
-    "TGC": "C", "TGT": "C", "TGA": "_", "TGG": "W",
+    "ATA": "I",
+    "ATC": "I",
+    "ATT": "I",
+    "ATG": "M",
+    "ACA": "T",
+    "ACC": "T",
+    "ACG": "T",
+    "ACT": "T",
+    "AAC": "N",
+    "AAT": "N",
+    "AAA": "K",
+    "AAG": "K",
+    "AGC": "S",
+    "AGT": "S",
+    "AGA": "R",
+    "AGG": "R",
+    "CTA": "L",
+    "CTC": "L",
+    "CTG": "L",
+    "CTT": "L",
+    "CCA": "P",
+    "CCC": "P",
+    "CCG": "P",
+    "CCT": "P",
+    "CAC": "H",
+    "CAT": "H",
+    "CAA": "Q",
+    "CAG": "Q",
+    "CGA": "R",
+    "CGC": "R",
+    "CGG": "R",
+    "CGT": "R",
+    "GTA": "V",
+    "GTC": "V",
+    "GTG": "V",
+    "GTT": "V",
+    "GCA": "A",
+    "GCC": "A",
+    "GCG": "A",
+    "GCT": "A",
+    "GAC": "D",
+    "GAT": "D",
+    "GAA": "E",
+    "GAG": "E",
+    "GGA": "G",
+    "GGC": "G",
+    "GGG": "G",
+    "GGT": "G",
+    "TCA": "S",
+    "TCC": "S",
+    "TCG": "S",
+    "TCT": "S",
+    "TTC": "F",
+    "TTT": "F",
+    "TTA": "L",
+    "TTG": "L",
+    "TAC": "Y",
+    "TAT": "Y",
+    "TAA": "_",
+    "TAG": "_",
+    "TGC": "C",
+    "TGT": "C",
+    "TGA": "_",
+    "TGG": "W",
 }
 
 
@@ -33,8 +81,16 @@ def reverse_complement(seq):
     :return: Reverse complement of the sequence.
     """
     rc_map = {
-        "A": "T", "T": "A", "G": "C", "C": "G", "N": "N",
-        "a": "t", "t": "a", "g": "c", "c": "g", "n": "n"
+        "A": "T",
+        "T": "A",
+        "G": "C",
+        "C": "G",
+        "N": "N",
+        "a": "t",
+        "t": "a",
+        "g": "c",
+        "c": "g",
+        "n": "n",
     }
     return "".join(rc_map.get(base, "N") for base in reversed(seq))
 
@@ -50,7 +106,7 @@ def dna_to_protein(dna, codon_table=CODON_TABLE, include_stop=False):
     """
     protein = []
     for i in range(0, len(dna), 3):
-        codon = dna[i:i + 3].upper()
+        codon = dna[i : i + 3].upper()
         if len(codon) < 3:
             break
         aa = codon_table.get(codon, "X")
@@ -60,9 +116,17 @@ def dna_to_protein(dna, codon_table=CODON_TABLE, include_stop=False):
     return "".join(protein)
 
 
-def find_orfs_in_memory(seq, min_len=30, max_len=1000000, strand="b",
-                        starts=["ATG", "TTG", "CTG"], stops=["TAA", "TAG", "TGA"],
-                        include_stop=False, partial5=False, partial3=False):
+def find_orfs_in_memory(
+    seq,
+    min_len=30,
+    max_len=1000000,
+    strand="b",
+    starts=["ATG", "TTG", "CTG"],
+    stops=["TAA", "TAG", "TGA"],
+    include_stop=False,
+    partial5=False,
+    partial3=False,
+):
     """
     Use orfipy_core.orfs() to find ORFs in a DNA sequence.
 
@@ -77,21 +141,25 @@ def find_orfs_in_memory(seq, min_len=30, max_len=1000000, strand="b",
     :param partial3: Allow partial ORFs at the 3' end.
     :return: List of ORFs as tuples (start, stop, strand, description).
     """
-    return list(orfipy_core.orfs(
-        seq,
-        minlen=min_len,
-        maxlen=max_len,
-        strand=strand,
-        starts=starts,
-        stops=stops,
-        include_stop=include_stop,
-        partial3=partial3,
-        partial5=partial5,
-        between_stops=False
-    ))
+    return list(
+        orfipy_core.orfs(
+            seq,
+            minlen=min_len,
+            maxlen=max_len,
+            strand=strand,
+            starts=starts,
+            stops=stops,
+            include_stop=include_stop,
+            partial3=partial3,
+            partial5=partial5,
+            between_stops=False,
+        )
+    )
 
 
-def predict_orfs_in_haplotypes(results, min_len=30, orf_min_aa=100, required_prefix=None):
+def predict_orfs_in_haplotypes(
+    results, min_len=30, orf_min_aa=100, required_prefix=None
+):
     """
     For each haplotype in results, find ORFs, translate them to peptides,
     and filter based on minimal peptide length and optional prefix.
@@ -114,7 +182,7 @@ def predict_orfs_in_haplotypes(results, min_len=30, orf_min_aa=100, required_pre
             strand="b",
             starts=["ATG", "TTG", "CTG"],
             stops=["TAA", "TAG", "TGA"],
-            include_stop=False
+            include_stop=False,
         )
         orf_list = []
         orf_count = 0
@@ -156,8 +224,9 @@ def write_peptides_to_fasta(haplotype_orfs, output_pep):
         raise
 
 
-def run_orf_finder_in_memory(results, output_pep, min_len=30, orf_min_aa=100,
-                             required_prefix=None):
+def run_orf_finder_in_memory(
+    results, output_pep, min_len=30, orf_min_aa=100, required_prefix=None
+):
     """
     High-level function that predicts ORFs for each haplotype in memory,
     applies filters, and writes the peptides to a FASTA file.
@@ -169,9 +238,6 @@ def run_orf_finder_in_memory(results, output_pep, min_len=30, orf_min_aa=100,
     :param required_prefix: Optional prefix filter for peptides.
     """
     haplotype_orfs = predict_orfs_in_haplotypes(
-        results,
-        min_len=min_len,
-        orf_min_aa=orf_min_aa,
-        required_prefix=required_prefix
+        results, min_len=min_len, orf_min_aa=orf_min_aa, required_prefix=required_prefix
     )
     write_peptides_to_fasta(haplotype_orfs, output_pep)

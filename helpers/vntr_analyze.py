@@ -242,7 +242,9 @@ def main() -> None:
     # Retrieve known repeats from config.
     known_repeats = config.get("repeats", {})
     if not known_repeats:
-        parser.error("Configuration file does not contain any known repeats under the 'repeats' key.")
+        parser.error(
+            "Configuration file does not contain any known repeats under the 'repeats' key."
+        )
 
     try:
         analysis_results = analyze_vntr_sequences(

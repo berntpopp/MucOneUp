@@ -29,44 +29,47 @@ from .simulate import simulate_diploid
 from .translate import run_orf_finder_in_memory
 from .fasta_writer import write_fasta  # Helper for writing FASTA files
 from .version import __version__  # Import version from the single source
-from .simulation_statistics import generate_simulation_statistics, write_statistics_report  # NEW: import simulation statistics module
+from .simulation_statistics import (
+    generate_simulation_statistics,
+    write_statistics_report,
+)  # NEW: import simulation statistics module
 
 
 def build_parser():
     """Build and return the argument parser."""
     parser = argparse.ArgumentParser(
-        prog="MucOneUp",
-        description="Tool to simulate MUC1 VNTR diploid references."
+        prog="MucOneUp", description="Tool to simulate MUC1 VNTR diploid references."
     )
     # Add a version flag.
     parser.add_argument(
-        "-v", "--version",
+        "-v",
+        "--version",
         action="version",
         version="%(prog)s " + __version__,
-        help="Print the version number and exit."
+        help="Print the version number and exit.",
     )
     parser.add_argument(
-        "--config",
-        required=True,
-        help="Path to JSON configuration file."
+        "--config", required=True, help="Path to JSON configuration file."
     )
     # Base name and output directory for all output files.
     parser.add_argument(
         "--out-base",
         default="muc1_simulated",
-        help=("Base name for all output files. All outputs (simulation FASTA, VNTR structure, ORF FASTA, "
-              "read simulation outputs) will be named based on this base name. Default is 'muc1_simulated'.")
+        help=(
+            "Base name for all output files. All outputs (simulation FASTA, VNTR structure, ORF FASTA, "
+            "read simulation outputs) will be named based on this base name. Default is 'muc1_simulated'."
+        ),
     )
     parser.add_argument(
         "--out-dir",
         default=".",
-        help="Output folder where all files will be written. Default is the current directory."
+        help="Output folder where all files will be written. Default is the current directory.",
     )
     parser.add_argument(
         "--num-haplotypes",
         default=2,
         type=int,
-        help="Number of haplotypes to simulate. Typically 2 for diploid."
+        help="Number of haplotypes to simulate. Typically 2 for diploid.",
     )
     # Allow fixed-lengths as strings so that ranges (e.g. "20-40") are allowed.
     parser.add_argument(
@@ -74,14 +77,16 @@ def build_parser():
         nargs="+",
         type=str,
         default=None,
-        help=("One or more fixed lengths (in VNTR repeats). If one value is provided, it applies to all haplotypes. "
-              "If multiple, the number must match --num-haplotypes. Values may be a single integer (e.g. '60') or a range (e.g. '20-40').")
+        help=(
+            "One or more fixed lengths (in VNTR repeats). If one value is provided, it applies to all haplotypes. "
+            "If multiple, the number must match --num-haplotypes. Values may be a single integer (e.g. '60') or a range (e.g. '20-40')."
+        ),
     )
     parser.add_argument(
         "--seed",
         type=int,
         default=None,
-        help="Random seed for reproducible simulations."
+        help="Random seed for reproducible simulations.",
     )
     # New flag to control series simulation with an optional step size.
     parser.add_argument(
@@ -89,64 +94,76 @@ def build_parser():
         nargs="?",
         const=1,
         type=int,
-        help=("If provided, generate a simulation for each value in the fixed-length range(s). "
-              "Optionally supply a step size (e.g. '--simulate-series 5' to use a step of 5). "
-              "If omitted, the step defaults to 1 (i.e. every value). Without this flag, a fixed-length range results in a single simulation iteration with a random pick from each range.")
+        help=(
+            "If provided, generate a simulation for each value in the fixed-length range(s). "
+            "Optionally supply a step size (e.g. '--simulate-series 5' to use a step of 5). "
+            "If omitted, the step defaults to 1 (i.e. every value). Without this flag, a fixed-length range results in a single simulation iteration with a random pick from each range."
+        ),
     )
     # Mutation arguments.
     parser.add_argument(
         "--mutation-name",
         default=None,
-        help=("Name of the mutation to apply. To run dual simulations (normal and mutated), provide a comma-separated pair "
-              "(e.g. 'normal,dupC').")
+        help=(
+            "Name of the mutation to apply. To run dual simulations (normal and mutated), provide a comma-separated pair "
+            "(e.g. 'normal,dupC')."
+        ),
     )
     parser.add_argument(
         "--mutation-targets",
         nargs="+",
         default=None,
-        help=("One or more 'haplotype_index,repeat_index' pairs (1-based). E.g., '1,5 2,7'. "
-              "If provided, each pair indicates which haplotype and repeat to mutate. If omitted, the mutation is applied at a random allowed repeat.")
+        help=(
+            "One or more 'haplotype_index,repeat_index' pairs (1-based). E.g., '1,5 2,7'. "
+            "If provided, each pair indicates which haplotype and repeat to mutate. If omitted, the mutation is applied at a random allowed repeat."
+        ),
     )
     # Flags for additional outputs.
     parser.add_argument(
         "--output-structure",
         action="store_true",
-        help="If provided, output a VNTR structure file using the normalized naming scheme."
+        help="If provided, output a VNTR structure file using the normalized naming scheme.",
     )
     parser.add_argument(
         "--output-orfs",
         action="store_true",
-        help=("If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme. "
-              "Additionally, the resulting ORF file will be scanned for toxic protein sequence features and "
-              "a statistics file will be generated.")
+        help=(
+            "If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme. "
+            "Additionally, the resulting ORF file will be scanned for toxic protein sequence features and "
+            "a statistics file will be generated."
+        ),
     )
     # ORF parameters.
     parser.add_argument(
         "--orf-min-aa",
         type=int,
         default=100,
-        help="Minimum peptide length (in amino acids) to report (default=100)."
+        help="Minimum peptide length (in amino acids) to report (default=100).",
     )
     parser.add_argument(
         "--orf-aa-prefix",
-        nargs='?',
-        const='MTSSV',
+        nargs="?",
+        const="MTSSV",
         default=None,
-        help=("Filter resulting peptides to only those beginning with this prefix. "
-              "If used without a value, defaults to 'MTSSV'. If omitted, no prefix filter is applied.")
+        help=(
+            "Filter resulting peptides to only those beginning with this prefix. "
+            "If used without a value, defaults to 'MTSSV'. If omitted, no prefix filter is applied."
+        ),
     )
     # Read simulation flag.
     parser.add_argument(
         "--simulate-reads",
         action="store_true",
-        help=("If provided, run the read simulation pipeline on the simulated FASTA. "
-              "This pipeline produces an aligned and indexed BAM and gzipped paired FASTQ files.")
+        help=(
+            "If provided, run the read simulation pipeline on the simulated FASTA. "
+            "This pipeline produces an aligned and indexed BAM and gzipped paired FASTQ files."
+        ),
     )
     parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "NONE"],
-        help="Set logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE). Default is INFO."
+        help="Set logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE). Default is INFO.",
     )
     return parser
 
@@ -165,8 +182,7 @@ def configure_logging(level_str):
             for handler in root_logger.handlers[:]:
                 root_logger.removeHandler(handler)
         logging.basicConfig(
-            level=level,
-            format="%(asctime)s - %(levelname)s - %(message)s"
+            level=level, format="%(asctime)s - %(levelname)s - %(message)s"
         )
         logging.info("Logging configured at level: %s", level_str.upper())
 
@@ -211,7 +227,9 @@ def build_cartesian_fixed_length_configs(fixed_matrix):
     return [list(prod) for prod in itertools.product(*fixed_matrix)]
 
 
-def numbered_filename(out_dir: str, out_base: str, iteration: int, file_type: str, variant: str = "") -> str:
+def numbered_filename(
+    out_dir: str, out_base: str, iteration: int, file_type: str, variant: str = ""
+) -> str:
     """
     Build a filename by combining the output directory, base name, iteration number,
     variant suffix, and a file type suffix.
@@ -262,11 +280,16 @@ def main():
                     new_fixed_matrix.append(lst)
             fixed_matrix = new_fixed_matrix
             simulation_configs = build_cartesian_fixed_length_configs(fixed_matrix)
-            logging.info("Series mode enabled with step %d: %d simulation iterations generated from fixed-length ranges.",
-                         step, len(simulation_configs))
+            logging.info(
+                "Series mode enabled with step %d: %d simulation iterations generated from fixed-length ranges.",
+                step,
+                len(simulation_configs),
+            )
         else:
             simulation_configs = [[random.choice(lst) for lst in fixed_matrix]]
-            logging.info("Single simulation iteration generated using a random choice from each fixed-length range.")
+            logging.info(
+                "Single simulation iteration generated using a random choice from each fixed-length range."
+            )
     else:
         simulation_configs = [None]  # Use random lengths if not provided.
 
@@ -274,10 +297,12 @@ def main():
     dual_mutation_mode = False
     mutation_pair = None
     if args.mutation_name:
-        if ',' in args.mutation_name:
-            mutation_pair = [s.strip() for s in args.mutation_name.split(',')]
+        if "," in args.mutation_name:
+            mutation_pair = [s.strip() for s in args.mutation_name.split(",")]
             if mutation_pair[0].lower() != "normal":
-                logging.error("In dual simulation mode, the first mutation-name must be 'normal'.")
+                logging.error(
+                    "In dual simulation mode, the first mutation-name must be 'normal'."
+                )
                 sys.exit(1)
             dual_mutation_mode = True
         # If a mutation is provided (even a single value), we will later capture mutated VNTR units.
@@ -289,9 +314,12 @@ def main():
                 config=config,
                 num_haplotypes=args.num_haplotypes,
                 fixed_lengths=fixed_conf,
-                seed=args.seed
+                seed=args.seed,
             )
-            logging.info("Haplotype simulation completed successfully for iteration %d.", sim_index)
+            logging.info(
+                "Haplotype simulation completed successfully for iteration %d.",
+                sim_index,
+            )
         except Exception as e:
             logging.error("Simulation failed: %s", e)
             sys.exit(1)
@@ -316,8 +344,14 @@ def main():
                             logging.error("Invalid --mutation-targets format: '%s'", t)
                             sys.exit(1)
                 else:
-                    if "mutations" not in config or mutation_pair[1] not in config["mutations"]:
-                        logging.error("Mutation '%s' not found in config['mutations'].", mutation_pair[1])
+                    if (
+                        "mutations" not in config
+                        or mutation_pair[1] not in config["mutations"]
+                    ):
+                        logging.error(
+                            "Mutation '%s' not found in config['mutations'].",
+                            mutation_pair[1],
+                        )
                         sys.exit(1)
                     mut_def = config["mutations"][mutation_pair[1]]
                     allowed_repeats = set(mut_def["allowed_repeats"])
@@ -328,7 +362,10 @@ def main():
                             if pure_sym in allowed_repeats:
                                 possible_targets.append((hap_idx, rep_idx))
                     if not possible_targets:
-                        logging.error("No repeats match 'allowed_repeats' for mutation '%s'", mutation_pair[1])
+                        logging.error(
+                            "No repeats match 'allowed_repeats' for mutation '%s'",
+                            mutation_pair[1],
+                        )
                         sys.exit(1)
                     mutation_positions.append(random.choice(possible_targets))
                 try:
@@ -336,7 +373,7 @@ def main():
                         config=config,
                         results=[(seq, chain.copy()) for seq, chain in results],
                         mutation_name=mutation_pair[1],
-                        targets=mutation_positions
+                        targets=mutation_positions,
                     )
                     logging.info("Dual mutation applied for mutated version.")
                 except Exception as e:
@@ -359,7 +396,7 @@ def main():
                             config=config,
                             results=results,
                             mutation_name=args.mutation_name,
-                            targets=mutation_positions
+                            targets=mutation_positions,
                         )
                         logging.info("Mutation applied at specified targets.")
                     except Exception as e:
@@ -367,8 +404,10 @@ def main():
                         sys.exit(1)
                 else:
                     try:
-                        if ("mutations" not in config or
-                                args.mutation_name not in config["mutations"]):
+                        if (
+                            "mutations" not in config
+                            or args.mutation_name not in config["mutations"]
+                        ):
                             raise ValueError(
                                 f"Mutation '{args.mutation_name}' not in config['mutations']"
                             )
@@ -389,21 +428,29 @@ def main():
                             config=config,
                             results=results,
                             mutation_name=args.mutation_name,
-                            targets=[rand_target]
+                            targets=[rand_target],
                         )
-                        logging.info("Mutation applied at random target: %s", str(rand_target))
+                        logging.info(
+                            "Mutation applied at random target: %s", str(rand_target)
+                        )
                     except Exception as e:
                         logging.error("Random-target mutation failed: %s", e)
                         sys.exit(1)
 
         # Write FASTA outputs.
         if dual_mutation_mode:
-            normal_out = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="normal")
-            mut_out = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="mut")
+            normal_out = numbered_filename(
+                out_dir, out_base, sim_index, "simulated.fa", variant="normal"
+            )
+            mut_out = numbered_filename(
+                out_dir, out_base, sim_index, "simulated.fa", variant="mut"
+            )
             try:
                 write_fasta([seq for seq, chain in normal_results], normal_out)
                 write_fasta([seq for seq, chain in mutated_results], mut_out)
-                logging.info("Dual FASTA outputs written: %s and %s", normal_out, mut_out)
+                logging.info(
+                    "Dual FASTA outputs written: %s and %s", normal_out, mut_out
+                )
             except Exception as e:
                 logging.error("Writing FASTA failed: %s", e)
                 sys.exit(1)
@@ -419,13 +466,19 @@ def main():
         # Write mutated VNTR unit FASTA if a mutation was applied.
         if args.mutation_name and mutated_units is not None:
             variant_suffix = "mut" if dual_mutation_mode else ""
-            mutated_unit_out = numbered_filename(out_dir, out_base, sim_index, "mutated_unit.fa", variant=variant_suffix)
+            mutated_unit_out = numbered_filename(
+                out_dir, out_base, sim_index, "mutated_unit.fa", variant=variant_suffix
+            )
             try:
                 with open(mutated_unit_out, "w") as muf:
                     for hap_idx, muts in mutated_units.items():
                         for rep_idx, unit_seq in muts:
-                            muf.write(f">haplotype_{hap_idx}_repeat_{rep_idx}\n{unit_seq}\n")
-                logging.info("Mutated VNTR unit FASTA output written: %s", mutated_unit_out)
+                            muf.write(
+                                f">haplotype_{hap_idx}_repeat_{rep_idx}\n{unit_seq}\n"
+                            )
+                logging.info(
+                    "Mutated VNTR unit FASTA output written: %s", mutated_unit_out
+                )
             except Exception as e:
                 logging.error("Writing mutated VNTR unit FASTA failed: %s", e)
                 sys.exit(1)
@@ -433,8 +486,12 @@ def main():
         # Write VNTR structure file.
         if args.output_structure:
             if dual_mutation_mode:
-                normal_struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt", variant="normal")
-                mut_struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt", variant="mut")
+                normal_struct_out = numbered_filename(
+                    out_dir, out_base, sim_index, "vntr_structure.txt", variant="normal"
+                )
+                mut_struct_out = numbered_filename(
+                    out_dir, out_base, sim_index, "vntr_structure.txt", variant="mut"
+                )
                 try:
                     with open(normal_struct_out, "w") as nf:
                         for i, (sequence, chain) in enumerate(normal_results, start=1):
@@ -444,12 +501,18 @@ def main():
                         for i, (sequence, chain) in enumerate(mutated_results, start=1):
                             chain_str = "-".join(chain)
                             mf.write(f"haplotype_{i}\t{chain_str}\n")
-                    logging.info("Structure files written: %s and %s", normal_struct_out, mut_struct_out)
+                    logging.info(
+                        "Structure files written: %s and %s",
+                        normal_struct_out,
+                        mut_struct_out,
+                    )
                 except Exception as e:
                     logging.error("Writing structure file failed: %s", e)
                     sys.exit(1)
             else:
-                struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt")
+                struct_out = numbered_filename(
+                    out_dir, out_base, sim_index, "vntr_structure.txt"
+                )
                 try:
                     with open(struct_out, "w") as struct_fh:
                         for i, (sequence, chain) in enumerate(results, start=1):
@@ -463,22 +526,30 @@ def main():
         # ORF logic.
         if args.output_orfs:
             if dual_mutation_mode:
-                normal_orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa", variant="normal")
-                mut_orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa", variant="mut")
+                normal_orf_out = numbered_filename(
+                    out_dir, out_base, sim_index, "orfs.fa", variant="normal"
+                )
+                mut_orf_out = numbered_filename(
+                    out_dir, out_base, sim_index, "orfs.fa", variant="mut"
+                )
                 try:
                     run_orf_finder_in_memory(
                         normal_results,
                         output_pep=normal_orf_out,
                         orf_min_aa=args.orf_min_aa,
-                        required_prefix=args.orf_aa_prefix
+                        required_prefix=args.orf_aa_prefix,
                     )
                     run_orf_finder_in_memory(
                         mutated_results,
                         output_pep=mut_orf_out,
                         orf_min_aa=args.orf_min_aa,
-                        required_prefix=args.orf_aa_prefix
+                        required_prefix=args.orf_aa_prefix,
                     )
-                    logging.info("ORF finding completed; peptide FASTA outputs written: %s and %s", normal_orf_out, mut_orf_out)
+                    logging.info(
+                        "ORF finding completed; peptide FASTA outputs written: %s and %s",
+                        normal_orf_out,
+                        mut_orf_out,
+                    )
                 except Exception as e:
                     logging.error("ORF finding failed: %s", e)
                     sys.exit(1)
@@ -489,9 +560,11 @@ def main():
                         results,
                         output_pep=orf_out,
                         orf_min_aa=args.orf_min_aa,
-                        required_prefix=args.orf_aa_prefix
+                        required_prefix=args.orf_aa_prefix,
                     )
-                    logging.info("ORF finding completed; peptide FASTA written to %s", orf_out)
+                    logging.info(
+                        "ORF finding completed; peptide FASTA written to %s", orf_out
+                    )
                 except Exception as e:
                     logging.error("ORF finding failed: %s", e)
                     sys.exit(1)
@@ -508,18 +581,36 @@ def main():
             left_const_val = config.get("constants", {}).get("left")
             right_const_val = config.get("constants", {}).get("right")
             if dual_mutation_mode:
-                normal_stats = scan_orf_fasta(normal_orf_out, left_const=left_const_val, right_const=right_const_val)
-                mut_stats = scan_orf_fasta(mut_orf_out, left_const=left_const_val, right_const=right_const_val)
-                stats_file_normal = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt", variant="normal")
-                stats_file_mut = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt", variant="mut")
+                normal_stats = scan_orf_fasta(
+                    normal_orf_out,
+                    left_const=left_const_val,
+                    right_const=right_const_val,
+                )
+                mut_stats = scan_orf_fasta(
+                    mut_orf_out, left_const=left_const_val, right_const=right_const_val
+                )
+                stats_file_normal = numbered_filename(
+                    out_dir, out_base, sim_index, "orf_stats.txt", variant="normal"
+                )
+                stats_file_mut = numbered_filename(
+                    out_dir, out_base, sim_index, "orf_stats.txt", variant="mut"
+                )
                 with open(stats_file_normal, "w") as nf:
                     json.dump(normal_stats, nf, indent=4)
                 with open(stats_file_mut, "w") as mf:
                     json.dump(mut_stats, mf, indent=4)
-                logging.info("Toxic protein detection stats written: %s and %s", stats_file_normal, stats_file_mut)
+                logging.info(
+                    "Toxic protein detection stats written: %s and %s",
+                    stats_file_normal,
+                    stats_file_mut,
+                )
             else:
-                stats_file = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt")
-                stats = scan_orf_fasta(orf_out, left_const=left_const_val, right_const=right_const_val)
+                stats_file = numbered_filename(
+                    out_dir, out_base, sim_index, "orf_stats.txt"
+                )
+                stats = scan_orf_fasta(
+                    orf_out, left_const=left_const_val, right_const=right_const_val
+                )
                 with open(stats_file, "w") as sf:
                     json.dump(stats, sf, indent=4)
                 logging.info("Toxic protein detection stats written: %s", stats_file)
@@ -528,28 +619,55 @@ def main():
         # Run read simulation pipeline if requested.
         if args.simulate_reads:
             if dual_mutation_mode:
-                normal_fa_for_reads = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="normal")
-                mut_fa_for_reads = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="mut")
+                normal_fa_for_reads = numbered_filename(
+                    out_dir, out_base, sim_index, "simulated.fa", variant="normal"
+                )
+                mut_fa_for_reads = numbered_filename(
+                    out_dir, out_base, sim_index, "simulated.fa", variant="mut"
+                )
                 try:
-                    logging.info("Starting read simulation pipeline for iteration %d (normal variant).", sim_index)
+                    logging.info(
+                        "Starting read simulation pipeline for iteration %d (normal variant).",
+                        sim_index,
+                    )
                     simulate_reads_pipeline(config, normal_fa_for_reads)
-                    logging.info("Read simulation pipeline completed for iteration %d (normal variant).", sim_index)
+                    logging.info(
+                        "Read simulation pipeline completed for iteration %d (normal variant).",
+                        sim_index,
+                    )
                 except Exception as e:
-                    logging.error("Read simulation pipeline (normal variant) failed: %s", e)
+                    logging.error(
+                        "Read simulation pipeline (normal variant) failed: %s", e
+                    )
                     sys.exit(1)
                 try:
-                    logging.info("Starting read simulation pipeline for iteration %d (mutated variant).", sim_index)
+                    logging.info(
+                        "Starting read simulation pipeline for iteration %d (mutated variant).",
+                        sim_index,
+                    )
                     simulate_reads_pipeline(config, mut_fa_for_reads)
-                    logging.info("Read simulation pipeline completed for iteration %d (mutated variant).", sim_index)
+                    logging.info(
+                        "Read simulation pipeline completed for iteration %d (mutated variant).",
+                        sim_index,
+                    )
                 except Exception as e:
-                    logging.error("Read simulation pipeline (mutated variant) failed: %s", e)
+                    logging.error(
+                        "Read simulation pipeline (mutated variant) failed: %s", e
+                    )
                     sys.exit(1)
             else:
-                sim_fa_for_reads = numbered_filename(out_dir, out_base, sim_index, "simulated.fa")
+                sim_fa_for_reads = numbered_filename(
+                    out_dir, out_base, sim_index, "simulated.fa"
+                )
                 try:
-                    logging.info("Starting read simulation pipeline for iteration %d.", sim_index)
+                    logging.info(
+                        "Starting read simulation pipeline for iteration %d.", sim_index
+                    )
                     simulate_reads_pipeline(config, sim_fa_for_reads)
-                    logging.info("Read simulation pipeline completed for iteration %d.", sim_index)
+                    logging.info(
+                        "Read simulation pipeline completed for iteration %d.",
+                        sim_index,
+                    )
                 except Exception as e:
                     logging.error("Read simulation pipeline failed: %s", e)
                     sys.exit(1)
@@ -557,7 +675,9 @@ def main():
         # ----------------------------------------------------------------
         # NEW: Generate simulation statistics report for this iteration.
         iteration_end = time.time()
-        vntr_coverage_stats = {}  # This can be filled with VNTR coverage data if available
+        vntr_coverage_stats = (
+            {}
+        )  # This can be filled with VNTR coverage data if available
         if dual_mutation_mode:
             normal_stats_report = generate_simulation_statistics(
                 start_time=iteration_start,
@@ -565,7 +685,7 @@ def main():
                 simulation_results=normal_results,
                 config=config,
                 mutation_info={"mutation_name": "normal"},
-                vntr_coverage=vntr_coverage_stats
+                vntr_coverage=vntr_coverage_stats,
             )
             mutated_stats_report = generate_simulation_statistics(
                 start_time=iteration_start,
@@ -573,26 +693,35 @@ def main():
                 simulation_results=mutated_results,
                 config=config,
                 mutation_info={"mutation_name": mutation_pair[1]},
-                vntr_coverage=vntr_coverage_stats
+                vntr_coverage=vntr_coverage_stats,
             )
-            stats_file_normal = numbered_filename(out_dir, out_base, sim_index, "simulation_stats.json", variant="normal")
-            stats_file_mut = numbered_filename(out_dir, out_base, sim_index, "simulation_stats.json", variant="mut")
+            stats_file_normal = numbered_filename(
+                out_dir, out_base, sim_index, "simulation_stats.json", variant="normal"
+            )
+            stats_file_mut = numbered_filename(
+                out_dir, out_base, sim_index, "simulation_stats.json", variant="mut"
+            )
             write_statistics_report(normal_stats_report, stats_file_normal)
             write_statistics_report(mutated_stats_report, stats_file_mut)
         else:
             simulation_results_for_stats = results
             mutation_info = {}
             if args.mutation_name:
-                mutation_info = {"mutation_name": args.mutation_name, "mutation_targets": args.mutation_targets}
+                mutation_info = {
+                    "mutation_name": args.mutation_name,
+                    "mutation_targets": args.mutation_targets,
+                }
             stats_report = generate_simulation_statistics(
                 start_time=iteration_start,
                 end_time=iteration_end,
                 simulation_results=simulation_results_for_stats,
                 config=config,
                 mutation_info=mutation_info,
-                vntr_coverage=vntr_coverage_stats
+                vntr_coverage=vntr_coverage_stats,
             )
-            stats_output_file = numbered_filename(out_dir, out_base, sim_index, "simulation_stats.json")
+            stats_output_file = numbered_filename(
+                out_dir, out_base, sim_index, "simulation_stats.json"
+            )
             write_statistics_report(stats_report, stats_output_file)
         # ----------------------------------------------------------------
 

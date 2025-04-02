@@ -61,7 +61,7 @@ def extract_vntr_region(seq: str, config: Dict[str, Any]) -> str:
     left = config.get("constants", {}).get("left", "")
     right = config.get("constants", {}).get("right", "")
     if seq.startswith(left) and seq.endswith(right):
-        return seq[len(left): -len(right)]
+        return seq[len(left) : -len(right)]
     return seq
 
 
@@ -161,9 +161,9 @@ def generate_haplotype_stats(
             "repeat_lengths_summary": {
                 "min": min(repeat_lengths) if repeat_lengths else 0,
                 "max": max(repeat_lengths) if repeat_lengths else 0,
-                "average": sum(repeat_lengths) / len(repeat_lengths)
-                if repeat_lengths
-                else 0,
+                "average": (
+                    sum(repeat_lengths) / len(repeat_lengths) if repeat_lengths else 0
+                ),
             },
             "repeat_type_counts": count_repeat_types(chain),
             "mutant_repeat_count": sum(1 for r in chain if r.endswith("m")),
@@ -173,9 +173,7 @@ def generate_haplotype_stats(
     return hap_stats
 
 
-def generate_overall_stats(
-    hap_stats: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+def generate_overall_stats(hap_stats: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Generate overall aggregated statistics from haplotype-level data.
 
@@ -196,23 +194,17 @@ def generate_overall_stats(
 
     overall = {
         "repeat_count": {
-            "average": sum(repeat_counts) / len(repeat_counts)
-            if repeat_counts
-            else 0,
+            "average": sum(repeat_counts) / len(repeat_counts) if repeat_counts else 0,
             "min": min(repeat_counts) if repeat_counts else 0,
             "max": max(repeat_counts) if repeat_counts else 0,
         },
         "vntr_length": {
-            "average": sum(vntr_lengths) / len(vntr_lengths)
-            if vntr_lengths
-            else 0,
+            "average": sum(vntr_lengths) / len(vntr_lengths) if vntr_lengths else 0,
             "min": min(vntr_lengths) if vntr_lengths else 0,
             "max": max(vntr_lengths) if vntr_lengths else 0,
         },
         "gc_content": {
-            "average": sum(gc_contents) / len(gc_contents)
-            if gc_contents
-            else 0,
+            "average": sum(gc_contents) / len(gc_contents) if gc_contents else 0,
             "min": min(gc_contents) if gc_contents else 0,
             "max": max(gc_contents) if gc_contents else 0,
         },

@@ -27,11 +27,11 @@ region deviates from the wild–type. The analysis proceeds through four main st
    - The frequencies of key amino acids (by default R, C, and H) in the variable region are computed.
    - A wild–type composition is defined (by default, the consensus motif repeated a given number of times)
      and the similarity score is computed as:
-     
+
        S_composition = 1 - (sum(|f_mut - f_wt|) / sum(f_wt))
-     
+
      where a score near 1 indicates high similarity in composition.
-     
+
 4. **Combining Metrics into an Overall Score:**
    - The overall deviation (or similarity) score is calculated as a weighted sum of the repeat score and
      the composition similarity. In this implementation, a **higher overall score indicates a greater deviation
@@ -43,7 +43,7 @@ to its detection metrics.
 
 Usage (via command line):
     python toxic_protein_detector.py <orf_fasta> [options]
-    
+
 The output is a JSON-formatted report containing, for each ORF:
     - repeat_count
     - avg_repeat_identity
@@ -51,7 +51,7 @@ The output is a JSON-formatted report containing, for each ORF:
     - composition_similarity
     - overall_score
     - toxic_flag (1.0 if flagged as toxic, 0.0 otherwise)
-    
+
 All parameters (consensus motif, identity threshold, expected repeat count, weights, and cutoff) are configurable.
 """
 
@@ -60,8 +60,9 @@ import json
 from typing import Dict, List, Optional, Tuple
 
 
-def sliding_window_repeat_analysis(region: str, consensus: str,
-                                   identity_threshold: float = 0.8) -> Tuple[int, float]:
+def sliding_window_repeat_analysis(
+    region: str, consensus: str, identity_threshold: float = 0.8
+) -> Tuple[int, float]:
     """
     Slide a window of length equal to the consensus motif along the given region
     and compute repeat matches based on identity.
@@ -84,13 +85,16 @@ def sliding_window_repeat_analysis(region: str, consensus: str,
     motif_len = len(consensus)
     detected_repeats = []
     for i in range(len(region) - motif_len + 1):
-        candidate = region[i: i + motif_len]
+        candidate = region[i : i + motif_len]
         identity = sum(1 for a, b in zip(candidate, consensus) if a == b) / motif_len
         if identity >= identity_threshold:
             detected_repeats.append((i, candidate, identity))
     repeat_count = len(detected_repeats)
-    avg_identity = (sum(rep[2] for rep in detected_repeats) / repeat_count
-                    if repeat_count > 0 else 0.0)
+    avg_identity = (
+        sum(rep[2] for rep in detected_repeats) / repeat_count
+        if repeat_count > 0
+        else 0.0
+    )
     return repeat_count, avg_identity
 
 
@@ -115,8 +119,9 @@ def compute_amino_acid_composition(seq: str, residues: List[str]) -> Dict[str, f
     return freq
 
 
-def composition_similarity(mutant_seq: str, wildtype_seq: str,
-                           key_residues: List[str]) -> float:
+def composition_similarity(
+    mutant_seq: str, wildtype_seq: str, key_residues: List[str]
+) -> float:
     """
     Compute a similarity score based on the frequencies of key amino acids
     between the mutant (toxic) and wild–type protein sequences.
@@ -142,17 +147,18 @@ def composition_similarity(mutant_seq: str, wildtype_seq: str,
 
 
 def detect_toxic_protein_in_sequence(
-        protein_seq: str,
-        left_const: Optional[str] = None,
-        right_const: Optional[str] = None,
-        consensus: str = "RCHLGPGHQAGPGLHR",
-        identity_threshold: float = 0.8,
-        key_residues: Optional[List[str]] = None,
-        expected_repeat_count: int = 10,
-        w_repeat: float = 0.6,
-        w_composition: float = 0.4,
-        wildtype_variable_region: Optional[str] = None,
-        toxic_detection_cutoff: float = 0.5) -> Dict[str, float]:
+    protein_seq: str,
+    left_const: Optional[str] = None,
+    right_const: Optional[str] = None,
+    consensus: str = "RCHLGPGHQAGPGLHR",
+    identity_threshold: float = 0.8,
+    key_residues: Optional[List[str]] = None,
+    expected_repeat_count: int = 10,
+    w_repeat: float = 0.6,
+    w_composition: float = 0.4,
+    wildtype_variable_region: Optional[str] = None,
+    toxic_detection_cutoff: float = 0.5,
+) -> Dict[str, float]:
     """
     Analyze a protein sequence for toxic protein features by quantifying its repeat structure
     and amino acid composition relative to a wild–type model.
@@ -212,22 +218,28 @@ def detect_toxic_protein_in_sequence(
     # Extract the variable region by removing constant flanks if provided.
     variable_region = protein_seq
     if left_const and protein_seq.startswith(left_const):
-        variable_region = protein_seq[len(left_const):]
+        variable_region = protein_seq[len(left_const) :]
     if right_const and variable_region.endswith(right_const):
-        variable_region = variable_region[:-len(right_const)]
+        variable_region = variable_region[: -len(right_const)]
 
     # --- Step 2: Repeat Analysis ---
     # Slide a window over the variable region and compute the identity with the consensus motif.
-    repeat_count, avg_identity = sliding_window_repeat_analysis(variable_region, consensus, identity_threshold)
+    repeat_count, avg_identity = sliding_window_repeat_analysis(
+        variable_region, consensus, identity_threshold
+    )
     # Scale the average identity by the minimum of detected repeats and expected repeat count.
-    repeat_score = avg_identity * min(repeat_count, expected_repeat_count) / expected_repeat_count
+    repeat_score = (
+        avg_identity * min(repeat_count, expected_repeat_count) / expected_repeat_count
+    )
 
     # --- Step 3: Composition Analysis ---
     # Define the wild-type variable region if not provided.
     if wildtype_variable_region is None:
         wildtype_variable_region = consensus * expected_repeat_count
     # Compute the composition similarity between the variable region and the wild-type.
-    comp_sim = composition_similarity(variable_region, wildtype_variable_region, key_residues)
+    comp_sim = composition_similarity(
+        variable_region, wildtype_variable_region, key_residues
+    )
 
     # --- Step 4: Combine Metrics ---
     overall_score = w_repeat * repeat_score + w_composition * comp_sim
@@ -245,10 +257,12 @@ def detect_toxic_protein_in_sequence(
     }
 
 
-def scan_orf_fasta(orf_fasta_path: str,
-                   left_const: Optional[str] = None,
-                   right_const: Optional[str] = None,
-                   **detection_kwargs) -> Dict[str, Dict[str, float]]:
+def scan_orf_fasta(
+    orf_fasta_path: str,
+    left_const: Optional[str] = None,
+    right_const: Optional[str] = None,
+    **detection_kwargs
+) -> Dict[str, Dict[str, float]]:
     """
     Scan an ORF FASTA file for toxic protein sequence features.
 
@@ -277,7 +291,8 @@ def scan_orf_fasta(orf_fasta_path: str,
                 if header and seq_lines:
                     protein_seq = "".join(seq_lines)
                     metrics = detect_toxic_protein_in_sequence(
-                        protein_seq, left_const, right_const, **detection_kwargs)
+                        protein_seq, left_const, right_const, **detection_kwargs
+                    )
                     results[header] = metrics
                 header = line[1:].strip()
                 seq_lines = []
@@ -286,7 +301,8 @@ def scan_orf_fasta(orf_fasta_path: str,
         if header and seq_lines:
             protein_seq = "".join(seq_lines)
             metrics = detect_toxic_protein_in_sequence(
-                protein_seq, left_const, right_const, **detection_kwargs)
+                protein_seq, left_const, right_const, **detection_kwargs
+            )
             results[header] = metrics
     return results
 
@@ -297,7 +313,7 @@ def main() -> None:
 
     This function parses command-line arguments, calls scan_orf_fasta() with the provided options,
     and prints the detection results as a JSON-formatted string.
-    
+
     Command-line options include:
       - Path to the ORF FASTA file.
       - Optional left/right constant regions.
@@ -308,16 +324,35 @@ def main() -> None:
         description="Scan an ORF FASTA file for toxic protein sequence features."
     )
     parser.add_argument("orf_fasta", help="Path to the ORF FASTA file.")
-    parser.add_argument("--left-const", help="Left constant region (to remove).", default=None)
-    parser.add_argument("--right-const", help="Right constant region (to remove).", default=None)
-    parser.add_argument("--consensus", help="Consensus motif for repeat detection.",
-                        default="RCHLGPGHQAGPGLHR")
-    parser.add_argument("--identity-threshold", type=float,
-                        help="Identity threshold for repeat matching.", default=0.8)
-    parser.add_argument("--expected-repeat-count", type=int,
-                        help="Expected repeat count in wild–type.", default=10)
-    parser.add_argument("--toxic-cutoff", type=float,
-                        help="Overall score cutoff to flag toxic protein (default=0.5).", default=0.5)
+    parser.add_argument(
+        "--left-const", help="Left constant region (to remove).", default=None
+    )
+    parser.add_argument(
+        "--right-const", help="Right constant region (to remove).", default=None
+    )
+    parser.add_argument(
+        "--consensus",
+        help="Consensus motif for repeat detection.",
+        default="RCHLGPGHQAGPGLHR",
+    )
+    parser.add_argument(
+        "--identity-threshold",
+        type=float,
+        help="Identity threshold for repeat matching.",
+        default=0.8,
+    )
+    parser.add_argument(
+        "--expected-repeat-count",
+        type=int,
+        help="Expected repeat count in wild–type.",
+        default=10,
+    )
+    parser.add_argument(
+        "--toxic-cutoff",
+        type=float,
+        help="Overall score cutoff to flag toxic protein (default=0.5).",
+        default=0.5,
+    )
     args = parser.parse_args()
 
     detection_results = scan_orf_fasta(
@@ -327,7 +362,7 @@ def main() -> None:
         consensus=args.consensus,
         identity_threshold=args.identity_threshold,
         expected_repeat_count=args.expected_repeat_count,
-        toxic_detection_cutoff=args.toxic_cutoff
+        toxic_detection_cutoff=args.toxic_cutoff,
     )
     print(json.dumps(detection_results, indent=4))
 

@@ -25,6 +25,7 @@ def sample_repeat_count(length_model):
                 logging.debug("Sampled repeat count: %d", val)
                 return val
     else:
-        logging.warning("Distribution type '%s' not implemented; using mean_repeats.",
-                        dist_type)
+        logging.warning(
+            "Distribution type '%s' not implemented; using mean_repeats.", dist_type
+        )
         return mean_rep

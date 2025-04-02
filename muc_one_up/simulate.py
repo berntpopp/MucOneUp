@@ -20,7 +20,9 @@ def pick_next_symbol_no_end(probabilities, current_symbol):
 
     next_options = probabilities[current_symbol]
     forbidden = {"6", "6p", "9", "END"}
-    filtered = [(sym, prob) for (sym, prob) in next_options.items() if sym not in forbidden]
+    filtered = [
+        (sym, prob) for (sym, prob) in next_options.items() if sym not in forbidden
+    ]
     if not filtered:
         logging.debug("No valid next symbol available from '%s'.", current_symbol)
         return None
@@ -51,7 +53,9 @@ def simulate_diploid(config, num_haplotypes=2, fixed_lengths=None, seed=None):
             target_length = fixed_lengths[i]
         else:
             target_length = sample_repeat_count(config["length_model"])
-        logging.info("Simulating haplotype %d with target length %d", i + 1, target_length)
+        logging.info(
+            "Simulating haplotype %d with target length %d", i + 1, target_length
+        )
         seq, chain = simulate_single_haplotype(config, target_length)
         haplotypes.append((seq, chain))
     return haplotypes

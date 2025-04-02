@@ -1,34 +1,23 @@
 import pytest
 from muc_one_up.mutate import apply_mutations
 
+
 @pytest.fixture
 def mutation_config():
     """A minimal config that includes a mutation definition."""
     return {
-        "repeats": {
-            "X": "XXXXX",   # 5-base sequence
-            "C": "CCCCC"
-        },
-        "constants": {
-            "left": "TTTT",
-            "right": "GGGG"
-        },
+        "repeats": {"X": "XXXXX", "C": "CCCCC"},  # 5-base sequence
+        "constants": {"left": "TTTT", "right": "GGGG"},
         "probabilities": {},
         "length_model": {},
         "mutations": {
             "testMut": {
                 "allowed_repeats": ["X"],
-                "changes": [
-                    {
-                        "type": "replace",
-                        "start": 2,
-                        "end": 2,
-                        "sequence": "Z"
-                    }
-                ]
+                "changes": [{"type": "replace", "start": 2, "end": 2, "sequence": "Z"}],
             }
-        }
+        },
     }
+
 
 def test_apply_mutations_forced_change(mutation_config):
     """
@@ -44,7 +33,7 @@ def test_apply_mutations_forced_change(mutation_config):
         config=mutation_config,
         results=results,
         mutation_name="testMut",
-        targets=[(1, 1)]
+        targets=[(1, 1)],
     )
     # Verify updated results
     assert len(updated) == 1
@@ -65,6 +54,7 @@ def test_apply_mutations_forced_change(mutation_config):
             found = True
     assert found
 
+
 def test_apply_mutations_replace_ok(mutation_config):
     """Test a normal replacement mutation in an allowed repeat (X)."""
     results = [
@@ -74,7 +64,7 @@ def test_apply_mutations_replace_ok(mutation_config):
         config=mutation_config,
         results=results,
         mutation_name="testMut",
-        targets=[(1, 1)]
+        targets=[(1, 1)],
     )
     new_seq, new_chain = updated[0]
     # After mutation, chain symbol becomes "Xm"
@@ -92,18 +82,14 @@ def test_apply_mutations_replace_ok(mutation_config):
             found = True
     assert found
 
+
 def test_apply_mutations_out_of_range(mutation_config):
     """
     If the change parameters are out of bounds for the repeat, a ValueError should be raised.
     """
     # Set change to be out-of-bounds (for a 5-base repeat)
     mutation_config["mutations"]["testMut"]["changes"] = [
-        {
-            "type": "replace",
-            "start": 100,
-            "end": 101,
-            "sequence": "ABC"
-        }
+        {"type": "replace", "start": 100, "end": 101, "sequence": "ABC"}
     ]
     results = [
         ("TTTTXXXXXGGGG", ["X"]),
@@ -113,6 +99,6 @@ def test_apply_mutations_out_of_range(mutation_config):
             config=mutation_config,
             results=results,
             mutation_name="testMut",
-            targets=[(1, 1)]
+            targets=[(1, 1)],
         )
     assert "out of bounds" in str(exc.value)

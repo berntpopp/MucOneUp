@@ -3,6 +3,7 @@ import pytest
 import json
 from muc_one_up.config import load_config
 
+
 def test_load_config_valid(tmp_path):
     """Test that a valid config file loads without error."""
     config_data = {
@@ -14,7 +15,7 @@ def test_load_config_valid(tmp_path):
             "min_repeats": 5,
             "max_repeats": 10,
             "mean_repeats": 7,
-            "median_repeats": 7
+            "median_repeats": 7,
         },
         "mutations": {},
         "tools": {
@@ -22,7 +23,7 @@ def test_load_config_valid(tmp_path):
             "faToTwoBit": "dummy_faToTwoBit",
             "samtools": "dummy_samtools",
             "pblat": "dummy_pblat",
-            "bwa": "dummy_bwa"
+            "bwa": "dummy_bwa",
         },
         "read_simulation": {
             "reseq_model": "dummy_reseq_model",
@@ -32,8 +33,8 @@ def test_load_config_valid(tmp_path):
             "fragment_size": 150,
             "fragment_sd": 20,
             "min_fragment": 30,
-            "threads": 1
-        }
+            "threads": 1,
+        },
     }
     config_file = tmp_path / "config.json"
     with open(config_file, "w") as fh:

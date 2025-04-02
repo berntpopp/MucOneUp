@@ -41,8 +41,7 @@ from pathlib import Path  # NEW: for downsample_bam
 
 # Configure logging.
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
@@ -69,7 +68,7 @@ def run_command(cmd, shell=False, timeout=None):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
-            preexec_fn=os.setsid
+            preexec_fn=os.setsid,
         )
     except Exception as e:
         logging.exception("Failed to start command: %s", cmd_str)
@@ -81,15 +80,21 @@ def run_command(cmd, shell=False, timeout=None):
             log_func(line.rstrip())
         stream.close()
 
-    stdout_thread = threading.Thread(target=log_stream, args=(proc.stdout, logging.info))
-    stderr_thread = threading.Thread(target=log_stream, args=(proc.stderr, logging.error))
+    stdout_thread = threading.Thread(
+        target=log_stream, args=(proc.stdout, logging.info)
+    )
+    stderr_thread = threading.Thread(
+        target=log_stream, args=(proc.stderr, logging.error)
+    )
     stdout_thread.start()
     stderr_thread.start()
 
     try:
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
+        logging.warning(
+            "Command timed out after %s seconds. Killing process group.", timeout
+        )
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
         except Exception as e:
@@ -99,7 +104,9 @@ def run_command(cmd, shell=False, timeout=None):
     stderr_thread.join()
 
     if proc.returncode != 0:
-        logging.error("Command exited with non-zero exit code %d: %s", proc.returncode, cmd_str)
+        logging.error(
+            "Command exited with non-zero exit code %d: %s", proc.returncode, cmd_str
+        )
         sys.exit(proc.returncode)
     return proc.returncode
 
@@ -141,8 +148,15 @@ def generate_systematic_errors(input_fa, reseq_model, output_fq, tools):
     :param tools: Dictionary of tool commands.
     """
     cmd = [
-        tools["reseq"], "illuminaPE", "-r", input_fa, "-s", reseq_model,
-        "--stopAfterEstimation", "--writeSysError", output_fq
+        tools["reseq"],
+        "illuminaPE",
+        "-r",
+        input_fa,
+        "-s",
+        reseq_model,
+        "--stopAfterEstimation",
+        "--writeSysError",
+        output_fq,
     ]
     run_command(cmd, timeout=60)
 
@@ -176,8 +190,15 @@ def extract_subset_reference(sample_bam, output_fa, tools):
     return intermediate_bam
 
 
-def run_pblat(twobit_file, subset_reference, output_psl, tools, threads=24,
-              minScore=95, minIdentity=95):
+def run_pblat(
+    twobit_file,
+    subset_reference,
+    output_psl,
+    tools,
+    threads=24,
+    minScore=95,
+    minIdentity=95,
+):
     """
     Run pblat to align a 2bit file to a subset reference.
 
@@ -190,8 +211,13 @@ def run_pblat(twobit_file, subset_reference, output_psl, tools, threads=24,
     :param minIdentity: Minimal identity.
     """
     cmd = [
-        tools["pblat"], twobit_file, subset_reference, output_psl,
-        f"-threads={threads}", f"-minScore={minScore}", f"-minIdentity={minIdentity}"
+        tools["pblat"],
+        twobit_file,
+        subset_reference,
+        output_psl,
+        f"-threads={threads}",
+        f"-minScore={minScore}",
+        f"-minIdentity={minIdentity}",
     ]
     run_command(cmd, timeout=120)
 
@@ -362,9 +388,16 @@ def comp(sequence):
     :return: Complemented sequence.
     """
     d = {
-        "A": "T", "T": "A", "C": "G", "G": "C",
-        "a": "t", "t": "a", "c": "g", "g": "c",
-        "N": "N", "n": "n"
+        "A": "T",
+        "T": "A",
+        "C": "G",
+        "G": "C",
+        "a": "t",
+        "t": "a",
+        "c": "g",
+        "g": "c",
+        "N": "N",
+        "n": "n",
     }
     return "".join(d.get(s, "N") for s in sequence)
 
@@ -379,14 +412,11 @@ def check_external_tools(tools):
       - Runs a basic test command (using '--help' or '--version') for tools that support it.
         Currently, only "reseq" and "samtools" are tested.
       - For tools that do not support a test parameter (e.g. bwa, pblat, faToTwoBit), only verifies they are found.
-    
+
     Exits gracefully with a clear error message if any required tool is missing or misconfigured.
     """
-    test_args = {
-        "reseq": "--help",
-        "samtools": "--version"
-    }
-    
+    test_args = {"reseq": "--help", "samtools": "--version"}
+
     for tool_key, cmd_str in tools.items():
         tokens = cmd_str.split()
         executable = tokens[0]
@@ -395,7 +425,7 @@ def check_external_tools(tools):
                 f"Required tool '{tool_key}' not found: {executable}. Please ensure it is installed and in your PATH."
             )
             sys.exit(1)
-        
+
         if tool_key in test_args:
             test_command = f"{cmd_str} {test_args[tool_key]}"
             try:
@@ -404,7 +434,7 @@ def check_external_tools(tools):
                     shell=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    timeout=30
+                    timeout=30,
                 )
                 if result.returncode != 0:
                     logging.error(
@@ -425,7 +455,9 @@ def check_external_tools(tools):
 
 
 # NEW: Function to calculate mean VNTR coverage using samtools depth
-def calculate_vntr_coverage(samtools_exe, bam_file, region, threads, output_dir, output_name):
+def calculate_vntr_coverage(
+    samtools_exe, bam_file, region, threads, output_dir, output_name
+):
     """
     Calculate mean coverage over the VNTR region using samtools depth.
 
@@ -445,7 +477,7 @@ def calculate_vntr_coverage(samtools_exe, bam_file, region, threads, output_dir,
         str(threads),
         "-r",
         region,
-        str(bam_file)
+        str(bam_file),
     ]
     logging.info("Calculating VNTR coverage for %s in region %s", bam_file, region)
     with open(coverage_output, "w") as fout:
@@ -472,7 +504,9 @@ def calculate_vntr_coverage(samtools_exe, bam_file, region, threads, output_dir,
 
 
 # NEW: Function to calculate mean target (non-VNTR) coverage using samtools depth with BED file
-def calculate_target_coverage(samtools_exe, bam_file, bed_file, threads, output_dir, output_name):
+def calculate_target_coverage(
+    samtools_exe, bam_file, bed_file, threads, output_dir, output_name
+):
     """
     Calculate mean coverage over the target (non-VNTR) regions using samtools depth and a BED file.
 
@@ -492,9 +526,13 @@ def calculate_target_coverage(samtools_exe, bam_file, bed_file, threads, output_
         str(threads),
         "-b",
         bed_file,
-        str(bam_file)
+        str(bam_file),
     ]
-    logging.info("Calculating target (non-VNTR) coverage for %s using bed file %s", bam_file, bed_file)
+    logging.info(
+        "Calculating target (non-VNTR) coverage for %s using bed file %s",
+        bam_file,
+        bed_file,
+    )
     with open(coverage_output, "w") as fout:
         if " " in samtools_exe:
             cmd_str = " ".join(depth_command)
@@ -519,7 +557,9 @@ def calculate_target_coverage(samtools_exe, bam_file, bed_file, threads, output_
 
 
 # NEW: Function to downsample BAM file using samtools view -s for a specified region
-def downsample_bam(samtools_exe, input_bam, output_bam, region, fraction, seed, threads):
+def downsample_bam(
+    samtools_exe, input_bam, output_bam, region, fraction, seed, threads
+):
     """
     Downsample the BAM file to the specified fraction in the given region.
     """
@@ -547,7 +587,7 @@ def downsample_bam(samtools_exe, input_bam, output_bam, region, fraction, seed, 
         str(threads),
         "-o",
         str(sorted_bam),
-        str(output_bam)
+        str(output_bam),
     ]
     run_command(sort_command, timeout=60)
     os.remove(str(output_bam))
@@ -573,7 +613,7 @@ def downsample_entire_bam(samtools_exe, input_bam, output_bam, fraction, seed, t
         "-b",
         "-o",
         str(output_bam),
-        str(input_bam)
+        str(input_bam),
     ]
     run_command(view_command, timeout=60)
     sorted_bam = output_bam.with_suffix(".sorted.bam")
@@ -584,7 +624,7 @@ def downsample_entire_bam(samtools_exe, input_bam, output_bam, fraction, seed, t
         str(threads),
         "-o",
         str(sorted_bam),
-        str(output_bam)
+        str(output_bam),
     ]
     run_command(sort_command, timeout=60)
     os.remove(str(output_bam))
@@ -593,8 +633,17 @@ def downsample_entire_bam(samtools_exe, input_bam, output_bam, fraction, seed, t
     run_command(index_command, timeout=60)
 
 
-def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
-                       fragment_sd, min_fragment, bind, output_fragments):
+def simulate_fragments(
+    ref_fa,
+    syser_file,
+    psl_file,
+    read_number,
+    fragment_size,
+    fragment_sd,
+    min_fragment,
+    bind,
+    output_fragments,
+):
     """
     Simulate fragments (port of w‑Wessim2) and write paired fragment sequences to a FASTA file.
 
@@ -619,6 +668,14 @@ def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
     output_dir = os.path.dirname(output_fragments)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    # Remove existing file if it exists
+    if os.path.exists(output_fragments):
+        try:
+            os.remove(output_fragments)
+            logging.debug("Removed existing file: %s", output_fragments)
+        except Exception as e:
+            logging.error("Failed to remove existing file %s: %s", output_fragments, e)
+            sys.exit(1)
     with open(output_fragments, "w") as out_f:
         i = 0
         attempts = 0
@@ -631,8 +688,11 @@ def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
             chrom, frag_start, frag_end, strand = fragment
             seq = ref_dict.get(chrom, "")[frag_start:frag_end]
             if len(seq) < min_fragment:
-                logging.debug("Fragment length %d is below min_fragment %d. Skipping.",
-                              len(seq), min_fragment)
+                logging.debug(
+                    "Fragment length %d is below min_fragment %d. Skipping.",
+                    len(seq),
+                    min_fragment,
+                )
                 continue
             frag_seq = seq
             frag_seq_rc = comp(seq)[::-1]
@@ -664,8 +724,12 @@ def simulate_fragments(ref_fa, syser_file, psl_file, read_number, fragment_size,
                 t1 = time.time()
                 logging.info("%d fragments processed in %.2f secs", i + 1, t1 - t0)
         if i < read_number:
-            logging.warning("Only generated %d fragments after %d attempts. Expected %d.",
-                            i, attempts, read_number)
+            logging.warning(
+                "Only generated %d fragments after %d attempts. Expected %d.",
+                i,
+                attempts,
+                read_number,
+            )
     t1 = time.time()
     logging.info("Done processing %d fragments in %.2f secs", i, t1 - t0)
 
@@ -684,8 +748,16 @@ def create_reads(input_fragments, reseq_model, output_reads, threads, tools):
     :param tools: Dictionary of tool commands.
     """
     cmd = [
-        tools["reseq"], "seqToIllumina", "-j", str(threads),
-        "-s", reseq_model, "-i", input_fragments, "-o", output_reads
+        tools["reseq"],
+        "seqToIllumina",
+        "-j",
+        str(threads),
+        "-s",
+        reseq_model,
+        "-i",
+        input_fragments,
+        "-o",
+        output_reads,
     ]
     try:
         run_command(cmd, timeout=120)
@@ -706,10 +778,12 @@ def split_reads(interleaved_fastq, output_fastq1, output_fastq2):
     :param output_fastq1: Output FASTQ filename for read1.
     :param output_fastq2: Output FASTQ filename for read2.
     """
-    logging.info("Splitting %s into %s and %s", interleaved_fastq, output_fastq1, output_fastq2)
-    with open(interleaved_fastq, "r") as inf, \
-         gzip.open(output_fastq1, "wt") as out1, \
-         gzip.open(output_fastq2, "wt") as out2:
+    logging.info(
+        "Splitting %s into %s and %s", interleaved_fastq, output_fastq1, output_fastq2
+    )
+    with open(interleaved_fastq, "r") as inf, gzip.open(
+        output_fastq1, "wt"
+    ) as out1, gzip.open(output_fastq2, "wt") as out2:
         record = []
         record_index = 0
         for line in inf:
@@ -737,7 +811,11 @@ def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
     """
     bwa_exe = tools["bwa"]
     if " " in bwa_exe:
-        bwa_cmd = "bash -c '" + " ".join([bwa_exe, "mem", human_reference, read1, read2]) + "'"
+        bwa_cmd = (
+            "bash -c '"
+            + " ".join([bwa_exe, "mem", human_reference, read1, read2])
+            + "'"
+        )
         bwa_shell = True
     else:
         bwa_cmd = [bwa_exe, "mem", human_reference, read1, read2]
@@ -746,8 +824,7 @@ def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
     samtools_exe = tools["samtools"]
     if " " in samtools_exe:
         samtools_sort_cmd = (
-            "bash -c '" +
-            " ".join([samtools_exe, "sort", "-o", output_bam, "-"]) + "'"
+            "bash -c '" + " ".join([samtools_exe, "sort", "-o", output_bam, "-"]) + "'"
         )
         samtools_shell = True
     else:
@@ -757,17 +834,14 @@ def align_reads(read1, read2, human_reference, output_bam, tools, threads=4):
     logging.info("Aligning reads...")
     try:
         bwa_proc = subprocess.Popen(
-            bwa_cmd,
-            shell=bwa_shell,
-            stdout=subprocess.PIPE,
-            universal_newlines=True
+            bwa_cmd, shell=bwa_shell, stdout=subprocess.PIPE, universal_newlines=True
         )
         sort_proc = subprocess.Popen(
             samtools_sort_cmd,
             shell=samtools_shell,
             stdin=bwa_proc.stdout,
             stdout=subprocess.PIPE,
-            universal_newlines=True
+            universal_newlines=True,
         )
         bwa_proc.stdout.close()
         sort_proc.communicate()
@@ -828,22 +902,35 @@ def simulate_reads(config, input_fa):
     threads = int(rs_config.get("threads", 24))
     bind = int(rs_config.get("bind", 50))
 
-    logging.info("Starting read simulation pipeline at %s",
-                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    logging.info(
+        "Starting read simulation pipeline at %s",
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    )
 
     replace_Ns(input_fa, noNs_fa, tools)
     generate_systematic_errors(noNs_fa, reseq_model, syser_fq, tools)
     fa_to_twobit(noNs_fa, twobit_file, tools)
     collated_bam = extract_subset_reference(sample_bam, subset_ref, tools)
     run_pblat(twobit_file, subset_ref, psl_file, tools, threads=threads)
-    simulate_fragments(noNs_fa, syser_fq, psl_file, read_number,
-                       fragment_size, fragment_sd, min_fragment, bind, fragments_fa)
+    simulate_fragments(
+        noNs_fa,
+        syser_fq,
+        psl_file,
+        read_number,
+        fragment_size,
+        fragment_sd,
+        min_fragment,
+        bind,
+        fragments_fa,
+    )
     if not os.path.exists(fragments_fa) or os.path.getsize(fragments_fa) == 0:
         logging.error("Fragments file %s was not created or is empty.", fragments_fa)
         sys.exit(1)
     create_reads(fragments_fa, reseq_model, reads_fq, threads, tools)
     split_reads(reads_fq, reads_fq1, reads_fq2)
-    align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads=threads)
+    align_reads(
+        reads_fq1, reads_fq2, human_reference, output_bam, tools, threads=threads
+    )
 
     # NEW: Optional downsampling of the final BAM file to a target coverage.
     downsample_target = rs_config.get("downsample_coverage")
@@ -860,47 +947,104 @@ def simulate_reads(config, input_fa):
             vntr_region_key = f"vntr_region_{reference_assembly}"
             vntr_region = rs_config.get(vntr_region_key)
             if not vntr_region:
-                logging.error(f"VNTR region not specified in config for {reference_assembly}.")
+                logging.error(
+                    f"VNTR region not specified in config for {reference_assembly}."
+                )
                 sys.exit(1)
-            current_cov = calculate_vntr_coverage(tools["samtools"], output_bam, vntr_region, threads, os.path.dirname(output_bam), os.path.basename(output_bam).replace(".bam", ""))
+            current_cov = calculate_vntr_coverage(
+                tools["samtools"],
+                output_bam,
+                vntr_region,
+                threads,
+                os.path.dirname(output_bam),
+                os.path.basename(output_bam).replace(".bam", ""),
+            )
             region_info = vntr_region
         elif mode == "non_vntr":
             bed_file = rs_config.get("sample_target_bed")
             if not bed_file:
-                logging.error("For non-VNTR downsampling, 'sample_target_bed' must be provided in config.")
+                logging.error(
+                    "For non-VNTR downsampling, 'sample_target_bed' must be provided in config."
+                )
                 sys.exit(1)
-            current_cov = calculate_target_coverage(tools["samtools"], output_bam, bed_file, threads, os.path.dirname(output_bam), os.path.basename(output_bam).replace(".bam", ""))
+            current_cov = calculate_target_coverage(
+                tools["samtools"],
+                output_bam,
+                bed_file,
+                threads,
+                os.path.dirname(output_bam),
+                os.path.basename(output_bam).replace(".bam", ""),
+            )
             region_info = f"BED file: {bed_file}"
         else:
-            logging.error("Invalid downsample_mode in config; use 'vntr' or 'non_vntr'.")
+            logging.error(
+                "Invalid downsample_mode in config; use 'vntr' or 'non_vntr'."
+            )
             sys.exit(1)
         if current_cov > downsample_target:
             fraction = downsample_target / current_cov
             fraction = min(max(fraction, 0.0), 1.0)
-            logging.info("Downsampling BAM from %.2fx to target %dx (fraction: %.4f) based on %s",
-                         current_cov, downsample_target, fraction, region_info)
-            downsampled_bam = os.path.join(os.path.dirname(output_bam), os.path.basename(output_bam).replace(".bam", "_downsampled.bam"))
+            logging.info(
+                "Downsampling BAM from %.2fx to target %dx (fraction: %.4f) based on %s",
+                current_cov,
+                downsample_target,
+                fraction,
+                region_info,
+            )
+            downsampled_bam = os.path.join(
+                os.path.dirname(output_bam),
+                os.path.basename(output_bam).replace(".bam", "_downsampled.bam"),
+            )
             if mode == "vntr":
-                downsample_bam(tools["samtools"], output_bam, downsampled_bam, vntr_region, fraction, rs_config.get("downsample_seed", 42), threads)
+                downsample_bam(
+                    tools["samtools"],
+                    output_bam,
+                    downsampled_bam,
+                    vntr_region,
+                    fraction,
+                    rs_config.get("downsample_seed", 42),
+                    threads,
+                )
             else:
-                downsample_entire_bam(tools["samtools"], output_bam, downsampled_bam, fraction, rs_config.get("downsample_seed", 42), threads)
+                downsample_entire_bam(
+                    tools["samtools"],
+                    output_bam,
+                    downsampled_bam,
+                    fraction,
+                    rs_config.get("downsample_seed", 42),
+                    threads,
+                )
             output_bam = downsampled_bam
         else:
-            logging.info("Current coverage (%.2fx) is below the target; no downsampling performed.", current_cov)
+            logging.info(
+                "Current coverage (%.2fx) is below the target; no downsampling performed.",
+                current_cov,
+            )
 
-    logging.info("Read simulation pipeline completed at %s",
-                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    logging.info(
+        "Read simulation pipeline completed at %s",
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    )
     logging.info("Final outputs:")
     logging.info("  Aligned and indexed BAM: %s", output_bam)
     logging.info("  Paired FASTQ files (gzipped): %s and %s", reads_fq1, reads_fq2)
 
-    intermediates = [noNs_fa, syser_fq, twobit_file, subset_ref, psl_file, fragments_fa,
-                     reads_fq, collated_bam]
+    intermediates = [
+        noNs_fa,
+        syser_fq,
+        twobit_file,
+        subset_ref,
+        psl_file,
+        fragments_fa,
+        reads_fq,
+        collated_bam,
+    ]
     cleanup_files(intermediates)
 
 
 if __name__ == "__main__":
     import json
+
     if len(sys.argv) != 3:
         print("Usage: python read_simulation.py <config.json> <input_fasta>")
         sys.exit(1)

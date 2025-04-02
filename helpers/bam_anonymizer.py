@@ -50,7 +50,7 @@ def compute_md5(filepath: str, chunk_size: int = 1048576) -> str:
         The MD5 hexadecimal digest as a string.
     """
     md5 = hashlib.md5()
-    with open(filepath, 'rb') as f:
+    with open(filepath, "rb") as f:
         while True:
             data = f.read(chunk_size)
             if not data:
@@ -69,9 +69,7 @@ def subset_bam(input_bam: str, region: str, output_bam: str) -> None:
         output_bam: Path for the output subset BAM.
     """
     logging.info("Subsetting BAM: %s to region: %s", input_bam, region)
-    view_cmd = [
-        "samtools", "view", "-b", "-P", input_bam, region, "-o", output_bam
-    ]
+    view_cmd = ["samtools", "view", "-b", "-P", input_bam, region, "-o", output_bam]
     logging.debug("Running command: %s", " ".join(view_cmd))
     subprocess.run(view_cmd, check=True)
     index_cmd = ["samtools", "index", output_bam]
@@ -89,14 +87,22 @@ def run_gatk_add_or_replace_read_groups(input_bam: str, output_bam: str) -> None
     """
     logging.info("Replacing read groups on: %s", input_bam)
     cmd = [
-        "gatk", "AddOrReplaceReadGroups",
-        "-I", input_bam,
-        "-O", output_bam,
-        "-RGID", "4",
-        "-RGLB", "lib1",
-        "-RGPL", "ILLUMINA",
-        "-RGPU", "unit1",
-        "-RGSM", "20"
+        "gatk",
+        "AddOrReplaceReadGroups",
+        "-I",
+        input_bam,
+        "-O",
+        output_bam,
+        "-RGID",
+        "4",
+        "-RGLB",
+        "lib1",
+        "-RGPL",
+        "ILLUMINA",
+        "-RGPU",
+        "unit1",
+        "-RGSM",
+        "20",
     ]
     logging.debug("Running command: %s", " ".join(cmd))
     subprocess.run(cmd, check=True)
@@ -113,10 +119,14 @@ def run_gatk_read_anonymizer(input_bam: str, output_bam: str, reference: str) ->
     """
     logging.info("Running GATK ReadAnonymizer on: %s", input_bam)
     gatk_cmd = [
-        "gatk", "ReadAnonymizer",
-        "-I", input_bam,
-        "-O", output_bam,
-        "-R", reference,
+        "gatk",
+        "ReadAnonymizer",
+        "-I",
+        input_bam,
+        "-O",
+        output_bam,
+        "-R",
+        reference,
     ]
     logging.debug("Running command: %s", " ".join(gatk_cmd))
     subprocess.run(gatk_cmd, check=True)
@@ -132,13 +142,15 @@ def run_samtools_reheader(input_bam: str, output_bam: str) -> None:
     """
     logging.info("Reheadering BAM: %s", input_bam)
     cmd_reheader = [
-        "samtools", "reheader",
+        "samtools",
+        "reheader",
         "-P",
-        "-c", "grep -v ^@PG | grep -v ^@RG | grep -v ^@CO",
-        input_bam
+        "-c",
+        "grep -v ^@PG | grep -v ^@RG | grep -v ^@CO",
+        input_bam,
     ]
     logging.debug("Reheader command: %s", " ".join(cmd_reheader))
-    with open(output_bam, 'w') as fout:
+    with open(output_bam, "w") as fout:
         subprocess.run(cmd_reheader, stdout=fout, check=True)
     index_cmd = ["samtools", "index", output_bam]
     logging.debug("Indexing reheadered BAM with command: %s", " ".join(index_cmd))
@@ -162,7 +174,7 @@ def remove_file_and_index(file_path: str) -> None:
     Remove a file and any index files that may exist.
     Checks for both the standard naming scheme (file.bam.bai) and an alternative
     where the .bam extension is replaced by .bai.
-    
+
     Args:
         file_path: Path to the file to remove.
     """
@@ -198,29 +210,49 @@ def parse_args() -> argparse.Namespace:
             "The final output file is named based on the provided target design."
         )
     )
-    parser.add_argument("--input-bam", required=True,
-                        help="Path to the input BAM file.")
-    parser.add_argument("--target-design", required=True,
-                        help="Target design name to be used for naming the output file (e.g. twist_v2).")
-    parser.add_argument("--ref", required=True,
-                        help="Path to the reference FASTA file (required by GATK tools).")
-    parser.add_argument("--region", default="chr1:155184000-155194000",
-                        help="Genomic region to subset from the BAM file. Default is 'chr1:155184000-155194000' (hg38 MUC1 VNTR region).")
-    parser.add_argument("--output-dir", default=".",
-                        help="Directory to write output files. Default is current directory.")
-    parser.add_argument("--keep-intermediates", action="store_true",
-                        help="Keep intermediate files for debugging purposes.")
-    parser.add_argument("--log-level", default="INFO",
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-                        help="Set logging level. Default is INFO.")
+    parser.add_argument(
+        "--input-bam", required=True, help="Path to the input BAM file."
+    )
+    parser.add_argument(
+        "--target-design",
+        required=True,
+        help="Target design name to be used for naming the output file (e.g. twist_v2).",
+    )
+    parser.add_argument(
+        "--ref",
+        required=True,
+        help="Path to the reference FASTA file (required by GATK tools).",
+    )
+    parser.add_argument(
+        "--region",
+        default="chr1:155184000-155194000",
+        help="Genomic region to subset from the BAM file. Default is 'chr1:155184000-155194000' (hg38 MUC1 VNTR region).",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=".",
+        help="Directory to write output files. Default is current directory.",
+    )
+    parser.add_argument(
+        "--keep-intermediates",
+        action="store_true",
+        help="Keep intermediate files for debugging purposes.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Set logging level. Default is INFO.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     """Main function for the BAM anonymization pipeline."""
     args = parse_args()
-    logging.basicConfig(level=args.log_level.upper(),
-                        format="%(asctime)s [%(levelname)s] %(message)s")
+    logging.basicConfig(
+        level=args.log_level.upper(), format="%(asctime)s [%(levelname)s] %(message)s"
+    )
 
     if not os.path.isfile(args.input_bam):
         logging.error("Input BAM file not found: %s", args.input_bam)
@@ -250,7 +282,9 @@ def main() -> None:
         # 4. Reheader the anonymized BAM.
         run_samtools_reheader(anon_bam_path, final_bam_path)
 
-        logging.info("Final anonymized BAM file created successfully: %s", final_bam_path)
+        logging.info(
+            "Final anonymized BAM file created successfully: %s", final_bam_path
+        )
 
         # 5. Compute MD5 checksums and write pseudonymisation output.
         old_name = os.path.basename(args.input_bam)
@@ -258,8 +292,10 @@ def main() -> None:
         old_md5 = compute_md5(args.input_bam)
         new_md5 = compute_md5(final_bam_path)
         # Prefix the CSV file with the target design to avoid collisions.
-        ps_output = os.path.join(args.output_dir, f"{args.target_design}_pseudonymisation_output.csv")
-        with open(ps_output, 'w', newline='') as csvfile:
+        ps_output = os.path.join(
+            args.output_dir, f"{args.target_design}_pseudonymisation_output.csv"
+        )
+        with open(ps_output, "w", newline="") as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(["old_name", "old_md5", "new_name", "new_md5"])
             writer.writerow([old_name, old_md5, new_name, new_md5])

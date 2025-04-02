@@ -45,7 +45,9 @@ def report_progress(block_num: int, block_size: int, total_size: int) -> None:
         percent = downloaded / total_size * 100
         if percent > 100:
             percent = 100
-        sys.stdout.write(f"\rDownloading... {downloaded} of {total_size} bytes ({percent:.1f}%)")
+        sys.stdout.write(
+            f"\rDownloading... {downloaded} of {total_size} bytes ({percent:.1f}%)"
+        )
     else:
         sys.stdout.write(f"\rDownloading... {downloaded} bytes")
     sys.stdout.flush()
@@ -151,14 +153,13 @@ def execute_index_command(command_template: str, fasta_path: Path) -> None:
     logging.info("Executing command: %s", command)
     try:
         subprocess.run(
-            command.split(),
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            command.split(), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         logging.info("Command completed for %s", fasta_path.name)
     except subprocess.CalledProcessError as err:
-        logging.error("Command failed for %s: %s", fasta_path, err.stderr.decode().strip())
+        logging.error(
+            "Command failed for %s: %s", fasta_path, err.stderr.decode().strip()
+        )
         sys.exit(1)
     except Exception as err:
         logging.error("Error executing command for %s: %s", fasta_path, err)
@@ -214,7 +215,7 @@ def process_reference(
     skip_indexing: bool,
     bwa_path: str,
     gatk_path: str,
-    force: bool
+    force: bool,
 ) -> str:
     """Download, verify, extract, index (if needed), and generate a sequence dictionary (if configured) for a single reference.
 
@@ -248,11 +249,17 @@ def process_reference(
     if target_path.suffix == ".gz":
         extracted_path = target_path.with_suffix("")
         if extracted_path.exists() and not force:
-            logging.info("Extracted file %s already exists, skipping extraction.", extracted_path.name)
+            logging.info(
+                "Extracted file %s already exists, skipping extraction.",
+                extracted_path.name,
+            )
             installed_path = extracted_path
         else:
             if force and extracted_path.exists():
-                logging.info("Force enabled, removing existing extracted file: %s", extracted_path)
+                logging.info(
+                    "Force enabled, removing existing extracted file: %s",
+                    extracted_path,
+                )
                 extracted_path.unlink()
             installed_path = extract_gzip(target_path)
     else:
@@ -264,14 +271,19 @@ def process_reference(
         # Determine one of the expected index files (e.g. .amb).
         index_file = installed_path.parent / (installed_path.name + ".amb")
         if index_file.exists() and not force:
-            logging.info("Index files already exist for %s. Skipping indexing.", installed_path.name)
+            logging.info(
+                "Index files already exist for %s. Skipping indexing.",
+                installed_path.name,
+            )
         else:
             if force and index_file.exists():
                 # Remove all expected index files.
                 for ext in [".amb", ".ann", ".bwt", ".pac", ".sa"]:
                     f = installed_path.parent / (installed_path.name + ext)
                     if f.exists():
-                        logging.info("Force enabled, removing existing index file: %s", f)
+                        logging.info(
+                            "Force enabled, removing existing index file: %s", f
+                        )
                         f.unlink()
             command = index_command.replace("bwa", bwa_path)
             execute_index_command(command, installed_path)
@@ -283,10 +295,16 @@ def process_reference(
     if seq_dict_command:
         seq_dict_file = installed_path.parent / (installed_path.name + ".dict")
         if seq_dict_file.exists() and not force:
-            logging.info("Sequence dictionary already exists for %s. Skipping creation.", installed_path.name)
+            logging.info(
+                "Sequence dictionary already exists for %s. Skipping creation.",
+                installed_path.name,
+            )
         else:
             if force and seq_dict_file.exists():
-                logging.info("Force enabled, removing existing sequence dictionary: %s", seq_dict_file)
+                logging.info(
+                    "Force enabled, removing existing sequence dictionary: %s",
+                    seq_dict_file,
+                )
                 seq_dict_file.unlink()
             logging.info("Executing sequence dictionary command for %s", ref_name)
             seq_dict_command = seq_dict_command.replace("gatk", gatk_path)
@@ -304,23 +322,23 @@ def main() -> None:
         "--output-dir",
         type=Path,
         required=True,
-        help="Destination directory for installed reference files."
+        help="Destination directory for installed reference files.",
     )
     parser.add_argument(
         "--config",
         type=Path,
         default=Path(__file__).parent / "install_references_config.json",
-        help="Path to the configuration JSON file."
+        help="Path to the configuration JSON file.",
     )
     parser.add_argument(
         "--skip-indexing",
         action="store_true",
-        help="Skip indexing of FASTA reference files."
+        help="Skip indexing of FASTA reference files.",
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Redo everything despite existing files and overwrite them."
+        help="Redo everything despite existing files and overwrite them.",
     )
     args = parser.parse_args()
 

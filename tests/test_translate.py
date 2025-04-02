@@ -5,25 +5,31 @@ from muc_one_up.translate import (
     dna_to_protein,
     reverse_complement,
     predict_orfs_in_haplotypes,
-    run_orf_finder_in_memory
+    run_orf_finder_in_memory,
 )
 
-@pytest.mark.parametrize("dna,expected", [
-    ("ATG", "M"),       # single codon
-    ("ATGCCC", "MP"),   # two codons
-    ("ATGTAA", "M"),    # stop codon => truncated if include_stop=False
-    ("atgcccgtt", "MPV"), # lower-case input
-])
+
+@pytest.mark.parametrize(
+    "dna,expected",
+    [
+        ("ATG", "M"),  # single codon
+        ("ATGCCC", "MP"),  # two codons
+        ("ATGTAA", "M"),  # stop codon => truncated if include_stop=False
+        ("atgcccgtt", "MPV"),  # lower-case input
+    ],
+)
 def test_dna_to_protein(dna, expected):
     """Test dna_to_protein with simple codons."""
     prot = dna_to_protein(dna, include_stop=False)
     assert prot == expected
+
 
 def test_reverse_complement():
     """Test the reverse_complement function with a simple case."""
     seq = "ATGC"
     rc = reverse_complement(seq)  # => GCAT
     assert rc == "GCAT"
+
 
 def test_predict_orfs_in_haplotypes_basic(tmp_path):
     """
@@ -41,9 +47,9 @@ def test_predict_orfs_in_haplotypes_basic(tmp_path):
     # required_prefix=None => no prefix filter
     haplotype_orfs = predict_orfs_in_haplotypes(
         results,
-        min_len=0,      # we can set 0 for orfipy's minimal
+        min_len=0,  # we can set 0 for orfipy's minimal
         orf_min_aa=2,
-        required_prefix=None
+        required_prefix=None,
     )
 
     assert len(haplotype_orfs) == 1
@@ -52,6 +58,7 @@ def test_predict_orfs_in_haplotypes_basic(tmp_path):
     orf_id, peptide, start, stop, strand, desc = orfs[0]
     # "MK" => length=2
     assert peptide == "MK"
+
 
 def test_predict_orfs_in_haplotypes_prefix_filter():
     """
@@ -72,7 +79,7 @@ def test_predict_orfs_in_haplotypes_prefix_filter():
 
     # For clarity, let's just check the prefix is 'MTSSV' => only the first 5 AAs must match exactly
     # We'll artificially create that 5AA sequence: 'MTSSV' => codons => ATG ACC TCC TCT GTG => "MTSSV"
-    dna_seq = "ATGACCTCCTCTGTGTAGATGAGAATTAA" 
+    dna_seq = "ATGACCTCCTCTGTGTAGATGAGAATTAA"
     # Breaking it down:
     #   ATG ACC TCC TCT GTG => "MTSSV"
     #   then TAA => stop
@@ -86,15 +93,13 @@ def test_predict_orfs_in_haplotypes_prefix_filter():
     # We'll set orf_min_aa=4 => need 4 AAs => "MTSS" wouldn't be enough => must be 5
     # but we have "MTSSV" => 5 AAs => passes length. The second ORF might also pass length but won't start with "MTSSV"
     haplotype_orfs = predict_orfs_in_haplotypes(
-        results,
-        min_len=0,
-        orf_min_aa=5,
-        required_prefix="MTSSV"
+        results, min_len=0, orf_min_aa=5, required_prefix="MTSSV"
     )
     # Expect only 1 ORF surviving => the "MTSSV" one
     orfs_list = list(haplotype_orfs.values())[0]
     assert len(orfs_list) == 1
     assert orfs_list[0][1].startswith("MTSSV"), "peptide must start with 'MTSSV'"
+
 
 def test_run_orf_finder_in_memory(tmp_path):
     """
@@ -109,11 +114,7 @@ def test_run_orf_finder_in_memory(tmp_path):
     out_file = tmp_path / "orf_pep.fa"
 
     run_orf_finder_in_memory(
-        results,
-        output_pep=str(out_file),
-        min_len=0,
-        orf_min_aa=2,
-        required_prefix=None
+        results, output_pep=str(out_file), min_len=0, orf_min_aa=2, required_prefix=None
     )
 
     assert out_file.exists()

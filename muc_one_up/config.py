@@ -11,25 +11,19 @@ from jsonschema import validate, ValidationError
 CONFIG_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
-        "repeats": {
-            "type": "object",
-            "additionalProperties": {"type": "string"}
-        },
+        "repeats": {"type": "object", "additionalProperties": {"type": "string"}},
         "constants": {
             "type": "object",
-            "properties": {
-                "left": {"type": "string"},
-                "right": {"type": "string"}
-            },
+            "properties": {"left": {"type": "string"}, "right": {"type": "string"}},
             "required": ["left", "right"],
-            "additionalProperties": False
+            "additionalProperties": False,
         },
         "probabilities": {
             "type": "object",
             "additionalProperties": {
                 "type": "object",
-                "additionalProperties": {"type": "number"}
-            }
+                "additionalProperties": {"type": "number"},
+            },
         },
         "length_model": {
             "type": "object",
@@ -38,38 +32,44 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "min_repeats": {"type": "number"},
                 "max_repeats": {"type": "number"},
                 "mean_repeats": {"type": "number"},
-                "median_repeats": {"type": "number"}
+                "median_repeats": {"type": "number"},
             },
-            "required": ["distribution", "min_repeats", "max_repeats", "mean_repeats", "median_repeats"],
-            "additionalProperties": False
+            "required": [
+                "distribution",
+                "min_repeats",
+                "max_repeats",
+                "mean_repeats",
+                "median_repeats",
+            ],
+            "additionalProperties": False,
         },
         "mutations": {
             "type": "object",
             "additionalProperties": {
                 "type": "object",
                 "properties": {
-                    "allowed_repeats": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    },
+                    "allowed_repeats": {"type": "array", "items": {"type": "string"}},
                     "changes": {
                         "type": "array",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "type": {"type": "string", "enum": ["insert", "delete", "replace"]},
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["insert", "delete", "replace"],
+                                },
                                 "start": {"type": "number"},
                                 "end": {"type": "number"},
-                                "sequence": {"type": "string"}
+                                "sequence": {"type": "string"},
                             },
                             "required": ["type", "start", "end"],
-                            "additionalProperties": False
-                        }
-                    }
+                            "additionalProperties": False,
+                        },
+                    },
                 },
                 "required": ["allowed_repeats", "changes"],
-                "additionalProperties": False
-            }
+                "additionalProperties": False,
+            },
         },
         "tools": {
             "type": "object",
@@ -78,10 +78,10 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "faToTwoBit": {"type": "string"},
                 "samtools": {"type": "string"},
                 "pblat": {"type": "string"},
-                "bwa": {"type": "string"}
+                "bwa": {"type": "string"},
             },
             "required": ["reseq", "faToTwoBit", "samtools", "pblat", "bwa"],
-            "additionalProperties": False
+            "additionalProperties": False,
         },
         "read_simulation": {
             "type": "object",
@@ -98,17 +98,31 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "downsample_seed": {"type": "number"},
                 "reference_assembly": {"type": "string"},
                 "vntr_region_hg19": {"type": "string"},
-                "vntr_region_hg38": {"type": "string"}
+                "vntr_region_hg38": {"type": "string"},
             },
             "required": [
-                "reseq_model", "sample_bam", "human_reference", "read_number",
-                "fragment_size", "fragment_sd", "min_fragment", "threads"
+                "reseq_model",
+                "sample_bam",
+                "human_reference",
+                "read_number",
+                "fragment_size",
+                "fragment_sd",
+                "min_fragment",
+                "threads",
             ],
-            "additionalProperties": False
-        }
+            "additionalProperties": False,
+        },
     },
-    "required": ["repeats", "constants", "probabilities", "length_model", "mutations", "tools", "read_simulation"],
-    "additionalProperties": False
+    "required": [
+        "repeats",
+        "constants",
+        "probabilities",
+        "length_model",
+        "mutations",
+        "tools",
+        "read_simulation",
+    ],
+    "additionalProperties": False,
 }
 
 
