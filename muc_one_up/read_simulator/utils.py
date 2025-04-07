@@ -17,7 +17,11 @@ from typing import Dict, List, Optional, Union
 
 
 def run_command(
-    cmd: Union[List[str], str], shell: bool = False, timeout: Optional[int] = None
+    cmd: Union[List[str], str],
+    shell: bool = False,
+    timeout: Optional[int] = None,
+    stderr_log_level: int = logging.ERROR,
+    stderr_prefix: str = "",
 ) -> int:
     """
     Run a command in its own process group so that it can be killed on timeout.
@@ -54,22 +58,35 @@ def run_command(
         logging.exception("Failed to start command: %s", cmd_str)
         sys.exit(1)
 
-    def log_stream(stream, log_func):
+    def log_stream(stream, log_func, level=None, prefix=""):
         """Read lines from a stream and log them using log_func."""
         # Handle binary stream and decode with error handling
         for line_bytes in iter(stream.readline, b""):
             try:
                 line = line_bytes.decode("utf-8", errors="replace").rstrip()
-                log_func(line)
+                if level is not None:
+                    # Use logger.log method with specified level
+                    log_func(level, f"{prefix}{line}")
+                else:
+                    # Use direct logging function (info/error)
+                    log_func(f"{prefix}{line}")
             except Exception as decode_error:
-                log_func(f"[Error decoding output: {decode_error}]")
+                error_msg = f"{prefix}[Error decoding output: {decode_error}]"
+                if level is not None:
+                    log_func(level, error_msg)
+                else:
+                    log_func(error_msg)
         stream.close()
 
+    # Log stdout always as INFO
     stdout_thread = threading.Thread(
         target=log_stream, args=(proc.stdout, logging.info)
     )
+    # Log stderr with configurable level
+    logger = logging.getLogger()
     stderr_thread = threading.Thread(
-        target=log_stream, args=(proc.stderr, logging.error)
+        target=log_stream,
+        args=(proc.stderr, logger.log, stderr_log_level, stderr_prefix),
     )
     stdout_thread.start()
     stderr_thread.start()
@@ -89,9 +106,17 @@ def run_command(
     stderr_thread.join()
 
     if proc.returncode != 0:
-        logging.error(
-            "Command exited with non-zero exit code %d: %s", proc.returncode, cmd_str
-        )
+        # Check if this is a timeout-related exit code (-15 is typical for SIGTERM)
+        if timeout is not None and proc.returncode == -15:
+            logging.info(
+                "Command terminated due to timeout (%d seconds): %s", timeout, cmd_str
+            )
+        else:
+            logging.error(
+                "Command exited with non-zero exit code %d: %s",
+                proc.returncode,
+                cmd_str,
+            )
         sys.exit(proc.returncode)
     return proc.returncode
 

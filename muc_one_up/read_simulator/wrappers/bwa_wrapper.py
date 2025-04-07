@@ -56,7 +56,13 @@ def align_reads(
         f"{tools['samtools']} view -bS - > {unsorted_bam}"
     )
 
-    run_command(cmd, shell=True, timeout=300)
+    run_command(
+        cmd,
+        shell=True,
+        timeout=300,
+        stderr_prefix="[bwa+samtools] ",
+        stderr_log_level=logging.INFO,
+    )
 
     # Sort the BAM file
     cmd = [
@@ -68,11 +74,15 @@ def align_reads(
         output_bam,
         unsorted_bam,
     ]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+    )
 
     # Index the BAM file
     cmd = [tools["samtools"], "index", output_bam]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+    )
 
     # Check output files exist
     for file in [output_bam, f"{output_bam}.bai"]:

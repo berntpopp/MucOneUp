@@ -30,7 +30,7 @@ def fa_to_twobit(
         SystemExit: If the conversion fails.
     """
     cmd = [tools["faToTwoBit"], input_fa, output_2bit]
-    run_command(cmd, timeout=60)
+    run_command(cmd, timeout=60, stderr_prefix="[ucsc] ", stderr_log_level=logging.INFO)
 
     # Check output exists and is non-empty
     if not os.path.exists(output_2bit) or os.path.getsize(output_2bit) == 0:
@@ -84,7 +84,12 @@ def run_pblat(
     ]
 
     try:
-        run_command(cmd, timeout=timeout)
+        run_command(
+            cmd,
+            timeout=timeout,
+            stderr_prefix="[pblat] ",
+            stderr_log_level=logging.INFO,
+        )
     except SystemExit as e:
         # Check if output was produced despite error
         if os.path.exists(output_psl) and os.path.getsize(output_psl) > 0:

@@ -50,12 +50,20 @@ def extract_subset_reference(
         collated_bam,
         sample_bam,
     ]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+    )
 
     # Extract sequences into FASTA format
     # Using shell=True and string command to handle redirection properly
     cmd = f"{tools['samtools']} fasta -n -F 0x900 {collated_bam} > {output_fa}"
-    run_command(cmd, shell=True, timeout=60)
+    run_command(
+        cmd,
+        shell=True,
+        timeout=60,
+        stderr_prefix="[samtools] ",
+        stderr_log_level=logging.INFO,
+    )
 
     # Verify the output FASTA exists and is non-empty
     if not os.path.exists(output_fa) or os.path.getsize(output_fa) == 0:
@@ -109,7 +117,13 @@ def calculate_vntr_coverage(
         ">",
         depth_file,
     ]
-    run_command(cmd, shell=True, timeout=60)
+    run_command(
+        cmd,
+        shell=True,
+        timeout=60,
+        stderr_prefix="[samtools] ",
+        stderr_log_level=logging.INFO,
+    )
 
     # Calculate mean coverage from depth file
     total_depth = 0
@@ -268,7 +282,9 @@ def downsample_bam(
         "-o",
         other_bam,
     ]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+    )
 
     # Merge the downsampled region BAM with the unchanged "other" BAM
     cmd = [
@@ -281,11 +297,15 @@ def downsample_bam(
         region_bam,
         other_bam,
     ]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+    )
 
     # Index the final BAM
     cmd = [samtools_exe, "index", output_bam]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+    )
 
     # Clean up intermediate files
     for tmp_file in [region_bam, other_bam]:
@@ -338,11 +358,15 @@ def downsample_entire_bam(
         output_bam,
         input_bam,
     ]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+    )
 
     # Index the output BAM
     cmd = [samtools_exe, "index", output_bam]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+    )
 
     logging.info(
         f"Downsampled entire BAM file to fraction {fraction:.4f} (seed: {seed})"
@@ -391,7 +415,7 @@ def sort_and_index_bam(
 
     sort_cmd.extend(["-o", temp_bam, input_bam])
 
-    run_command(sort_cmd)
+    run_command(sort_cmd, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Replace original file with sorted version
     if os.path.exists(temp_bam):
@@ -402,6 +426,8 @@ def sort_and_index_bam(
     # Index the BAM file (only if sorted by coordinate)
     if not by_name:
         cmd = [samtools_exe, "index", output_bam]
-        run_command(cmd, timeout=60)
+        run_command(
+            cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+        )
 
     return output_bam

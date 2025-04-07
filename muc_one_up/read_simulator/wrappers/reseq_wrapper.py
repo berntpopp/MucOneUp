@@ -30,7 +30,9 @@ def replace_Ns(input_fa: str, output_fa: str, tools: Dict[str, str]) -> None:
     """
     # From reseq help: replaceN expects -r for input and -R for output
     cmd = [tools["reseq"], "replaceN", "-r", input_fa, "-R", output_fa]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] "
+    )
 
 
 def generate_systematic_errors(
@@ -61,7 +63,9 @@ def generate_systematic_errors(
         "--writeSysError",
         output_fq,  # Output FASTQ filename
     ]
-    run_command(cmd, timeout=60)
+    run_command(
+        cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] "
+    )
 
     # Verify output exists and is non-empty
     if not os.path.exists(output_fq) or os.path.getsize(output_fq) == 0:
@@ -114,12 +118,22 @@ def create_reads(
     try:
         # Execute with a short timeout - reseq seqToIllumina tends to keep running
         # indefinitely even after it has produced useful output
-        run_command(cmd, timeout=timeout)
+        run_command(
+            cmd,
+            timeout=timeout,
+            stderr_log_level=logging.INFO,
+            stderr_prefix="[reseq] ",
+        )
     except SystemExit:
         # Check if the output file exists and is non-empty despite timeout
         if os.path.exists(output_reads) and os.path.getsize(output_reads) > 0:
             logging.warning(
-                "reseq seqToIllumina timed out after %s seconds, but valid output exists. Continuing.",
+                (
+                    "reseq seqToIllumina timed out after %s seconds, but valid output "
+                    "exists. This is EXPECTED BEHAVIOR as seqToIllumina often "
+                    "produces complete output before finishing execution. Process was "
+                    "terminated but simulation will continue normally."
+                ),
                 timeout,
             )
         else:
