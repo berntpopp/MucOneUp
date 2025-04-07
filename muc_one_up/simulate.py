@@ -2,6 +2,7 @@
 
 import random
 import logging
+from typing import List, Tuple, Optional
 from .distribution import sample_repeat_count
 
 
@@ -31,6 +32,92 @@ def pick_next_symbol_no_end(probabilities, current_symbol):
     chosen = random.choices(symbols, weights=weights, k=1)[0]
     logging.debug("Picked next symbol '%s' from '%s'.", chosen, current_symbol)
     return chosen
+
+
+def assemble_haplotype_from_chain(chain: List[str], config: dict) -> str:
+    """
+    Assemble a complete haplotype sequence from a given repeat chain.
+
+    :param chain: List of repeat symbols to assemble.
+    :param config: Configuration dict with repeats and constants.
+    :return: Assembled haplotype sequence.
+    """
+    left_const = config["constants"]["left"]
+    right_const = config["constants"]["right"]
+    repeats_dict = config["repeats"]
+
+    # Start with the left constant
+    assembled_seq = left_const
+
+    # Add each repeat unit according to the chain
+    for symbol in chain:
+        # If symbol has mutation marker ('m'), we still use the base symbol for lookup
+        base_symbol = symbol.rstrip("m")
+        if base_symbol not in repeats_dict:
+            raise ValueError(f"Symbol '{base_symbol}' not found in config repeats.")
+
+        assembled_seq += repeats_dict[base_symbol]
+
+    # Add right constant
+    assembled_seq += right_const
+
+    logging.info(f"Assembled haplotype with {len(chain)} repeats.")
+    return assembled_seq
+
+
+def simulate_from_chains(
+    predefined_chains: List[List[str]],
+    config: dict,
+    mutation_name: Optional[str] = None,
+    mutation_targets: Optional[List[Tuple[int, int]]] = None,
+) -> List[Tuple[str, List[str]]]:
+    """
+    Simulate multiple haplotypes using predefined repeat chains.
+
+    :param predefined_chains: List of repeat chains, one per haplotype.
+    :param config: Configuration dict.
+    :param mutation_name: Optional mutation name to apply.
+    :param mutation_targets: Optional list of tuples (haplotype_index, repeat_index)
+        specifying where to apply mutations.
+    :return: List of tuples (haplotype_sequence, repeat_chain).
+    """
+    haplotypes = []
+
+    for i, chain in enumerate(predefined_chains):
+        # Create a copy of the chain to avoid modifying the original
+        working_chain = chain.copy()
+
+        # Apply mutations if specified in the mutation_targets
+        if mutation_name and mutation_targets:
+            for hap_idx, repeat_idx in mutation_targets:
+                # Check if this mutation applies to the current haplotype
+                if hap_idx == i + 1:  # User provides 1-indexed haplotype numbers
+                    # Convert from 1-indexed to 0-indexed for the repeat position
+                    zero_based_idx = repeat_idx - 1
+                    # Ensure the repeat index is valid
+                    if 0 <= zero_based_idx < len(working_chain):
+                        # Only add mutation marker if it doesn't already have one
+                        if not working_chain[zero_based_idx].endswith("m"):
+                            logging.info(
+                                f"Applying mutation '{mutation_name}' to haplotype {i+1}, "
+                                f"repeat position {repeat_idx} (0-based: {zero_based_idx})"
+                            )
+                            working_chain[zero_based_idx] = (
+                                working_chain[zero_based_idx] + "m"
+                            )
+                    else:
+                        logging.warning(
+                            f"Mutation target repeat index {repeat_idx} (0-based: {zero_based_idx}) "
+                            f"is out of range for haplotype {i+1} (length {len(working_chain)})"
+                        )
+
+        logging.info(
+            f"Assembling haplotype {i+1} from predefined chain with {len(working_chain)} repeats"
+        )
+        seq = assemble_haplotype_from_chain(working_chain, config)
+        haplotypes.append((seq, working_chain))
+
+    return haplotypes
 
 
 def simulate_diploid(config, num_haplotypes=2, fixed_lengths=None, seed=None):

@@ -25,7 +25,7 @@ import time  # NEW: imported for simulation statistics timing
 
 from .mutate import apply_mutations
 from .read_simulation import simulate_reads as simulate_reads_pipeline
-from .simulate import simulate_diploid
+from .simulate import simulate_diploid, simulate_from_chains
 from .translate import run_orf_finder_in_memory
 from .fasta_writer import write_fasta  # Helper for writing FASTA files
 from .version import __version__  # Import version from the single source
@@ -33,6 +33,7 @@ from .simulation_statistics import (
     generate_simulation_statistics,
     write_statistics_report,
 )  # NEW: import simulation statistics module
+from .io import parse_vntr_structure_file  # NEW: import structure file parser
 
 
 def build_parser():
@@ -71,8 +72,12 @@ def build_parser():
         type=int,
         help="Number of haplotypes to simulate. Typically 2 for diploid.",
     )
-    # Allow fixed-lengths as strings so that ranges (e.g. "20-40") are allowed.
-    parser.add_argument(
+
+    # Create mutually exclusive group for simulation modes
+    simulation_mode_group = parser.add_mutually_exclusive_group()
+
+    # Move fixed-lengths to the exclusive group
+    simulation_mode_group.add_argument(
         "--fixed-lengths",
         nargs="+",
         type=str,
@@ -82,6 +87,17 @@ def build_parser():
             "If multiple, the number must match --num-haplotypes. Values may be a single integer (e.g. '60') or a range (e.g. '20-40')."
         ),
     )
+
+    # New argument for providing exact VNTR structure from a file
+    simulation_mode_group.add_argument(
+        "--input-structure",
+        type=str,
+        default=None,
+        help=(
+            "Path to a file containing specific VNTR repeat compositions to use. "
+            "The file should contain one line per haplotype in the format: haplotype_N<TAB>1-2-3-4-5-...-9."
+        ),
+    )
     parser.add_argument(
         "--seed",
         type=int,
@@ -89,7 +105,7 @@ def build_parser():
         help="Random seed for reproducible simulations.",
     )
     # New flag to control series simulation with an optional step size.
-    parser.add_argument(
+    simulation_mode_group.add_argument(
         "--simulate-series",
         nargs="?",
         const=1,
@@ -262,8 +278,44 @@ def main():
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    # Process --fixed-lengths.
-    if args.fixed_lengths is not None:
+    # Process --input-structure if provided
+    predefined_chains = None
+    structure_mutation_info = None
+    if args.input_structure is not None:
+        try:
+            logging.info("Using input structure file: %s", args.input_structure)
+            predefined_chains, structure_mutation_info = parse_vntr_structure_file(
+                args.input_structure, config
+            )
+            num_chains = len(predefined_chains)
+            logging.info("Loaded %d haplotype chains from structure file", num_chains)
+
+            if structure_mutation_info:
+                logging.info(
+                    "Found mutation information in structure file: %s",
+                    structure_mutation_info["name"],
+                )
+
+            # Check if the number of chains matches the requested number of haplotypes
+            if num_chains != args.num_haplotypes:
+                logging.warning(
+                    "--num-haplotypes=%d specified but structure file has %d chains. "
+                    "Using the number of chains from the structure file.",
+                    args.num_haplotypes,
+                    num_chains,
+                )
+
+            # If --simulate-series is provided, warn that it's ignored
+            if args.simulate_series is not None:
+                logging.warning(
+                    "--simulate-series is ignored when using --input-structure"
+                )
+        except Exception as e:
+            logging.error("Error parsing structure file: %s", e)
+            sys.exit(1)
+
+    # Process --fixed-lengths if --input-structure is not provided
+    if args.input_structure is None and args.fixed_lengths is not None:
         fixed_matrix = parse_fixed_lengths(args.fixed_lengths, args.num_haplotypes)
         if args.simulate_series is not None:
             step = args.simulate_series
@@ -290,12 +342,34 @@ def main():
             logging.info(
                 "Single simulation iteration generated using a random choice from each fixed-length range."
             )
+    elif predefined_chains is not None:
+        # For structure files, we create a single simulation configuration
+        simulation_configs = ["from_structure"]
+        logging.info("Using predefined VNTR chains from structure file.")
     else:
         simulation_configs = [None]  # Use random lengths if not provided.
 
-    # Process --mutation-name to support dual simulation.
+    # Process mutation information - prioritize structure file over CLI args
     dual_mutation_mode = False
     mutation_pair = None
+
+    # Convert structure file mutation info to CLI-style mutation info if present
+    if structure_mutation_info:
+        # Override the mutation_name with structure file data
+        args.mutation_name = structure_mutation_info["name"]
+
+        # Convert tuple format [(1, 25)] to string format ["1,25"] for CLI compatibility
+        target_tuples = structure_mutation_info["targets"]
+        args.mutation_targets = [
+            f"{hap_idx},{rep_idx}" for hap_idx, rep_idx in target_tuples
+        ]
+
+        logging.info(
+            "Using mutation information from structure file: %s at targets %s",
+            args.mutation_name,
+            args.mutation_targets,
+        )
+    # Process standard mutation args
     if args.mutation_name:
         if "," in args.mutation_name:
             mutation_pair = [s.strip() for s in args.mutation_name.split(",")]
@@ -305,17 +379,27 @@ def main():
                 )
                 sys.exit(1)
             dual_mutation_mode = True
-        # If a mutation is provided (even a single value), we will later capture mutated VNTR units.
+            logging.info("Using mutations from command line: %s", mutation_pair)
+        else:
+            logging.info("Using mutation from command line: %s", args.mutation_name)
     sim_index = 1
     for fixed_conf in simulation_configs:
         iteration_start = time.time()  # NEW: record iteration start time
         try:
-            results = simulate_diploid(
-                config=config,
-                num_haplotypes=args.num_haplotypes,
-                fixed_lengths=fixed_conf,
-                seed=args.seed,
-            )
+            if fixed_conf == "from_structure":
+                # Use predefined chains from structure file without applying mutations here
+                # Mutations will be applied later using the standard pipeline
+                results = simulate_from_chains(
+                    predefined_chains=predefined_chains, config=config
+                )
+            else:
+                # Use the standard simulation function
+                results = simulate_diploid(
+                    config=config,
+                    num_haplotypes=args.num_haplotypes,
+                    fixed_lengths=fixed_conf,
+                    seed=args.seed,
+                )
             logging.info(
                 "Haplotype simulation completed successfully for iteration %d.",
                 sim_index,
@@ -384,12 +468,21 @@ def main():
                     mutation_positions = []
                     for t in args.mutation_targets:
                         try:
-                            hap_str, rep_str = t.split(",")
-                            hap_i = int(hap_str)
-                            rep_i = int(rep_str)
+                            # Handle either string format "1,25" or tuple format (1, 25)
+                            if isinstance(t, str):
+                                hap_str, rep_str = t.split(",")
+                                hap_i = int(hap_str)
+                                rep_i = int(rep_str)
+                            elif isinstance(t, tuple) and len(t) == 2:
+                                hap_i, rep_i = t
+                            else:
+                                raise ValueError(f"Unexpected target format: {t}")
+
                             mutation_positions.append((hap_i, rep_i))
-                        except ValueError:
-                            logging.error("Invalid --mutation-targets format: '%s'", t)
+                        except Exception as e:
+                            logging.error(
+                                "Invalid --mutation-targets format: '%s' (%s)", t, e
+                            )
                             sys.exit(1)
                     try:
                         results, mutated_units = apply_mutations(
@@ -470,18 +563,42 @@ def main():
         else:
             out_file = numbered_filename(out_dir, out_base, sim_index, "simulated.fa")
             try:
-                # Add mutation information if a mutation was applied
-                fasta_comment = None
-                if args.mutation_name:
-                    if args.mutation_targets:
-                        fasta_comment = f"Mutation Applied: {args.mutation_name} (Targets: {args.mutation_targets})"
-                    else:
-                        fasta_comment = (
-                            f"Mutation Applied: {args.mutation_name} (Target: random)"
-                        )
+                # Create haplotype-specific comments based on mutation information
+                # Initialize with no comments
+                haplotype_comments = [None] * len(results)
+
+                # If we have mutation information, apply it only to the targeted haplotypes
+                if structure_mutation_info or args.mutation_name:
+                    mutation_name = (
+                        structure_mutation_info["name"]
+                        if structure_mutation_info
+                        else args.mutation_name
+                    )
+                    mutation_targets = []
+
+                    if structure_mutation_info:
+                        mutation_targets = structure_mutation_info["targets"]
+                    elif args.mutation_targets:
+                        # Process CLI mutation targets
+                        for t in args.mutation_targets:
+                            if isinstance(t, str):
+                                hap_str, rep_str = t.split(",")
+                                mutation_targets.append((int(hap_str), int(rep_str)))
+                            elif isinstance(t, tuple) and len(t) == 2:
+                                mutation_targets.append(t)
+
+                    # Apply comments only to targeted haplotypes
+                    for hap_idx, rep_idx in mutation_targets:
+                        if 1 <= hap_idx <= len(results):  # 1-indexed haplotype numbers
+                            haplotype_comments[hap_idx - 1] = (
+                                f"Mutation Applied: {mutation_name} (Targets: {mutation_targets})"
+                            )
 
                 write_fasta(
-                    [seq for seq, chain in results], out_file, comment=fasta_comment
+                    [seq for seq, chain in results],
+                    out_file,
+                    prefix="haplotype",
+                    comments=haplotype_comments,
                 )
                 logging.info("FASTA output written to %s", out_file)
             except Exception as e:
@@ -545,8 +662,14 @@ def main():
                 )
                 try:
                     with open(struct_out, "w") as struct_fh:
-                        # Add mutation information if a mutation was applied
-                        if args.mutation_name:
+                        # Add mutation information - prioritize info from structure file
+                        if structure_mutation_info:
+                            # Preserve the original mutation information from input structure
+                            struct_fh.write(
+                                f"# Mutation Applied: {structure_mutation_info['name']} (Targets: {structure_mutation_info['targets']})\n"
+                            )
+                        elif args.mutation_name:
+                            # Fall back to command-line mutation info
                             if args.mutation_targets:
                                 struct_fh.write(
                                     f"# Mutation Applied: {args.mutation_name} (Targets: {args.mutation_targets})\n"

@@ -4,7 +4,8 @@
 
 1. **Generate** haplotypes containing a variable‐length VNTR region using a probability model or fixed‐lengths.  
 2. **Force** a canonical terminal block (`6` or `6p` → `7 → 8 → 9`) before appending the right‐hand constant.  
-3. Optionally **introduce mutations** (inserts, deletes, or replacements) in selected repeats.  
+3. Optionally **introduce mutations** (inserts, deletes, or replacements) in selected repeats with precise control over which haplotypes are affected.  
+4. **Support structure files** with mutation information, allowing for reproducible generation of specific mutated VNTR structures.  
 4. **Generate series of simulations** when fixed-length ranges are provided (via the `--simulate-series` flag) so that a simulation is run for each possible length (or combination of lengths for multiple haplotypes).  
 5. **Run dual simulations** (normal and mutated) when a comma-separated mutation name is provided.  
 6. **Detect Toxic Protein Features:** When ORF prediction is activated (via the `--output-orfs` flag), the tool scans the resulting ORF FASTA file for toxic protein sequence features by analyzing the repeat structure and amino acid composition of the variable region. A quantitative “deviation” (or similarity) score is computed relative to a wild–type model, and if the overall score exceeds a user–defined cutoff, the protein is flagged as toxic.  
@@ -159,7 +160,8 @@ Below are the available **command-line arguments**. Use `muconeup --help` for mo
 | `--simulate-series`            | (Optional) When specified and fixed-length ranges are provided, the program will generate a simulation iteration for every possible length (or combination of lengths for multiple haplotypes) instead of choosing a single random value. This flag is useful when you want to explore the entire parameter space.                             |
 | `--seed <int>`                 | Random seed for reproducible simulations (affects VNTR building and mutation target selection).                                                                                                                                                                                                                                                   |
 | `--mutation-name <str>`        | (Optional) Name of a mutation from the config to apply. To run dual simulations (normal and mutated), provide a comma-separated pair (e.g. `normal,dupC`). If a single value is provided, only one simulation is mutated.                                                                                                                  |
-| `--mutation-targets <pairs>`   | (Optional) One or more `haplotype_index,repeat_index` pairs (1-based). E.g., `1,5 2,7`. If provided, each pair indicates which haplotype and repeat to mutate. If omitted, the mutation is applied at a random allowed repeat.                                                                                                               |
+| `--mutation-targets <pairs>`   | (Optional) One or more `haplotype_index,repeat_index` pairs (1-based). E.g., `1,25 2,30`. If provided, each pair indicates which haplotype and repeat position to mutate. If omitted, the mutation is applied at a random allowed repeat. Only haplotypes specified in these targets will have mutation information in their FASTA headers.                                                                                                               |
+| `--input-structure <file>`     | (Optional) Path to a structure file containing predefined VNTR repeat chains. If the structure file includes a header comment with mutation information (e.g., `# Mutation Applied: dupC (Targets: [(1, 25)])`), that information will be used to apply mutations to the specific haplotypes and positions instead of using random targets or CLI-specified targets. |
 | `--output-structure`           | (Optional) If provided, output a VNTR structure file (text) listing the chain of repeats for each haplotype.                                                                                                                                                                                                                                      |
 | `--output-orfs`                | (Optional) If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme. Additionally, the resulting ORF file will be scanned for toxic protein sequence features and a JSON statistics file is generated.                                                                                                                   |
 | `--orf-min-aa <int>`           | Minimum peptide length (in amino acids) to report from ORF prediction. Defaults to 100.                                                                                                                                                                                                                                                           |
@@ -180,11 +182,36 @@ Below are the available **command-line arguments**. Use `muconeup --help` for mo
    ```
 
 3. **Generate a single simulation using a fixed-length range** (a random value is chosen from the range for each haplotype):
+
    ```bash
    muconeup --config config.json --out-base muc1_random_range --fixed-lengths 20-40
    ```
 
-4. **Generate a series of simulations** using a fixed-length range (each possible value in the range, or combination thereof, produces an output file):
+4. **Apply a specific mutation to targeted positions** in specific haplotypes:
+
+   ```bash
+   muconeup --config config.json --out-base muc1_mutated --mutation-name dupC --mutation-targets 1,25 2,30
+   ```
+
+   This applies the `dupC` mutation to haplotype 1 at repeat position 25 and to haplotype 2 at repeat position 30. The FASTA header for each mutated haplotype will include the mutation information.
+
+5. **Use a structure file with mutation information** for reproducible generation of specific VNTR structures:
+
+   ```bash
+   muconeup --config config.json --out-base muc1_from_structure --input-structure structure_file.txt
+   ```
+
+   Where the structure file contains mutation information in a header comment:
+
+   ```text
+   # Mutation Applied: dupC (Targets: [(1, 25)])
+   haplotype_1 1-2-3-4-5-C-X-B-X-X-X-X-X-X-X-X-V-G-B-X-X-G-A-B-Xm-X-X-X-A-A-A-B-X-D-E-C-6-7-8-9
+   haplotype_2 1-2-3-4-5-C-X-A-B-X-X-X-V-G-A-A-A-B-B-X-X-X-X-X-X-X-X-X-X-X-X-X-V-V-V-V-V-V-V-V-V-G-A-B-B-X-A-A-N-R-X-X-X-X-A-B-6p-7-8-9
+   ```
+
+   Note that the mutated repeat position is marked with an "m" suffix in the structure file (e.g., `Xm`). The output FASTA will include mutation information only in the header of haplotype 1, which is the only one with a mutation according to the targets.
+
+6. **Generate a series of simulations** using a fixed-length range (each possible value in the range, or combination thereof, produces an output file):
    ```bash
    muconeup --config config.json --out-base muc1_series --simulate-series --fixed-lengths 20-40
    ```
@@ -234,6 +261,7 @@ When the ORF prediction is enabled (using the `--output-orfs` flag), **MucOneUp*
 ## Simulation Statistics
 
 A new feature generates a comprehensive statistics report for each simulation run. This report includes:
+
 - **Runtime:** Total simulation runtime in seconds.
 - **Haplotype-Level Metrics:** For each simulated haplotype, the report details the number of repeats, VNTR region length, GC content, individual repeat lengths (with min, max, and average), repeat type counts, and mutation details.
 - **Aggregated Metrics:** Overall statistics aggregated from all haplotypes.
@@ -246,6 +274,7 @@ The statistics are saved as JSON files (e.g., `muc1_simulated.002.simulation_sta
 ## Read Simulation Integration
 
 The read simulation pipeline simulates Illumina reads from the generated FASTA files. This pipeline leverages external tools (reseq, faToTwoBit, samtools, pblat, bwa) and incorporates a port of [w‑Wessim2](https://github.com/GeorgetteTanner/w-Wessim2) to:
+
 - Replace Ns in the FASTA.
 - Generate systematic errors and convert the FASTA to 2bit format.
 - Extract a subset reference from a sample BAM.
@@ -256,17 +285,52 @@ The read simulation pipeline simulates Illumina reads from the generated FASTA f
 
 ---
 
+## Structure Files with Mutation Information
+
+MucOneUp now supports structure files that contain mutation information embedded in header comments. This allows for reproducible generation of specific mutated VNTR structures.
+
+### Structure File Format
+
+A structure file with mutation information has the following format:
+
+```text
+# Mutation Applied: <mutation_name> (Targets: [(<haplotype_index>, <position>), ...])
+haplotype_1 <repeat_chain_with_m_suffix_for_mutated_positions>
+haplotype_2 <repeat_chain>
+```
+
+Example:
+
+```text
+# Mutation Applied: dupC (Targets: [(1, 25)])
+haplotype_1 1-2-3-4-5-C-X-B-X-X-X-X-X-X-X-X-V-G-B-X-X-G-A-B-Xm-X-X-X-A-A-A-B-X-D-E-C-6-7-8-9
+haplotype_2 1-2-3-4-5-C-X-A-B-X-X-X-V-G-A-A-A-B-B-X-X-X-X-X-X-X-X-X-X-X-X-X-V-V-V-V-V-V-V-V-V-G-A-B-B-X-A-A-N-R-X-X-X-X-A-B-6p-7-8-9
+```
+
+When using such a structure file with the `--input-structure` argument, MucOneUp will:
+
+1. Parse the mutation information from the header comment
+2. Apply the specified mutation to the targeted haplotypes and positions
+3. Generate output FASTA files with mutation information only in the headers of affected haplotypes
+4. Create output structure files that preserve the mutation information
+
+This feature is particularly useful for:
+
+- Reproducing specific known mutations for testing
+- Generating consistent test data across multiple runs
+- Creating benchmark datasets for variant calling tools
+
 ## Project Structure and Logic
 
 The **muc_one_up** Python package is organized into modules. Here is a brief summary:
 
-```
+```text
 muc_one_up/
 ├── cli.py           # Main CLI logic and argument parsing (supports series simulation, dual mutation modes, toxic protein detection, simulation statistics, and read simulation)
 ├── config.py        # Loads and validates the JSON configuration file
 ├── distribution.py  # Samples the target VNTR length from a specified distribution
-├── fasta_writer.py  # Helper for writing FASTA files
-├── mutate.py        # Logic to apply specified mutations (including complex types like delete_insert) to haplotypes
+├── fasta_writer.py  # Helper for writing FASTA files with support for per-haplotype mutation comments
+├── mutate.py        # Logic to apply specified mutations (including complex types like delete_insert) to targeted haplotypes
 ├── probabilities.py # Provides weighted random selections for repeat transitions
 ├── simulate.py      # Core simulation code for building haplotypes (chains of repeats with terminal block insertion)
 ├── read_simulation.py  # Integrates an external read simulation pipeline (using w‑Wessim2) to generate reads from simulated FASTA files
@@ -280,10 +344,12 @@ muc_one_up/
 
 1. **CLI (cli.py):**
    - Parses command-line arguments and loads the configuration.
+   - Supports using predefined VNTR chains from structure files via `--input-structure`, including embedded mutation information.
    - If fixed-length ranges are provided, either picks a random value for each haplotype (default) or—if `--simulate-series` is specified—runs a simulation for every possible length (or combination of lengths for multiple haplotypes).
-   - Simulates haplotypes via **simulate_diploid()**.
-   - Optionally applies mutations using **apply_mutations()**. Dual simulation is supported when a comma-separated mutation name is provided.
-   - Writes output files (FASTA, VNTR structure, ORFs) with numbered filenames.
+   - Simulates haplotypes via **simulate_diploid()** or **simulate_from_chains()** when using structure files.
+   - Optionally applies mutations using **apply_mutations()** with precise control over targeted haplotypes and positions via `--mutation-targets`.
+   - Dual simulation is supported when a comma-separated mutation name is provided.
+   - Writes output files (FASTA, VNTR structure, ORFs) with numbered filenames and haplotype-specific mutation information in FASTA headers.
    - When ORF prediction is activated (via `--output-orfs`), the resulting ORF FASTA is further scanned for toxic protein features using **toxic_protein_detector.py**. The detection statistics are saved as a JSON file.
    - Generates a detailed simulation statistics report for each simulation iteration.
    - Optionally runs the read simulation pipeline.
