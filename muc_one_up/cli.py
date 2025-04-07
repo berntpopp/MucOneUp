@@ -446,8 +446,21 @@ def main():
                 out_dir, out_base, sim_index, "simulated.fa", variant="mut"
             )
             try:
-                write_fasta([seq for seq, chain in normal_results], normal_out)
-                write_fasta([seq for seq, chain in mutated_results], mut_out)
+                # Add no mutation information for normal results
+                write_fasta(
+                    [seq for seq, chain in normal_results],
+                    normal_out,
+                    comment="Normal sequence (no mutations applied)",
+                )
+
+                # Add mutation information for mutated results
+                mutation_comment = f"Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})"
+                write_fasta(
+                    [seq for seq, chain in mutated_results],
+                    mut_out,
+                    comment=mutation_comment,
+                )
+
                 logging.info(
                     "Dual FASTA outputs written: %s and %s", normal_out, mut_out
                 )
@@ -457,7 +470,19 @@ def main():
         else:
             out_file = numbered_filename(out_dir, out_base, sim_index, "simulated.fa")
             try:
-                write_fasta([seq for seq, chain in results], out_file)
+                # Add mutation information if a mutation was applied
+                fasta_comment = None
+                if args.mutation_name:
+                    if args.mutation_targets:
+                        fasta_comment = f"Mutation Applied: {args.mutation_name} (Targets: {args.mutation_targets})"
+                    else:
+                        fasta_comment = (
+                            f"Mutation Applied: {args.mutation_name} (Target: random)"
+                        )
+
+                write_fasta(
+                    [seq for seq, chain in results], out_file, comment=fasta_comment
+                )
                 logging.info("FASTA output written to %s", out_file)
             except Exception as e:
                 logging.error("Writing FASTA failed: %s", e)
@@ -494,10 +519,15 @@ def main():
                 )
                 try:
                     with open(normal_struct_out, "w") as nf:
+                        # Add comment indicating this is a normal (non-mutated) structure
+                        nf.write("# Normal sequence (no mutations applied)\n")
                         for i, (sequence, chain) in enumerate(normal_results, start=1):
                             chain_str = "-".join(chain)
                             nf.write(f"haplotype_{i}\t{chain_str}\n")
                     with open(mut_struct_out, "w") as mf:
+                        # Add comment indicating the mutation that was applied
+                        mutation_comment = f"# Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})\n"
+                        mf.write(mutation_comment)
                         for i, (sequence, chain) in enumerate(mutated_results, start=1):
                             chain_str = "-".join(chain)
                             mf.write(f"haplotype_{i}\t{chain_str}\n")
@@ -515,6 +545,17 @@ def main():
                 )
                 try:
                     with open(struct_out, "w") as struct_fh:
+                        # Add mutation information if a mutation was applied
+                        if args.mutation_name:
+                            if args.mutation_targets:
+                                struct_fh.write(
+                                    f"# Mutation Applied: {args.mutation_name} (Targets: {args.mutation_targets})\n"
+                                )
+                            else:
+                                struct_fh.write(
+                                    f"# Mutation Applied: {args.mutation_name} (Target: random)\n"
+                                )
+
                         for i, (sequence, chain) in enumerate(results, start=1):
                             chain_str = "-".join(chain)
                             struct_fh.write(f"haplotype_{i}\t{chain_str}\n")
