@@ -181,6 +181,12 @@ def build_parser():
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "NONE"],
         help="Set logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE). Default is INFO.",
     )
+    # Reference assembly parameter to override the config file setting
+    parser.add_argument(
+        "--reference-assembly",
+        choices=["hg19", "hg38"],
+        help="Specify reference assembly (hg19 or hg38). Overrides the setting in config file.",
+    )
     return parser
 
 
@@ -268,6 +274,16 @@ def main():
         with open(args.config) as fh:
             config = json.load(fh)
         logging.info("Configuration loaded from %s", args.config)
+
+        # Override reference_assembly if specified in command line
+        if args.reference_assembly:
+            current_assembly = config.get("reference_assembly", "hg38")
+            config["reference_assembly"] = args.reference_assembly
+            logging.info(
+                "Reference assembly overridden by command line: %s -> %s",
+                current_assembly,
+                args.reference_assembly,
+            )
     except (FileNotFoundError, json.JSONDecodeError) as e:
         logging.error("Could not load config: %s", e)
         sys.exit(1)

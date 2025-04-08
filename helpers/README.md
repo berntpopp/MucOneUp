@@ -150,7 +150,41 @@ After processing, the script produces:
 
 ---
 
-## 3. VNTR Analyzer Helper
+## 3. Reference Sequence Downloader
+
+The `download_references.py` script automates downloading MUC1 reference sequences for both hg19 and hg38 assemblies. It calculates the correct left and right flanking regions around the VNTR regions, handles reverse complementing (since MUC1 is on the negative strand), and updates the config.json file.
+
+### Usage
+
+```bash
+python helpers/download_references.py [--config CONFIG_PATH] [--padding BP] [--assembly {hg19,hg38,both}]
+```
+
+### Parameters
+
+- `--config`: *(Optional)* Path to the configuration file. Default is the main config.json file at the root of the project.
+- `--padding`: *(Optional)* Number of base pairs to include on each side of the VNTR region. Default is 5000bp.
+- `--assembly`: *(Optional)* Which assembly to download references for. Options are 'hg19', 'hg38', or 'both'. Default is 'both'.
+
+### Process
+
+1. Reads VNTR region coordinates from the config file (e.g., `vntr_region_hg38` and `vntr_region_hg19`)
+2. Computes the flanking regions with the specified padding
+3. Downloads sequences from the UCSC DAS server
+4. Reverse complements the sequences (MUC1 is on the negative strand)
+5. Updates the config.json file with the downloaded sequences in the `constants` section
+
+### Example
+
+```bash
+python helpers/download_references.py --padding 10000 --assembly hg38
+```
+
+This example downloads the hg38 reference sequences with a 10,000bp padding on each side.
+
+---
+
+## 4. VNTR Analyzer Helper
 
 The `vntr_analyze.py` script analyzes VNTR repeat units from a CSV/TSV file using a configuration file that defines known repeat sequences. It computes summary statistics and builds a transition probability matrix that describes the likelihood of one repeat unit following another.
 

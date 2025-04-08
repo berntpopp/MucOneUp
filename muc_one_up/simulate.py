@@ -42,8 +42,9 @@ def assemble_haplotype_from_chain(chain: List[str], config: dict) -> str:
     :param config: Configuration dict with repeats and constants.
     :return: Assembled haplotype sequence.
     """
-    left_const = config["constants"]["left"]
-    right_const = config["constants"]["right"]
+    reference_assembly = config.get("reference_assembly", "hg38")
+    left_const = config["constants"][reference_assembly]["left"]
+    right_const = config["constants"][reference_assembly]["right"]
     repeats_dict = config["repeats"]
 
     # Start with the left constant
@@ -167,8 +168,9 @@ def simulate_single_haplotype(config, target_length, min_length=10):
             f"Requested target_length={target_length} but minimum is {min_length}. Aborting."
         )
 
-    left_const = config["constants"]["left"]
-    right_const = config["constants"]["right"]
+    reference_assembly = config.get("reference_assembly", "hg38")
+    left_const = config["constants"][reference_assembly]["left"]
+    right_const = config["constants"][reference_assembly]["right"]
     probabilities = config["probabilities"]
     repeats_dict = config["repeats"]
 

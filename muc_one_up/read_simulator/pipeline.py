@@ -149,10 +149,30 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
     fa_to_twobit(noNs_fa, twobit_file, tools)
 
     # Stage 4: Extract subset reference from BAM
-    sample_bam = rs_config.get("sample_bam")
+    # Get the reference assembly setting from the config
+    reference_assembly = rs_config.get("reference_assembly", "hg38")
+
+    # Get the appropriate sample_bam based on the reference assembly
+    sample_bam_key = f"sample_bam_{reference_assembly}"
+    sample_bam = rs_config.get(sample_bam_key)
+
+    # Fall back to the generic sample_bam if assembly-specific one not found
     if not sample_bam:
-        logging.error("Error: sample_bam not specified in config.")
+        sample_bam = rs_config.get("sample_bam")
+        if sample_bam:
+            logging.warning(
+                f"Assembly-specific sample BAM not found for {reference_assembly}. "
+                f"Using generic sample_bam: {sample_bam}"
+            )
+
+    if not sample_bam:
+        logging.error(
+            f"Error: No sample BAM specified for {reference_assembly}. "
+            f"Please add 'sample_bam_{reference_assembly}' or 'sample_bam' to the config."
+        )
         sys.exit(1)
+
+    logging.info(f"Using sample BAM for {reference_assembly}: {sample_bam}")
     subset_ref = os.path.join(output_dir, f"_{output_base}_subset_ref.fa")
     logging.info("4. Extracting subset reference from BAM")
     collated_bam = extract_subset_reference(sample_bam, subset_ref, tools)
@@ -227,7 +247,7 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
         logging.info("10. Downsampling to target coverage")
         mode = rs_config.get("downsample_mode", "vntr").strip().lower()
         if mode == "vntr":
-            reference_assembly = rs_config.get("reference_assembly", "hg19")
+            reference_assembly = rs_config.get("reference_assembly", "hg38")
             vntr_region_key = f"vntr_region_{reference_assembly}"
             vntr_region = rs_config.get(vntr_region_key)
             if not vntr_region:

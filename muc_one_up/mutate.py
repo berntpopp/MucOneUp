@@ -155,8 +155,9 @@ def rebuild_haplotype_sequence(chain: List[str], config: Dict[str, Any]) -> str:
     :param config: Configuration dict containing 'constants' and 'repeats'.
     :return: Reassembled haplotype sequence.
     """
-    left_const = config["constants"]["left"]
-    right_const = config["constants"]["right"]
+    reference_assembly = config.get("reference_assembly", "hg38")
+    left_const = config["constants"][reference_assembly]["left"]
+    right_const = config["constants"][reference_assembly]["right"]
     repeats_dict = config["repeats"]
 
     seq = left_const
@@ -189,7 +190,8 @@ def apply_changes_to_repeat(
     :return: Tuple (new_seq, chain, mutated_repeat) after applying the changes.
     """
     repeats_dict = config["repeats"]
-    left_const_len = len(config["constants"]["left"])
+    reference_assembly = config.get("reference_assembly", "hg38")
+    left_const_len = len(config["constants"][reference_assembly]["left"])
 
     offset = left_const_len
     for i in range(repeat_index):

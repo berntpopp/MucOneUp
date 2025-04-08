@@ -1,19 +1,27 @@
 # Data Folder
 
-This folder contains anonymized BAM files for the MUC1 region generated for two exome designs used as templates for read simulation with [wessim](https://github.com/bioinformatics-centre/wessim). These files have been processed to include only the MUC1 region and have been anonymized for data privacy.
+This folder contains anonymized BAM files for the MUC1 region generated for various exome designs used as templates for read simulation with [wessim](https://github.com/bioinformatics-centre/wessim). These files have been processed to include only the MUC1 region and have been anonymized for data privacy.
+
+**Reference Assemblies**: All BAM files in this directory are currently mapped to the GRCh38/hg38 reference genome. Files for the GRCh37/hg19 reference assembly will be added in the future.
 
 ## Contents
 
-- **`idt_v1.bam`**: BAM file for the IDT v1 exome design (MUC1 region).
-- **`idt_v1.bam.bai`**: Index file for `idt_v1.bam`.
-- **`twist_v2.bam`**: BAM file for the Twist v2 exome design (MUC1 region).
-- **`twist_v2.bam.bai`**: Index file for `twist_v2.bam`.
-- **`agilent_v8.bam`**: BAM file for the Agilent SureSelect v8 exome design (MUC1 region).
-- **`agilent_v8.bam.bai`**: Index file for `agilent_v8.bam`.
+### hg38 (GRCh38) BAM Files
+
+- **`idt_v1_hg38.bam`**: BAM file for the IDT v1 exome design (MUC1 region, hg38).
+- **`idt_v1_hg38.bam.bai`**: Index file for `idt_v1_hg38.bam`.
+- **`twist_v2_hg38.bam`**: BAM file for the Twist v2 exome design (MUC1 region, hg38).
+- **`twist_v2_hg38.bam.bai`**: Index file for `twist_v2_hg38.bam`.
+- **`agilent_v8_hg38.bam`**: BAM file for the Agilent SureSelect v8 exome design (MUC1 region, hg38).
+- **`agilent_v8_hg38.bam.bai`**: Index file for `agilent_v8_hg38.bam`.
+
+### hg19 (GRCh37) BAM Files
+
+_Coming soon. hg19 versions will be added in the future._
 
 ## Usage
 
-These files are intended to be used as input templates for read simulation with wessim. They provide a realistic representation of the MUC1 region as captured by two different exome designs:
+These files are intended to be used as input templates for read simulation with wessim. They provide a realistic representation of the MUC1 region as captured by different exome designs:
 
 - **Twist v2**: Represents a widely used exome capture design capturing the MUC1 VNTR region.
 - **IDT v1**: Represents one alternative exome capture design capturing the MUC1 VNTR region.

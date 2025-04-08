@@ -58,8 +58,9 @@ def extract_vntr_region(seq: str, config: Dict[str, Any]) -> str:
     Returns:
         str: The VNTR region sequence.
     """
-    left = config.get("constants", {}).get("left", "")
-    right = config.get("constants", {}).get("right", "")
+    reference_assembly = config.get("reference_assembly", "hg38")
+    left = config.get("constants", {}).get(reference_assembly, {}).get("left", "")
+    right = config.get("constants", {}).get(reference_assembly, {}).get("right", "")
     if seq.startswith(left) and seq.endswith(right):
         return seq[len(left) : -len(right)]
     return seq
@@ -252,8 +253,12 @@ def generate_simulation_statistics(
     haplotype_stats = generate_haplotype_stats(simulation_results, config)
     overall_stats = generate_overall_stats(haplotype_stats)
 
+    # Get the reference assembly to include in the report
+    reference_assembly = config.get("reference_assembly", "hg38")
+
     report = {
         "runtime_seconds": runtime,
+        "reference_assembly": reference_assembly,
         "haplotype_statistics": haplotype_stats,
         "overall_statistics": overall_stats,
         "mutation_info": mutation_info if mutation_info is not None else {},
