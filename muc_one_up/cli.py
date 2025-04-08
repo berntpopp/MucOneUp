@@ -24,6 +24,13 @@ import itertools
 import time  # NEW: imported for simulation statistics timing
 
 from .mutate import apply_mutations
+from .snp_integrator import (
+    parse_snp_file,
+    generate_random_snps,
+    apply_snps_to_sequences,
+    get_vntr_boundaries,
+    write_snps_to_file,
+)
 from .read_simulation import simulate_reads as simulate_reads_pipeline
 from .simulate import simulate_diploid, simulate_from_chains
 from .translate import run_orf_finder_in_memory
@@ -34,6 +41,13 @@ from .simulation_statistics import (
     write_statistics_report,
 )  # NEW: import simulation statistics module
 from .io import parse_vntr_structure_file  # NEW: import structure file parser
+from .snp_integrator import (
+    parse_snp_file,
+    generate_random_snps,
+    apply_snps_to_sequences,
+    write_snps_to_file,
+    get_vntr_boundaries,
+)  # NEW: import SNP integrator module
 
 
 def build_parser():
@@ -187,6 +201,76 @@ def build_parser():
         choices=["hg19", "hg38"],
         help="Specify reference assembly (hg19 or hg38). Overrides the setting in config file.",
     )
+
+    # SNP Integration arguments
+    snp_group = parser.add_argument_group(
+        "SNP Integration", "Options for integrating SNPs into simulated haplotypes"
+    )
+
+    # Create mutually exclusive group for SNP sources
+    snp_source_group = snp_group.add_mutually_exclusive_group()
+
+    # File-based SNP integration
+    snp_source_group.add_argument(
+        "--snp-input-file",
+        type=str,
+        help=(
+            "Path to a TSV file defining specific SNPs to apply. Format: "
+            "haplotype_index\tposition\tref_base\talt_base. "
+            "Cannot be used with random SNP options."
+        ),
+    )
+
+    # Random SNP generation options
+    snp_source_group.add_argument(
+        "--random-snps",
+        action="store_true",
+        help="Enable random SNP generation. Cannot be used with --snp-input-file.",
+    )
+
+    # Random SNP density (required if random SNPs enabled)
+    snp_group.add_argument(
+        "--random-snp-density",
+        type=float,
+        help=(
+            "Target density of SNPs, specified as SNPs per 1000 bp "
+            "(e.g., 0.5 for 1 SNP every 2000 bp). "
+            "Required if --random-snps is used."
+        ),
+    )
+
+    # Random SNP output file (required if random SNPs enabled)
+    snp_group.add_argument(
+        "--random-snp-output-file",
+        type=str,
+        help=(
+            "Path to write the list of generated random SNPs in TSV format. "
+            "Required if --random-snps is used."
+        ),
+    )
+
+    # Random SNP region filter
+    snp_group.add_argument(
+        "--random-snp-region",
+        choices=["all", "constants_only", "vntr_only"],
+        default="constants_only",
+        help=(
+            "Apply random SNPs to specified region: all, constants_only (default), "
+            "or vntr_only. Requires --random-snps."
+        ),
+    )
+
+    # Random SNP haplotype filter
+    snp_group.add_argument(
+        "--random-snp-haplotypes",
+        choices=["all", "1", "2"],
+        default="all",
+        help=(
+            "Apply random SNPs to specified haplotypes: all (default, applied "
+            "independently), 1, or 2. Requires --random-snps."
+        ),
+    )
+
     return parser
 
 
@@ -555,6 +639,101 @@ def main():
                 out_dir, out_base, sim_index, "simulated.fa", variant="mut"
             )
             try:
+                # Process SNPs if requested (either from file or random generation)
+                applied_snp_info_normal = {}
+                applied_snp_info_mut = {}
+                snps_from_source = []
+                generated_snp_list_for_output = []
+
+                # Get current sequences for SNP application
+                normal_sequences = [seq for seq, chain in normal_results]
+                mutated_sequences = [seq for seq, chain in mutated_results]
+
+                # Check for SNP integration options
+                if args.snp_input_file:
+                    try:
+                        snps_from_source = parse_snp_file(args.snp_input_file)
+                        logging.info(
+                            f"Read {len(snps_from_source)} SNPs from {args.snp_input_file}"
+                        )
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to parse SNP input file: {e}. Skipping SNP integration."
+                        )
+                        snps_from_source = []  # Ensure it's empty if parsing fails
+                elif args.random_snps:
+                    # Validate required parameters for random SNP generation
+                    if not args.random_snp_density:
+                        logging.error(
+                            "--random-snp-density is required when --random-snps is used"
+                        )
+                        sys.exit(1)
+                    if not args.random_snp_output_file:
+                        logging.error(
+                            "--random-snp-output-file is required when --random-snps is used"
+                        )
+                        sys.exit(1)
+
+                    # Get VNTR boundaries if region filtering is used
+                    vntr_bounds_normal = get_vntr_boundaries(normal_results, config)
+
+                    # Generate random SNPs for normal sequences
+                    generated_snp_list_for_output = generate_random_snps(
+                        normal_sequences,
+                        args.random_snp_density,
+                        args.random_snp_region,
+                        args.random_snp_haplotypes,
+                        vntr_bounds_normal,
+                    )
+                    snps_from_source = generated_snp_list_for_output
+                    logging.info(f"Generated {len(snps_from_source)} random SNPs")
+
+                    # Write random SNPs to output file
+                    try:
+                        write_snps_to_file(
+                            generated_snp_list_for_output, args.random_snp_output_file
+                        )
+                        logging.info(
+                            f"Wrote {len(generated_snp_list_for_output)} SNPs to {args.random_snp_output_file}"
+                        )
+                    except Exception as e:
+                        logging.error(f"Failed to write generated SNP file: {e}")
+
+                # Apply SNPs if we have any from either source
+                if snps_from_source:
+                    # Apply to normal sequences
+                    modified_normal_sequences, applied_snp_info_normal = (
+                        apply_snps_to_sequences(normal_sequences, snps_from_source)
+                    )
+
+                    # Apply to mutated sequences - need to create a copy of the SNPs
+                    # since positions might be different due to mutations
+                    # Skip reference check for mutated sequences since mutations might have
+                    # altered the sequence at SNP positions
+                    modified_mutated_sequences, applied_snp_info_mut = (
+                        apply_snps_to_sequences(
+                            mutated_sequences,
+                            snps_from_source,
+                            skip_reference_check=True,
+                        )
+                    )
+
+                    # Replace original sequences with modified ones
+                    for i, (seq, chain) in enumerate(normal_results):
+                        normal_results[i] = (modified_normal_sequences[i], chain)
+
+                    for i, (seq, chain) in enumerate(mutated_results):
+                        mutated_results[i] = (modified_mutated_sequences[i], chain)
+
+                    normal_snps_count = sum(
+                        len(v) for v in applied_snp_info_normal.values()
+                    )
+                    mut_snps_count = sum(len(v) for v in applied_snp_info_mut.values())
+
+                    logging.info(
+                        f"Applied {normal_snps_count} SNPs to normal sequences and {mut_snps_count} SNPs to mutated sequences"
+                    )
+
                 # Add no mutation information for normal results
                 write_fasta(
                     [seq for seq, chain in normal_results],
@@ -610,6 +789,76 @@ def main():
                                 f"Mutation Applied: {mutation_name} (Targets: {mutation_targets})"
                             )
 
+                # Process SNPs if requested (either from file or random generation)
+                applied_snp_info = {}
+                snps_from_source = []
+                generated_snp_list_for_output = []
+
+                # Get current sequences for SNP application
+                current_sequences = [seq for seq, chain in results]
+
+                # Check for SNP integration options
+                if args.snp_input_file:
+                    try:
+                        snps_from_source = parse_snp_file(args.snp_input_file)
+                        logging.info(
+                            f"Read {len(snps_from_source)} SNPs from {args.snp_input_file}"
+                        )
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to parse SNP input file: {e}. Skipping SNP integration."
+                        )
+                        snps_from_source = []  # Ensure it's empty if parsing fails
+                elif args.random_snps:
+                    # Validate required parameters for random SNP generation
+                    if not args.random_snp_density:
+                        logging.error(
+                            "--random-snp-density is required when --random-snps is used"
+                        )
+                        sys.exit(1)
+                    if not args.random_snp_output_file:
+                        logging.error(
+                            "--random-snp-output-file is required when --random-snps is used"
+                        )
+                        sys.exit(1)
+
+                    # Get VNTR boundaries if region filtering is used
+                    vntr_bounds = get_vntr_boundaries(results, config)
+
+                    # Generate random SNPs
+                    generated_snp_list_for_output = generate_random_snps(
+                        current_sequences,
+                        args.random_snp_density,
+                        args.random_snp_region,
+                        args.random_snp_haplotypes,
+                        vntr_bounds,
+                    )
+                    snps_from_source = generated_snp_list_for_output
+                    logging.info(f"Generated {len(snps_from_source)} random SNPs")
+
+                    # Write random SNPs to output file
+                    try:
+                        write_snps_to_file(
+                            generated_snp_list_for_output, args.random_snp_output_file
+                        )
+                    except Exception as e:
+                        logging.error(f"Failed to write generated SNP file: {e}")
+
+                # Apply SNPs if we have any from either source
+                if snps_from_source:
+                    modified_sequences, applied_snp_info = apply_snps_to_sequences(
+                        current_sequences, snps_from_source
+                    )
+
+                    # Replace original sequences with modified ones
+                    for i, (seq, chain) in enumerate(results):
+                        results[i] = (modified_sequences[i], chain)
+
+                    logging.info(
+                        f"Applied {sum(len(v) for v in applied_snp_info.values())} SNPs to sequences"
+                    )
+
+                # Continue with FASTA output
                 write_fasta(
                     [seq for seq, chain in results],
                     out_file,
@@ -866,6 +1115,11 @@ def main():
                 config=config,
                 mutation_info={"mutation_name": "normal"},
                 vntr_coverage=vntr_coverage_stats,
+                applied_snp_info=(
+                    applied_snp_info_normal
+                    if "applied_snp_info_normal" in locals()
+                    else None
+                ),
             )
             mutated_stats_report = generate_simulation_statistics(
                 start_time=iteration_start,
@@ -874,6 +1128,9 @@ def main():
                 config=config,
                 mutation_info={"mutation_name": mutation_pair[1]},
                 vntr_coverage=vntr_coverage_stats,
+                applied_snp_info=(
+                    applied_snp_info_mut if "applied_snp_info_mut" in locals() else None
+                ),
             )
             stats_file_normal = numbered_filename(
                 out_dir, out_base, sim_index, "simulation_stats.json", variant="normal"
@@ -881,6 +1138,8 @@ def main():
             stats_file_mut = numbered_filename(
                 out_dir, out_base, sim_index, "simulation_stats.json", variant="mut"
             )
+            # For dual mutation mode, we don't have SNP info separate for each variant
+            # So we don't pass applied_snp_info here
             write_statistics_report(normal_stats_report, stats_file_normal)
             write_statistics_report(mutated_stats_report, stats_file_mut)
         else:
@@ -898,6 +1157,7 @@ def main():
                 config=config,
                 mutation_info=mutation_info,
                 vntr_coverage=vntr_coverage_stats,
+                applied_snp_info=applied_snp_info,
             )
             stats_output_file = numbered_filename(
                 out_dir, out_base, sim_index, "simulation_stats.json"

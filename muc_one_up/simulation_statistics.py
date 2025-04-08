@@ -169,6 +169,9 @@ def generate_haplotype_stats(
             "repeat_type_counts": count_repeat_types(chain),
             "mutant_repeat_count": sum(1 for r in chain if r.endswith("m")),
             "mutation_details": get_mutation_details(chain),
+            # Initialize SNP fields that will be populated later if SNPs were applied
+            "snp_count": 0,
+            "applied_snps": [],
         }
         hap_stats.append(hap_stat)
     return hap_stats
@@ -224,6 +227,7 @@ def generate_simulation_statistics(
     config: Dict[str, Any],
     mutation_info: Optional[Dict[str, Any]] = None,
     vntr_coverage: Optional[Dict[str, Any]] = None,
+    applied_snp_info: Optional[Dict[int, List[Dict[str, Any]]]] = None,
 ) -> Dict[str, Any]:
     """
     Generate a comprehensive simulation statistics report.
@@ -245,6 +249,8 @@ def generate_simulation_statistics(
             target positions). Defaults to None.
         vntr_coverage (Optional[Dict[str, Any]]): VNTR coverage statistics (e.g., from BAM files).
             Defaults to None.
+        applied_snp_info (Optional[Dict[int, List[Dict[str, Any]]]]): Dictionary mapping haplotype
+            index (0-based) to list of successfully applied SNPs. Defaults to None.
 
     Returns:
         Dict[str, Any]: Comprehensive simulation statistics.
@@ -256,6 +262,30 @@ def generate_simulation_statistics(
     # Get the reference assembly to include in the report
     reference_assembly = config.get("reference_assembly", "hg38")
 
+    # Add SNP information to haplotype statistics if available
+    if applied_snp_info:
+        # Convert to 1-indexed for consistency with other parts of the report
+        snp_info_1indexed = {}
+        for hap_idx, snps in applied_snp_info.items():
+            # Convert each SNP dictionary to a serializable form
+            # (Removing any potential complex objects like objects with __dict__ etc.)
+            serializable_snps = []
+            for snp in snps:
+                serializable_snp = {
+                    "position": snp.get("position"),
+                    "ref_base": snp.get("ref_base"),
+                    "alt_base": snp.get("alt_base"),
+                }
+                serializable_snps.append(serializable_snp)
+
+            # Store with 1-indexed haplotype
+            snp_info_1indexed[hap_idx + 1] = serializable_snps
+
+            # Add SNP count to the corresponding haplotype statistics
+            if 0 <= hap_idx < len(haplotype_stats):
+                haplotype_stats[hap_idx]["snp_count"] = len(snps)
+                haplotype_stats[hap_idx]["applied_snps"] = serializable_snps
+
     report = {
         "runtime_seconds": runtime,
         "reference_assembly": reference_assembly,
@@ -263,6 +293,7 @@ def generate_simulation_statistics(
         "overall_statistics": overall_stats,
         "mutation_info": mutation_info if mutation_info is not None else {},
         "vntr_coverage": vntr_coverage if vntr_coverage is not None else {},
+        "snp_info": snp_info_1indexed if applied_snp_info else {},
     }
     return report
 

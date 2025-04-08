@@ -167,6 +167,10 @@ Below are the available **command-line arguments**. Use `muconeup --help` for mo
 | `--orf-min-aa <int>`           | Minimum peptide length (in amino acids) to report from ORF prediction. Defaults to 100.                                                                                                                                                                                                                                                           |
 | `--orf-aa-prefix <str>`        | (Optional) Filter resulting peptides to only those beginning with this prefix. If used without a value, defaults to `MTSSV`. If omitted, no prefix filtering is applied.                                                                                                                                                                     |
 | `--simulate-reads`             | (Optional) If provided, run the read simulation pipeline on the simulated FASTA. This pipeline produces an aligned/indexed BAM and gzipped paired FASTQ files.                                                                                                                                                                              |
+| `--random-snps`                | (Optional) If provided, generate random SNPs and integrate them into the simulated sequences.                                                                                                                                                                                                                                          |
+| `--random-snp-density <float>` | Density of random SNPs to generate (SNPs per kilobase). Defaults to 1.0.                                                                                                                                                                                                                                                               |
+| `--random-snp-output-file <path>` | (Optional) Path to a file where generated random SNPs will be saved in TSV format.                                                                                                                                                                                                                                               |
+| `--snp-file <path>`            | (Optional) Path to a TSV file containing predefined SNPs to integrate into the simulated sequences.                                                                                                                                                                                                                                     |
 | `--log-level <level>`          | Set logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE). Default is INFO.                                                                                                                                                                                                                                                              |
 
 ### Example Commands
@@ -282,6 +286,58 @@ The read simulation pipeline simulates Illumina reads from the generated FASTA f
 - Simulate fragments and create reads using the w‑Wessim2 port.
 - Split the interleaved FASTQ into paired FASTQ files.
 - Align the reads to a human reference.
+
+---
+
+## SNP Integration
+
+MucOneUp supports the integration of Single Nucleotide Polymorphisms (SNPs) into simulated sequences. This feature allows for more realistic simulations by incorporating natural genetic variation. SNPs can be integrated in two ways:
+
+1. **From a predefined file** using the `--snp-file` parameter.
+2. **Generated randomly** using the `--random-snps` parameter and a specified density.
+
+### SNP File Format
+
+The SNP file format is tab-separated (TSV) with the following columns:
+
+- **haplotype** (1-based): The haplotype index (1 or 2 for diploid)
+- **position** (0-based): Position in the haplotype sequence
+- **ref_base**: Expected reference base at the position
+- **alt_base**: Alternative base to introduce
+
+Example SNP file content:
+```
+haplotype	position	ref_base	alt_base
+1	125	A	G
+2	236	C	T
+```
+
+### Random SNP Generation
+
+When using `--random-snps`, MucOneUp will:
+
+1. Generate random SNPs based on the specified density (SNPs per kilobase).
+2. Ensure SNPs are distributed across both haplotypes.
+3. Save the generated SNPs to a file if `--random-snp-output-file` is provided.
+
+### Dual Mutation Mode and SNPs
+
+In dual mutation mode (using `--mutation-name normal,dupC`), SNPs are applied to both the normal and mutated sequences. For mutated sequences, the `skip_reference_check` option is automatically enabled, allowing SNPs to be applied even when mutations have altered the original reference bases.
+
+This is particularly useful when you want to simulate scenarios where both structural mutations and SNPs are present in the sample, providing a more realistic representation of genetic diversity.
+
+### Example Commands
+
+```bash
+# Generate random SNPs with specified density
+muconeup --config config.json --out-base muc1_with_snps --random-snps --random-snp-density 0.5 --random-snp-output-file output/muc1_random_snps.tsv
+
+# Apply SNPs from a predefined file
+muconeup --config config.json --out-base muc1_with_predefined_snps --snp-file my_snps.tsv
+
+# Combine dual mutation mode with SNP integration
+muconeup --config config.json --out-base muc1_dual_with_snps --mutation-name normal,dupC --random-snps
+```
 
 ---
 
