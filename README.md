@@ -12,13 +12,21 @@
 7. **Generate Comprehensive Simulation Statistics:**  
    For each simulation run, detailed statistics are generated—including simulation runtime, haplotype-level metrics (repeat counts, VNTR lengths, GC content, repeat length summaries, and mutation details), as well as overall aggregated statistics. In dual simulation mode, separate reports are produced for the normal and mutated outputs.
 
-Additionally, the **read simulation** pipeline has been integrated with a port of [w‑Wessim2](https://github.com/GeorgetteTanner/w-Wessim2). This pipeline simulates Illumina reads from the simulated FASTA by:
-- Replacing Ns and generating systematic errors using external tools.
-- Converting the FASTA to 2bit format.
-- Extracting a subset reference from a sample BAM.
-- Running pblat for alignment.
-- Generating fragments and creating reads using the w‑Wessim2 port.
-- Splitting interleaved FASTQ into paired FASTQ files and aligning the reads to a human reference.
+Additionally, MucOneUp supports **multiple read simulation pipelines**:
+
+**For Illumina reads**, we use a port of [w‑Wessim2](https://github.com/GeorgetteTanner/w-Wessim2). This pipeline simulates reads from the simulated FASTA by:
+- Replacing Ns and generating systematic errors using external tools
+- Converting the FASTA to 2bit format
+- Extracting a subset reference from a sample BAM
+- Running pblat for alignment
+- Generating fragments and creating reads using the w‑Wessim2 port
+- Splitting interleaved FASTQ into paired FASTQ files and aligning to a human reference
+
+**For Oxford Nanopore (ONT) reads**, we integrate [NanoSim](https://github.com/bcgsc/NanoSim) to generate realistic long reads with the error profiles characteristic of nanopore sequencing. This pipeline:
+- Uses pre-trained models specific to ONT technologies
+- Simulates long reads with realistic error profiles
+- Aligns reads to the reference using minimap2
+- Generates alignment files in BAM format
 
 ---
 
@@ -49,14 +57,19 @@ Additionally, the **read simulation** pipeline has been integrated with a port o
    ```
    This will install the `muc_one_up` Python package locally.
 
-> **Optional (Conda/Mamba Environment for Read Simulation):**  
-> To install all required external tools for the read simulation pipeline using conda/mamba, run:
+> **Optional (Conda/Mamba Environments for Read Simulation):**  
 > 
+> For **Illumina read simulation** with w-Wessim2, create the environment:
 > ```bash
 > mamba env create -f conda/env_wessim.yaml
 > ```
 > 
-> After creating the environment, update the `tools` section in your configuration file to reference the executables from the newly created environment. Alternatively, you can install the tools locally.
+> For **ONT read simulation** with NanoSim, create the environment:
+> ```bash
+> mamba env create -f conda/env_nanosim.yaml
+> ```
+> 
+> After creating these environments, update the `tools` section in your configuration file to reference the executables from the newly created environments. Alternatively, you can install the tools locally.
 
 Once installed, you’ll have a command-line program called **`muconeup`** available.
 
@@ -102,7 +115,9 @@ update the `human_reference` field in the `read_simulation` section accordingly.
     "faToTwoBit": "mamba run --no-capture-output -n env_wessim faToTwoBit",
     "samtools": "mamba run --no-capture-output -n env_wessim samtools",
     "pblat": "mamba run --no-capture-output -n env_wessim pblat",
-    "bwa": "mamba run --no-capture-output -n env_wessim bwa"
+    "bwa": "mamba run --no-capture-output -n env_wessim bwa",
+    "nanosim": "mamba run --no-capture-output -n env_nanosim simulator.py",
+    "minimap2": "mamba run --no-capture-output -n env_nanosim minimap2"
   },
   "read_simulation": {
     "reseq_model": "/path/to/references/Hs-Nova-TruSeq.reseq",
@@ -276,6 +291,8 @@ The statistics are saved as JSON files (e.g., `muc1_simulated.002.simulation_sta
 ---
 
 ## Read Simulation Integration
+
+### Illumina Read Simulation
 
 The read simulation pipeline simulates Illumina reads from the generated FASTA files. This pipeline leverages external tools (reseq, faToTwoBit, samtools, pblat, bwa) and incorporates a port of [w‑Wessim2](https://github.com/GeorgetteTanner/w-Wessim2) to:
 
@@ -559,6 +576,14 @@ A simplified example:
     "fragment_size": 250,
     "fragment_sd": 35,
     "min_fragment": 20,
+    "threads": 8
+  },
+  "nanosim_params": {
+    "training_data_path": "reference/nanosim/human_giab_hg002_sub1M_kitv14_dorado_v3.2.1",
+    "coverage": 30,
+    "read_type": "ONT",
+    "min_read_length": 100,
+    "max_read_length": 100000,
     "threads": 8
   }
 }

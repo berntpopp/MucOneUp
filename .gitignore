@@ -173,8 +173,9 @@ cython_debug/
 # reference folder
 reference/
 
-# outout folder
+# outout and test folder
 output/
+test/
 
 # bed files
 data/bed/_muc1_regions/

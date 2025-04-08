@@ -22,9 +22,11 @@ import gzip
 import hashlib
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 from typing import Any, Dict
 
@@ -215,6 +217,7 @@ def process_reference(
     skip_indexing: bool,
     bwa_path: str,
     gatk_path: str,
+    minimap2_path: str,
     force: bool,
 ) -> str:
     """Download, verify, extract, index (if needed), and generate a sequence dictionary (if configured) for a single reference.
@@ -245,8 +248,41 @@ def process_reference(
     download_file(url, target_path)
     calculate_md5(target_path)
 
+    # Check if this is a tar file that needs extraction
+    if ref_info.get("extract_tar", False) and (
+        str(target_path).endswith(".tar.gz") or str(target_path).endswith(".tar")
+    ):
+        extract_path = ref_info.get("extract_path")
+        if not extract_path:
+            extract_path = target_path.stem
+            if extract_path.endswith(".tar"):
+                extract_path = extract_path[:-4]  # Remove .tar suffix if present
+
+        extract_dir = output_dir / extract_path
+        if extract_dir.exists() and not force:
+            logging.info(
+                "Extracted directory %s already exists, skipping extraction.",
+                extract_dir,
+            )
+            installed_path = extract_dir
+        else:
+            if force and extract_dir.exists() and extract_dir.is_dir():
+                logging.info(
+                    "Force enabled, removing existing extracted directory: %s",
+                    extract_dir,
+                )
+                shutil.rmtree(extract_dir)
+            # Extract the tar file
+            with tarfile.open(target_path) as tar:
+                extract_dir.mkdir(parents=True, exist_ok=True)
+                logging.info("Extracting %s to %s", target_path, extract_dir)
+                tar.extractall(path=extract_dir)
+            installed_path = extract_dir
+            logging.info(
+                "Successfully extracted %s to %s", target_path.name, extract_dir
+            )
     # If the file is gzip-compressed, check for extracted file and extract if needed.
-    if target_path.suffix == ".gz":
+    elif target_path.suffix == ".gz":
         extracted_path = target_path.with_suffix("")
         if extracted_path.exists() and not force:
             logging.info(
@@ -289,6 +325,29 @@ def process_reference(
             execute_index_command(command, installed_path)
     elif index_command:
         logging.info("Skipping indexing for %s", ref_name)
+
+    # Run minimap2 indexing command if provided and not skipped
+    minimap2_index_command = ref_info.get("minimap2_index_command")
+    if minimap2_index_command and not skip_indexing:
+        # Check for .mmi index file
+        index_file = Path(str(installed_path) + ".mmi")
+        if index_file.exists() and not force:
+            logging.info(
+                "Minimap2 index file already exists for %s. Skipping indexing.",
+                installed_path.name,
+            )
+        else:
+            if force and index_file.exists():
+                logging.info(
+                    "Force enabled, removing existing minimap2 index file: %s",
+                    index_file,
+                )
+                index_file.unlink()
+            command = minimap2_index_command.replace("minimap2", minimap2_path)
+            logging.info("Executing minimap2 indexing command for %s", ref_name)
+            execute_index_command(command, installed_path)
+    elif minimap2_index_command:
+        logging.info("Skipping minimap2 indexing for %s", ref_name)
 
     # Run sequence dictionary command if provided.
     seq_dict_command = ref_info.get("seq_dict_command")
@@ -346,6 +405,7 @@ def main() -> None:
     config = load_config(args.config)
     bwa_path = config.get("bwa_path", "bwa")
     gatk_path = config.get("gatk_path", "gatk")
+    minimap2_path = config.get("minimap2_path", "minimap2")
     references = config.get("references", {})
 
     if not references:
@@ -362,6 +422,7 @@ def main() -> None:
             args.skip_indexing,
             bwa_path,
             gatk_path,
+            minimap2_path,
             args.force,
         )
         installed_refs[ref_name] = installed_path

@@ -180,13 +180,17 @@ def build_parser():
             "If used without a value, defaults to 'MTSSV'. If omitted, no prefix filter is applied."
         ),
     )
-    # Read simulation flag.
+    # Read simulation options.
     parser.add_argument(
         "--simulate-reads",
-        action="store_true",
+        nargs="?",
+        const="illumina",
+        choices=["illumina", "ont"],
         help=(
-            "If provided, run the read simulation pipeline on the simulated FASTA. "
-            "This pipeline produces an aligned and indexed BAM and gzipped paired FASTQ files."
+            "Run the read simulation pipeline on the simulated FASTA. "
+            "Specify 'illumina' for short reads (via reseq/WeSSim) or 'ont' for Oxford Nanopore long reads (via NanoSim). "
+            "If used without a value, defaults to 'illumina'. "
+            "This pipeline produces an aligned and indexed BAM and FASTQ files."
         ),
     )
     parser.add_argument(
@@ -1047,6 +1051,16 @@ def main():
 
         # Run read simulation pipeline if requested.
         if args.simulate_reads:
+            # Set the simulator in the config based on CLI argument
+            if "read_simulation" not in config:
+                config["read_simulation"] = {}
+            config["read_simulation"]["simulator"] = args.simulate_reads
+
+            simulator_type = args.simulate_reads
+            simulator_name = (
+                "Oxford Nanopore" if simulator_type == "ont" else "Illumina"
+            )
+
             if dual_mutation_mode:
                 normal_fa_for_reads = numbered_filename(
                     out_dir, out_base, sim_index, "simulated.fa", variant="normal"
@@ -1056,32 +1070,40 @@ def main():
                 )
                 try:
                     logging.info(
-                        "Starting read simulation pipeline for iteration %d (normal variant).",
+                        "Starting %s read simulation pipeline for iteration %d (normal variant).",
+                        simulator_name,
                         sim_index,
                     )
                     simulate_reads_pipeline(config, normal_fa_for_reads)
                     logging.info(
-                        "Read simulation pipeline completed for iteration %d (normal variant).",
+                        "%s read simulation pipeline completed for iteration %d (normal variant).",
+                        simulator_name,
                         sim_index,
                     )
                 except Exception as e:
                     logging.error(
-                        "Read simulation pipeline (normal variant) failed: %s", e
+                        "%s read simulation pipeline (normal variant) failed: %s",
+                        simulator_name,
+                        e,
                     )
                     sys.exit(1)
                 try:
                     logging.info(
-                        "Starting read simulation pipeline for iteration %d (mutated variant).",
+                        "Starting %s read simulation pipeline for iteration %d (mutated variant).",
+                        simulator_name,
                         sim_index,
                     )
                     simulate_reads_pipeline(config, mut_fa_for_reads)
                     logging.info(
-                        "Read simulation pipeline completed for iteration %d (mutated variant).",
+                        "%s read simulation pipeline completed for iteration %d (mutated variant).",
+                        simulator_name,
                         sim_index,
                     )
                 except Exception as e:
                     logging.error(
-                        "Read simulation pipeline (mutated variant) failed: %s", e
+                        "%s read simulation pipeline (mutated variant) failed: %s",
+                        simulator_name,
+                        e,
                     )
                     sys.exit(1)
             else:
@@ -1090,15 +1112,20 @@ def main():
                 )
                 try:
                     logging.info(
-                        "Starting read simulation pipeline for iteration %d.", sim_index
+                        "Starting %s read simulation pipeline for iteration %d.",
+                        simulator_name,
+                        sim_index,
                     )
                     simulate_reads_pipeline(config, sim_fa_for_reads)
                     logging.info(
-                        "Read simulation pipeline completed for iteration %d.",
+                        "%s read simulation pipeline completed for iteration %d.",
+                        simulator_name,
                         sim_index,
                     )
                 except Exception as e:
-                    logging.error("Read simulation pipeline failed: %s", e)
+                    logging.error(
+                        "%s read simulation pipeline failed: %s", simulator_name, e
+                    )
                     sys.exit(1)
 
         # ----------------------------------------------------------------

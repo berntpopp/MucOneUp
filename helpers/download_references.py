@@ -2,24 +2,34 @@
 """
 download_references.py
 
-A helper script to download MUC1 reference sequences for both hg19 and hg38 assemblies.
+A helper script to download MUC1 reference sequences for both hg19 and hg38 assemblies,
+and set up the required references for both Illumina and Oxford Nanopore sequencing.
+
 This script:
 1. Downloads left and right flanking regions of the MUC1 VNTR for both assemblies
 2. Updates the config.json file with the downloaded sequences
 3. Handles reverse complementing when necessary (MUC1 is on the negative strand)
+4. Sets up NanoSim model for Oxford Nanopore simulation
+5. Creates minimap2 indices for human reference genomes
 
 Usage:
     python download_references.py [--config CONFIG_PATH]
 
 Args:
     --config: Path to the configuration file (default: ../config.json)
+    --references-dir: Path to the references directory (default: ../reference)
+    --setup-nanosim: Flag to download and set up NanoSim models
+    --create-minimap2-index: Flag to create minimap2 indices for human references
 """
 
 import argparse
 import json
 import logging
 import os
+import shutil
+import subprocess
 import sys
+import tarfile
 from pathlib import Path
 import requests
 import xml.etree.ElementTree as ET
@@ -242,10 +252,124 @@ def update_config_with_sequences(
         return False
 
 
+def download_nanosim_model(output_dir, force=False):
+    """Download and extract the NanoSim model.
+
+    Args:
+        output_dir: Directory to store the NanoSim model
+        force: Force download even if model exists
+
+    Returns:
+        Path to the extracted model directory
+    """
+    # NanoSim model URL
+    model_url = "https://github.com/bcgsc/NanoSim/raw/master/pre-trained_models/human_giab_hg002_sub1M_kitv14_dorado_v3.2.1.tar.gz"
+    model_name = "human_giab_hg002_sub1M_kitv14_dorado_v3.2.1"
+
+    # Create nanosim directory in output_dir
+    nanosim_dir = Path(output_dir) / "nanosim"
+    nanosim_dir.mkdir(parents=True, exist_ok=True)
+
+    # Paths for downloaded and extracted files
+    tar_path = nanosim_dir / f"{model_name}.tar.gz"
+    extract_path = nanosim_dir / model_name
+
+    # Check if model already exists
+    if extract_path.exists() and not force:
+        logging.info(f"NanoSim model already exists at {extract_path}")
+        return extract_path
+
+    # Download the model
+    logging.info(f"Downloading NanoSim model from {model_url}")
+    try:
+        response = requests.get(model_url, stream=True)
+        response.raise_for_status()
+        with open(tar_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        logging.info(f"Downloaded NanoSim model to {tar_path}")
+    except Exception as e:
+        logging.error(f"Failed to download NanoSim model: {e}")
+        return None
+
+    # Extract the model
+    try:
+        if extract_path.exists() and force:
+            logging.info(f"Removing existing model directory: {extract_path}")
+            shutil.rmtree(extract_path)
+
+        extract_path.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(tar_path) as tar:
+            tar.extractall(path=extract_path)
+        logging.info(f"Extracted NanoSim model to {extract_path}")
+        return extract_path
+    except Exception as e:
+        logging.error(f"Failed to extract NanoSim model: {e}")
+        return None
+
+
+def create_minimap2_index(reference_path, output_dir, minimap2_cmd="minimap2"):
+    """Create a minimap2 index for the reference genome.
+
+    Args:
+        reference_path: Path to the reference genome FASTA
+        output_dir: Directory to store the index
+        minimap2_cmd: Command to run minimap2 (default: 'minimap2')
+
+    Returns:
+        Path to the created index file
+    """
+    # Check if reference exists
+    ref_path = Path(reference_path)
+    if not ref_path.exists():
+        logging.error(f"Reference file not found: {reference_path}")
+        return None
+
+    # Create index path
+    index_path = Path(output_dir) / f"{ref_path.name}.mmi"
+
+    # Check if index already exists
+    if index_path.exists():
+        logging.info(f"Minimap2 index already exists at {index_path}")
+        return index_path
+
+    # Create the index
+    logging.info(f"Creating minimap2 index for {reference_path}")
+    try:
+        # Convert paths to strings to avoid any path parsing issues
+        ref_path_str = str(ref_path)
+        index_path_str = str(index_path)
+
+        # Construct the command
+        # We use "mamba run" with env_nanosim to ensure correct environment
+        cmd = f"mamba run --no-capture-output -n env_nanosim {minimap2_cmd} -d {index_path_str} {ref_path_str}"
+        logging.info(f"Running command: {cmd}")
+
+        # Run the command
+        subprocess.run(
+            cmd,
+            shell=True,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        logging.info(f"Successfully created minimap2 index at {index_path}")
+        return index_path
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to create minimap2 index: {e}")
+        logging.error(f"Command output: {e.stdout}")
+        logging.error(f"Command error: {e.stderr}")
+        return None
+    except Exception as e:
+        logging.error(f"Error creating minimap2 index: {e}")
+        return None
+
+
 def main():
     """Main function to download references and update config."""
     parser = argparse.ArgumentParser(
-        description="Download reference sequences for MUC1 region in hg19 and hg38."
+        description="Download reference sequences for MUC1 region in hg19 and hg38 and set up NanoSim models."
     )
     parser.add_argument(
         "--config",
@@ -253,6 +377,13 @@ def main():
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json"
         ),
         help="Path to the configuration file",
+    )
+    parser.add_argument(
+        "--references-dir",
+        default=os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "reference"
+        ),
+        help="Path to the references directory",
     )
     parser.add_argument(
         "--padding",
@@ -266,6 +397,26 @@ def main():
         default="both",
         help="Which assembly to download references for (default: both)",
     )
+    parser.add_argument(
+        "--download-flanking",
+        action="store_true",
+        help="Download flanking regions for MUC1 VNTR",
+    )
+    parser.add_argument(
+        "--setup-nanosim",
+        action="store_true",
+        help="Download and set up NanoSim models",
+    )
+    parser.add_argument(
+        "--create-minimap2-index",
+        action="store_true",
+        help="Create minimap2 indices for human references",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force download and extraction even if files exist",
+    )
 
     args = parser.parse_args()
 
@@ -274,39 +425,115 @@ def main():
         logging.error(f"Config file not found: {args.config}")
         sys.exit(1)
 
-    # Load the config to get the VNTR regions
+    # Check if any specific operations are requested
+    specific_ops_requested = (
+        args.download_flanking or args.setup_nanosim or args.create_minimap2_index
+    )
+
+    # Load the config
     with open(args.config, "r") as f:
         config = json.load(f)
 
+    # Process assembly choice
     assemblies = []
     if args.assembly == "both":
         assemblies = ["hg19", "hg38"]
     else:
         assemblies = [args.assembly]
 
-    for assembly in assemblies:
-        try:
-            vntr_region_key = f"vntr_region_{assembly}"
-            vntr_region = config["read_simulation"][vntr_region_key]
+    # Download flanking regions if explicitly requested or if no specific operations are requested
+    if args.download_flanking or not specific_ops_requested:
+        for assembly in assemblies:
+            try:
+                # Try to get the vntr_region from constants first
+                if "vntr_region" in config["constants"][assembly]:
+                    vntr_region = config["constants"][assembly]["vntr_region"]
+                else:
+                    # Fall back to read_simulation section
+                    vntr_region_key = f"vntr_region_{assembly}"
+                    vntr_region = config["read_simulation"][vntr_region_key]
 
-            logging.info(
-                f"Downloading {assembly} flanking regions for VNTR: {vntr_region}"
-            )
-            left_seq, right_seq = download_flanking_regions(
-                assembly, vntr_region, args.padding
-            )
-
-            if left_seq and right_seq:
                 logging.info(
-                    f"Downloaded {assembly} sequences: LEFT={len(left_seq)}bp, RIGHT={len(right_seq)}bp"
+                    f"Downloading {assembly} flanking regions for VNTR: {vntr_region}"
                 )
-                update_config_with_sequences(args.config, assembly, left_seq, right_seq)
+                left_seq, right_seq = download_flanking_regions(
+                    assembly, vntr_region, args.padding
+                )
+
+                if left_seq and right_seq:
+                    logging.info(
+                        f"Downloaded {assembly} sequences: LEFT={len(left_seq)}bp, RIGHT={len(right_seq)}bp"
+                    )
+                    update_config_with_sequences(
+                        args.config, assembly, left_seq, right_seq
+                    )
+                else:
+                    logging.error(f"Failed to download {assembly} sequences")
+            except KeyError as e:
+                logging.error(f"Missing key in config: {e}")
+            except Exception as e:
+                logging.error(f"Error processing {assembly}: {e}")
+
+    # Setup NanoSim models if requested
+    if args.setup_nanosim or not specific_ops_requested:
+        logging.info("Setting up NanoSim models...")
+        nanosim_model_path = download_nanosim_model(args.references_dir, args.force)
+        if nanosim_model_path:
+            # Update the config with the NanoSim model path
+            try:
+                with open(args.config, "r") as f:
+                    config = json.load(f)
+
+                # Update the NanoSim training model path in config
+                if "nanosim_params" in config:
+                    rel_path = os.path.relpath(
+                        nanosim_model_path, os.path.dirname(args.config)
+                    )
+                    config["nanosim_params"]["training_data_path"] = str(rel_path)
+                    logging.info(f"Updated config with NanoSim model path: {rel_path}")
+
+                    # Write the updated config
+                    with open(args.config, "w") as f:
+                        json.dump(config, f, indent=2)
+                else:
+                    logging.warning(
+                        "nanosim_params section not found in config, could not update model path"
+                    )
+            except Exception as e:
+                logging.error(f"Error updating config with NanoSim model path: {e}")
+
+    # Create minimap2 indices if requested
+    if args.create_minimap2_index or not specific_ops_requested:
+        logging.info("Creating minimap2 indices for human references...")
+        try:
+            with open(args.config, "r") as f:
+                config = json.load(f)
+
+            # Get the human reference path from config
+            human_reference = config.get("read_simulation", {}).get("human_reference")
+            if human_reference:
+                # Convert to absolute path
+                if not os.path.isabs(human_reference):
+                    human_reference = os.path.join(
+                        os.path.dirname(args.config), human_reference
+                    )
+
+                # Ensure the path exists
+                if not os.path.exists(human_reference):
+                    logging.error(f"Human reference file not found: {human_reference}")
+                else:
+                    # Create the index
+                    index_path = create_minimap2_index(
+                        human_reference, os.path.dirname(human_reference)
+                    )
+                if index_path:
+                    logging.info(f"Successfully created minimap2 index at {index_path}")
             else:
-                logging.error(f"Failed to download {assembly} sequences")
-        except KeyError as e:
-            logging.error(f"Missing key in config: {e}")
+                logging.warning(
+                    "human_reference not found in config, could not create minimap2 index"
+                )
         except Exception as e:
-            logging.error(f"Error processing {assembly}: {e}")
+            logging.error(f"Error creating minimap2 index: {e}")
 
     logging.info("Reference download process completed.")
 
