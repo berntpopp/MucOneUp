@@ -1,5 +1,5 @@
 import pytest
-from muc_one_up.mutate import apply_mutations
+from muc_one_up.mutate import apply_mutations, validate_allowed_repeats
 
 
 @pytest.fixture
@@ -14,7 +14,16 @@ def mutation_config():
             "testMut": {
                 "allowed_repeats": ["X"],
                 "changes": [{"type": "replace", "start": 2, "end": 2, "sequence": "Z"}],
-            }
+            },
+            "strictMut": {
+                "allowed_repeats": ["X"],
+                "strict_mode": True,
+                "changes": [{"type": "replace", "start": 2, "end": 2, "sequence": "Z"}],
+            },
+            "invalidAllowedMut": {
+                "allowed_repeats": ["Y"],  # Y is not a valid repeat
+                "changes": [{"type": "replace", "start": 2, "end": 2, "sequence": "Z"}],
+            },
         },
     }
 
@@ -102,3 +111,68 @@ def test_apply_mutations_out_of_range(mutation_config):
             targets=[(1, 1)],
         )
     assert "out of bounds" in str(exc.value)
+
+
+def test_validate_allowed_repeats():
+    """
+    Test that validate_allowed_repeats correctly identifies invalid repeat symbols.
+    """
+    config = {"repeats": {"X": "XXXXX", "C": "CCCCC"}}
+
+    # Valid repeats should not raise an error
+    mutation_def = {"allowed_repeats": ["X", "C"]}
+    valid_repeats = validate_allowed_repeats(mutation_def, config)
+    assert valid_repeats == {"X", "C"}
+
+    # Invalid repeats should raise an error
+    mutation_def = {"allowed_repeats": ["X", "Y", "Z"]}
+    with pytest.raises(ValueError) as exc:
+        validate_allowed_repeats(mutation_def, config)
+    assert "Invalid repeats in allowed_repeats" in str(exc.value)
+    assert "Y, Z" in str(exc.value)
+    assert "Valid repeats are: C, X" in str(exc.value)
+
+
+def test_strict_mode_enforcement(mutation_config):
+    """
+    Test that strict mode raises an error when encountering a disallowed repeat.
+    """
+    results = [
+        (
+            "TTTTCCCCC",
+            ["C"],
+        ),  # Chain has symbol "C" but strict mutation only allows "X"
+    ]
+
+    # In strict mode, an error should be raised
+    with pytest.raises(ValueError) as exc:
+        apply_mutations(
+            config=mutation_config,
+            results=results,
+            mutation_name="strictMut",
+            targets=[(1, 1)],
+        )
+    assert "Cannot apply mutation 'strictMut'" in str(exc.value)
+    assert "Repeat symbol 'C' is not in allowed_repeats" in str(exc.value)
+
+    # With non-strict mutation, it should force a change (tested in test_apply_mutations_forced_change)
+
+
+def test_invalid_allowed_repeats_in_mutations(mutation_config):
+    """
+    Test that using a mutation with invalid allowed_repeats raises an error.
+    """
+    results = [
+        ("TTTTCCCCC", ["C"]),
+    ]
+
+    with pytest.raises(ValueError) as exc:
+        apply_mutations(
+            config=mutation_config,
+            results=results,
+            mutation_name="invalidAllowedMut",
+            targets=[(1, 1)],
+        )
+    assert "Invalid repeats in allowed_repeats" in str(exc.value)
+    assert "Y" in str(exc.value)
+    assert "Valid repeats are: C, X" in str(exc.value)

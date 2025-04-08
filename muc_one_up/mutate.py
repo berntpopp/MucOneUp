@@ -1,8 +1,40 @@
 import random
 import logging
+from typing import Dict, List, Tuple, Any, Set
 
 
-def apply_mutations(config, results, mutation_name, targets):
+def validate_allowed_repeats(
+    mutation_def: Dict[str, Any], config: Dict[str, Any]
+) -> Set[str]:
+    """
+    Validate that the allowed_repeats in a mutation definition are valid repeat symbols.
+
+    :param mutation_def: Mutation definition from config["mutations"][name].
+    :param config: The entire config dict containing the "repeats" section.
+    :return: Set of validated allowed repeat symbols.
+    :raises ValueError: If any allowed repeat is not a valid repeat symbol.
+    """
+    allowed_repeats = set(mutation_def.get("allowed_repeats", []))
+    valid_repeats = set(config["repeats"].keys())
+
+    invalid_repeats = allowed_repeats - valid_repeats
+    if invalid_repeats:
+        valid_repeats_str = ", ".join(sorted(valid_repeats))
+        invalid_repeats_str = ", ".join(sorted(invalid_repeats))
+        raise ValueError(
+            f"Invalid repeats in allowed_repeats: {invalid_repeats_str}. "
+            f"Valid repeats are: {valid_repeats_str}"
+        )
+
+    return allowed_repeats
+
+
+def apply_mutations(
+    config: Dict[str, Any],
+    results: List[Tuple[str, List[str]]],
+    mutation_name: str,
+    targets: List[Tuple[int, int]],
+) -> Tuple[List[Tuple[str, List[str]]], Dict[int, List[Tuple[int, str]]]]:
     """
     Apply a single named mutation to one or more haplotypes at specific repeat indices,
     and record the mutated VNTR unit(s).
@@ -26,7 +58,16 @@ def apply_mutations(config, results, mutation_name, targets):
         )
 
     mutation_def = config["mutations"][mutation_name]
-    allowed_repeats = mutation_def["allowed_repeats"]
+
+    # Validate that allowed_repeats only contains valid repeat symbols
+    try:
+        allowed_repeats = validate_allowed_repeats(mutation_def, config)
+    except ValueError as e:
+        logging.error(f"In mutation '{mutation_name}': {e}")
+        raise
+
+    # Check if strict mode is enabled for this mutation
+    strict_mode = mutation_def.get("strict_mode", False)
     changes = mutation_def["changes"]
 
     updated_results = list(results)
@@ -51,19 +92,33 @@ def apply_mutations(config, results, mutation_name, targets):
 
         current_symbol = chain[repeat_index]
 
-        # Force a change if the current symbol is not allowed.
-        if current_symbol not in allowed_repeats:
+        # Handle the case where the current symbol is not in allowed_repeats
+        current_symbol_clean = current_symbol.replace("m", "")
+        if current_symbol_clean not in allowed_repeats:
             if not allowed_repeats:
                 raise ValueError(
                     f"Mutation '{mutation_name}' has no allowed_repeats, cannot fix symbol."
                 )
-            new_symbol = random.choice(allowed_repeats)
-            logging.debug(
-                "Forcing change at haplotype %d, repeat %d: %s -> %s",
+
+            # If in strict mode, raise an error instead of forcing a change
+            if strict_mode:
+                valid_repeats_str = ", ".join(sorted(allowed_repeats))
+                raise ValueError(
+                    f"Cannot apply mutation '{mutation_name}' at haplotype {hap_i}, "
+                    f"repeat {rep_i}: Repeat symbol '{current_symbol_clean}' is not in "
+                    f"allowed_repeats: {valid_repeats_str}. Set strict_mode=false to "
+                    f"allow automatic conversion."
+                )
+
+            # In non-strict mode, force a change to a random allowed repeat
+            new_symbol = random.choice(list(allowed_repeats))
+            logging.warning(
+                "Forcing change at haplotype %d, repeat %d: %s -> %s for mutation '%s'",
                 hap_i,
                 rep_i,
-                current_symbol,
+                current_symbol_clean,
                 new_symbol,
+                mutation_name,
             )
             chain[repeat_index] = new_symbol
             seq = rebuild_haplotype_sequence(chain, config)
@@ -92,7 +147,7 @@ def apply_mutations(config, results, mutation_name, targets):
     return updated_results, mutated_units
 
 
-def rebuild_haplotype_sequence(chain, config):
+def rebuild_haplotype_sequence(chain: List[str], config: Dict[str, Any]) -> str:
     """
     Rebuild the haplotype sequence from the chain of repeats and constant flanks.
 
@@ -113,7 +168,14 @@ def rebuild_haplotype_sequence(chain, config):
     return seq
 
 
-def apply_changes_to_repeat(seq, chain, repeat_index, changes, config, mutation_name):
+def apply_changes_to_repeat(
+    seq: str,
+    chain: List[str],
+    repeat_index: int,
+    changes: List[Dict[str, Any]],
+    config: Dict[str, Any],
+    mutation_name: str,
+) -> Tuple[str, List[str], str]:
     """
     Modify the substring of 'seq' corresponding to chain[repeat_index] using the
     list of changes from the mutation definition.

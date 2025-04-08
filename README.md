@@ -371,6 +371,65 @@ muc_one_up/
 
 ---
 
+## Mutation Strict Mode
+
+MucOneUp provides two modes for handling mutations when the target repeat is not in the mutation's `allowed_repeats` list:
+
+### Default Mode (Auto-conversion)
+
+By default, when a mutation is applied to a repeat that isn't listed in the `allowed_repeats` for that mutation:
+
+1. The system automatically changes the target repeat to a randomly chosen repeat from the `allowed_repeats` list
+2. A warning message is logged indicating this forced change
+3. The simulation continues with the substituted repeat type
+
+This behavior ensures simulations complete successfully even when target repeats don't match what the mutation allows.
+
+### Strict Mode
+
+When you need more precise control, enable strict mode by setting `"strict_mode": true` in a mutation definition:
+
+```json
+"mutations": {
+  "myMutation": {
+    "allowed_repeats": ["X", "C"],
+    "strict_mode": true,
+    "changes": [
+      // mutation changes here
+    ]
+  }
+}
+```
+
+With strict mode enabled:
+
+1. The system validates target repeats before applying mutations
+2. If a target repeat isn't in the `allowed_repeats` list, an error is raised with a detailed message
+3. The simulation stops instead of automatically changing the repeat type
+
+### Important Behavior Differences
+
+**For explicitly specified mutation targets** (using `--mutation-targets`):
+
+- In non-strict mode: If the target repeat isn't in `allowed_repeats`, it's automatically converted to a random allowed repeat with a warning
+- In strict mode: If the target repeat isn't in `allowed_repeats`, an error is raised and the simulation stops
+
+**For random mutation targets** (when no explicit targets provided):
+
+- In both modes: The system only selects target positions that already have a repeat type from the `allowed_repeats` list
+- This ensures that even in strict mode, randomly selected targets won't cause pipeline failures
+
+### When to Use Strict Mode
+
+Strict mode is particularly useful when:
+
+- **Precision is critical**: Ensure mutations are only applied to specific repeat types
+- **Debugging simulations**: Catch configuration issues early rather than having silent substitutions
+- **Scientific rigor**: Prevent automatic changes that could compromise experimental design
+- **Quality control**: Verify that manually specified targets meet your configuration requirements
+
+---
+
 ## Config File Layout
 
 A simplified example:
@@ -406,6 +465,7 @@ A simplified example:
   "mutations": {
     "dupC": {
       "allowed_repeats": ["X", "C", "B", "A"], 
+      "strict_mode": false,  // Optional: When true, raises an error if target repeat isn't allowed
       "changes": [
         {
           "type": "insert",
@@ -414,8 +474,19 @@ A simplified example:
           "sequence": "G"
         }
       ]
+    },
+    "delinsAT": {
+      "allowed_repeats": ["C", "X"],  // Must only contain valid repeat keys from 'repeats' section
+      "changes": [
+        {
+          "type": "delete_insert",
+          "start": 2,
+          "end": 4,
+          "sequence": "AT"
+        }
+      ]
     }
-    // Additional mutations (e.g. "delinsAT" with type "delete_insert")...
+    // Additional mutations...
   },
   "tools": {
     "reseq": "mamba run --no-capture-output -n wessim reseq",

@@ -49,6 +49,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "type": "object",
                 "properties": {
                     "allowed_repeats": {"type": "array", "items": {"type": "string"}},
+                    "strict_mode": {"type": "boolean"},
                     "changes": {
                         "type": "array",
                         "items": {
@@ -56,7 +57,12 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                             "properties": {
                                 "type": {
                                     "type": "string",
-                                    "enum": ["insert", "delete", "replace"],
+                                    "enum": [
+                                        "insert",
+                                        "delete",
+                                        "replace",
+                                        "delete_insert",
+                                    ],
                                 },
                                 "start": {"type": "number"},
                                 "end": {"type": "number"},
@@ -147,6 +153,22 @@ def load_config(config_path: str) -> Dict[str, Any]:
 
     try:
         validate(instance=config, schema=CONFIG_SCHEMA)
+
+        # Extra validation for allowed_repeats in mutations
+        if "repeats" in config and "mutations" in config:
+            repeat_keys = set(config["repeats"].keys())
+            for mutation_name, mutation_def in config["mutations"].items():
+                allowed_repeats = set(mutation_def.get("allowed_repeats", []))
+                invalid_repeats = allowed_repeats - repeat_keys
+
+                if invalid_repeats:
+                    msg = (
+                        f"Mutation '{mutation_name}' has invalid repeats "
+                        f"in allowed_repeats: {', '.join(invalid_repeats)}. "
+                        f"Valid repeats are: {', '.join(repeat_keys)}"
+                    )
+                    logging.error(msg)
+                    raise ValidationError(msg)
     except ValidationError as e:
         logging.error("Configuration validation error: %s", e.message)
         raise
