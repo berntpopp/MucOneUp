@@ -183,3 +183,6 @@ data/bed/_original_files/
 
 # windsurf rules
 .windsurfrules
+
+# tmp folder
+tmp/
