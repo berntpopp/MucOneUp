@@ -283,7 +283,7 @@
     "training_data_path": "reference/nanosim/human_giab_hg002_sub1M_kitv14_dorado_v3.2.1/training",
     "coverage": 200,
     "num_threads": 12,
-    "min_read_length": 10000,
+    "min_read_length": 3000,
     "max_read_length": null,
     "other_options": "--fastq"
   },
