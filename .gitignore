@@ -186,3 +186,7 @@ data/bed/_original_files/
 
 # tmp folder
 tmp/
+
+# claude files and folders
+.claude/
+CLAUDE.md
