@@ -1,7 +1,7 @@
 # muc_one_up/probabilities.py
 
-import random
 import logging
+import random
 
 
 def pick_next_repeat(probabilities, current_symbol, force_end=False):
@@ -16,9 +16,7 @@ def pick_next_repeat(probabilities, current_symbol, force_end=False):
     :return: The next symbol as a string.
     """
     if current_symbol not in probabilities:
-        logging.debug(
-            "Current symbol '%s' not in probabilities; returning 'END'.", current_symbol
-        )
+        logging.debug("Current symbol '%s' not in probabilities; returning 'END'.", current_symbol)
         return "END"
 
     next_options = probabilities[current_symbol]
@@ -28,9 +26,7 @@ def pick_next_repeat(probabilities, current_symbol, force_end=False):
         return "END"
 
     items = list(next_options.items())
-    symbols, weights = zip(*items)
+    symbols, weights = zip(*items, strict=True)
     chosen = random.choices(symbols, weights=weights, k=1)[0]
-    logging.debug(
-        "Picked next symbol '%s' from current symbol '%s'.", chosen, current_symbol
-    )
+    logging.debug("Picked next symbol '%s' from current symbol '%s'.", chosen, current_symbol)
     return chosen

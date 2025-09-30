@@ -50,12 +50,64 @@ Additionally, MucOneUp supports **multiple read simulation pipelines**:
 
 ## Installation
 
+### For Users
+
 1. **Clone or download** this repository.
-2. **Install** in a Python 3.7+ environment:
+2. **Install** in a Python 3.10+ environment:
    ```bash
    pip install .
    ```
    This will install the `muc_one_up` Python package locally.
+
+### For Developers
+
+This project uses a modern Python development stack with **uv**, **ruff**, **mypy**, and **make** for automation.
+
+1. **Install uv** (fast Python package manager):
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. **Initialize the development environment**:
+   ```bash
+   make init
+   ```
+   This installs the package in editable mode with all development dependencies.
+
+#### Development Commands
+
+All development tasks are automated via `make`:
+
+| Command | Description |
+|---------|-------------|
+| `make help` | Show all available commands |
+| `make init` | Initialize complete development environment (uv + dev dependencies) |
+| `make dev` | Install package with development dependencies |
+| `make test` | Run tests with coverage |
+| `make lint` | Run ruff linter |
+| `make lint-fix` | Run ruff linter and auto-fix issues |
+| `make format` | Format code with ruff |
+| `make format-check` | Check code formatting without changes |
+| `make type-check` | Run mypy type checker |
+| `make check` | Run all quality checks (lint, format, type-check, test) |
+| `make clean` | Remove build artifacts and cache |
+| `make install` | Install package in current environment |
+
+#### Quick Development Workflow
+
+```bash
+# Setup
+make init
+
+# Development cycle
+make lint-fix    # Auto-fix linting issues
+make format      # Format code
+make type-check  # Check types
+make test        # Run tests
+
+# Or run all checks at once
+make check
+```
 
 > **Optional (Conda/Mamba Environments for Read Simulation):**  
 > 

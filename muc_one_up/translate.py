@@ -1,8 +1,9 @@
 # muc_one_up/translate.py
 
-import orfipy_core
-import sys
 import logging
+from pathlib import Path
+
+import orfipy_core
 
 # Standard genetic code table.
 CODON_TABLE = {
@@ -121,8 +122,8 @@ def find_orfs_in_memory(
     min_len=30,
     max_len=1000000,
     strand="b",
-    starts=["ATG", "TTG", "CTG"],
-    stops=["TAA", "TAG", "TGA"],
+    starts=None,
+    stops=None,
     include_stop=False,
     partial5=False,
     partial3=False,
@@ -141,6 +142,10 @@ def find_orfs_in_memory(
     :param partial3: Allow partial ORFs at the 3' end.
     :return: List of ORFs as tuples (start, stop, strand, description).
     """
+    if stops is None:
+        stops = ["TAA", "TAG", "TGA"]
+    if starts is None:
+        starts = ["ATG", "TTG", "CTG"]
     return list(
         orfipy_core.orfs(
             seq,
@@ -157,9 +162,7 @@ def find_orfs_in_memory(
     )
 
 
-def predict_orfs_in_haplotypes(
-    results, min_len=30, orf_min_aa=100, required_prefix=None
-):
+def predict_orfs_in_haplotypes(results, min_len=30, orf_min_aa=100, required_prefix=None):
     """
     For each haplotype in results, find ORFs, translate them to peptides,
     and filter based on minimal peptide length and optional prefix.
@@ -173,7 +176,7 @@ def predict_orfs_in_haplotypes(
     haplotype_orfs = {}
     min_nt_length = orf_min_aa * 3
 
-    for i, (dna_seq, chain) in enumerate(results, start=1):
+    for i, (dna_seq, _chain) in enumerate(results, start=1):
         hap_id = f"haplotype_{i}"
         orfs = find_orfs_in_memory(
             seq=dna_seq,
@@ -213,9 +216,9 @@ def write_peptides_to_fasta(haplotype_orfs, output_pep):
     :param output_pep: Output FASTA filename.
     """
     try:
-        with open(output_pep, "w") as out_fh:
-            for hap_id, orf_list in haplotype_orfs.items():
-                for orf_id, peptide, start, stop, strand, desc in orf_list:
+        with Path(output_pep).open("w") as out_fh:
+            for _hap_id, orf_list in haplotype_orfs.items():
+                for orf_id, peptide, _start, _stop, strand, desc in orf_list:
                     out_fh.write(f">{orf_id} strand={strand} {desc}\n")
                     out_fh.write(peptide + "\n")
         logging.info("Peptide FASTA written to %s", output_pep)
@@ -224,9 +227,7 @@ def write_peptides_to_fasta(haplotype_orfs, output_pep):
         raise
 
 
-def run_orf_finder_in_memory(
-    results, output_pep, min_len=30, orf_min_aa=100, required_prefix=None
-):
+def run_orf_finder_in_memory(results, output_pep, min_len=30, orf_min_aa=100, required_prefix=None):
     """
     High-level function that predicts ORFs for each haplotype in memory,
     applies filters, and writes the peptides to a FASTA file.

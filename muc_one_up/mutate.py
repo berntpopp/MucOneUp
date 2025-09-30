@@ -1,11 +1,9 @@
-import random
 import logging
-from typing import Dict, List, Tuple, Any, Set
+import random
+from typing import Any
 
 
-def validate_allowed_repeats(
-    mutation_def: Dict[str, Any], config: Dict[str, Any]
-) -> Set[str]:
+def validate_allowed_repeats(mutation_def: dict[str, Any], config: dict[str, Any]) -> set[str]:
     """
     Validate that the allowed_repeats in a mutation definition are valid repeat symbols.
 
@@ -30,11 +28,11 @@ def validate_allowed_repeats(
 
 
 def apply_mutations(
-    config: Dict[str, Any],
-    results: List[Tuple[str, List[str]]],
+    config: dict[str, Any],
+    results: list[tuple[str, list[str]]],
     mutation_name: str,
-    targets: List[Tuple[int, int]],
-) -> Tuple[List[Tuple[str, List[str]]], Dict[int, List[Tuple[int, str]]]]:
+    targets: list[tuple[int, int]],
+) -> tuple[list[tuple[str, list[str]]], dict[int, list[tuple[int, str]]]]:
     """
     Apply a single named mutation to one or more haplotypes at specific repeat indices,
     and record the mutated VNTR unit(s).
@@ -53,9 +51,7 @@ def apply_mutations(
         raise ValueError("No 'mutations' section in config; cannot apply mutations.")
 
     if mutation_name not in config["mutations"]:
-        raise ValueError(
-            f"Mutation '{mutation_name}' not found in config['mutations']."
-        )
+        raise ValueError(f"Mutation '{mutation_name}' not found in config['mutations'].")
 
     mutation_def = config["mutations"][mutation_name]
 
@@ -71,9 +67,7 @@ def apply_mutations(
     changes = mutation_def["changes"]
 
     updated_results = list(results)
-    mutated_units = (
-        {}
-    )  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
+    mutated_units = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
 
     # Apply the mutation to each specified target.
     for hap_i, rep_i in targets:
@@ -81,9 +75,7 @@ def apply_mutations(
         repeat_index = rep_i - 1
 
         if hap_index < 0 or hap_index >= len(updated_results):
-            raise ValueError(
-                f"Haplotype index {hap_i} out of range (1..{len(updated_results)})."
-            )
+            raise ValueError(f"Haplotype index {hap_i} out of range (1..{len(updated_results)}).")
 
         seq, chain = updated_results[hap_index]
 
@@ -147,7 +139,7 @@ def apply_mutations(
     return updated_results, mutated_units
 
 
-def rebuild_haplotype_sequence(chain: List[str], config: Dict[str, Any]) -> str:
+def rebuild_haplotype_sequence(chain: list[str], config: dict[str, Any]) -> str:
     """
     Rebuild the haplotype sequence from the chain of repeats and constant flanks.
 
@@ -171,12 +163,12 @@ def rebuild_haplotype_sequence(chain: List[str], config: Dict[str, Any]) -> str:
 
 def apply_changes_to_repeat(
     seq: str,
-    chain: List[str],
+    chain: list[str],
     repeat_index: int,
-    changes: List[Dict[str, Any]],
-    config: Dict[str, Any],
+    changes: list[dict[str, Any]],
+    config: dict[str, Any],
     mutation_name: str,
-) -> Tuple[str, List[str], str]:
+) -> tuple[str, list[str], str]:
     """
     Modify the substring of 'seq' corresponding to chain[repeat_index] using the
     list of changes from the mutation definition.
@@ -213,9 +205,7 @@ def apply_changes_to_repeat(
         insertion_str = change.get("sequence", "")
 
         if start is None or end is None or ctype is None:
-            raise ValueError(
-                f"Malformed change in mutation '{mutation_name}': missing fields."
-            )
+            raise ValueError(f"Malformed change in mutation '{mutation_name}': missing fields.")
 
         start_idx = start - 1
         end_idx = end - 1
@@ -250,9 +240,7 @@ def apply_changes_to_repeat(
             # Insert the provided sequence at position start_idx+1.
             repeat_chars[start_idx + 1 : start_idx + 1] = list(insertion_str)
         else:
-            raise ValueError(
-                f"Unknown mutation type '{ctype}' in mutation '{mutation_name}'"
-            )
+            raise ValueError(f"Unknown mutation type '{ctype}' in mutation '{mutation_name}'")
 
     mutated_repeat = "".join(repeat_chars)
     new_seq = seq[:start_pos] + mutated_repeat + seq[end_pos + 1 :]

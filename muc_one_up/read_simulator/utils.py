@@ -13,13 +13,13 @@ import signal
 import subprocess
 import sys
 import threading
-from typing import Dict, List, Optional, Union
+from pathlib import Path
 
 
 def run_command(
-    cmd: Union[List[str], str],
+    cmd: list[str] | str,
     shell: bool = False,
-    timeout: Optional[int] = None,
+    timeout: int | None = None,
     stderr_log_level: int = logging.ERROR,
     stderr_prefix: str = "",
 ) -> int:
@@ -79,9 +79,7 @@ def run_command(
         stream.close()
 
     # Log stdout always as INFO
-    stdout_thread = threading.Thread(
-        target=log_stream, args=(proc.stdout, logging.info)
-    )
+    stdout_thread = threading.Thread(target=log_stream, args=(proc.stdout, logging.info))
     # Log stderr with configurable level
     logger = logging.getLogger()
     stderr_thread = threading.Thread(
@@ -94,9 +92,7 @@ def run_command(
     try:
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        logging.warning(
-            "Command timed out after %s seconds. Killing process group.", timeout
-        )
+        logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
         except Exception:
@@ -108,9 +104,7 @@ def run_command(
     if proc.returncode != 0:
         # Check if this is a timeout-related exit code (-15 is typical for SIGTERM)
         if timeout is not None and proc.returncode == -15:
-            logging.info(
-                "Command terminated due to timeout (%d seconds): %s", timeout, cmd_str
-            )
+            logging.info("Command terminated due to timeout (%d seconds): %s", timeout, cmd_str)
         else:
             logging.error(
                 "Command exited with non-zero exit code %d: %s",
@@ -139,7 +133,7 @@ def fix_field(field: str, desired_length: int, pad_char: str) -> str:
         return field + pad_char * (desired_length - len(field))
 
 
-def check_external_tools(tools: Dict[str, str]) -> None:
+def check_external_tools(tools: dict[str, str]) -> None:
     """
     Check that all external tools required for read simulation are available.
 
@@ -182,10 +176,8 @@ def check_external_tools(tools: Dict[str, str]) -> None:
             continue
 
         cmd = command.split()[0]  # Get just the executable part
-        if not (shutil.which(cmd) or os.path.isfile(cmd)):
-            logging.error(
-                f"Required tool '{tool}' (command: '{cmd}') not found in PATH."
-            )
+        if not (shutil.which(cmd) or Path(cmd).is_file()):
+            logging.error(f"Required tool '{tool}' (command: '{cmd}') not found in PATH.")
             sys.exit(1)
 
     # Skip detailed validation if using conda (it will be checked when used)
@@ -201,13 +193,11 @@ def check_external_tools(tools: Dict[str, str]) -> None:
         logging.info("External tool validation completed successfully.")
     except SystemExit:
         logging.error("External tool validation failed.")
-        logging.info(
-            "If using conda/mamba environments, ensure they're properly set up"
-        )
+        logging.info("If using conda/mamba environments, ensure they're properly set up")
         sys.exit(1)
 
 
-def cleanup_files(file_list: List[str]) -> None:
+def cleanup_files(file_list: list[str]) -> None:
     """
     Remove files in the provided list if they exist.
 
@@ -215,9 +205,11 @@ def cleanup_files(file_list: List[str]) -> None:
         file_list: List of filenames.
     """
     for file in file_list:
-        if file and os.path.exists(file):
-            try:
-                os.remove(file)
-                logging.info("Removed intermediate file: %s", file)
-            except Exception as e:
-                logging.warning("Failed to remove file %s: %s", file, str(e))
+        if file:
+            file_path = Path(file)
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                    logging.info("Removed intermediate file: %s", file)
+                except Exception as e:
+                    logging.warning("Failed to remove file %s: %s", file, str(e))

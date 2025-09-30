@@ -1,8 +1,8 @@
 # muc_one_up/simulate.py
 
-import random
 import logging
-from typing import List, Tuple, Optional
+import random
+
 from .distribution import sample_repeat_count
 
 
@@ -21,20 +21,18 @@ def pick_next_symbol_no_end(probabilities, current_symbol):
 
     next_options = probabilities[current_symbol]
     forbidden = {"6", "6p", "9", "END"}
-    filtered = [
-        (sym, prob) for (sym, prob) in next_options.items() if sym not in forbidden
-    ]
+    filtered = [(sym, prob) for (sym, prob) in next_options.items() if sym not in forbidden]
     if not filtered:
         logging.debug("No valid next symbol available from '%s'.", current_symbol)
         return None
 
-    symbols, weights = zip(*filtered)
+    symbols, weights = zip(*filtered, strict=True)
     chosen = random.choices(symbols, weights=weights, k=1)[0]
     logging.debug("Picked next symbol '%s' from '%s'.", chosen, current_symbol)
     return chosen
 
 
-def assemble_haplotype_from_chain(chain: List[str], config: dict) -> str:
+def assemble_haplotype_from_chain(chain: list[str], config: dict) -> str:
     """
     Assemble a complete haplotype sequence from a given repeat chain.
 
@@ -67,11 +65,11 @@ def assemble_haplotype_from_chain(chain: List[str], config: dict) -> str:
 
 
 def simulate_from_chains(
-    predefined_chains: List[List[str]],
+    predefined_chains: list[list[str]],
     config: dict,
-    mutation_name: Optional[str] = None,
-    mutation_targets: Optional[List[Tuple[int, int]]] = None,
-) -> List[Tuple[str, List[str]]]:
+    mutation_name: str | None = None,
+    mutation_targets: list[tuple[int, int]] | None = None,
+) -> list[tuple[str, list[str]]]:
     """
     Simulate multiple haplotypes using predefined repeat chains.
 
@@ -103,9 +101,7 @@ def simulate_from_chains(
                                 f"Applying mutation '{mutation_name}' to haplotype {i+1}, "
                                 f"repeat position {repeat_idx} (0-based: {zero_based_idx})"
                             )
-                            working_chain[zero_based_idx] = (
-                                working_chain[zero_based_idx] + "m"
-                            )
+                            working_chain[zero_based_idx] = working_chain[zero_based_idx] + "m"
                     else:
                         logging.warning(
                             f"Mutation target repeat index {repeat_idx} (0-based: {zero_based_idx}) "
@@ -141,9 +137,7 @@ def simulate_diploid(config, num_haplotypes=2, fixed_lengths=None, seed=None):
             target_length = fixed_lengths[i]
         else:
             target_length = sample_repeat_count(config["length_model"])
-        logging.info(
-            "Simulating haplotype %d with target length %d", i + 1, target_length
-        )
+        logging.info("Simulating haplotype %d with target length %d", i + 1, target_length)
         seq, chain = simulate_single_haplotype(config, target_length)
         haplotypes.append((seq, chain))
     return haplotypes

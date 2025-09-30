@@ -8,10 +8,9 @@ command construction, execution, and error handling.
 """
 
 import logging
-import os
 import subprocess
 import tempfile
-from typing import Optional
+from pathlib import Path
 
 from ..utils import run_command
 
@@ -23,8 +22,8 @@ def run_nanosim_simulation(
     training_model: str,
     coverage: float,
     threads: int = 4,
-    min_read_length: Optional[int] = None,
-    max_read_length: Optional[int] = None,
+    min_read_length: int | None = None,
+    max_read_length: int | None = None,
     other_options: str = "",
     timeout: int = 3600,
 ) -> str:
@@ -50,8 +49,9 @@ def run_nanosim_simulation(
         RuntimeError: If NanoSim execution fails
     """
     # Ensure output directory exists
-    output_dir = os.path.dirname(os.path.abspath(output_prefix))
-    os.makedirs(output_dir, exist_ok=True)
+    output_path = Path(output_prefix).resolve()
+    output_dir = output_path.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Build the command with required parameters
     if isinstance(nanosim_cmd, str) and (" " in nanosim_cmd):
@@ -114,10 +114,10 @@ def run_nanosim_simulation(
         # Standard output file pattern for NanoSim
         output_fastq = f"{output_prefix}_aligned_reads.fastq"
 
-        if not os.path.exists(output_fastq):
+        if not Path(output_fastq).exists():
             # Check for alternative naming pattern
             alt_output_fastq = f"{output_prefix}.fastq"
-            if os.path.exists(alt_output_fastq):
+            if Path(alt_output_fastq).exists():
                 output_fastq = alt_output_fastq
             else:
                 error_msg = f"Expected output file not found: {output_fastq}"
@@ -132,7 +132,7 @@ def run_nanosim_simulation(
     except Exception as e:
         logging.error("[NanoSim] Unexpected error during execution: %s", e)
         msg = str(e)
-        raise RuntimeError(f"NanoSim simulation failed: {msg}")
+        raise RuntimeError(f"NanoSim simulation failed: {msg}") from e
 
     finally:
         # No need to restore working directory since we didn't change it
@@ -167,7 +167,7 @@ def align_ont_reads_with_minimap2(
         RuntimeError: If alignment or conversion fails
     """
     # Ensure output directory exists
-    os.makedirs(os.path.dirname(os.path.abspath(output_bam)), exist_ok=True)
+    Path(output_bam).resolve().parent.mkdir(parents=True, exist_ok=True)
 
     # Create an intermediate SAM file
     with tempfile.NamedTemporaryFile(suffix=".sam", delete=False) as temp_sam:
@@ -203,7 +203,7 @@ def align_ont_reads_with_minimap2(
             logging.info("Running minimap2 alignment: %s", align_cmd_str)
 
             # Run with output redirection to SAM file
-            with open(sam_path, "w") as sam_file:
+            with Path(sam_path).open("w") as sam_file:
                 # Use run_command when possible, but for file redirection
                 # we need to use subprocess.Popen directly
                 process = subprocess.Popen(
@@ -261,10 +261,7 @@ def align_ont_reads_with_minimap2(
         # Sort BAM
         if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
             # Execute as string command
-            sort_cmd = (
-                f"{samtools_cmd} sort -@ {threads} "
-                f"-o {output_bam} {output_bam}.unsorted"
-            )
+            sort_cmd = f"{samtools_cmd} sort -@ {threads} " f"-o {output_bam} {output_bam}.unsorted"
             logging.info("[samtools] Sorting BAM: %s", sort_cmd)
             run_command(
                 sort_cmd,
@@ -331,11 +328,13 @@ def align_ont_reads_with_minimap2(
     except Exception as e:
         logging.error("[minimap2] Unexpected error during ONT alignment: %s", e)
         error_msg = f"ONT read alignment failed: {str(e)[:60]}..."
-        raise RuntimeError(error_msg)
+        raise RuntimeError(error_msg) from e
 
     finally:
         # Clean up temporary files
-        if os.path.exists(sam_path):
-            os.unlink(sam_path)
-        if os.path.exists(output_bam + ".unsorted"):
-            os.unlink(output_bam + ".unsorted")
+        sam_path_obj = Path(sam_path)
+        if sam_path_obj.exists():
+            sam_path_obj.unlink()
+        unsorted_path = Path(output_bam + ".unsorted")
+        if unsorted_path.exists():
+            unsorted_path.unlink()

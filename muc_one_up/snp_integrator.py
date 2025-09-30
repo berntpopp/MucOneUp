@@ -17,15 +17,16 @@ The SNP file format is TSV with the following columns:
     - alt_base: Alternative base to introduce
 """
 
-import random
 import logging
-from typing import Any, Dict, List, Tuple, Optional
+import random
+from pathlib import Path
+from typing import Any
 
 # Valid DNA bases for SNP generation
 DNA_BASES = ["A", "C", "G", "T"]
 
 
-def parse_snp_file(filepath: str) -> List[Dict[str, Any]]:
+def parse_snp_file(filepath: str) -> list[dict[str, Any]]:
     """
     Parse a tab-separated SNP file and return a list of SNP definitions.
 
@@ -49,7 +50,7 @@ def parse_snp_file(filepath: str) -> List[Dict[str, Any]]:
     snps = []
 
     try:
-        with open(filepath, "r") as f:
+        with Path(filepath).open() as f:
             for line_num, line in enumerate(f, 1):
                 # Skip comments or empty lines
                 line = line.strip()
@@ -60,8 +61,7 @@ def parse_snp_file(filepath: str) -> List[Dict[str, Any]]:
                 fields = line.split("\t")
                 if len(fields) != 4:
                     raise ValueError(
-                        f"Line {line_num}: Expected 4 tab-separated fields, "
-                        f"found {len(fields)}"
+                        f"Line {line_num}: Expected 4 tab-separated fields, " f"found {len(fields)}"
                     )
 
                 # Validate and extract fields
@@ -69,8 +69,7 @@ def parse_snp_file(filepath: str) -> List[Dict[str, Any]]:
                     hap_idx = int(fields[0])
                     if hap_idx not in [1, 2]:
                         raise ValueError(
-                            f"Line {line_num}: Haplotype index must be 1 or 2, "
-                            f"found {hap_idx}"
+                            f"Line {line_num}: Haplotype index must be 1 or 2, " f"found {hap_idx}"
                         )
 
                     position = int(fields[1])
@@ -102,7 +101,7 @@ def parse_snp_file(filepath: str) -> List[Dict[str, Any]]:
 
                 except ValueError as e:
                     # Re-raise with more context
-                    raise ValueError(f"Error parsing line {line_num}: {e}")
+                    raise ValueError(f"Error parsing line {line_num}: {e}") from e
 
                 # Add validated SNP definition
                 snps.append(
@@ -118,15 +117,15 @@ def parse_snp_file(filepath: str) -> List[Dict[str, Any]]:
             logging.warning(f"No valid SNPs found in {filepath}")
         return snps
 
-    except FileNotFoundError:
-        raise ValueError(f"SNP file not found: {filepath}")
+    except FileNotFoundError as e:
+        raise ValueError(f"SNP file not found: {filepath}") from e
     except Exception as e:
-        raise ValueError(f"Error reading SNP file {filepath}: {str(e)}")
+        raise ValueError(f"Error reading SNP file {filepath}: {e!s}") from e
 
 
 def get_vntr_boundaries(
-    simulation_results: List[Tuple[str, List[str]]], config: dict
-) -> List[Dict[str, int]]:
+    simulation_results: list[tuple[str, list[str]]], config: dict
+) -> list[dict[str, int]]:
     """
     Calculate the boundaries of the VNTR region within each haplotype sequence.
 
@@ -153,12 +152,12 @@ def get_vntr_boundaries(
 
 
 def generate_random_snps(
-    sequences: List[str],
+    sequences: list[str],
     density_per_kb: float,
     region: str = "all",
     target_haplotypes: str = "all",
-    vntr_boundaries: Optional[List[Dict[str, int]]] = None,
-) -> List[Dict[str, any]]:
+    vntr_boundaries: list[dict[str, int]] | None = None,
+) -> list[dict[str, any]]:
     """
     Generate random SNPs based on specified parameters.
 
@@ -217,9 +216,7 @@ def generate_random_snps(
 
             if region == "constants_only":
                 # Keep only positions in constant regions
-                valid_positions = set(range(vntr_start)) | set(
-                    range(vntr_end, seq_length)
-                )
+                valid_positions = set(range(vntr_start)) | set(range(vntr_end, seq_length))
             elif region == "vntr_only":
                 # Keep only positions in VNTR region
                 valid_positions = set(range(vntr_start, vntr_end))
@@ -274,10 +271,10 @@ def generate_random_snps(
 
 
 def apply_snps_to_sequences(
-    haplotype_sequences: List[str],
-    snps_to_apply: List[Dict[str, Any]],
+    haplotype_sequences: list[str],
+    snps_to_apply: list[dict[str, Any]],
     skip_reference_check: bool = False,
-) -> Tuple[List[str], Dict[int, List[Dict[str, Any]]]]:
+) -> tuple[list[str], dict[int, list[dict[str, Any]]]]:
     """
     Apply a list of SNPs to the haplotype sequences.
 
@@ -310,8 +307,7 @@ def apply_snps_to_sequences(
         # Validate haplotype index
         if hap_idx < 0 or hap_idx >= len(mutable_sequences):
             logging.warning(
-                f"SNP specifies invalid haplotype index {snp['haplotype']} "
-                f"(0-based: {hap_idx})"
+                f"SNP specifies invalid haplotype index {snp['haplotype']} " f"(0-based: {hap_idx})"
             )
             continue
 
@@ -354,7 +350,7 @@ def apply_snps_to_sequences(
     return modified_sequences, applied_snps
 
 
-def write_snps_to_file(snps: List[Dict[str, Any]], filepath: str) -> None:
+def write_snps_to_file(snps: list[dict[str, Any]], filepath: str) -> None:
     """
     Write a list of SNPs to a file in the standard TSV format.
 
@@ -366,7 +362,7 @@ def write_snps_to_file(snps: List[Dict[str, Any]], filepath: str) -> None:
         IOError: If file cannot be written
     """
     try:
-        with open(filepath, "w") as f:
+        with Path(filepath).open("w") as f:
             f.write("# MucOneUp SNP File\n")
             f.write(
                 "# Columns: haplotype_index (1-based)\tposition (0-based)\tref_base\talt_base\n"
@@ -380,4 +376,4 @@ def write_snps_to_file(snps: List[Dict[str, Any]], filepath: str) -> None:
 
         logging.info(f"Wrote {len(snps)} SNPs to {filepath}")
     except Exception as e:
-        raise IOError(f"Failed to write SNP file {filepath}: {str(e)}")
+        raise OSError(f"Failed to write SNP file {filepath}: {e!s}") from e

@@ -1,14 +1,14 @@
 # muc_one_up/config.py
 
 import json
-import os
 import logging
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any
 
-from jsonschema import validate, ValidationError
+from jsonschema import ValidationError, validate
 
 # Define a JSON schema that matches the current config structure.
-CONFIG_SCHEMA: Dict[str, Any] = {
+CONFIG_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "repeats": {"type": "object", "additionalProperties": {"type": "string"}},
@@ -17,19 +17,31 @@ CONFIG_SCHEMA: Dict[str, Any] = {
             "properties": {
                 "training_data_path": {"type": "string"},
                 "coverage": {"type": "number"},
-                "num_threads": {"type": "number"},
-                "min_read_length": {"type": "number"},
-                "max_read_length": {"type": "number"},
-                "other_options": {"type": "string"},
+                "num_threads": {"type": ["number", "null"]},
+                "min_read_length": {"type": ["number", "null"]},
+                "max_read_length": {"type": ["number", "null"]},
+                "other_options": {"type": ["string", "null"]},
             },
             "required": ["training_data_path", "coverage"],
             "additionalProperties": False,
         },
         "constants": {
             "type": "object",
-            "properties": {"left": {"type": "string"}, "right": {"type": "string"}},
-            "required": ["left", "right"],
-            "additionalProperties": False,
+            # Allow either flat format (for backward compatibility with tests)
+            # or nested hg19/hg38 format (for production)
+            "additionalProperties": {
+                "oneOf": [
+                    {"type": "string"},  # Flat format: left, right keys
+                    {  # Nested format: hg19, hg38 keys
+                        "type": "object",
+                        "properties": {
+                            "left": {"type": "string"},
+                            "right": {"type": "string"},
+                            "vntr_region": {"type": "string"},
+                        },
+                    },
+                ]
+            },
         },
         "probabilities": {
             "type": "object",
@@ -110,6 +122,8 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "simulator": {"type": "string", "enum": ["illumina", "ont"]},
                 "reseq_model": {"type": "string"},
                 "sample_bam": {"type": "string"},
+                "sample_bam_hg19": {"type": "string"},
+                "sample_bam_hg38": {"type": "string"},
                 "human_reference": {"type": "string"},
                 "read_number": {"type": "number"},
                 "fragment_size": {"type": "number"},
@@ -118,13 +132,14 @@ CONFIG_SCHEMA: Dict[str, Any] = {
                 "threads": {"type": "number"},
                 "downsample_coverage": {"type": "number"},
                 "downsample_seed": {"type": "number"},
+                "downsample_mode": {"type": "string"},
+                "sample_target_bed": {"type": "string"},
                 "reference_assembly": {"type": "string"},
                 "vntr_region_hg19": {"type": "string"},
                 "vntr_region_hg38": {"type": "string"},
                 "aligner": {"type": "string", "enum": ["bwa", "minimap2"]},
             },
             "required": [
-                "simulator",
                 "human_reference",
                 "threads",
             ],
@@ -144,7 +159,7 @@ CONFIG_SCHEMA: Dict[str, Any] = {
 }
 
 
-def load_config(config_path: str) -> Dict[str, Any]:
+def load_config(config_path: str) -> dict[str, Any]:
     """
     Load and validate the JSON config for MucOneUp.
 
@@ -154,17 +169,31 @@ def load_config(config_path: str) -> Dict[str, Any]:
     :raises json.JSONDecodeError: if the config file is not valid JSON.
     :raises ValidationError: if the config does not conform to the required schema.
     """
-    if not os.path.exists(config_path):
+    if not Path(config_path).exists():
         logging.error("Config file not found: %s", config_path)
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
-    with open(config_path, "r") as fh:
+    with Path(config_path).open() as fh:
         config = json.load(fh)
 
     logging.debug("Configuration loaded from %s", config_path)
 
     try:
         validate(instance=config, schema=CONFIG_SCHEMA)
+
+        # Normalize constants format: convert flat format to nested format
+        if (
+            "constants" in config
+            and "left" in config["constants"]
+            and "right" in config["constants"]
+        ):
+            # Check if this is the flat format (has 'left' and 'right' as top-level keys)
+            # Get reference assembly, default to hg38 if not specified
+            ref_assembly = config.get("reference_assembly", "hg38")
+            # Convert to nested format
+            old_constants = config["constants"].copy()
+            config["constants"] = {ref_assembly: old_constants}
+            logging.debug("Normalized flat constants format to nested format")
 
         # Extra validation for allowed_repeats in mutations
         if "repeats" in config and "mutations" in config:

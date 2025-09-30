@@ -7,9 +7,8 @@ This module provides wrapper functions for BWA operations:
 """
 
 import logging
-import os
 import sys
-from typing import Dict, Optional
+from pathlib import Path
 
 from ..utils import run_command
 
@@ -19,9 +18,9 @@ def align_reads(
     read2: str,
     human_reference: str,
     output_bam: str,
-    tools: Dict[str, str],
+    tools: dict[str, str],
     threads: int = 4,
-    timeout: Optional[int] = 300,
+    timeout: int | None = 300,
 ) -> None:
     """
     Align paired-end reads with bwa mem, sort with samtools, and index the BAM file.
@@ -39,16 +38,17 @@ def align_reads(
     """
     # Check input files exist
     for file in [read1, read2, human_reference]:
-        if not os.path.exists(file):
+        if not Path(file).exists():
             logging.error(f"Input file not found: {file}")
             sys.exit(1)
 
     # Get output directory and filename base for intermediate files
-    output_dir = os.path.dirname(output_bam)
-    output_base = os.path.basename(output_bam).replace(".bam", "")
+    output_bam_path = Path(output_bam)
+    output_dir = output_bam_path.parent
+    output_base = output_bam_path.stem
 
     # Create intermediate filenames for unsorted BAM
-    unsorted_bam = os.path.join(output_dir, f"{output_base}_unsorted.bam")
+    unsorted_bam = str(output_dir / f"{output_base}_unsorted.bam")
 
     # Run alignment with BWA mem and pipe to samtools to create BAM
     cmd = (
@@ -74,30 +74,26 @@ def align_reads(
         output_bam,
         unsorted_bam,
     ]
-    run_command(
-        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-    )
+    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Index the BAM file
     cmd = [tools["samtools"], "index", output_bam]
-    run_command(
-        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-    )
+    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Check output files exist
     for file in [output_bam, f"{output_bam}.bai"]:
-        if not os.path.exists(file) or os.path.getsize(file) == 0:
+        file_path = Path(file)
+        if not file_path.exists() or file_path.stat().st_size == 0:
             logging.error(f"Expected output file missing or empty: {file}")
             sys.exit(1)
 
     # Clean up intermediate files
-    if os.path.exists(unsorted_bam):
+    unsorted_bam_path = Path(unsorted_bam)
+    if unsorted_bam_path.exists():
         try:
-            os.remove(unsorted_bam)
+            unsorted_bam_path.unlink()
             logging.info(f"Removed intermediate file: {unsorted_bam}")
         except Exception as e:
-            logging.warning(
-                f"Could not remove intermediate file {unsorted_bam}: {str(e)}"
-            )
+            logging.warning(f"Could not remove intermediate file {unsorted_bam}: {e!s}")
 
     logging.info(f"Successfully aligned reads to {output_bam}")

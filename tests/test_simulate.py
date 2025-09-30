@@ -1,5 +1,5 @@
 import pytest
-import random
+
 from muc_one_up.simulate import simulate_diploid, simulate_single_haplotype
 
 
@@ -12,7 +12,7 @@ def simple_config():
             "2": "CCC",
             "9": "GGG",  # final block usage
         },
-        "constants": {"left": "TTTT", "right": "AAAA"},
+        "constants": {"hg38": {"left": "TTTT", "right": "AAAA"}},  # Use nested format
         "probabilities": {"1": {"2": 1.0}, "2": {"9": 1.0}, "9": {"END": 1.0}},
         "length_model": {
             "distribution": "normal",
@@ -26,9 +26,7 @@ def simple_config():
 def test_simulate_single_haplotype_min_len(simple_config):
     """If the target length is below min_length=10 in the function, it raises ValueError."""
     with pytest.raises(ValueError):
-        simulate_single_haplotype(
-            simple_config, target_length=5
-        )  # below default min_length=10
+        simulate_single_haplotype(simple_config, target_length=5)  # below default min_length=10
 
 
 def test_simulate_single_haplotype_override_min_len(simple_config):

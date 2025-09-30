@@ -9,14 +9,13 @@ This module provides wrapper functions for the reseq toolkit operations:
 """
 
 import logging
-import os
 import sys
-from typing import Dict, Optional
+from pathlib import Path
 
 from ..utils import run_command
 
 
-def replace_Ns(input_fa: str, output_fa: str, tools: Dict[str, str]) -> None:
+def replace_Ns(input_fa: str, output_fa: str, tools: dict[str, str]) -> None:
     """
     Replace Ns in the simulated FASTA using reseq replaceN.
 
@@ -30,13 +29,11 @@ def replace_Ns(input_fa: str, output_fa: str, tools: Dict[str, str]) -> None:
     """
     # From reseq help: replaceN expects -r for input and -R for output
     cmd = [tools["reseq"], "replaceN", "-r", input_fa, "-R", output_fa]
-    run_command(
-        cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] "
-    )
+    run_command(cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] ")
 
 
 def generate_systematic_errors(
-    input_fa: str, reseq_model: str, output_fq: str, tools: Dict[str, str]
+    input_fa: str, reseq_model: str, output_fq: str, tools: dict[str, str]
 ) -> None:
     """
     Generate systematic errors using reseq illuminaPE.
@@ -63,12 +60,11 @@ def generate_systematic_errors(
         "--writeSysError",
         output_fq,  # Output FASTQ filename
     ]
-    run_command(
-        cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] "
-    )
+    run_command(cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] ")
 
     # Verify output exists and is non-empty
-    if not os.path.exists(output_fq) or os.path.getsize(output_fq) == 0:
+    output_path = Path(output_fq)
+    if not output_path.exists() or output_path.stat().st_size == 0:
         logging.error(
             "Failed to generate systematic errors: Output %s missing or empty.",
             output_fq,
@@ -81,8 +77,8 @@ def create_reads(
     reseq_model: str,
     output_reads: str,
     threads: int,
-    tools: Dict[str, str],
-    timeout: Optional[int] = 120,
+    tools: dict[str, str],
+    timeout: int | None = 120,
 ) -> None:
     """
     Create reads from fragments using reseq seqToIllumina.
@@ -126,7 +122,8 @@ def create_reads(
         )
     except SystemExit:
         # Check if the output file exists and is non-empty despite timeout
-        if os.path.exists(output_reads) and os.path.getsize(output_reads) > 0:
+        output_path = Path(output_reads)
+        if output_path.exists() and output_path.stat().st_size > 0:
             logging.warning(
                 (
                     "reseq seqToIllumina timed out after %s seconds, but valid output "
@@ -158,10 +155,9 @@ def split_reads(interleaved_fastq: str, output_fastq1: str, output_fastq2: str) 
         IOError: If the input file can't be read or output files can't be written.
     """
     try:
-        with open(interleaved_fastq, "r") as in_fq, open(
-            output_fastq1, "wb"
-        ) as out_fq1, open(output_fastq2, "wb") as out_fq2:
-
+        with Path(interleaved_fastq).open() as in_fq, Path(output_fastq1).open(
+            "wb"
+        ) as out_fq1, Path(output_fastq2).open("wb") as out_fq2:
             # Create gzip writers
             import gzip
 

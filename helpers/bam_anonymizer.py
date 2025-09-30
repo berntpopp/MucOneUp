@@ -36,6 +36,7 @@ import logging
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 
 def compute_md5(filepath: str, chunk_size: int = 1048576) -> str:
@@ -50,7 +51,7 @@ def compute_md5(filepath: str, chunk_size: int = 1048576) -> str:
         The MD5 hexadecimal digest as a string.
     """
     md5 = hashlib.md5()
-    with open(filepath, "rb") as f:
+    with Path(filepath).open("rb") as f:
         while True:
             data = f.read(chunk_size)
             if not data:
@@ -150,7 +151,7 @@ def run_samtools_reheader(input_bam: str, output_bam: str) -> None:
         input_bam,
     ]
     logging.debug("Reheader command: %s", " ".join(cmd_reheader))
-    with open(output_bam, "w") as fout:
+    with Path(output_bam).open("w") as fout:
         subprocess.run(cmd_reheader, stdout=fout, check=True)
     index_cmd = ["samtools", "index", output_bam]
     logging.debug("Indexing reheadered BAM with command: %s", " ".join(index_cmd))
@@ -179,8 +180,9 @@ def remove_file_and_index(file_path: str) -> None:
         file_path: Path to the file to remove.
     """
     try:
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        file_p = Path(file_path)
+        if file_p.exists():
+            file_p.unlink()
             logging.debug("Removed file: %s", file_path)
     except Exception as e:
         logging.warning("Could not remove file %s: %s", file_path, e)
@@ -189,8 +191,9 @@ def remove_file_and_index(file_path: str) -> None:
     possible_indices = [file_path + ".bai", file_path.replace(".bam", ".bai")]
     for idx in possible_indices:
         try:
-            if os.path.exists(idx):
-                os.remove(idx)
+            idx_p = Path(idx)
+            if idx_p.exists():
+                idx_p.unlink()
                 logging.debug("Removed index file: %s", idx)
         except Exception as e:
             logging.warning("Could not remove index file %s: %s", idx, e)
@@ -254,20 +257,20 @@ def main() -> None:
         level=args.log_level.upper(), format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    if not os.path.isfile(args.input_bam):
+    if not Path(args.input_bam).is_file():
         logging.error("Input BAM file not found: %s", args.input_bam)
         sys.exit(1)
-    if not os.path.isfile(args.ref):
+    if not Path(args.ref).is_file():
         logging.error("Reference FASTA file not found: %s", args.ref)
         sys.exit(1)
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     # Define intermediate and final file paths.
-    subset_bam_path = os.path.join(args.output_dir, f"{args.target_design}_subset.bam")
-    rg_bam_path = os.path.join(args.output_dir, f"{args.target_design}_rg.bam")
-    anon_bam_path = os.path.join(args.output_dir, f"{args.target_design}_anon.bam")
-    final_bam_path = os.path.join(args.output_dir, f"{args.target_design}.bam")
+    subset_bam_path = str(Path(args.output_dir) / f"{args.target_design}_subset.bam")
+    rg_bam_path = str(Path(args.output_dir) / f"{args.target_design}_rg.bam")
+    anon_bam_path = str(Path(args.output_dir) / f"{args.target_design}_anon.bam")
+    final_bam_path = str(Path(args.output_dir) / f"{args.target_design}.bam")
 
     try:
         # 1. Subset the input BAM to the specified region.
@@ -287,15 +290,15 @@ def main() -> None:
         )
 
         # 5. Compute MD5 checksums and write pseudonymisation output.
-        old_name = os.path.basename(args.input_bam)
-        new_name = os.path.basename(final_bam_path)
+        old_name = Path(args.input_bam).name
+        new_name = Path(final_bam_path).name
         old_md5 = compute_md5(args.input_bam)
         new_md5 = compute_md5(final_bam_path)
         # Prefix the CSV file with the target design to avoid collisions.
-        ps_output = os.path.join(
-            args.output_dir, f"{args.target_design}_pseudonymisation_output.csv"
+        ps_output = str(
+            Path(args.output_dir) / f"{args.target_design}_pseudonymisation_output.csv"
         )
-        with open(ps_output, "w", newline="") as csvfile:
+        with Path(ps_output).open("w", newline="") as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(["old_name", "old_md5", "new_name", "new_md5"])
             writer.writerow([old_name, old_md5, new_name, new_md5])

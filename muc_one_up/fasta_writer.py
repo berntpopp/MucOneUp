@@ -1,6 +1,7 @@
 # muc_one_up/fasta_writer.py
 
 import logging
+from pathlib import Path
 
 
 def write_fasta(sequences, filename, prefix="haplotype", comment=None, comments=None):
@@ -14,7 +15,7 @@ def write_fasta(sequences, filename, prefix="haplotype", comment=None, comments=
     :param comments: Optional list of comments, one per sequence.
     """
     try:
-        with open(filename, "w") as fh:
+        with Path(filename).open("w") as fh:
             for i, seq in enumerate(sequences, start=1):
                 header = f">{prefix}_{i}"
 

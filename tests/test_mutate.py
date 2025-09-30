@@ -1,4 +1,5 @@
 import pytest
+
 from muc_one_up.mutate import apply_mutations, validate_allowed_repeats
 
 
@@ -7,7 +8,7 @@ def mutation_config():
     """A minimal config that includes a mutation definition."""
     return {
         "repeats": {"X": "XXXXX", "C": "CCCCC"},  # 5-base sequence
-        "constants": {"left": "TTTT", "right": "GGGG"},
+        "constants": {"hg38": {"left": "TTTT", "right": "GGGG"}},  # Use nested format
         "probabilities": {},
         "length_model": {},
         "mutations": {

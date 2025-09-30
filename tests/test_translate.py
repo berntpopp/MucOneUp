@@ -1,10 +1,13 @@
 # tests/test_translate.py
+
+from pathlib import Path
+
 import pytest
-import os
+
 from muc_one_up.translate import (
     dna_to_protein,
-    reverse_complement,
     predict_orfs_in_haplotypes,
+    reverse_complement,
     run_orf_finder_in_memory,
 )
 
@@ -53,7 +56,7 @@ def test_predict_orfs_in_haplotypes_basic(tmp_path):
     )
 
     assert len(haplotype_orfs) == 1
-    orfs = list(haplotype_orfs.values())[0]
+    orfs = next(iter(haplotype_orfs.values()))
     assert len(orfs) == 1  # we expect one kept ORF
     orf_id, peptide, start, stop, strand, desc = orfs[0]
     # "MK" => length=2
@@ -96,7 +99,7 @@ def test_predict_orfs_in_haplotypes_prefix_filter():
         results, min_len=0, orf_min_aa=5, required_prefix="MTSSV"
     )
     # Expect only 1 ORF surviving => the "MTSSV" one
-    orfs_list = list(haplotype_orfs.values())[0]
+    orfs_list = next(iter(haplotype_orfs.values()))
     assert len(orfs_list) == 1
     assert orfs_list[0][1].startswith("MTSSV"), "peptide must start with 'MTSSV'"
 
@@ -118,7 +121,7 @@ def test_run_orf_finder_in_memory(tmp_path):
     )
 
     assert out_file.exists()
-    with open(out_file) as fh:
+    with Path(out_file).open() as fh:
         lines = fh.read().splitlines()
 
     # We expect something like:

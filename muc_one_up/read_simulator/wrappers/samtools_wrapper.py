@@ -10,17 +10,13 @@ This module provides wrapper functions for samtools operations:
 """
 
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Union, List
 
 from ..utils import run_command
 
 
-def extract_subset_reference(
-    sample_bam: str, output_fa: str, tools: Dict[str, str]
-) -> str:
+def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, str]) -> str:
     """
     Extract a subset reference from a BAM file.
 
@@ -36,11 +32,12 @@ def extract_subset_reference(
         SystemExit: If any samtools command fails.
     """
     # Get the base directory and name for intermediate files
-    output_dir = os.path.dirname(output_fa)
-    output_base = os.path.basename(output_fa).replace(".fa", "").replace(".fasta", "")
+    output_path = Path(output_fa)
+    output_dir = output_path.parent
+    output_base = output_path.name.replace(".fa", "").replace(".fasta", "")
 
     # Create intermediate filenames
-    collated_bam = os.path.join(output_dir, f"{output_base}_collated.bam")
+    collated_bam = str(output_dir / f"{output_base}_collated.bam")
 
     # Collate the BAM file (group by read name)
     cmd = [
@@ -50,9 +47,7 @@ def extract_subset_reference(
         collated_bam,
         sample_bam,
     ]
-    run_command(
-        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-    )
+    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Extract sequences into FASTA format
     # Using shell=True and string command to handle redirection properly
@@ -66,7 +61,7 @@ def extract_subset_reference(
     )
 
     # Verify the output FASTA exists and is non-empty
-    if not os.path.exists(output_fa) or os.path.getsize(output_fa) == 0:
+    if not output_path.exists() or output_path.stat().st_size == 0:
         logging.error(
             "Failed to extract subset reference: Output FASTA %s missing or empty.",
             output_fa,
@@ -102,7 +97,7 @@ def calculate_vntr_coverage(
         SystemExit: If the samtools command fails.
     """
     # Create output filename for depth data
-    depth_file = os.path.join(output_dir, f"{output_name}_vntr_depth.txt")
+    depth_file = str(Path(output_dir) / f"{output_name}_vntr_depth.txt")
 
     # Run samtools depth to get per-base coverage
     cmd = [
@@ -130,14 +125,14 @@ def calculate_vntr_coverage(
     num_positions = 0
 
     try:
-        with open(depth_file, "r") as f:
+        with Path(depth_file).open() as f:
             for line in f:
                 parts = line.strip().split()
                 if len(parts) >= 3:  # chr, pos, depth
                     total_depth += int(parts[2])
                     num_positions += 1
     except Exception as e:
-        logging.error(f"Error reading depth file: {str(e)}")
+        logging.error(f"Error reading depth file: {e!s}")
         sys.exit(1)
 
     # Calculate mean coverage (handle empty file case)
@@ -177,12 +172,12 @@ def calculate_target_coverage(
         SystemExit: If the samtools command fails or bed file is invalid.
     """
     # Verify bed file exists
-    if not os.path.exists(bed_file):
+    if not Path(bed_file).exists():
         logging.error(f"BED file not found: {bed_file}")
         sys.exit(1)
 
     # Create output filename for depth data
-    depth_file = os.path.join(output_dir, f"{output_name}_target_depth.txt")
+    depth_file = str(Path(output_dir) / f"{output_name}_target_depth.txt")
 
     # Run samtools depth with BED file to get per-base coverage
     cmd = [
@@ -204,14 +199,14 @@ def calculate_target_coverage(
     num_positions = 0
 
     try:
-        with open(depth_file, "r") as f:
+        with Path(depth_file).open() as f:
             for line in f:
                 parts = line.strip().split()
                 if len(parts) >= 3:  # chr, pos, depth
                     total_depth += int(parts[2])
                     num_positions += 1
     except Exception as e:
-        logging.error(f"Error reading depth file: {str(e)}")
+        logging.error(f"Error reading depth file: {e!s}")
         sys.exit(1)
 
     # Calculate mean coverage (handle empty file case)
@@ -282,9 +277,7 @@ def downsample_bam(
         "-o",
         other_bam,
     ]
-    run_command(
-        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-    )
+    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Merge the downsampled region BAM with the unchanged "other" BAM
     cmd = [
@@ -297,23 +290,20 @@ def downsample_bam(
         region_bam,
         other_bam,
     ]
-    run_command(
-        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-    )
+    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Index the final BAM
     cmd = [samtools_exe, "index", output_bam]
-    run_command(
-        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-    )
+    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Clean up intermediate files
     for tmp_file in [region_bam, other_bam]:
-        if os.path.exists(tmp_file):
+        tmp_path = Path(tmp_file)
+        if tmp_path.exists():
             try:
-                os.remove(tmp_file)
+                tmp_path.unlink()
             except Exception as e:
-                logging.warning(f"Could not remove temporary file {tmp_file}: {str(e)}")
+                logging.warning(f"Could not remove temporary file {tmp_file}: {e!s}")
 
     logging.info(
         f"Downsampled BAM file in region {region} to fraction {fraction:.4f} (seed: {seed})"
@@ -358,25 +348,19 @@ def downsample_entire_bam(
         output_bam,
         input_bam,
     ]
-    run_command(
-        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-    )
+    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Index the output BAM
     cmd = [samtools_exe, "index", output_bam]
-    run_command(
-        cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-    )
+    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
-    logging.info(
-        f"Downsampled entire BAM file to fraction {fraction:.4f} (seed: {seed})"
-    )
+    logging.info(f"Downsampled entire BAM file to fraction {fraction:.4f} (seed: {seed})")
 
 
 def sort_and_index_bam(
     samtools_exe: str,
     input_bam: str,
-    output_bam: Optional[str] = None,
+    output_bam: str | None = None,
     threads: int = 4,
     by_name: bool = False,
 ) -> str:
@@ -418,16 +402,16 @@ def sort_and_index_bam(
     run_command(sort_cmd, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Replace original file with sorted version
-    if os.path.exists(temp_bam):
-        if os.path.exists(output_bam):
-            os.remove(output_bam)
-        os.rename(temp_bam, output_bam)
+    temp_bam_path = Path(temp_bam)
+    output_bam_path = Path(output_bam)
+    if temp_bam_path.exists():
+        if output_bam_path.exists():
+            output_bam_path.unlink()
+        temp_bam_path.rename(output_bam_path)
 
     # Index the BAM file (only if sorted by coordinate)
     if not by_name:
         cmd = [samtools_exe, "index", output_bam]
-        run_command(
-            cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-        )
+        run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     return output_bam

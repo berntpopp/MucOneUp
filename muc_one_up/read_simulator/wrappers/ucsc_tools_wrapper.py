@@ -8,15 +8,14 @@ This module provides wrapper functions for UCSC tools operations:
 """
 
 import logging
-import os
 import sys
-from typing import Dict, Optional
+from pathlib import Path
 
 from ..utils import run_command
 
 
 def fa_to_twobit(
-    input_fa: str, output_2bit: str, tools: Dict[str, str], timeout: Optional[int] = 60
+    input_fa: str, output_2bit: str, tools: dict[str, str], timeout: int | None = 60
 ) -> None:
     """
     Convert a FASTA file to 2bit format using faToTwoBit.
@@ -33,7 +32,8 @@ def fa_to_twobit(
     run_command(cmd, timeout=60, stderr_prefix="[ucsc] ", stderr_log_level=logging.INFO)
 
     # Check output exists and is non-empty
-    if not os.path.exists(output_2bit) or os.path.getsize(output_2bit) == 0:
+    output_path = Path(output_2bit)
+    if not output_path.exists() or output_path.stat().st_size == 0:
         logging.error(
             "Failed to convert FASTA to 2bit: Output file %s missing or empty.",
             output_2bit,
@@ -45,11 +45,11 @@ def run_pblat(
     twobit_file: str,
     subset_reference: str,
     output_psl: str,
-    tools: Dict[str, str],
+    tools: dict[str, str],
     threads: int = 24,
-    minScore: int = 95,
-    minIdentity: int = 95,
-    timeout: Optional[int] = 120,
+    min_score: int = 95,
+    min_identity: int = 95,
+    timeout: int | None = 120,
 ) -> None:
     """
     Run pblat to align a 2bit file to a subset reference.
@@ -60,8 +60,8 @@ def run_pblat(
         output_psl: Output PSL filename.
         tools: Dictionary of tool commands.
         threads: Number of threads.
-        minScore: Minimal score.
-        minIdentity: Minimal identity.
+        min_score: Minimal score.
+        min_identity: Minimal identity.
         timeout: Timeout in seconds (default: 1 hour)
 
     Raises:
@@ -69,15 +69,16 @@ def run_pblat(
     """
     # Check input files exist
     for file in [twobit_file, subset_reference]:
-        if not os.path.exists(file) or os.path.getsize(file) == 0:
+        file_path = Path(file)
+        if not file_path.exists() or file_path.stat().st_size == 0:
             logging.error(f"Input file missing or empty: {file}")
             sys.exit(1)
 
     cmd = [
         tools["pblat"],
-        "-threads={}".format(threads),
-        "-minScore={}".format(minScore),
-        "-minIdentity={}".format(minIdentity),
+        f"-threads={threads}",
+        f"-minScore={min_score}",
+        f"-minIdentity={min_identity}",
         twobit_file,
         subset_reference,
         output_psl,
@@ -90,9 +91,10 @@ def run_pblat(
             stderr_prefix="[pblat] ",
             stderr_log_level=logging.INFO,
         )
-    except SystemExit as e:
+    except SystemExit:
         # Check if output was produced despite error
-        if os.path.exists(output_psl) and os.path.getsize(output_psl) > 0:
+        output_path = Path(output_psl)
+        if output_path.exists() and output_path.stat().st_size > 0:
             logging.warning(
                 "pblat command failed, but output file exists. Continuing with caution."
             )
@@ -101,7 +103,8 @@ def run_pblat(
             sys.exit(1)
 
     # Verify output exists and is non-empty
-    if not os.path.exists(output_psl) or os.path.getsize(output_psl) == 0:
+    output_path = Path(output_psl)
+    if not output_path.exists() or output_path.stat().st_size == 0:
         logging.error(f"pblat output file missing or empty: {output_psl}")
         sys.exit(1)
 

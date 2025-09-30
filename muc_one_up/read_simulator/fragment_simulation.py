@@ -8,11 +8,9 @@ PSL alignments and produces fragment pairs for later sequencing.
 """
 
 import logging
-import math
-import os
 import random
 import sys
-from typing import Dict, List, Tuple, Optional
+from pathlib import Path
 
 # Map for DNA complementation
 COMP_MAP = {
@@ -29,7 +27,7 @@ COMP_MAP = {
 }
 
 
-def read_fasta_to_dict(fasta_file: str) -> Dict[str, str]:
+def read_fasta_to_dict(fasta_file: str) -> dict[str, str]:
     """
     Read a FASTA file into a dictionary mapping chromosome names to sequences.
 
@@ -48,7 +46,7 @@ def read_fasta_to_dict(fasta_file: str) -> Dict[str, str]:
     current_seq = []
 
     try:
-        with open(fasta_file, "r") as f:
+        with Path(fasta_file).open() as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -68,7 +66,7 @@ def read_fasta_to_dict(fasta_file: str) -> Dict[str, str]:
             if current_chrom:
                 sequences[current_chrom] = "".join(current_seq)
     except Exception as e:
-        logging.error(f"Error reading FASTA file {fasta_file}: {str(e)}")
+        logging.error(f"Error reading FASTA file {fasta_file}: {e!s}")
         raise
 
     return sequences
@@ -76,7 +74,7 @@ def read_fasta_to_dict(fasta_file: str) -> Dict[str, str]:
 
 def read_syser_file(
     syser_file: str,
-) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str]]:
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
     """
     Read the systematic errors file and return four dictionaries.
 
@@ -99,7 +97,7 @@ def read_syser_file(
     rat = False
 
     try:
-        with open(syser_file, "r") as f:
+        with Path(syser_file).open() as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -138,13 +136,13 @@ def read_syser_file(
                             # Reverse the string for reverse reads
                             tendendict_r[identifier] = line[::-1]
     except Exception as e:
-        logging.error(f"Error reading systematic errors file {syser_file}: {str(e)}")
+        logging.error(f"Error reading systematic errors file {syser_file}: {e!s}")
         raise
 
     return tendendict_f, tendendict_r, ratesdict_f, ratesdict_r
 
 
-def read_psl_file(psl_file: str) -> List[Tuple[str, int, int, str]]:
+def read_psl_file(psl_file: str) -> list[tuple[str, int, int, str]]:
     """
     Read a PSL file (skipping header lines) and return a list of matches.
 
@@ -162,7 +160,7 @@ def read_psl_file(psl_file: str) -> List[Tuple[str, int, int, str]]:
     matches = []
 
     try:
-        with open(psl_file, "r") as f:
+        with Path(psl_file).open() as f:
             line_num = 0
             for line in f:
                 line_num += 1
@@ -179,9 +177,7 @@ def read_psl_file(psl_file: str) -> List[Tuple[str, int, int, str]]:
 
                 cols = line.split("\t")
                 if len(cols) < 21:
-                    logging.warning(
-                        f"Skipping invalid PSL line {line_num}: insufficient columns"
-                    )
+                    logging.warning(f"Skipping invalid PSL line {line_num}: insufficient columns")
                     continue
 
                 # Example PSL format: matches misMatches repMatches nCount
@@ -195,7 +191,7 @@ def read_psl_file(psl_file: str) -> List[Tuple[str, int, int, str]]:
 
                 matches.append((chrom, start, end, strand))
     except Exception as e:
-        logging.error(f"Error reading PSL file {psl_file}: {str(e)}")
+        logging.error(f"Error reading PSL file {psl_file}: {e!s}")
         raise
 
     if not matches:
@@ -205,8 +201,8 @@ def read_psl_file(psl_file: str) -> List[Tuple[str, int, int, str]]:
 
 
 def pick_on_match(
-    matches: List[Tuple[str, int, int, str]],
-) -> Tuple[str, int, int, str]:
+    matches: list[tuple[str, int, int, str]],
+) -> tuple[str, int, int, str]:
     """
     Randomly pick one match from the provided list.
 
@@ -244,8 +240,8 @@ def get_insert_length(mu: float, sigma: float, lower: int) -> int:
 
 
 def pick_fragment(
-    match: Tuple[str, int, int, str], ins: int, bind: float
-) -> Tuple[str, int, int, str]:
+    match: tuple[str, int, int, str], ins: int, bind: float
+) -> tuple[str, int, int, str]:
     """
     Randomly pick a fragment based on a match and desired insert length.
 
@@ -308,7 +304,7 @@ def simulate_fragments(
     output_fragments: str,
 ) -> None:
     """
-    Simulate fragments (port of w‑Wessim2) and write paired fragment sequences to a FASTA file.
+    Simulate fragments (port of w-Wessim2) and write paired fragment sequences to a FASTA file.
 
     Args:
         ref_fa: Reference FASTA file.
@@ -332,20 +328,18 @@ def simulate_fragments(
         genome = read_fasta_to_dict(ref_fa)
         logging.info(f"Loaded {len(genome)} sequences from reference")
     except Exception as e:
-        logging.error(f"Failed to load reference FASTA: {str(e)}")
+        logging.error(f"Failed to load reference FASTA: {e!s}")
         sys.exit(1)
 
     # Load systematic errors
     try:
         logging.info(f"Reading systematic errors file: {syser_file}")
-        tendendict_f, tendendict_r, ratesdict_f, ratesdict_r = read_syser_file(
-            syser_file
-        )
+        tendendict_f, tendendict_r, ratesdict_f, ratesdict_r = read_syser_file(syser_file)
         logging.info(
             f"Loaded {len(tendendict_f)} forward and {len(tendendict_r)} reverse positions"
         )
     except Exception as e:
-        logging.error(f"Failed to load systematic errors: {str(e)}")
+        logging.error(f"Failed to load systematic errors: {e!s}")
         sys.exit(1)
 
     # Load PSL matches
@@ -354,7 +348,7 @@ def simulate_fragments(
         matches = read_psl_file(psl_file)
         logging.info(f"Loaded {len(matches)} matches from PSL file")
     except Exception as e:
-        logging.error(f"Failed to load PSL matches: {str(e)}")
+        logging.error(f"Failed to load PSL matches: {e!s}")
         sys.exit(1)
 
     if not matches:
@@ -363,7 +357,7 @@ def simulate_fragments(
 
     # Simulate fragments and write to FASTA file
     try:
-        with open(output_fragments, "w") as fout:
+        with Path(output_fragments).open("w") as fout:
             for i in range(read_number):
                 # Pick a random match from the PSL file
                 match = pick_on_match(matches)
@@ -391,9 +385,7 @@ def simulate_fragments(
 
                 # Skip if fragment is too short after adjustment
                 if fend - fstart < min_fragment:
-                    logging.debug(
-                        f"Fragment too short after adjustment: {fend - fstart} bp"
-                    )
+                    logging.debug(f"Fragment too short after adjustment: {fend - fstart} bp")
                     continue
 
                 # Get fragment sequence
@@ -423,22 +415,14 @@ def simulate_fragments(
                 # Write fragment read pair to FASTA with appropriate headers
                 # reseq expects format: >id 1;length;tendencies;rates
                 if strand == "+":
-                    fout.write(
-                        f">{i+1} 1;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n"
-                    )
+                    fout.write(f">{i+1} 1;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n")
                     fout.write(f"{frag_seq}\n")
-                    fout.write(
-                        f">{i+1} 2;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n"
-                    )
+                    fout.write(f">{i+1} 2;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n")
                     fout.write(f"{frag_seq_rc}\n")
                 elif strand == "-":
-                    fout.write(
-                        f">{i+1} 1;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n"
-                    )
+                    fout.write(f">{i+1} 1;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n")
                     fout.write(f"{frag_seq_rc}\n")
-                    fout.write(
-                        f">{i+1} 2;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n"
-                    )
+                    fout.write(f">{i+1} 2;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n")
                     fout.write(f"{frag_seq}\n")
 
                 # Progress logging
@@ -447,11 +431,12 @@ def simulate_fragments(
 
         logging.info(f"Fragment simulation completed. Output: {output_fragments}")
     except Exception as e:
-        logging.error(f"Error simulating fragments: {str(e)}")
+        logging.error(f"Error simulating fragments: {e!s}")
         sys.exit(1)
 
     # Check output file exists and is non-empty
-    if not os.path.exists(output_fragments) or os.path.getsize(output_fragments) == 0:
+    output_path = Path(output_fragments)
+    if not output_path.exists() or output_path.stat().st_size == 0:
         logging.error(
             f"Fragment simulation failed: Output file missing or empty: {output_fragments}"
         )

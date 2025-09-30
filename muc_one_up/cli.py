@@ -15,39 +15,34 @@ It supports:
 """
 
 import argparse
+import itertools
 import json
 import logging
 import random
 import sys
-import os
-import itertools
 import time  # NEW: imported for simulation statistics timing
+from pathlib import Path
 
+from .fasta_writer import write_fasta  # Helper for writing FASTA files
+
+# NEW: import simulation statistics module
+from .io import parse_vntr_structure_file  # NEW: import structure file parser
 from .mutate import apply_mutations
-from .snp_integrator import (
-    parse_snp_file,
-    generate_random_snps,
-    apply_snps_to_sequences,
-    get_vntr_boundaries,
-    write_snps_to_file,
-)
 from .read_simulation import simulate_reads as simulate_reads_pipeline
 from .simulate import simulate_diploid, simulate_from_chains
-from .translate import run_orf_finder_in_memory
-from .fasta_writer import write_fasta  # Helper for writing FASTA files
-from .version import __version__  # Import version from the single source
 from .simulation_statistics import (
     generate_simulation_statistics,
     write_statistics_report,
-)  # NEW: import simulation statistics module
-from .io import parse_vntr_structure_file  # NEW: import structure file parser
+)
 from .snp_integrator import (
-    parse_snp_file,
-    generate_random_snps,
     apply_snps_to_sequences,
-    write_snps_to_file,
+    generate_random_snps,
     get_vntr_boundaries,
-)  # NEW: import SNP integrator module
+    parse_snp_file,
+    write_snps_to_file,
+)
+from .translate import run_orf_finder_in_memory
+from .version import __version__  # Import version from the single source
 
 
 def build_parser():
@@ -63,9 +58,7 @@ def build_parser():
         version="%(prog)s " + __version__,
         help="Print the version number and exit.",
     )
-    parser.add_argument(
-        "--config", required=True, help="Path to JSON configuration file."
-    )
+    parser.add_argument("--config", required=True, help="Path to JSON configuration file.")
     # Base name and output directory for all output files.
     parser.add_argument(
         "--out-base",
@@ -291,9 +284,7 @@ def configure_logging(level_str):
         if root_logger.handlers:
             for handler in root_logger.handlers[:]:
                 root_logger.removeHandler(handler)
-        logging.basicConfig(
-            level=level, format="%(asctime)s - %(levelname)s - %(message)s"
-        )
+        logging.basicConfig(level=level, format="%(asctime)s - %(levelname)s - %(message)s")
         logging.info("Logging configured at level: %s", level_str.upper())
 
 
@@ -346,7 +337,7 @@ def numbered_filename(
     """
     iter_str = f".{iteration:03d}"
     variant_str = f".{variant}" if variant else ""
-    return os.path.join(out_dir, f"{out_base}{iter_str}{variant_str}.{file_type}")
+    return str(Path(out_dir) / f"{out_base}{iter_str}{variant_str}.{file_type}")
 
 
 def main():
@@ -359,7 +350,7 @@ def main():
 
     # Load configuration.
     try:
-        with open(args.config) as fh:
+        with Path(args.config).open() as fh:
             config = json.load(fh)
         logging.info("Configuration loaded from %s", args.config)
 
@@ -379,8 +370,7 @@ def main():
     # Normalize output folder and base name.
     out_dir = args.out_dir
     out_base = args.out_base
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
 
     # Process --input-structure if provided
     predefined_chains = None
@@ -411,9 +401,7 @@ def main():
 
             # If --simulate-series is provided, warn that it's ignored
             if args.simulate_series is not None:
-                logging.warning(
-                    "--simulate-series is ignored when using --input-structure"
-                )
+                logging.warning("--simulate-series is ignored when using --input-structure")
         except Exception as e:
             logging.error("Error parsing structure file: %s", e)
             sys.exit(1)
@@ -464,9 +452,7 @@ def main():
 
         # Convert tuple format [(1, 25)] to string format ["1,25"] for CLI compatibility
         target_tuples = structure_mutation_info["targets"]
-        args.mutation_targets = [
-            f"{hap_idx},{rep_idx}" for hap_idx, rep_idx in target_tuples
-        ]
+        args.mutation_targets = [f"{hap_idx},{rep_idx}" for hap_idx, rep_idx in target_tuples]
 
         logging.info(
             "Using mutation information from structure file: %s at targets %s",
@@ -478,9 +464,7 @@ def main():
         if "," in args.mutation_name:
             mutation_pair = [s.strip() for s in args.mutation_name.split(",")]
             if mutation_pair[0].lower() != "normal":
-                logging.error(
-                    "In dual simulation mode, the first mutation-name must be 'normal'."
-                )
+                logging.error("In dual simulation mode, the first mutation-name must be 'normal'.")
                 sys.exit(1)
             dual_mutation_mode = True
             logging.info("Using mutations from command line: %s", mutation_pair)
@@ -493,9 +477,7 @@ def main():
             if fixed_conf == "from_structure":
                 # Use predefined chains from structure file without applying mutations here
                 # Mutations will be applied later using the standard pipeline
-                results = simulate_from_chains(
-                    predefined_chains=predefined_chains, config=config
-                )
+                results = simulate_from_chains(predefined_chains=predefined_chains, config=config)
             else:
                 # Use the standard simulation function
                 results = simulate_diploid(
@@ -532,10 +514,7 @@ def main():
                             logging.error("Invalid --mutation-targets format: '%s'", t)
                             sys.exit(1)
                 else:
-                    if (
-                        "mutations" not in config
-                        or mutation_pair[1] not in config["mutations"]
-                    ):
+                    if "mutations" not in config or mutation_pair[1] not in config["mutations"]:
                         logging.error(
                             "Mutation '%s' not found in config['mutations'].",
                             mutation_pair[1],
@@ -544,7 +523,7 @@ def main():
                     mut_def = config["mutations"][mutation_pair[1]]
                     allowed_repeats = set(mut_def["allowed_repeats"])
                     possible_targets = []
-                    for hap_idx, (seq, chain) in enumerate(results, start=1):
+                    for hap_idx, (_seq, chain) in enumerate(results, start=1):
                         for rep_idx, sym in enumerate(chain, start=1):
                             pure_sym = sym.replace("m", "")
                             if pure_sym in allowed_repeats:
@@ -584,9 +563,7 @@ def main():
 
                             mutation_positions.append((hap_i, rep_i))
                         except Exception as e:
-                            logging.error(
-                                "Invalid --mutation-targets format: '%s' (%s)", t, e
-                            )
+                            logging.error("Invalid --mutation-targets format: '%s' (%s)", t, e)
                             sys.exit(1)
                     try:
                         results, mutated_units = apply_mutations(
@@ -611,7 +588,7 @@ def main():
                         mut_def = config["mutations"][args.mutation_name]
                         allowed_repeats = set(mut_def["allowed_repeats"])
                         possible_targets = []
-                        for hap_idx, (seq, chain) in enumerate(results, start=1):
+                        for hap_idx, (_seq, chain) in enumerate(results, start=1):
                             for rep_idx, sym in enumerate(chain, start=1):
                                 pure_sym = sym.replace("m", "")
                                 if pure_sym in allowed_repeats:
@@ -627,9 +604,7 @@ def main():
                             mutation_name=args.mutation_name,
                             targets=[rand_target],
                         )
-                        logging.info(
-                            "Mutation applied at random target: %s", str(rand_target)
-                        )
+                        logging.info("Mutation applied at random target: %s", str(rand_target))
                     except Exception as e:
                         logging.error("Random-target mutation failed: %s", e)
                         sys.exit(1)
@@ -639,9 +614,7 @@ def main():
             normal_out = numbered_filename(
                 out_dir, out_base, sim_index, "simulated.fa", variant="normal"
             )
-            mut_out = numbered_filename(
-                out_dir, out_base, sim_index, "simulated.fa", variant="mut"
-            )
+            mut_out = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="mut")
             try:
                 # Process SNPs if requested (either from file or random generation)
                 applied_snp_info_normal = {}
@@ -668,9 +641,7 @@ def main():
                 elif args.random_snps:
                     # Validate required parameters for random SNP generation
                     if not args.random_snp_density:
-                        logging.error(
-                            "--random-snp-density is required when --random-snps is used"
-                        )
+                        logging.error("--random-snp-density is required when --random-snps is used")
                         sys.exit(1)
                     if not args.random_snp_output_file:
                         logging.error(
@@ -706,32 +677,28 @@ def main():
                 # Apply SNPs if we have any from either source
                 if snps_from_source:
                     # Apply to normal sequences
-                    modified_normal_sequences, applied_snp_info_normal = (
-                        apply_snps_to_sequences(normal_sequences, snps_from_source)
+                    modified_normal_sequences, applied_snp_info_normal = apply_snps_to_sequences(
+                        normal_sequences, snps_from_source
                     )
 
                     # Apply to mutated sequences - need to create a copy of the SNPs
                     # since positions might be different due to mutations
                     # Skip reference check for mutated sequences since mutations might have
                     # altered the sequence at SNP positions
-                    modified_mutated_sequences, applied_snp_info_mut = (
-                        apply_snps_to_sequences(
-                            mutated_sequences,
-                            snps_from_source,
-                            skip_reference_check=True,
-                        )
+                    modified_mutated_sequences, applied_snp_info_mut = apply_snps_to_sequences(
+                        mutated_sequences,
+                        snps_from_source,
+                        skip_reference_check=True,
                     )
 
                     # Replace original sequences with modified ones
-                    for i, (seq, chain) in enumerate(normal_results):
+                    for i, (_seq, chain) in enumerate(normal_results):
                         normal_results[i] = (modified_normal_sequences[i], chain)
 
-                    for i, (seq, chain) in enumerate(mutated_results):
+                    for i, (_seq, chain) in enumerate(mutated_results):
                         mutated_results[i] = (modified_mutated_sequences[i], chain)
 
-                    normal_snps_count = sum(
-                        len(v) for v in applied_snp_info_normal.values()
-                    )
+                    normal_snps_count = sum(len(v) for v in applied_snp_info_normal.values())
                     mut_snps_count = sum(len(v) for v in applied_snp_info_mut.values())
 
                     logging.info(
@@ -746,16 +713,16 @@ def main():
                 )
 
                 # Add mutation information for mutated results
-                mutation_comment = f"Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})"
+                mutation_comment = (
+                    f"Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})"
+                )
                 write_fasta(
                     [seq for seq, chain in mutated_results],
                     mut_out,
                     comment=mutation_comment,
                 )
 
-                logging.info(
-                    "Dual FASTA outputs written: %s and %s", normal_out, mut_out
-                )
+                logging.info("Dual FASTA outputs written: %s and %s", normal_out, mut_out)
             except Exception as e:
                 logging.error("Writing FASTA failed: %s", e)
                 sys.exit(1)
@@ -787,11 +754,11 @@ def main():
                                 mutation_targets.append(t)
 
                     # Apply comments only to targeted haplotypes
-                    for hap_idx, rep_idx in mutation_targets:
+                    for hap_idx, _rep_idx in mutation_targets:
                         if 1 <= hap_idx <= len(results):  # 1-indexed haplotype numbers
-                            haplotype_comments[hap_idx - 1] = (
-                                f"Mutation Applied: {mutation_name} (Targets: {mutation_targets})"
-                            )
+                            haplotype_comments[
+                                hap_idx - 1
+                            ] = f"Mutation Applied: {mutation_name} (Targets: {mutation_targets})"
 
                 # Process SNPs if requested (either from file or random generation)
                 applied_snp_info = {}
@@ -816,9 +783,7 @@ def main():
                 elif args.random_snps:
                     # Validate required parameters for random SNP generation
                     if not args.random_snp_density:
-                        logging.error(
-                            "--random-snp-density is required when --random-snps is used"
-                        )
+                        logging.error("--random-snp-density is required when --random-snps is used")
                         sys.exit(1)
                     if not args.random_snp_output_file:
                         logging.error(
@@ -855,7 +820,7 @@ def main():
                     )
 
                     # Replace original sequences with modified ones
-                    for i, (seq, chain) in enumerate(results):
+                    for i, (_seq, chain) in enumerate(results):
                         results[i] = (modified_sequences[i], chain)
 
                     logging.info(
@@ -881,15 +846,11 @@ def main():
                 out_dir, out_base, sim_index, "mutated_unit.fa", variant=variant_suffix
             )
             try:
-                with open(mutated_unit_out, "w") as muf:
+                with Path(mutated_unit_out).open("w") as muf:
                     for hap_idx, muts in mutated_units.items():
                         for rep_idx, unit_seq in muts:
-                            muf.write(
-                                f">haplotype_{hap_idx}_repeat_{rep_idx}\n{unit_seq}\n"
-                            )
-                logging.info(
-                    "Mutated VNTR unit FASTA output written: %s", mutated_unit_out
-                )
+                            muf.write(f">haplotype_{hap_idx}_repeat_{rep_idx}\n{unit_seq}\n")
+                logging.info("Mutated VNTR unit FASTA output written: %s", mutated_unit_out)
             except Exception as e:
                 logging.error("Writing mutated VNTR unit FASTA failed: %s", e)
                 sys.exit(1)
@@ -904,17 +865,17 @@ def main():
                     out_dir, out_base, sim_index, "vntr_structure.txt", variant="mut"
                 )
                 try:
-                    with open(normal_struct_out, "w") as nf:
+                    with Path(normal_struct_out).open("w") as nf:
                         # Add comment indicating this is a normal (non-mutated) structure
                         nf.write("# Normal sequence (no mutations applied)\n")
-                        for i, (sequence, chain) in enumerate(normal_results, start=1):
+                        for i, (_sequence, chain) in enumerate(normal_results, start=1):
                             chain_str = "-".join(chain)
                             nf.write(f"haplotype_{i}\t{chain_str}\n")
-                    with open(mut_struct_out, "w") as mf:
+                    with Path(mut_struct_out).open("w") as mf:
                         # Add comment indicating the mutation that was applied
                         mutation_comment = f"# Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})\n"
                         mf.write(mutation_comment)
-                        for i, (sequence, chain) in enumerate(mutated_results, start=1):
+                        for i, (_sequence, chain) in enumerate(mutated_results, start=1):
                             chain_str = "-".join(chain)
                             mf.write(f"haplotype_{i}\t{chain_str}\n")
                     logging.info(
@@ -926,11 +887,9 @@ def main():
                     logging.error("Writing structure file failed: %s", e)
                     sys.exit(1)
             else:
-                struct_out = numbered_filename(
-                    out_dir, out_base, sim_index, "vntr_structure.txt"
-                )
+                struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt")
                 try:
-                    with open(struct_out, "w") as struct_fh:
+                    with Path(struct_out).open("w") as struct_fh:
                         # Add mutation information - prioritize info from structure file
                         if structure_mutation_info:
                             # Preserve the original mutation information from input structure
@@ -948,7 +907,7 @@ def main():
                                     f"# Mutation Applied: {args.mutation_name} (Target: random)\n"
                                 )
 
-                        for i, (sequence, chain) in enumerate(results, start=1):
+                        for i, (_sequence, chain) in enumerate(results, start=1):
                             chain_str = "-".join(chain)
                             struct_fh.write(f"haplotype_{i}\t{chain_str}\n")
                     logging.info("Structure file written to %s", struct_out)
@@ -995,9 +954,7 @@ def main():
                         orf_min_aa=args.orf_min_aa,
                         required_prefix=args.orf_aa_prefix,
                     )
-                    logging.info(
-                        "ORF finding completed; peptide FASTA written to %s", orf_out
-                    )
+                    logging.info("ORF finding completed; peptide FASTA written to %s", orf_out)
                 except Exception as e:
                     logging.error("ORF finding failed: %s", e)
                     sys.exit(1)
@@ -1028,9 +985,9 @@ def main():
                 stats_file_mut = numbered_filename(
                     out_dir, out_base, sim_index, "orf_stats.txt", variant="mut"
                 )
-                with open(stats_file_normal, "w") as nf:
+                with Path(stats_file_normal).open("w") as nf:
                     json.dump(normal_stats, nf, indent=4)
-                with open(stats_file_mut, "w") as mf:
+                with Path(stats_file_mut).open("w") as mf:
                     json.dump(mut_stats, mf, indent=4)
                 logging.info(
                     "Toxic protein detection stats written: %s and %s",
@@ -1038,13 +995,11 @@ def main():
                     stats_file_mut,
                 )
             else:
-                stats_file = numbered_filename(
-                    out_dir, out_base, sim_index, "orf_stats.txt"
-                )
+                stats_file = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt")
                 stats = scan_orf_fasta(
                     orf_out, left_const=left_const_val, right_const=right_const_val
                 )
-                with open(stats_file, "w") as sf:
+                with Path(stats_file).open("w") as sf:
                     json.dump(stats, sf, indent=4)
                 logging.info("Toxic protein detection stats written: %s", stats_file)
             # ----------------------------------------------------------------
@@ -1057,9 +1012,7 @@ def main():
             config["read_simulation"]["simulator"] = args.simulate_reads
 
             simulator_type = args.simulate_reads
-            simulator_name = (
-                "Oxford Nanopore" if simulator_type == "ont" else "Illumina"
-            )
+            simulator_name = "Oxford Nanopore" if simulator_type == "ont" else "Illumina"
 
             if dual_mutation_mode:
                 normal_fa_for_reads = numbered_filename(
@@ -1107,9 +1060,7 @@ def main():
                     )
                     sys.exit(1)
             else:
-                sim_fa_for_reads = numbered_filename(
-                    out_dir, out_base, sim_index, "simulated.fa"
-                )
+                sim_fa_for_reads = numbered_filename(out_dir, out_base, sim_index, "simulated.fa")
                 try:
                     logging.info(
                         "Starting %s read simulation pipeline for iteration %d.",
@@ -1123,17 +1074,13 @@ def main():
                         sim_index,
                     )
                 except Exception as e:
-                    logging.error(
-                        "%s read simulation pipeline failed: %s", simulator_name, e
-                    )
+                    logging.error("%s read simulation pipeline failed: %s", simulator_name, e)
                     sys.exit(1)
 
         # ----------------------------------------------------------------
         # NEW: Generate simulation statistics report for this iteration.
         iteration_end = time.time()
-        vntr_coverage_stats = (
-            {}
-        )  # This can be filled with VNTR coverage data if available
+        vntr_coverage_stats = {}  # This can be filled with VNTR coverage data if available
         if dual_mutation_mode:
             normal_stats_report = generate_simulation_statistics(
                 start_time=iteration_start,
@@ -1143,9 +1090,7 @@ def main():
                 mutation_info={"mutation_name": "normal"},
                 vntr_coverage=vntr_coverage_stats,
                 applied_snp_info=(
-                    applied_snp_info_normal
-                    if "applied_snp_info_normal" in locals()
-                    else None
+                    applied_snp_info_normal if "applied_snp_info_normal" in locals() else None
                 ),
             )
             mutated_stats_report = generate_simulation_statistics(
