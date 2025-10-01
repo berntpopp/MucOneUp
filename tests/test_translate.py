@@ -58,7 +58,7 @@ def test_predict_orfs_in_haplotypes_basic(tmp_path):
     assert len(haplotype_orfs) == 1
     orfs = next(iter(haplotype_orfs.values()))
     assert len(orfs) == 1  # we expect one kept ORF
-    orf_id, peptide, start, stop, strand, desc = orfs[0]
+    _orf_id, peptide, _start, _stop, _strand, _desc = orfs[0]
     # "MK" => length=2
     assert peptide == "MK"
 

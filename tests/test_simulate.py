@@ -56,7 +56,7 @@ def test_simulate_single_haplotype_override_min_len(simple_config):
     def patched(cfg, target_length):
         return simulate_single_haplotype(cfg, target_length, min_length=2)
 
-    seq, chain = patched(simple_config, target_length=3)
+    seq, _chain = patched(simple_config, target_length=3)
     # We have a small chain. Possibly 2 or 3 repeats, depending on logic.
     # Just confirm it produced something valid:
     assert seq.startswith("TTTT")  # left const

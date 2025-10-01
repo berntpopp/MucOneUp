@@ -273,7 +273,7 @@ class TestMutateErrorConditions:
 
         # Should have applied delete_insert successfully
         assert len(updated) == 1
-        new_seq, new_chain = updated[0]
+        _new_seq, new_chain = updated[0]
         assert new_chain[0] == "Xm"
 
     def test_delete_insert_out_of_bounds(self, mutation_config):
@@ -325,6 +325,6 @@ class TestMutateErrorConditions:
         # Target the 3rd repeat (B)
         updated, _ = apply_mutations(mutation_config, results, "testMut", [(1, 3)])
 
-        new_seq, new_chain = updated[0]
+        _new_seq, new_chain = updated[0]
         # Third repeat should be marked
         assert new_chain[2] == "Bm"

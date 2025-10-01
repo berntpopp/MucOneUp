@@ -66,7 +66,7 @@ class TestParseVntrStructureFile:
             "haplotype_2\t1-2-A-B-6p-7-8-9\n"
         )
 
-        chains, mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
+        chains, _mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
 
         assert len(chains) == 2
         assert chains[0] == ["1", "2", "X", "B", "6", "7", "8", "9"]
@@ -79,7 +79,7 @@ class TestParseVntrStructureFile:
             "\n" "haplotype_1\t1-2-X-B-6-7-8-9\n" "\n" "\n" "haplotype_2\t1-2-A-B-6p-7-8-9\n" "\n"
         )
 
-        chains, mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
+        chains, _mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
 
         assert len(chains) == 2
 
@@ -88,7 +88,7 @@ class TestParseVntrStructureFile:
         structure_file = tmp_path / "structure.txt"
         structure_file.write_text("haplotype_1\t1-2-X-B-6-7-8-9\n")
 
-        chains, mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
+        chains, _mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
 
         assert len(chains) == 1
         assert chains[0] == ["1", "2", "X", "B", "6", "7", "8", "9"]
@@ -99,7 +99,7 @@ class TestParseVntrStructureFile:
         lines = [f"haplotype_{i}\t1-2-X-B-6-7-8-9\n" for i in range(1, 11)]
         structure_file.write_text("".join(lines))
 
-        chains, mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
+        chains, _mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
 
         assert len(chains) == 10
         for chain in chains:
@@ -160,7 +160,7 @@ class TestParseVntrStructureFile:
             "haplotype_2\t1-2-A-B-X-C-A-B-X-C-6-7-8-9\n"
         )
 
-        chains, mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
+        chains, _mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
 
         assert len(chains) == 2
         assert len(chains[0]) == 19  # 1-2-X-X-X-A-A-A-B-B-B-C-6-6p-6-6p-7-8-9
