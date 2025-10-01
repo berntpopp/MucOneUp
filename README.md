@@ -405,19 +405,24 @@ muconeup --config config.json reads ont output/muc1.001.simulated.fa --out-base 
 
 **8. Batch processing multiple files (Unix philosophy):**
 ```bash
-# Analyze multiple files at once (glob pattern)
+# Option 1: Built-in batch processing (glob pattern - EASIEST)
 muconeup --config config.json analyze orfs output/*.simulated.fa
-
-# Read simulation for all files
 muconeup --config config.json reads illumina output/*.simulated.fa --coverage 30
 
-# Or use shell loop for complex workflows
+# Option 2: Shell loop (most portable, good for complex logic)
 for file in output/*.simulated.fa; do
   base=$(basename "$file" .fa)
   muconeup --config config.json reads illumina "$file"
   muconeup --config config.json analyze orfs "$file"
 done
+
+# Option 3: xargs (traditional Unix tool)
+ls output/*.simulated.fa | xargs -I {} muconeup --config config.json reads illumina {}
+
+# Option 4: GNU parallel (parallel execution - FASTEST for large batches)
+ls output/*.simulated.fa | parallel muconeup --config config.json reads illumina {}
 ```
+See example 13 below for more xargs/parallel patterns.
 
 #### SNP Integration
 
@@ -455,7 +460,31 @@ muconeup --config config.json analyze orfs muc1_series.*.simulated.fa
 muconeup --config config.json reads illumina muc1_series.*.simulated.fa --coverage 30
 ```
 
-**13. External FASTA analysis:**
+**13. Unix composition with xargs and GNU parallel:**
+```bash
+# Using xargs (sequential processing)
+ls muc1_series.*.simulated.fa | xargs -I {} muconeup --config config.json reads illumina {}
+
+# Using xargs with parallel processing (-P flag)
+ls muc1_series.*.simulated.fa | xargs -P 4 -I {} muconeup --config config.json reads illumina {}
+
+# Using GNU parallel (automatic CPU core detection, safer output handling)
+ls muc1_series.*.simulated.fa | parallel muconeup --config config.json reads illumina {}
+
+# GNU parallel with progress bar and specific jobs
+parallel --bar -j 8 muconeup --config config.json reads illumina {} ::: muc1_series.*.simulated.fa
+
+# Complex pipeline with GNU parallel
+parallel -j 4 "muconeup --config config.json reads illumina {} && \
+                muconeup --config config.json analyze orfs {}" ::: muc1_series.*.simulated.fa
+```
+
+**Why use xargs/parallel?**
+- **xargs**: Portable, available everywhere, ~0.3ms/job overhead
+- **GNU parallel**: Safer (prevents output mixing), auto-detects CPU cores, requires installation
+- **Best for**: Very large batches, compute-intensive workloads, parallelizing across machines
+
+**14. External FASTA analysis:**
 ```bash
 # Analyze ANY external FASTA file (not just MucOneUp outputs)
 muconeup --config config.json analyze orfs /path/to/external.fa --out-base external_orfs
