@@ -1,12 +1,12 @@
 """
 CLI package for MucOneUp.
 
-This package contains the modularized command-line interface following SOLID principles.
+Click-based CLI following Unix philosophy and SOLID principles.
 
 Public API:
-    - main(): Entry point for the CLI application
+    - main(): Entry point for the Click CLI application
 """
 
-from .main import main
+from .click_main import main
 
 __all__ = ["main"]

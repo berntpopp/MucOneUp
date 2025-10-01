@@ -26,8 +26,29 @@ from .config import (
     process_mutation_config,
     setup_configuration,
 )
-from .main import configure_logging
 from .orchestration import run_single_simulation_iteration
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+
+
+def configure_logging(level_str: str) -> None:
+    """Configure root logging based on the provided level string.
+
+    If level_str is 'NONE', disable logging.
+    """
+    if level_str.upper() == "NONE":
+        logging.disable(logging.CRITICAL)
+    else:
+        level = getattr(logging, level_str.upper(), logging.INFO)
+        root_logger = logging.getLogger()
+        if root_logger.handlers:
+            for handler in root_logger.handlers[:]:
+                root_logger.removeHandler(handler)
+        logging.basicConfig(level=level, format="%(asctime)s - %(levelname)s - %(message)s")
+        logging.info("Logging configured at level: %s", level_str.upper())
+
 
 # ============================================================================
 # Root CLI Group

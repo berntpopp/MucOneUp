@@ -40,7 +40,7 @@ dev = [
 ]
 
 [project.scripts]
-muconeup = "muc_one_up.cli:main"
+muconeup = "muc_one_up.cli.click_main:main"
 
 [project.urls]
 Homepage = "https://github.com/berntpopp/MucOneUp"
