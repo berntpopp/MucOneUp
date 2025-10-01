@@ -34,6 +34,7 @@ Additionally, MucOneUp supports **multiple read simulation pipelines**:
 
 - [Installation](#installation)
 - [Installing Required Reference Files](#installing-required-reference-files)
+- [Migration Guide](#migration-guide)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
   - [Command-Line Arguments](#command-line-arguments)
@@ -178,6 +179,34 @@ Be sure to replace `/path/to/references` with the absolute path where your refer
 ### Step 3. Verify Reference Installation
 
 Before running the full simulation or read simulation pipeline, check that the reference files are accessible and correctly referenced in your config. Review the contents of the `installed_references.json` file and ensure that each required file exists at the specified path.
+
+---
+
+## Migration Guide
+
+**Upgrading from v1.x (argparse) to v2.0 (Click)?**
+
+MucOneUp v2.0 introduces a new Click-based CLI with improved command structure following Unix philosophy. All v1.x functionality is preserved with 100% feature parity.
+
+**Key changes:**
+- Single `muconeup` command → Four specialized commands: `simulate`, `reads`, `analyze`, `pipeline`
+- Each command does ONE thing well
+- Cleaner command composition
+
+**See [docs/MIGRATION_v2.md](docs/MIGRATION_v2.md) for:**
+- Complete side-by-side command comparisons
+- Migration examples for all common workflows
+- Breaking changes (none! - 100% backward compatible at the flag level)
+- Troubleshooting tips
+
+**Quick example:**
+```bash
+# v1.x (deprecated)
+muconeup --config config.json --out-base sample
+
+# v2.0 (current)
+muconeup --config config.json simulate --out-base sample
+```
 
 ---
 
