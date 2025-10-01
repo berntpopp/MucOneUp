@@ -132,7 +132,7 @@ def test_setup_configuration_creates_output_dir(mock_args, tmp_path):
     output_path = tmp_path / "output"
     assert not output_path.exists()
 
-    config, out_dir, out_base = setup_configuration(mock_args)
+    _config, _out_dir, _out_base = setup_configuration(mock_args)
 
     assert output_path.exists()
     assert output_path.is_dir()
@@ -152,7 +152,7 @@ def test_setup_configuration_override_assembly(mock_args, minimal_config):
     """Test reference assembly override."""
     mock_args.reference_assembly = "hg19"
 
-    config, out_dir, out_base = setup_configuration(mock_args)
+    config, _out_dir, _out_base = setup_configuration(mock_args)
 
     assert config["reference_assembly"] == "hg19"
 

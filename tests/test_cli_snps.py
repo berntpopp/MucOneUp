@@ -121,7 +121,7 @@ class TestIntegrateSNPsUnified:
         repeat = "ATCGATCGATCGATCGATCGATCG" * 10
         results = [(f"{left}{repeat}{right}", ["1"])]
 
-        modified_results, applied_snp_info = integrate_snps_unified(
+        modified_results, _applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
         )
 
@@ -150,7 +150,7 @@ class TestIntegrateSNPsUnified:
         repeat = "ATCGATCGATCGATCGATCGATCG" * 10
         results = [(f"{left}{repeat}{right}", ["1"])]
 
-        modified_results, applied_snp_info = integrate_snps_unified(
+        modified_results, _applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
         )
 
@@ -177,7 +177,7 @@ class TestIntegrateSNPsUnified:
             (f"{left}{repeat}{right}", ["2"]),
         ]
 
-        modified_results, applied_snp_info = integrate_snps_unified(
+        modified_results, _applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
         )
 
@@ -199,7 +199,7 @@ class TestIntegrateSNPsUnified:
 
         # Should not raise error with skip_reference_check=True
         # SNPs that don't match reference will be skipped, but no error raised
-        modified_results, applied_snp_info = integrate_snps_unified(
+        modified_results, _applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=True
         )
 
@@ -236,7 +236,7 @@ class TestIntegrateSNPsUnified:
         results = [(f"{left}{repeat}{right}", ["1"])]
 
         # Should not raise error, just log it
-        modified_results, applied_snp_info = integrate_snps_unified(
+        modified_results, _applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
         )
 
@@ -258,7 +258,7 @@ class TestIntegrateSNPsUnified:
         original_chain = ["1", "2", "X"]
         results = [("ATCGATCGATCGATCGATCG", original_chain)]
 
-        modified_results, applied_snp_info = integrate_snps_unified(
+        modified_results, _applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
         )
 
