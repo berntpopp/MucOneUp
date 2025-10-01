@@ -98,7 +98,7 @@ class TestWriteFastaOutputs:
         mock_args.mutation_name = "dupC"
         mock_args.mutation_targets = ["1,25", "2,30"]
 
-        out_results, mutated_results, snp_info_normal, snp_info_mut = write_fasta_outputs(
+        _out_results, _mutated_results, _snp_info_normal, _snp_info_mut = write_fasta_outputs(
             args=mock_args,
             config=minimal_config,
             out_dir=str(tmp_path),
@@ -130,7 +130,7 @@ class TestWriteFastaOutputs:
             (sample_results[1][0], ["1", "2", "Am", "B", "6p", "7", "8", "9"]),
         ]
 
-        out_results, mut_results, snp_info_normal, _snp_info_mut = write_fasta_outputs(
+        _out_results, _mut_results, _snp_info_normal, _snp_info_mut = write_fasta_outputs(
             args=mock_args,
             config=minimal_config,
             out_dir=str(tmp_path),

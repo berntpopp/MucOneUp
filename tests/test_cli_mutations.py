@@ -54,7 +54,7 @@ class TestApplyMutationPipeline:
         # Mock the apply_mutations to return expected structure
         mock_apply.return_value = (results, {"mutated": "units"})
 
-        res, mut_res, mut_units, mut_pos = apply_mutation_pipeline(
+        _res, mut_res, mut_units, mut_pos = apply_mutation_pipeline(
             args=args,
             config=minimal_config,
             results=results,
@@ -81,7 +81,7 @@ class TestApplyMutationPipeline:
 
         mock_apply.return_value = (results, {"mutated": "units"})
 
-        res, mut_res, mut_units, mut_pos = apply_mutation_pipeline(
+        _res, _mut_res, mut_units, mut_pos = apply_mutation_pipeline(
             args=args,
             config=minimal_config,
             results=results,
@@ -134,7 +134,7 @@ class TestApplyMutationPipeline:
 
         mock_apply.return_value = (results, {"mutated": "units"})
 
-        res, mut_res, mut_units, mut_pos = apply_mutation_pipeline(
+        res, mut_res, _mut_units, mut_pos = apply_mutation_pipeline(
             args=args,
             config=minimal_config,
             results=results,
@@ -208,7 +208,7 @@ class TestApplyMutationPipeline:
             {"mutated": "units"},
         )
 
-        res, mut_res, mut_units, mut_pos = apply_mutation_pipeline(
+        res, mut_res, _mut_units, _mut_pos = apply_mutation_pipeline(
             args=args,
             config=minimal_config,
             results=results,
@@ -239,7 +239,7 @@ class TestApplyMutationPipeline:
 
         mock_apply.return_value = (results, {"mutated": "units"})
 
-        res, mut_res, mut_units, mut_pos = apply_mutation_pipeline(
+        _res, _mut_res, _mut_units, mut_pos = apply_mutation_pipeline(
             args=args,
             config=minimal_config,
             results=results,

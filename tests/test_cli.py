@@ -188,7 +188,7 @@ def test_determine_simulation_mode_series(mock_args, minimal_config):
     mock_args.fixed_lengths = ["20-25"]
     mock_args.simulate_series = 2
 
-    sim_configs, chains, mutation_info = determine_simulation_mode(mock_args, minimal_config)
+    sim_configs, _chains, _mutation_info = determine_simulation_mode(mock_args, minimal_config)
 
     assert len(sim_configs) > 1
     # Should generate configs for range with step size
@@ -340,7 +340,7 @@ def test_integrate_snps_unified_file_based(mock_args, minimal_config, sample_res
     snp_file.write_text("1\t5\tA\tG\n")
     mock_args.snp_input_file = str(snp_file)
 
-    results, snp_info = integrate_snps_unified(mock_args, minimal_config, sample_results)
+    _results, snp_info = integrate_snps_unified(mock_args, minimal_config, sample_results)
 
     # Should have attempted to apply SNPs
     assert isinstance(snp_info, dict)
@@ -374,15 +374,15 @@ def test_cli_refactoring_maintains_backwards_compatibility(mock_args, minimal_co
     # This is an integration test to ensure the refactoring doesn't break existing functionality
 
     # Test configuration loading
-    config, out_dir, out_base = setup_configuration(mock_args)
+    config, _out_dir, _out_base = setup_configuration(mock_args)
     assert config is not None
 
     # Test simulation mode determination
-    sim_configs, chains, mutation_info = determine_simulation_mode(mock_args, config)
+    sim_configs, _chains, mutation_info = determine_simulation_mode(mock_args, config)
     assert sim_configs is not None
 
     # Test mutation config processing
-    dual_mode, pair, name = process_mutation_config(mock_args, mutation_info)
+    dual_mode, _pair, _name = process_mutation_config(mock_args, mutation_info)
     assert isinstance(dual_mode, bool)
 
 
