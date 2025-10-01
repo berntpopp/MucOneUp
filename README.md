@@ -50,63 +50,47 @@ Additionally, MucOneUp supports **multiple read simulation pipelines**:
 
 ## Installation
 
+### Requirements
+
+- Python 3.10 or higher
+- pip (Python package installer)
+
 ### For Users
 
-1. **Clone or download** this repository.
-2. **Install** in a Python 3.10+ environment:
-   ```bash
-   pip install .
-   ```
-   This will install the `muc_one_up` Python package locally.
+```bash
+pip install .
+```
+
+This installs the `muconeup` command-line tool.
 
 ### For Developers
 
-This project uses a modern Python development stack with **uv**, **ruff**, **mypy**, and **make** for automation.
+Modern Python tooling with **uv**, **ruff**, **mypy**, and automated **pre-commit hooks**.
 
-1. **Install uv** (fast Python package manager):
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-
-2. **Initialize the development environment**:
-   ```bash
-   make init
-   ```
-   This installs the package in editable mode with all development dependencies.
-
-#### Development Commands
-
-All development tasks are automated via `make`:
-
-| Command | Description |
-|---------|-------------|
-| `make help` | Show all available commands |
-| `make init` | Initialize complete development environment (uv + dev dependencies) |
-| `make dev` | Install package with development dependencies |
-| `make test` | Run tests with coverage |
-| `make lint` | Run ruff linter |
-| `make lint-fix` | Run ruff linter and auto-fix issues |
-| `make format` | Format code with ruff |
-| `make format-check` | Check code formatting without changes |
-| `make type-check` | Run mypy type checker |
-| `make check` | Run all quality checks (lint, format, type-check, test) |
-| `make clean` | Remove build artifacts and cache |
-| `make install` | Install package in current environment |
-
-#### Quick Development Workflow
-
+**Setup:**
 ```bash
-# Setup
+# Install uv (fast package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Initialize environment
 make init
+```
 
-# Development cycle
-make lint-fix    # Auto-fix linting issues
-make format      # Format code
-make type-check  # Check types
-make test        # Run tests
+**Development Commands:**
 
-# Or run all checks at once
-make check
+| Command | Action |
+|---------|--------|
+| `make init` | Setup complete dev environment |
+| `make test` | Run tests with coverage |
+| `make lint` | Check code quality |
+| `make lint-fix` | Auto-fix linting issues |
+| `make format` | Format code |
+| `make type-check` | Run static type checking |
+| `make check` | Run all quality checks |
+
+**Quick workflow:**
+```bash
+make check  # Run all checks before committing
 ```
 
 > **Optional (Conda/Mamba Environments for Read Simulation):**
@@ -447,23 +431,30 @@ This feature is particularly useful for:
 
 ## Project Structure and Logic
 
-The **muc_one_up** Python package is organized into modules. Here is a brief summary:
+**Core modules:**
 
 ```text
 muc_one_up/
-├── cli.py           # Main CLI logic and argument parsing (supports series simulation, dual mutation modes, toxic protein detection, simulation statistics, and read simulation)
-├── config.py        # Loads and validates the JSON configuration file
-├── distribution.py  # Samples the target VNTR length from a specified distribution
-├── fasta_writer.py  # Helper for writing FASTA files with support for per-haplotype mutation comments
-├── mutate.py        # Logic to apply specified mutations (including complex types like delete_insert) to targeted haplotypes
-├── probabilities.py # Provides weighted random selections for repeat transitions
-├── simulate.py      # Core simulation code for building haplotypes (chains of repeats with terminal block insertion)
-├── read_simulation.py  # Integrates an external read simulation pipeline (using w‑Wessim2) to generate reads from simulated FASTA files
-├── translate.py     # Translates DNA to protein and performs ORF prediction using orfipy
-├── toxic_protein_detector.py   # Scans ORF FASTA outputs to detect toxic protein sequence features based on repeat structure and amino acid composition
-├── simulation_statistics.py    # **New Feature**: Generates comprehensive simulation statistics for each simulation run
-└── __init__.py      # Package initialization and version information
+├── cli/                    # CLI modules (config, mutations, outputs, SNPs)
+├── bioinformatics/         # DNA/FASTA/SNP validation
+├── read_simulator/         # Illumina and ONT pipelines
+├── type_defs.py            # Type aliases and Protocol definitions
+├── validation.py           # General validation functions
+├── simulate.py             # Core haplotype simulation
+├── mutate.py               # Mutation application
+├── probabilities.py        # Weighted random selection
+├── distribution.py         # Length sampling from distributions
+├── fasta_writer.py         # FASTA output with mutation annotations
+├── translate.py            # ORF prediction
+├── toxic_protein_detector.py  # Toxic protein feature detection
+└── simulation_statistics.py   # Statistics generation
 ```
+
+**Key features:**
+- Comprehensive type hints with mypy checking
+- Runtime validation with fail-fast error messages
+- 50+ test coverage with 380+ tests
+- Pre-commit hooks for code quality
 
 ### High-Level Logic
 
