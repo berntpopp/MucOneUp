@@ -61,7 +61,7 @@ def parse_snp_file(filepath: str) -> list[dict[str, Any]]:
                 fields = line.split("\t")
                 if len(fields) != 4:
                     raise ValueError(
-                        f"Line {line_num}: Expected 4 tab-separated fields, " f"found {len(fields)}"
+                        f"Line {line_num}: Expected 4 tab-separated fields, found {len(fields)}"
                     )
 
                 # Validate and extract fields
@@ -69,7 +69,7 @@ def parse_snp_file(filepath: str) -> list[dict[str, Any]]:
                     hap_idx = int(fields[0])
                     if hap_idx not in [1, 2]:
                         raise ValueError(
-                            f"Line {line_num}: Haplotype index must be 1 or 2, " f"found {hap_idx}"
+                            f"Line {line_num}: Haplotype index must be 1 or 2, found {hap_idx}"
                         )
 
                     position = int(fields[1])
@@ -224,7 +224,7 @@ def generate_random_snps(
         # Calculate number of SNPs to generate
         target_count = int(len(valid_positions) * rate_per_base)
         logging.debug(
-            f"Target SNP count for haplotype {hap_idx+1}: {target_count} "
+            f"Target SNP count for haplotype {hap_idx + 1}: {target_count} "
             f"(rate: {rate_per_base}, region: {region})"
         )
 
@@ -307,7 +307,7 @@ def apply_snps_to_sequences(
         # Validate haplotype index
         if hap_idx < 0 or hap_idx >= len(mutable_sequences):
             logging.warning(
-                f"SNP specifies invalid haplotype index {snp['haplotype']} " f"(0-based: {hap_idx})"
+                f"SNP specifies invalid haplotype index {snp['haplotype']} (0-based: {hap_idx})"
             )
             continue
 
@@ -318,7 +318,7 @@ def apply_snps_to_sequences(
         if position < 0 or position >= len(sequence):
             logging.warning(
                 f"SNP position {position} out of bounds for haplotype "
-                f"{hap_idx+1} (length: {len(sequence)})"
+                f"{hap_idx + 1} (length: {len(sequence)})"
             )
             continue
 
@@ -330,7 +330,7 @@ def apply_snps_to_sequences(
         if not skip_reference_check and actual_ref != expected_ref:
             logging.warning(
                 f"Reference base mismatch at position {position} in haplotype "
-                f"{hap_idx+1}: expected '{expected_ref}', found '{actual_ref}'"
+                f"{hap_idx + 1}: expected '{expected_ref}', found '{actual_ref}'"
             )
             continue
 
@@ -340,7 +340,7 @@ def apply_snps_to_sequences(
         # Record successful application
         applied_snps[hap_idx].append(snp)
         logging.debug(
-            f"Applied SNP at position {position} in haplotype {hap_idx+1}: "
+            f"Applied SNP at position {position} in haplotype {hap_idx + 1}: "
             f"{expected_ref} -> {snp['alt_base']}"
         )
 
@@ -370,8 +370,7 @@ def write_snps_to_file(snps: list[dict[str, Any]], filepath: str) -> None:
 
             for snp in snps:
                 f.write(
-                    f"{snp['haplotype']}\t{snp['position']}\t"
-                    f"{snp['ref_base']}\t{snp['alt_base']}\n"
+                    f"{snp['haplotype']}\t{snp['position']}\t{snp['ref_base']}\t{snp['alt_base']}\n"
                 )
 
         logging.info(f"Wrote {len(snps)} SNPs to {filepath}")

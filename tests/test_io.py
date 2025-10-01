@@ -24,9 +24,7 @@ class TestParseVntrStructureFile:
     def test_parse_valid_structure_file(self, tmp_path: Path, minimal_config: dict):
         """Test parsing valid structure file succeeds."""
         structure_file = tmp_path / "structure.txt"
-        structure_file.write_text(
-            "haplotype_1\t1-2-X-B-6-7-8-9\n" "haplotype_2\t1-2-A-B-6p-7-8-9\n"
-        )
+        structure_file.write_text("haplotype_1\t1-2-X-B-6-7-8-9\nhaplotype_2\t1-2-A-B-6p-7-8-9\n")
 
         chains, mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
 
@@ -76,7 +74,7 @@ class TestParseVntrStructureFile:
         """Test parsing structure file with empty lines."""
         structure_file = tmp_path / "structure.txt"
         structure_file.write_text(
-            "\n" "haplotype_1\t1-2-X-B-6-7-8-9\n" "\n" "\n" "haplotype_2\t1-2-A-B-6p-7-8-9\n" "\n"
+            "\nhaplotype_1\t1-2-X-B-6-7-8-9\n\n\nhaplotype_2\t1-2-A-B-6p-7-8-9\n\n"
         )
 
         chains, _mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
@@ -145,7 +143,7 @@ class TestParseVntrStructureFile:
     def test_parse_structure_file_only_comments(self, tmp_path: Path, minimal_config: dict):
         """Test parsing file with only comments raises ValueError."""
         structure_file = tmp_path / "structure.txt"
-        structure_file.write_text("# Comment 1\n" "# Comment 2\n" "# Comment 3\n")
+        structure_file.write_text("# Comment 1\n# Comment 2\n# Comment 3\n")
 
         with pytest.raises(ValueError) as exc_info:
             parse_vntr_structure_file(str(structure_file), minimal_config)

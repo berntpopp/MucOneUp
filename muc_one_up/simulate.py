@@ -132,18 +132,18 @@ def simulate_from_chains(
                         # Only add mutation marker if it doesn't already have one
                         if not working_chain[zero_based_idx].endswith("m"):
                             logging.info(
-                                f"Applying mutation '{mutation_name}' to haplotype {i+1}, "
+                                f"Applying mutation '{mutation_name}' to haplotype {i + 1}, "
                                 f"repeat position {repeat_idx} (0-based: {zero_based_idx})"
                             )
                             working_chain[zero_based_idx] = working_chain[zero_based_idx] + "m"
                     else:
                         logging.warning(
                             f"Mutation target repeat index {repeat_idx} (0-based: {zero_based_idx}) "
-                            f"is out of range for haplotype {i+1} (length {len(working_chain)})"
+                            f"is out of range for haplotype {i + 1} (length {len(working_chain)})"
                         )
 
         logging.info(
-            f"Assembling haplotype {i+1} from predefined chain with {len(working_chain)} repeats"
+            f"Assembling haplotype {i + 1} from predefined chain with {len(working_chain)} repeats"
         )
         seq = assemble_haplotype_from_chain(working_chain, config)
         haplotypes.append((seq, working_chain))

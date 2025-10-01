@@ -227,8 +227,7 @@ def align_ont_reads_with_minimap2(
         if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
             # Execute as string command
             view_cmd = (
-                f"{samtools_cmd} view -@ {threads} -b -h -F 4"
-                f" -o {output_bam}.unsorted {sam_path}"
+                f"{samtools_cmd} view -@ {threads} -b -h -F 4 -o {output_bam}.unsorted {sam_path}"
             )
             logging.info("[samtools] Converting SAM to BAM: %s", view_cmd)
             run_command(
@@ -268,7 +267,7 @@ def align_ont_reads_with_minimap2(
         # Sort BAM
         if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
             # Execute as string command
-            sort_cmd = f"{samtools_cmd} sort -@ {threads} " f"-o {output_bam} {output_bam}.unsorted"
+            sort_cmd = f"{samtools_cmd} sort -@ {threads} -o {output_bam} {output_bam}.unsorted"
             logging.info("[samtools] Sorting BAM: %s", sort_cmd)
             run_command(
                 sort_cmd,

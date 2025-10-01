@@ -37,9 +37,7 @@ def validate_reference_genome(
     # Check FASTA index (.fai)
     fai_path = Path(f"{reference_path}.fai")
     if not fai_path.exists():
-        warnings.append(
-            f"FASTA index missing: {fai_path}. " f"Run: samtools faidx {reference_path}"
-        )
+        warnings.append(f"FASTA index missing: {fai_path}. Run: samtools faidx {reference_path}")
 
     # Check aligner-specific indices
     if aligner == "bwa":
@@ -47,9 +45,7 @@ def validate_reference_genome(
     elif aligner == "minimap2":
         warnings.extend(_validate_minimap2_indices(reference_path))
     else:
-        raise ValidationError(
-            f"Unknown aligner: '{aligner}'. " f"Supported aligners: bwa, minimap2"
-        )
+        raise ValidationError(f"Unknown aligner: '{aligner}'. Supported aligners: bwa, minimap2")
 
     return warnings
 
@@ -73,7 +69,7 @@ def _validate_bwa_indices(reference_path: FilePath) -> list[str]:
 
     warnings: list[str] = []
     if missing:
-        warnings.append(f"BWA index files missing: {missing}. " f"Run: bwa index {reference_path}")
+        warnings.append(f"BWA index files missing: {missing}. Run: bwa index {reference_path}")
 
     return warnings
 
@@ -92,7 +88,7 @@ def _validate_minimap2_indices(reference_path: FilePath) -> list[str]:
 
     if not mmi_path.exists():
         warnings.append(
-            f"Minimap2 index missing: {mmi_path}. " f"Run: minimap2 -d {mmi_path} {reference_path}"
+            f"Minimap2 index missing: {mmi_path}. Run: minimap2 -d {mmi_path} {reference_path}"
         )
 
     return warnings
@@ -158,8 +154,7 @@ def validate_bed_file(bed_path: FilePath) -> None:
             fields = line.split("\t")
             if len(fields) < 3:
                 raise ValidationError(
-                    f"Invalid BED format at line {i}: expected at least 3 fields, "
-                    f"got {len(fields)}"
+                    f"Invalid BED format at line {i}: expected at least 3 fields, got {len(fields)}"
                 )
 
             # Validate start/end are integers

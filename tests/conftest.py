@@ -136,7 +136,7 @@ def sample_fasta(tmp_path: Path) -> Path:
     """
     fasta = tmp_path / "sample.fa"
     fasta.write_text(
-        ">haplotype_1\n" "ATCGATCGATCGATCGATCGATCG\n" ">haplotype_2\n" "GCTAGCTAGCTAGCTAGCTAGCTA\n"
+        ">haplotype_1\nATCGATCGATCGATCGATCGATCG\n>haplotype_2\nGCTAGCTAGCTAGCTAGCTAGCTA\n"
     )
     return fasta
 
@@ -149,7 +149,7 @@ def sample_structure_file(tmp_path: Path) -> Path:
         Path to temporary structure file
     """
     structure = tmp_path / "structure.txt"
-    structure.write_text("haplotype_1\t1-2-X-B-6-7-8-9\n" "haplotype_2\t1-2-A-B-6p-7-8-9\n")
+    structure.write_text("haplotype_1\t1-2-X-B-6-7-8-9\nhaplotype_2\t1-2-A-B-6p-7-8-9\n")
     return structure
 
 

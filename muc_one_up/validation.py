@@ -96,7 +96,7 @@ def validate_mutation_exists(mutation_name: str, config: ConfigDict) -> None:
     if mutation_name not in mutations:
         available = list(mutations.keys())
         raise ValidationError(
-            f"Mutation '{mutation_name}' not defined. " f"Available mutations: {available}"
+            f"Mutation '{mutation_name}' not defined. Available mutations: {available}"
         )
 
 
@@ -148,7 +148,7 @@ def validate_repeat_symbol(symbol: str, valid_symbols: set[str]) -> None:
 
     if clean_symbol not in valid_symbols:
         raise ValidationError(
-            f"Invalid repeat symbol: '{symbol}'. " f"Valid symbols: {sorted(valid_symbols)}"
+            f"Invalid repeat symbol: '{symbol}'. Valid symbols: {sorted(valid_symbols)}"
         )
 
 

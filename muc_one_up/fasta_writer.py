@@ -21,14 +21,14 @@ def write_fasta(sequences, filename, prefix="haplotype", comment=None, comments=
 
                 # Use sequence-specific comment if available
                 if comments and i - 1 < len(comments) and comments[i - 1]:
-                    header += f" {comments[i-1]}"
+                    header += f" {comments[i - 1]}"
                 elif comment:  # Fall back to global comment
                     header += f" {comment}"
 
                 # Write the sequence in chunks of 80 characters for readability
                 fh.write(f"{header}\n")
                 for j in range(0, len(seq), 80):
-                    fh.write(f"{seq[j:j+80]}\n")
+                    fh.write(f"{seq[j : j + 80]}\n")
         logging.info("FASTA file written to %s", filename)
     except Exception as e:
         logging.error("Error writing FASTA file: %s", e)

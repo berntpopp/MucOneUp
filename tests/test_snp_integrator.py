@@ -40,9 +40,7 @@ class TestParseSnpFile:
     def test_parse_snp_file_with_comments(self, tmp_path: Path):
         """Test parsing SNP file with comment lines."""
         snp_file = tmp_path / "snps.tsv"
-        snp_file.write_text(
-            "# This is a comment\n" "1\t100\tA\tG\n" "# Another comment\n" "2\t200\tC\tT\n"
-        )
+        snp_file.write_text("# This is a comment\n1\t100\tA\tG\n# Another comment\n2\t200\tC\tT\n")
 
         snps = parse_snp_file(str(snp_file))
 
@@ -53,7 +51,7 @@ class TestParseSnpFile:
     def test_parse_snp_file_with_empty_lines(self, tmp_path: Path):
         """Test parsing SNP file with empty lines."""
         snp_file = tmp_path / "snps.tsv"
-        snp_file.write_text("\n" "1\t100\tA\tG\n" "\n" "\n" "2\t200\tC\tT\n" "\n")
+        snp_file.write_text("\n1\t100\tA\tG\n\n\n2\t200\tC\tT\n\n")
 
         snps = parse_snp_file(str(snp_file))
 
@@ -62,7 +60,7 @@ class TestParseSnpFile:
     def test_parse_snp_file_lowercase_bases(self, tmp_path: Path):
         """Test parsing SNP file with lowercase bases (should be uppercased)."""
         snp_file = tmp_path / "snps.tsv"
-        snp_file.write_text("1\t100\ta\tg\n" "2\t200\tc\tt\n")
+        snp_file.write_text("1\t100\ta\tg\n2\t200\tc\tt\n")
 
         snps = parse_snp_file(str(snp_file))
 

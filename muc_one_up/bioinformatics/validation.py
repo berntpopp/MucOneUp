@@ -40,9 +40,7 @@ def validate_dna_sequence(sequence: DNASequence, allow_ambiguous: bool = True) -
     invalid = bases - allowed
 
     if invalid:
-        raise ValidationError(
-            f"Invalid DNA bases: {sorted(invalid)}. " f"Allowed: {sorted(allowed)}"
-        )
+        raise ValidationError(f"Invalid DNA bases: {sorted(invalid)}. Allowed: {sorted(allowed)}")
 
 
 def validate_fasta_format(fasta_path: str | Path) -> None:
@@ -132,7 +130,7 @@ def validate_snp_base(base: str, allow_ref_mismatch: bool = False) -> None:
 
     upper_base = base.upper()
     if upper_base not in SNP_BASES:
-        raise ValidationError(f"Invalid SNP base: '{base}'. " f"Allowed: {sorted(SNP_BASES)}")
+        raise ValidationError(f"Invalid SNP base: '{base}'. Allowed: {sorted(SNP_BASES)}")
 
 
 def validate_snp_record(

@@ -421,14 +421,14 @@ def simulate_fragments(
                 # Write fragment read pair to FASTA with appropriate headers
                 # reseq expects format: >id 1;length;tendencies;rates
                 if strand == "+":
-                    fout.write(f">{i+1} 1;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n")
+                    fout.write(f">{i + 1} 1;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n")
                     fout.write(f"{frag_seq}\n")
-                    fout.write(f">{i+1} 2;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n")
+                    fout.write(f">{i + 1} 2;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n")
                     fout.write(f"{frag_seq_rc}\n")
                 elif strand == "-":
-                    fout.write(f">{i+1} 1;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n")
+                    fout.write(f">{i + 1} 1;{frag_len};{tendenseq_r_fixed};{ratesseq_r_fixed}\n")
                     fout.write(f"{frag_seq_rc}\n")
-                    fout.write(f">{i+1} 2;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n")
+                    fout.write(f">{i + 1} 2;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n")
                     fout.write(f"{frag_seq}\n")
 
                 # Progress logging
