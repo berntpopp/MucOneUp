@@ -163,20 +163,34 @@ class LazyGroup(click.Group):
 
 ## 3. Proposed CLI Architecture
 
-### Design Philosophy: **Hybrid Approach**
+### Design Philosophy: **Clean Separation (Unix Philosophy)**
 
-After researching Click best practices and bioinformatics CLI patterns, we adopt a **hybrid approach**:
+After researching Click best practices and bioinformatics CLI patterns, we adopt **clean command separation**:
 
-1. **`simulate`** = **Main workflow command** (does everything in one invocation)
-   - Supports pipeline flags (`--simulate-reads`, `--output-orfs`) for integrated workflows
-   - Maintains familiar single-command UX from argparse version
+**Each command does ONE thing well:**
 
-2. **`reads`** and **`analyze`** = **Standalone utility commands**
-   - Work with any FASTA file (not just MucOneUp outputs)
-   - Enable advanced users to run individual pipeline steps
-   - Support external tool integration
+1. **`simulate`** = **ONLY generates haplotypes**
+   - No pipeline options, pure haplotype generation
+   - Follows Single Responsibility Principle
 
-**Rationale:** This balances convenience (common case = one command) with flexibility (can run steps independently), following the pattern of tools like `git pull` (fetch+merge) vs separate `git fetch`/`git merge`.
+2. **`reads`** = **ONLY simulates reads from FASTA**
+   - Works with ANY FASTA file (not just MucOneUp outputs)
+   - Truly reusable utility
+
+3. **`analyze`** = **ONLY analyzes FASTA**
+   - ORF prediction, statistics
+   - Works with ANY FASTA file
+
+4. **`pipeline`** = **Convenience orchestrator**
+   - Uses Click's `ctx.invoke()` to call other commands
+   - Equivalent to chaining commands manually
+   - ONLY command allowed to call others
+
+**Rationale:**
+- Modularity > Monolithic (bioinformatics best practice)
+- Each tool does one thing well (Unix philosophy)
+- Separation of concerns (Click best practice)
+- Commands can be composed (flexibility)
 
 ### High-Level Command Structure
 
@@ -186,62 +200,58 @@ muconeup
 ├── --config <path>              # Global: Required for all commands
 ├── --log-level <level>          # Global: DEBUG/INFO/WARNING/ERROR/CRITICAL/NONE
 │
-├── simulate                     # MAIN WORKFLOW - Complete pipeline in one command
-│   │
-│   ├── [Core Simulation Options]
-│   │   ├── --out-dir <dir>
-│   │   ├── --out-base <name>
-│   │   ├── --num-haplotypes <N>
-│   │   ├── --seed <int>
-│   │   ├── --reference-assembly <hg19|hg38>
-│   │   └── --output-structure       # Flag: Write structure file
-│   │
-│   ├── [Length Options - Mutually Exclusive]
-│   │   ├── --fixed-lengths <values>
-│   │   ├── --input-structure <file>
-│   │   └── --simulate-series [<step>]
-│   │
-│   ├── [Mutation Options]
-│   │   ├── --mutation-name <name>
-│   │   └── --mutation-targets <pairs>
-│   │
-│   ├── [SNP Options - Mutually Exclusive]
-│   │   ├── --snp-input-file <file>
-│   │   └── --random-snps
-│   │       ├── --random-snp-density <float>
-│   │       ├── --random-snp-output-file <file>
-│   │       ├── --random-snp-region <all|constants_only|vntr_only>
-│   │       └── --random-snp-haplotypes <indices>
-│   │
-│   └── [Pipeline Options - Enable integrated workflow]
-│       ├── --simulate-reads <illumina|ont>  # Run read simulation after haplotype generation
-│       ├── --output-orfs                    # Run ORF prediction after haplotype generation
-│       ├── --orf-min-aa <int>               # ORF minimum length (requires --output-orfs)
-│       └── --orf-aa-prefix <prefix>         # ORF prefix filter (requires --output-orfs)
+├── simulate                     # PURE - ONLY generates haplotypes
+│   ├── --out-dir <dir>
+│   ├── --out-base <name>
+│   ├── --num-haplotypes <N>
+│   ├── --seed <int>
+│   ├── --reference-assembly <hg19|hg38>
+│   ├── --output-structure
+│   ├── --fixed-lengths <values>
+│   ├── --input-structure <file>
+│   ├── --simulate-series <step>
+│   ├── --mutation-name <name>
+│   ├── --mutation-targets <pairs>
+│   ├── --snp-input-file <file>
+│   ├── --random-snps
+│   ├── --random-snp-density <float>
+│   ├── --random-snp-output-file <file>
+│   ├── --random-snp-region <all|constants_only|vntr_only>
+│   └── --random-snp-haplotypes <1|2|all>
 │
-├── reads                        # STANDALONE UTILITY - Work with any FASTA
-│   ├── illumina <input_fasta>   # Simulate Illumina short reads
+├── reads                        # PURE - ONLY read simulation
+│   ├── illumina <input_fasta>
 │   │   ├── --out-dir <dir>
 │   │   ├── --out-base <name>
 │   │   ├── --coverage <int>
 │   │   └── --threads <int>
 │   │
-│   └── ont <input_fasta>        # Simulate Oxford Nanopore long reads
+│   └── ont <input_fasta>
 │       ├── --out-dir <dir>
 │       ├── --out-base <name>
 │       ├── --coverage <int>
 │       └── --min-read-length <int>
 │
-└── analyze                      # STANDALONE UTILITY - Work with any FASTA
-    ├── orfs <input_fasta>       # ORF prediction and toxic protein detection
-    │   ├── --out-dir <dir>
-    │   ├── --out-base <name>
-    │   ├── --orf-min-aa <int>
-    │   └── --orf-aa-prefix [<prefix>]
-    │
-    └── stats <input_fasta>      # Generate simulation statistics
-        ├── --out-dir <dir>
-        └── --out-base <name>
+├── analyze                      # PURE - ONLY analysis
+│   ├── orfs <input_fasta>
+│   │   ├── --out-dir <dir>
+│   │   ├── --out-base <name>
+│   │   ├── --orf-min-aa <int>
+│   │   └── --orf-aa-prefix <prefix>
+│   │
+│   └── stats <input_fasta>
+│       ├── --out-dir <dir>
+│       └── --out-base <name>
+│
+└── pipeline                     # ORCHESTRATOR - Calls other commands
+    ├── --out-base <name>
+    ├── --out-dir <dir>
+    ├── --with-reads <illumina|ont>
+    ├── --with-orfs
+    ├── (all simulate options...)
+    ├── --coverage <int>
+    ├── --threads <int>
+    └── --orf-min-aa <int>
 ```
 
 ### Command Invocation Examples
@@ -258,69 +268,65 @@ muconeup --config config.json --out-base output --mutation-name dupC --mutation-
 muconeup --config config.json --out-base output --simulate-reads illumina --output-orfs
 ```
 
-#### After (Click - proposed) - **Minimal Breaking Changes**
+#### After (Click - CLEAN SEPARATION)
 
 ```bash
-# Basic simulation (nearly identical)
-muconeup --config config.json simulate --out-dir results/ --out-base output
+# OPTION 1: Compose commands (Unix philosophy)
+muconeup --config X simulate --out-base Y
+muconeup --config X reads illumina Y.001.simulated.fa --out-base reads_out
+muconeup --config X analyze orfs Y.001.simulated.fa --out-base analysis
 
-# With mutation (nearly identical)
-muconeup --config config.json simulate --out-base output \
-    --mutation-name dupC --mutation-targets 1,25
+# OPTION 2: Use pipeline for convenience
+muconeup --config X pipeline --out-base Y --with-reads illumina --with-orfs
 
-# Full pipeline in ONE command (like current!) ✅
-muconeup --config config.json simulate --out-base output \
-    --simulate-reads illumina --output-orfs --orf-min-aa 100
-
-# NEW: Standalone utilities for flexibility
-muconeup --config config.json reads illumina external_file.fa --out-base reads_output
-muconeup --config config.json analyze orfs external_file.fa --out-base analysis
+# Each command is PURE and reusable
+muconeup --config X reads illumina external_file.fa --out-base reads_out
+muconeup --config X analyze orfs external_file.fa --out-base analysis
 ```
 
-### Benefits of Hybrid Structure
+### Benefits of Clean Separation
 
-1. **Minimal Breaking Changes:**
-   - Common workflow stays **one command** (like current argparse)
-   - Users can do full pipeline: `simulate --simulate-reads illumina --output-orfs`
-   - Only change: Add `simulate` word after config
+1. **Unix Philosophy - Each Tool Does ONE Thing:**
+   - `simulate` = ONLY haplotypes (pure, no side effects)
+   - `reads` = ONLY read simulation (reusable with ANY FASTA)
+   - `analyze` = ONLY analysis (reusable with ANY FASTA)
+   - `pipeline` = Orchestrator (convenience wrapper)
 
-2. **Flexibility for Advanced Users:**
-   - Standalone `reads` and `analyze` commands work with **any FASTA**
-   - Not limited to MucOneUp outputs
-   - Supports external tool integration
+2. **True Modularity (Bioinformatics Best Practice):**
+   - Commands are **truly independent**
+   - Can use `reads` with external tools (not just MucOneUp)
+   - Can use `analyze` with external FASTAs
+   - Supports workflow integration (Snakemake, Nextflow)
 
-3. **Clear Command Hierarchy:**
+3. **Flexibility Through Composition:**
    ```bash
-   $ muconeup --help
-   Commands:
-     simulate  Main workflow - generate haplotypes and run pipeline
-     analyze   Standalone utilities for FASTA analysis
-     reads     Standalone utilities for read simulation
+   # Chain manually for full control
+   muconeup --config X simulate --out-base Y &&
+     muconeup --config X reads illumina Y.001.simulated.fa &&
+     muconeup --config X analyze orfs Y.001.simulated.fa
+
+   # Or use pipeline for convenience
+   muconeup --config X pipeline --out-base Y --with-reads --with-orfs
    ```
 
-4. **Better Discoverability:**
-   ```bash
-   $ muconeup simulate --help
-   # Shows all simulation options + pipeline flags (--simulate-reads, --output-orfs)
-
-   $ muconeup reads --help
-   Commands:
-     illumina  Simulate Illumina short reads
-     ont       Simulate Oxford Nanopore long reads
-   ```
-
-5. **Superior Testability:**
+4. **Superior Testability:**
    ```python
-   # CliRunner for isolated testing (no subprocess)
+   # Each command tested in isolation (CliRunner)
    result = runner.invoke(cli, ['simulate', '--config', 'test.json'])
    result = runner.invoke(cli, ['reads', 'illumina', 'input.fa'])
-   # Much faster and cleaner than subprocess.run()
+   result = runner.invoke(cli, ['pipeline', '--config', 'test.json'])
+   # No subprocess, 10x faster
    ```
 
-6. **Real-World Pattern:**
-   - Like `git pull` (fetch+merge in one) vs separate `git fetch`/`git merge`
-   - Like `apt upgrade` (update+upgrade) vs separate `apt update`
-   - Common case = convenient; advanced case = flexible
+5. **Clear Separation of Concerns:**
+   - Click best practice: business logic separate from CLI
+   - Single Responsibility Principle
+   - Easy to extend (add new commands without modifying existing)
+
+6. **Real-World Patterns:**
+   - Like `samtools view` / `samtools sort` / `samtools index` (separate tools)
+   - Like Unix pipes: `grep | sed | awk` (composable)
+   - NOT like monolithic `bwa mem` (all-in-one)
 
 ---
 
