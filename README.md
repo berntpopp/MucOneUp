@@ -184,107 +184,252 @@ Before running the full simulation or read simulation pipeline, check that the r
 ## Quick Start
 
 1. **Create** or update a **JSON config** (see [Config File Layout](#config-file-layout)) describing your repeats, probabilities, mutations, etc.
-2. **Run** the tool by specifying your config along with desired parameters. For example:
+
+2. **Generate haplotypes:**
    ```bash
-   muconeup --config config.json --out-base muc1_simulated --output muc1_simulated.fa --output-structure muc1_struct.txt
+   muconeup --config config.json simulate --out-base muc1_sim --out-dir output/
    ```
-3. Inspect the resulting outputs:
-   - **`muc1_simulated.fa`**: Multi-FASTA file of haplotype sequences.
-   - **`muc1_struct.txt`**: Textual representation of each haplotype’s chain of repeats.
-   - **`simulation_stats.json`** (or with variant suffixes in dual simulation mode): JSON file(s) containing detailed simulation statistics.
+
+3. **Inspect outputs:**
+   - **`output/muc1_sim.001.simulated.fa`**: Haplotype sequences
+   - **`output/muc1_sim.001.simulation_stats.json`**: Detailed statistics
+
+4. **Optional - Add analysis:**
+   ```bash
+   # Predict ORFs and detect toxic proteins
+   muconeup --config config.json analyze orfs output/muc1_sim.001.simulated.fa --out-base muc1_orfs
+
+   # Generate sequence statistics
+   muconeup --config config.json analyze stats output/muc1_sim.001.simulated.fa --out-base muc1_stats
+   ```
+
+5. **Optional - Simulate reads:**
+   ```bash
+   # Illumina short reads
+   muconeup --config config.json reads illumina output/muc1_sim.001.simulated.fa --out-base muc1_reads
+
+   # Oxford Nanopore long reads
+   muconeup --config config.json reads ont output/muc1_sim.001.simulated.fa --out-base muc1_ont
+   ```
 
 ---
 
 ## Usage
 
-Below are the available **command-line arguments**. Use `muconeup --help` for more details.
+MucOneUp follows **Unix philosophy**: each command does one thing well. Commands can be **composed** for complete workflows.
 
-### Command-Line Arguments
+### CLI Architecture
 
-| Argument                       | Description                                                                                                                                                                                                                                                                                                                                      |
-|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--config <path>`              | **Required**. Path to the JSON config file containing repeats, probabilities, constants, length model, mutations, tools, and read simulation settings.                                                                                                                                                                                          |
-| `--out-base <basename>`        | Base name for all output files. All outputs (simulation FASTA, VNTR structure, ORF FASTA, read simulation outputs, and ORF toxic protein statistics) will be named using this base. Default is `muc1_simulated`.                                                                                                                             |
-| `--out-dir <folder>`           | Output folder where all files will be written. Defaults to the current directory.                                                                                                                                                                                                                                                              |
-| `--num-haplotypes N`           | Number of haplotypes to simulate. Typically `2` for diploid. Defaults to 2.                                                                                                                                                                                                                                                                       |
-| `--fixed-lengths <vals>`       | One or more fixed lengths (or ranges) for each haplotype’s VNTR repeats. Values may be a single integer (e.g. `60`) or a range (e.g. `20-40`). When a range is provided, the default behavior is to pick one value at random from each range. Use the `--simulate-series` flag (see below) to run a simulation for every value (or combination) in the range. |
-| `--simulate-series`            | (Optional) When specified and fixed-length ranges are provided, the program will generate a simulation iteration for every possible length (or combination of lengths for multiple haplotypes) instead of choosing a single random value. This flag is useful when you want to explore the entire parameter space.                             |
-| `--seed <int>`                 | Random seed for reproducible simulations (affects VNTR building and mutation target selection).                                                                                                                                                                                                                                                   |
-| `--mutation-name <str>`        | (Optional) Name of a mutation from the config to apply. To run dual simulations (normal and mutated), provide a comma-separated pair (e.g. `normal,dupC`). If a single value is provided, only one simulation is mutated.                                                                                                                  |
-| `--mutation-targets <pairs>`   | (Optional) One or more `haplotype_index,repeat_index` pairs (1-based). E.g., `1,25 2,30`. If provided, each pair indicates which haplotype and repeat position to mutate. If omitted, the mutation is applied at a random allowed repeat. Only haplotypes specified in these targets will have mutation information in their FASTA headers.                                                                                                               |
-| `--input-structure <file>`     | (Optional) Path to a structure file containing predefined VNTR repeat chains. If the structure file includes a header comment with mutation information (e.g., `# Mutation Applied: dupC (Targets: [(1, 25)])`), that information will be used to apply mutations to the specific haplotypes and positions instead of using random targets or CLI-specified targets. |
-| `--output-structure`           | (Optional) If provided, output a VNTR structure file (text) listing the chain of repeats for each haplotype.                                                                                                                                                                                                                                      |
-| `--output-orfs`                | (Optional) If provided, run ORF prediction and output an ORF FASTA file using the normalized naming scheme. Additionally, the resulting ORF file will be scanned for toxic protein sequence features and a JSON statistics file is generated.                                                                                                                   |
-| `--orf-min-aa <int>`           | Minimum peptide length (in amino acids) to report from ORF prediction. Defaults to 100.                                                                                                                                                                                                                                                           |
-| `--orf-aa-prefix <str>`        | (Optional) Filter resulting peptides to only those beginning with this prefix. If used without a value, defaults to `MTSSV`. If omitted, no prefix filtering is applied.                                                                                                                                                                     |
-| `--simulate-reads`             | (Optional) If provided, run the read simulation pipeline on the simulated FASTA. This pipeline produces an aligned/indexed BAM and gzipped paired FASTQ files.                                                                                                                                                                              |
-| `--random-snps`                | (Optional) If provided, generate random SNPs and integrate them into the simulated sequences.                                                                                                                                                                                                                                          |
-| `--random-snp-density <float>` | Density of random SNPs to generate (SNPs per kilobase). Defaults to 1.0.                                                                                                                                                                                                                                                               |
-| `--random-snp-output-file <path>` | (Optional) Path to a file where generated random SNPs will be saved in TSV format.                                                                                                                                                                                                                                               |
-| `--snp-file <path>`            | (Optional) Path to a TSV file containing predefined SNPs to integrate into the simulated sequences.                                                                                                                                                                                                                                     |
-| `--log-level <level>`          | Set logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE). Default is INFO.                                                                                                                                                                                                                                                              |
+```bash
+muconeup --config <file> [--log-level LEVEL] <command> [options]
+```
+
+**Commands:**
+- **`simulate`** - Generate haplotypes ONLY (core functionality)
+- **`reads`** - Simulate sequencing reads from ANY FASTA
+  - `illumina` - Short read simulation
+  - `ont` - Oxford Nanopore long read simulation
+- **`analyze`** - Analyze ANY FASTA file
+  - `orfs` - Predict ORFs and detect toxic proteins
+  - `stats` - Generate sequence statistics
+- **`pipeline`** - Run complete workflow (convenience orchestrator)
+
+Use `muconeup --help` or `muconeup <command> --help` for detailed options.
+
+### Simulate Command Options
+
+Generate MUC1 VNTR diploid haplotypes (core functionality).
+
+**Key Options:**
+- `--out-base` - Base name for output files (default: `muc1_simulated`)
+- `--out-dir` - Output directory (default: current directory)
+- `--num-haplotypes` - Number of haplotypes (default: 2)
+- `--seed` - Random seed for reproducibility
+- `--fixed-lengths` - Fixed VNTR lengths or ranges (e.g., `60` or `20-40`)
+- `--simulate-series` - Generate series across length ranges
+- `--mutation-name` - Mutation to apply (or `normal,dupC` for dual mode)
+- `--mutation-targets` - Specific positions to mutate (e.g., `1,25 2,30`)
+- `--input-structure` - Use predefined VNTR structure file
+- `--output-structure` - Write VNTR structure file
+- `--random-snps` - Enable random SNP generation
+- `--snp-input-file` - Apply SNPs from TSV file
+
+**Output:**
+- `{out_base}.001.simulated.fa` - Haplotype sequences
+- `{out_base}.001.vntr_structure.txt` - Structure file (if `--output-structure`)
+- `{out_base}.001.simulation_stats.json` - Statistics
+
+### Reads Command Options
+
+Simulate sequencing reads from ANY FASTA file (not just MucOneUp outputs).
+
+**Illumina subcommand:**
+```bash
+muconeup --config X reads illumina INPUT_FASTA [options]
+```
+- `--out-base` - Base name for read files
+- `--coverage` - Sequencing coverage depth
+- `--threads` - Number of threads
+
+**ONT subcommand:**
+```bash
+muconeup --config X reads ont INPUT_FASTA [options]
+```
+- `--out-base` - Base name for read files
+- `--min-read-length` - Minimum read length
+- `--max-read-length` - Maximum read length
+- `--coverage` - Sequencing coverage depth
+
+### Analyze Command Options
+
+Analyze ANY FASTA file (works with external sequences).
+
+**ORFs subcommand:**
+```bash
+muconeup --config X analyze orfs INPUT_FASTA [options]
+```
+- `--out-base` - Base name for ORF outputs
+- `--orf-min-aa` - Minimum peptide length (default: 100)
+- `--orf-aa-prefix` - Filter by N-terminal prefix (default: `MTSSV`)
+
+**Stats subcommand:**
+```bash
+muconeup --config X analyze stats INPUT_FASTA [options]
+```
+- `--out-base` - Base name for statistics file
+
+### Pipeline Command Options
+
+Run complete workflow (convenience orchestrator).
+
+```bash
+muconeup --config X pipeline [simulate options] --with-reads [illumina|ont] --with-orfs
+```
+
+Combines `simulate` → `reads` → `analyze` in a single command.
 
 ### Example Commands
 
-1. **Generate two diploid haplotypes** with random VNTR lengths (sampled from the length model defined in your config):
-   ```bash
-   muconeup --config config.json --out-base muc1_sim --output muc1_sim.fa --output-structure muc1_struct.txt
-   ```
+#### Basic Workflows
 
-2. **Force a fixed length of 60 repeats** for each haplotype:
-   ```bash
-   muconeup --config config.json --out-base muc1_fixed --output muc1_fixed.fa --output-structure muc1_fixed.txt --num-haplotypes 2 --fixed-lengths 60
-   ```
+**1. Generate random haplotypes:**
+```bash
+# Generate 2 diploid haplotypes with random VNTR lengths
+muconeup --config config.json simulate --out-base muc1_sim --out-dir output/
+```
 
-3. **Generate a single simulation using a fixed-length range** (a random value is chosen from the range for each haplotype):
+**2. Fixed-length haplotypes:**
+```bash
+# Force 60 repeats per haplotype
+muconeup --config config.json simulate --out-base muc1_fixed --fixed-lengths 60
 
-   ```bash
-   muconeup --config config.json --out-base muc1_random_range --fixed-lengths 20-40
-   ```
+# Random pick from range 20-40
+muconeup --config config.json simulate --out-base muc1_range --fixed-lengths 20-40
 
-4. **Apply a specific mutation to targeted positions** in specific haplotypes:
+# Generate series (one simulation per value: 20, 21, ..., 40)
+muconeup --config config.json simulate --out-base muc1_series --fixed-lengths 20-40 --simulate-series 1
+```
 
-   ```bash
-   muconeup --config config.json --out-base muc1_mutated --mutation-name dupC --mutation-targets 1,25 2,30
-   ```
+**3. Reproducible simulations:**
+```bash
+# Use fixed seed for reproducibility
+muconeup --config config.json simulate --out-base muc1_repro --seed 42
+```
 
-   This applies the `dupC` mutation to haplotype 1 at repeat position 25 and to haplotype 2 at repeat position 30. The FASTA header for each mutated haplotype will include the mutation information.
+#### Mutation Workflows
 
-5. **Use a structure file with mutation information** for reproducible generation of specific VNTR structures:
+**4. Apply specific mutations:**
+```bash
+# Mutation at specific positions (haplotype 1 repeat 25, haplotype 2 repeat 30)
+muconeup --config config.json simulate --out-base muc1_mut --mutation-name dupC --mutation-targets 1,25 2,30
 
-   ```bash
-   muconeup --config config.json --out-base muc1_from_structure --input-structure structure_file.txt
-   ```
+# Mutation at random allowed position
+muconeup --config config.json simulate --out-base muc1_random_mut --mutation-name dupC
+```
 
-   Where the structure file contains mutation information in a header comment:
+**5. Dual simulation (normal + mutated):**
+```bash
+# Generates both .normal.fa and .mut.fa outputs
+muconeup --config config.json simulate --out-base muc1_dual --mutation-name normal,dupC --mutation-targets 1,25
+```
 
-   ```text
-   # Mutation Applied: dupC (Targets: [(1, 25)])
-   haplotype_1 1-2-3-4-5-C-X-B-X-X-X-X-X-X-X-X-V-G-B-X-X-G-A-B-Xm-X-X-X-A-A-A-B-X-D-E-C-6-7-8-9
-   haplotype_2 1-2-3-4-5-C-X-A-B-X-X-X-V-G-A-A-A-B-B-X-X-X-X-X-X-X-X-X-X-X-X-X-V-V-V-V-V-V-V-V-V-G-A-B-B-X-A-A-N-R-X-X-X-X-A-B-6p-7-8-9
-   ```
+**6. Use structure file:**
+```bash
+# Generate from predefined VNTR structure
+muconeup --config config.json simulate --out-base muc1_struct --input-structure my_structure.txt
+```
 
-   Note that the mutated repeat position is marked with an "m" suffix in the structure file (e.g., `Xm`). The output FASTA will include mutation information only in the header of haplotype 1, which is the only one with a mutation according to the targets.
+#### Command Composition (Step-by-Step)
 
-6. **Generate a series of simulations** using a fixed-length range (each possible value in the range, or combination thereof, produces an output file):
-   ```bash
-   muconeup --config config.json --out-base muc1_series --simulate-series --fixed-lengths 20-40
-   ```
+**7. Complete workflow - compose commands:**
+```bash
+# Step 1: Generate haplotypes
+muconeup --config config.json simulate --out-base muc1 --out-dir output/ --output-structure
 
-5. **Apply a known mutation** (`dupC`) at a specific repeat (haplotype #1, repeat #5):
-   ```bash
-   muconeup --config config.json --out-base muc1_mutated --mutation-name dupC --mutation-targets 1,5
-   ```
+# Step 2: Predict ORFs
+muconeup --config config.json analyze orfs output/muc1.001.simulated.fa --out-base muc1_orfs
 
-6. **Run dual simulation** (normal and mutated) with a mutation (`dupC`):
-   ```bash
-   muconeup --config config.json --out-base muc1_dual --mutation-name normal,dupC
-   ```
+# Step 3: Generate statistics
+muconeup --config config.json analyze stats output/muc1.001.simulated.fa --out-base muc1_stats
 
-7. **Apply a known mutation** (`snpA`) to a **random allowed** repeat:
-   ```bash
-   muconeup --config config.json --out-base muc1_random_mut --mutation-name snpA
-   ```
+# Step 4: Simulate Illumina reads
+muconeup --config config.json reads illumina output/muc1.001.simulated.fa --out-base muc1_reads --coverage 100
+
+# Step 5: Simulate ONT reads (alternative to step 4)
+muconeup --config config.json reads ont output/muc1.001.simulated.fa --out-base muc1_ont --coverage 30
+```
+
+**8. Or use pipeline for convenience:**
+```bash
+# All-in-one: haplotypes + ORFs + Illumina reads
+muconeup --config config.json pipeline --out-base muc1_complete --out-dir output/ \
+  --with-orfs --with-reads illumina
+
+# All-in-one: haplotypes + ORFs + ONT reads
+muconeup --config config.json pipeline --out-base muc1_ont_complete --out-dir output/ \
+  --with-orfs --with-reads ont
+```
+
+#### SNP Integration
+
+**9. Random SNPs:**
+```bash
+# Generate random SNPs (density: 1 SNP per 1000bp)
+muconeup --config config.json simulate --out-base muc1_snps \
+  --random-snps --random-snp-density 1.0 --random-snp-output-file snps.tsv
+```
+
+**10. Predefined SNPs:**
+```bash
+# Apply SNPs from file (TSV format: haplotype, position, ref_base, alt_base)
+muconeup --config config.json simulate --out-base muc1_custom_snps --snp-input-file my_snps.tsv
+```
+
+**11. Dual simulation with SNPs:**
+```bash
+# Combine mutations and SNPs
+muconeup --config config.json simulate --out-base muc1_dual_snps \
+  --mutation-name normal,dupC --mutation-targets 1,25 \
+  --random-snps --random-snp-density 0.5
+```
+
+#### Advanced Workflows
+
+**12. Full pipeline with series:**
+```bash
+# Generate series of haplotypes (20-40 repeats) then analyze each
+for i in {20..40}; do
+  muconeup --config config.json simulate --out-base muc1_L${i} --fixed-lengths ${i} --seed 42
+  muconeup --config config.json analyze orfs muc1_L${i}.001.simulated.fa --out-base muc1_L${i}_orfs
+done
+```
+
+**13. External FASTA analysis:**
+```bash
+# Analyze ANY external FASTA file (not just MucOneUp outputs)
+muconeup --config config.json analyze orfs /path/to/external.fa --out-base external_orfs
+muconeup --config config.json reads illumina /path/to/external.fa --out-base external_reads
+```
 
 ---
 
@@ -383,13 +528,15 @@ This is particularly useful when you want to simulate scenarios where both struc
 
 ```bash
 # Generate random SNPs with specified density
-muconeup --config config.json --out-base muc1_with_snps --random-snps --random-snp-density 0.5 --random-snp-output-file output/muc1_random_snps.tsv
+muconeup --config config.json simulate --out-base muc1_with_snps \
+  --random-snps --random-snp-density 0.5 --random-snp-output-file output/muc1_random_snps.tsv
 
 # Apply SNPs from a predefined file
-muconeup --config config.json --out-base muc1_with_predefined_snps --snp-file my_snps.tsv
+muconeup --config config.json simulate --out-base muc1_with_predefined_snps --snp-input-file my_snps.tsv
 
 # Combine dual mutation mode with SNP integration
-muconeup --config config.json --out-base muc1_dual_with_snps --mutation-name normal,dupC --random-snps
+muconeup --config config.json simulate --out-base muc1_dual_with_snps \
+  --mutation-name normal,dupC --random-snps
 ```
 
 ---
