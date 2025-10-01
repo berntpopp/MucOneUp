@@ -5,7 +5,7 @@ This directory contains technical documentation for improving and maintaining th
 ## Quick Links
 
 ### 🔴 URGENT - Start Here
-1. [CLI Architecture & Refactoring](01_cli_architecture_refactoring.md) - Break down monolithic `main()` function
+1. ✅ [CLI Architecture & Refactoring](completed/phase1-cli-refactoring/01_cli_architecture_refactoring.md) - **COMPLETED** - Break down monolithic `main()` function
 2. [Error Handling & Exceptions](02_error_handling_exceptions.md) - Replace `sys.exit()` with proper exception handling
 
 ### 🟠 HIGH Priority
@@ -137,7 +137,8 @@ This directory contains technical documentation for improving and maintaining th
    - ✅ Create `cli/` module structure (8 focused modules)
    - ✅ All 46 tests passing, zero regressions
    - ✅ Zero linting errors (ruff)
-   - **See:** [01_cli_architecture_refactoring.md](./01_cli_architecture_refactoring.md)
+   - **See:** [01_cli_architecture_refactoring.md](./completed/phase1-cli-refactoring/01_cli_architecture_refactoring.md)
+   - **Documentation:** [CLI_REFACTORING_SUMMARY.md](./completed/phase1-cli-refactoring/CLI_REFACTORING_SUMMARY.md), [CLI_MODULARIZATION_SUMMARY.md](./completed/phase1-cli-refactoring/CLI_MODULARIZATION_SUMMARY.md), [VALIDATION_CHECKLIST.md](./completed/phase1-cli-refactoring/VALIDATION_CHECKLIST.md)
 
 2. ⏳ **Exception Handling** (Week 1-2) - **NEXT**
    - Create `exceptions.py`
@@ -290,9 +291,9 @@ All recommendations follow these software engineering principles:
 
 ### For First-Time Contributors
 
-1. **Read the URGENT documents first:**
-   - [CLI Architecture & Refactoring](01_cli_architecture_refactoring.md)
-   - [Error Handling & Exceptions](02_error_handling_exceptions.md)
+1. **Read the current phase documents:**
+   - ✅ [CLI Architecture & Refactoring](completed/phase1-cli-refactoring/01_cli_architecture_refactoring.md) - **COMPLETED**
+   - [Error Handling & Exceptions](02_error_handling_exceptions.md) - **CURRENT PHASE**
 
 2. **Setup development environment:**
    ```bash
