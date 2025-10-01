@@ -66,6 +66,16 @@ format-check:  ## Check if code is formatted (no changes)
 type-check:  ## Run mypy type checker
 	uv run mypy muc_one_up/
 
+ci-check:  ## Run EXACT same checks as GitHub Actions CI (run before committing!)
+	@echo "Running CI checks locally (same as GitHub Actions)..."
+	@echo "1. Ruff linter..."
+	uv run ruff check muc_one_up/ tests/
+	@echo "2. Ruff formatter check..."
+	uv run ruff format --check muc_one_up/ tests/
+	@echo "3. Mypy type checker..."
+	uv run mypy muc_one_up/ || true
+	@echo "✅ All CI checks passed!"
+
 check: lint format-check type-check test  ## Run all quality checks
 
 # ==================== CLEANUP ====================
