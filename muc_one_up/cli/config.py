@@ -9,10 +9,10 @@ import itertools
 import json
 import logging
 import random
-import sys
 from pathlib import Path
 from typing import Any
 
+from ..exceptions import ConfigurationError, SimulationError, ValidationError
 from ..io import parse_vntr_structure_file
 
 
@@ -21,10 +21,14 @@ def parse_fixed_lengths(fixed_lengths_args, num_haplotypes):
     Parse the fixed-length values provided as strings.
     Each value may be a single integer or a range in the format "start-end".
     Returns a list of lists, one per haplotype.
+
+    Raises:
+        ValidationError: If fixed-length format is invalid
     """
     if len(fixed_lengths_args) not in (1, num_haplotypes):
-        logging.error("--fixed-lengths must have either 1 value or N=--num-haplotypes")
-        sys.exit(1)
+        raise ValidationError(
+            f"--fixed-lengths must have either 1 value or N={num_haplotypes} (got {len(fixed_lengths_args)})"
+        )
     result = []
     for val in fixed_lengths_args:
         if "-" in val:
@@ -33,16 +37,14 @@ def parse_fixed_lengths(fixed_lengths_args, num_haplotypes):
                 start = int(start_str)
                 end = int(end_str)
                 result.append(list(range(start, end + 1)))
-            except ValueError:
-                logging.error("Invalid fixed-length range format: '%s'", val)
-                sys.exit(1)
+            except ValueError as e:
+                raise ValidationError(f"Invalid fixed-length range format: '{val}'") from e
         else:
             try:
                 fixed = int(val)
                 result.append([fixed])
-            except ValueError:
-                logging.error("Invalid fixed-length value: '%s'", val)
-                sys.exit(1)
+            except ValueError as e:
+                raise ValidationError(f"Invalid fixed-length value: '{val}'") from e
     if len(result) == 1 and num_haplotypes > 1:
         result = result * num_haplotypes
     return result
@@ -81,7 +83,7 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
         Tuple of (config_dict, out_dir, out_base)
 
     Raises:
-        SystemExit: If config cannot be loaded
+        ConfigurationError: If config cannot be loaded or is invalid
     """
     try:
         with Path(args.config).open() as fh:
@@ -96,9 +98,10 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
                 current_assembly,
                 args.reference_assembly,
             )
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        logging.error("Could not load config: %s", e)
-        sys.exit(1)
+    except FileNotFoundError as e:
+        raise ConfigurationError(f"Config file not found: {args.config}") from e
+    except json.JSONDecodeError as e:
+        raise ConfigurationError(f"Invalid JSON in config file {args.config}: {e}") from e
 
     out_dir = args.out_dir
     out_base = args.out_base
@@ -119,6 +122,10 @@ def determine_simulation_mode(args, config) -> tuple[list, list | None, dict | N
 
     Returns:
         Tuple of (simulation_configs, predefined_chains, structure_mutation_info)
+
+    Raises:
+        SimulationError: If structure file cannot be parsed
+        ValidationError: If fixed-length format is invalid
     """
     predefined_chains = None
     structure_mutation_info = None
@@ -153,8 +160,7 @@ def determine_simulation_mode(args, config) -> tuple[list, list | None, dict | N
             simulation_configs = ["from_structure"]
             logging.info("Using predefined VNTR chains from structure file.")
         except Exception as e:
-            logging.error("Error parsing structure file: %s", e)
-            sys.exit(1)
+            raise SimulationError(f"Error parsing structure file {args.input_structure}: {e}") from e
 
     # Process --fixed-lengths if --input-structure is not provided
     elif args.fixed_lengths is not None:
@@ -204,6 +210,9 @@ def process_mutation_config(
 
     Returns:
         Tuple of (dual_mutation_mode, mutation_pair, mutation_name)
+
+    Raises:
+        ValidationError: If mutation configuration is invalid
     """
     dual_mutation_mode = False
     mutation_pair = None
@@ -224,8 +233,10 @@ def process_mutation_config(
         if "," in args.mutation_name:
             mutation_pair = [s.strip() for s in args.mutation_name.split(",")]
             if mutation_pair[0].lower() != "normal":
-                logging.error("In dual simulation mode, the first mutation-name must be 'normal'.")
-                sys.exit(1)
+                raise ValidationError(
+                    "In dual simulation mode, the first mutation-name must be 'normal' "
+                    f"(got '{mutation_pair[0]}')"
+                )
             dual_mutation_mode = True
             logging.info("Using mutations from command line: %s", mutation_pair)
         else:

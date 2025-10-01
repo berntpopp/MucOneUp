@@ -10,9 +10,9 @@ This module provides wrapper functions for samtools operations:
 """
 
 import logging
-import sys
 from pathlib import Path
 
+from ...exceptions import FileOperationError
 from ..utils import run_command
 
 
@@ -62,11 +62,9 @@ def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, s
 
     # Verify the output FASTA exists and is non-empty
     if not output_path.exists() or output_path.stat().st_size == 0:
-        logging.error(
-            "Failed to extract subset reference: Output FASTA %s missing or empty.",
-            output_fa,
+        raise FileOperationError(
+            f"Failed to extract subset reference: Output FASTA {output_fa} missing or empty"
         )
-        sys.exit(1)
 
     return collated_bam
 
@@ -132,8 +130,7 @@ def calculate_vntr_coverage(
                     total_depth += int(parts[2])
                     num_positions += 1
     except Exception as e:
-        logging.error(f"Error reading depth file: {e!s}")
-        sys.exit(1)
+        raise FileOperationError(f"Error reading depth file for VNTR coverage: {e}") from e
 
     # Calculate mean coverage (handle empty file case)
     if num_positions == 0:
@@ -173,8 +170,7 @@ def calculate_target_coverage(
     """
     # Verify bed file exists
     if not Path(bed_file).exists():
-        logging.error(f"BED file not found: {bed_file}")
-        sys.exit(1)
+        raise FileOperationError(f"BED file not found: {bed_file}")
 
     # Create output filename for depth data
     depth_file = str(Path(output_dir) / f"{output_name}_target_depth.txt")
@@ -206,8 +202,7 @@ def calculate_target_coverage(
                     total_depth += int(parts[2])
                     num_positions += 1
     except Exception as e:
-        logging.error(f"Error reading depth file: {e!s}")
-        sys.exit(1)
+        raise FileOperationError(f"Error reading depth file for target coverage: {e}") from e
 
     # Calculate mean coverage (handle empty file case)
     if num_positions == 0:

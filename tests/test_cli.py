@@ -5,20 +5,21 @@ Following SOLID, DRY, KISS principles with focused unit tests.
 """
 
 import json
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
+
+import pytest
+
 from muc_one_up.cli.config import (
-    setup_configuration,
     determine_simulation_mode,
     process_mutation_config,
+    setup_configuration,
 )
 from muc_one_up.cli.mutations import (
-    parse_mutation_targets,
     find_random_mutation_target,
+    parse_mutation_targets,
 )
 from muc_one_up.cli.snps import integrate_snps_unified
-
 
 # ==============================================================================
 # Fixtures
@@ -139,12 +140,12 @@ def test_setup_configuration_creates_output_dir(mock_args, tmp_path):
 
 def test_setup_configuration_missing_file(mock_args):
     """Test error handling for missing config file."""
+    from muc_one_up.exceptions import ConfigurationError
+
     mock_args.config = "/nonexistent/config.json"
 
-    with pytest.raises(SystemExit) as exc_info:
+    with pytest.raises(ConfigurationError, match="Config file not found"):
         setup_configuration(mock_args)
-
-    assert exc_info.value.code == 1
 
 
 def test_setup_configuration_override_assembly(mock_args, minimal_config):
@@ -231,12 +232,12 @@ def test_process_mutation_config_dual(mock_args):
 
 def test_process_mutation_config_dual_invalid_first(mock_args):
     """Test dual mode with invalid first mutation."""
+    from muc_one_up.exceptions import ValidationError
+
     mock_args.mutation_name = "dupC,normal"
 
-    with pytest.raises(SystemExit) as exc_info:
+    with pytest.raises(ValidationError, match="first mutation-name must be 'normal'"):
         process_mutation_config(mock_args, None)
-
-    assert exc_info.value.code == 1
 
 
 # ==============================================================================
@@ -273,9 +274,11 @@ def test_parse_mutation_targets_mixed():
 
 def test_parse_mutation_targets_invalid_format():
     """Test error handling for invalid format."""
+    from muc_one_up.exceptions import ValidationError
+
     targets = ["invalid"]
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(ValidationError, match="Invalid --mutation-targets format"):
         parse_mutation_targets(targets)
 
 
@@ -296,12 +299,16 @@ def test_find_random_mutation_target_success(sample_results, minimal_config):
 
 def test_find_random_mutation_target_mutation_not_found(sample_results, minimal_config):
     """Test error when mutation not in config."""
-    with pytest.raises(ValueError, match="not in config"):
+    from muc_one_up.exceptions import MutationError
+
+    with pytest.raises(MutationError, match="not in config"):
         find_random_mutation_target(sample_results, minimal_config, "nonexistent")
 
 
 def test_find_random_mutation_target_no_valid_repeats(sample_results, minimal_config):
     """Test error when no valid repeat targets exist."""
+    from muc_one_up.exceptions import MutationError
+
     # Create mutation with no matching repeats
     minimal_config["mutations"]["test"] = {
         "allowed_repeats": ["X"],  # Not in sample_results
@@ -309,7 +316,7 @@ def test_find_random_mutation_target_no_valid_repeats(sample_results, minimal_co
         "changes": [],
     }
 
-    with pytest.raises(ValueError, match="No repeats match"):
+    with pytest.raises(MutationError, match="No repeats match"):
         find_random_mutation_target(sample_results, minimal_config, "test")
 
 

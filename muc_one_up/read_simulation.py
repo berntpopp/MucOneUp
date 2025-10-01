@@ -43,7 +43,6 @@ where <input_fasta> is typically the output from muconeup
 """
 
 import logging
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -95,8 +94,9 @@ def simulate_reads(config: dict[str, Any], input_fa: str) -> str:
         return simulate_illumina_reads(config, input_fa)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # OK: top-level entry point
     import json
+    import sys
 
     if len(sys.argv) != 3:
         print("Usage: python read_simulation.py <config.json> <input_fasta>")

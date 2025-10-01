@@ -21,10 +21,12 @@ For usage information, see the main read_simulation.py module.
 """
 
 import logging
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# Import exceptions
+from ..exceptions import ConfigurationError
 
 # Import fragment simulation
 from .fragment_simulation import simulate_fragments
@@ -133,7 +135,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     reseq_model = rs_config.get("reseq_model")
     if not reseq_model:
         logging.error("Error: reseq_model not specified in config.")
-        sys.exit(1)
+        raise ConfigurationError("reseq_model not specified in config 'read_simulation' section")
     syser_fq = str(Path(output_dir) / f"_{output_base}_syser.fq")
     logging.info("2. Generating systematic errors")
     generate_systematic_errors(no_ns_fa, reseq_model, syser_fq, tools)
@@ -165,7 +167,10 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
             f"Error: No sample BAM specified for {reference_assembly}. "
             f"Please add 'sample_bam_{reference_assembly}' or 'sample_bam' to the config."
         )
-        sys.exit(1)
+        raise ConfigurationError(
+            f"No sample BAM specified for {reference_assembly}. "
+            f"Add 'sample_bam_{reference_assembly}' or 'sample_bam' to config"
+        )
 
     logging.info(f"Using sample BAM for {reference_assembly}: {sample_bam}")
     subset_ref = str(Path(output_dir) / f"_{output_base}_subset_ref.fa")
@@ -230,7 +235,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     human_reference = rs_config.get("human_reference")
     if not human_reference:
         logging.error("Error: human_reference not specified in config.")
-        sys.exit(1)
+        raise ConfigurationError("human_reference not specified in config 'read_simulation' section")
     logging.info("9. Aligning reads to reference")
     align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads)
 
@@ -245,7 +250,10 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
             vntr_region = rs_config.get(vntr_region_key)
             if not vntr_region:
                 logging.error(f"VNTR region not specified in config for {reference_assembly}.")
-                sys.exit(1)
+                raise ConfigurationError(
+                    f"VNTR region not specified in config for {reference_assembly}. "
+                    f"Add '{vntr_region_key}' to config"
+                )
             current_cov = calculate_vntr_coverage(
                 tools["samtools"],
                 output_bam,
@@ -261,7 +269,9 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                 logging.error(
                     "For non-VNTR downsampling, 'sample_target_bed' must be provided in config."
                 )
-                sys.exit(1)
+                raise ConfigurationError(
+                    "For non-VNTR downsampling, 'sample_target_bed' must be provided in config"
+                )
             current_cov = calculate_target_coverage(
                 tools["samtools"],
                 output_bam,
@@ -273,7 +283,9 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
             region_info = f"BED file: {bed_file}"
         else:
             logging.error("Invalid downsample_mode in config; use 'vntr' or 'non_vntr'.")
-            sys.exit(1)
+            raise ConfigurationError(
+                f"Invalid downsample_mode '{mode}' in config; use 'vntr' or 'non_vntr'"
+            )
         if current_cov > downsample_target:
             fraction = downsample_target / current_cov
             fraction = min(max(fraction, 0.0), 1.0)
@@ -350,8 +362,9 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
 
 
 # For direct command-line use (backward compatibility)
-if __name__ == "__main__":
+if __name__ == "__main__":  # OK: top-level entry point
     import json
+    import sys
 
     # Configure logging
     logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")

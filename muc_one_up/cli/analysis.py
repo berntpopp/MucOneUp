@@ -6,9 +6,9 @@ Single Responsibility: Run optional analyses (ORF prediction, read simulation, s
 
 import json
 import logging
-import sys
 from pathlib import Path
 
+from ..exceptions import FileOperationError, ReadSimulationError
 from ..read_simulation import simulate_reads as simulate_reads_pipeline
 from ..simulation_statistics import (
     generate_simulation_statistics,
@@ -48,8 +48,7 @@ def run_orf_prediction(
                 mut_orf_out,
             )
         except Exception as e:
-            logging.error("ORF finding failed: %s", e)
-            sys.exit(1)
+            raise FileOperationError(f"ORF finding failed (dual mode): {e}") from e
 
         # Toxic protein detection
         try:
@@ -71,8 +70,7 @@ def run_orf_prediction(
 
             logging.info("Toxic protein detection stats written: %s and %s", stats_file_normal, stats_file_mut)
         except ImportError as e:
-            logging.error("Failed to import toxic_protein_detector module: %s", e)
-            sys.exit(1)
+            raise FileOperationError(f"Failed to import toxic_protein_detector module: {e}") from e
     else:
         orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa")
 
@@ -85,8 +83,7 @@ def run_orf_prediction(
             )
             logging.info("ORF finding completed; peptide FASTA written to %s", orf_out)
         except Exception as e:
-            logging.error("ORF finding failed: %s", e)
-            sys.exit(1)
+            raise FileOperationError(f"ORF finding failed: {e}") from e
 
         # Toxic protein detection
         try:
@@ -103,8 +100,7 @@ def run_orf_prediction(
 
             logging.info("Toxic protein detection stats written: %s", stats_file)
         except ImportError as e:
-            logging.error("Failed to import toxic_protein_detector module: %s", e)
-            sys.exit(1)
+            raise FileOperationError(f"Failed to import toxic_protein_detector module: {e}") from e
 
 
 def run_read_simulation(
@@ -138,8 +134,7 @@ def run_read_simulation(
                 sim_index,
             )
         except Exception as e:
-            logging.error("%s read simulation pipeline (normal variant) failed: %s", simulator_name, e)
-            sys.exit(1)
+            raise ReadSimulationError(f"{simulator_name} read simulation pipeline (normal variant) failed: {e}") from e
 
         try:
             logging.info(
@@ -154,8 +149,7 @@ def run_read_simulation(
                 sim_index,
             )
         except Exception as e:
-            logging.error("%s read simulation pipeline (mutated variant) failed: %s", simulator_name, e)
-            sys.exit(1)
+            raise ReadSimulationError(f"{simulator_name} read simulation pipeline (mutated variant) failed: {e}") from e
     else:
         sim_fa = numbered_filename(out_dir, out_base, sim_index, "simulated.fa")
 
@@ -166,8 +160,7 @@ def run_read_simulation(
             simulate_reads_pipeline(config, sim_fa)
             logging.info("%s read simulation pipeline completed for iteration %d.", simulator_name, sim_index)
         except Exception as e:
-            logging.error("%s read simulation pipeline failed: %s", simulator_name, e)
-            sys.exit(1)
+            raise ReadSimulationError(f"{simulator_name} read simulation pipeline failed: {e}") from e
 
 
 def write_simulation_statistics(

@@ -6,8 +6,8 @@ Single Responsibility: Parse mutation targets and apply mutations to haplotypes.
 
 import logging
 import random
-import sys
 
+from ..exceptions import MutationError, ValidationError
 from ..mutate import apply_mutations
 
 
@@ -20,6 +20,9 @@ def parse_mutation_targets(mutation_targets_list: list[str]) -> list[tuple[int, 
 
     Returns:
         List of (haplotype_idx, repeat_idx) tuples
+
+    Raises:
+        ValidationError: If target format is invalid
     """
     mutation_positions = []
     for t in mutation_targets_list:
@@ -34,8 +37,7 @@ def parse_mutation_targets(mutation_targets_list: list[str]) -> list[tuple[int, 
                 raise ValueError(f"Unexpected target format: {t}")
             mutation_positions.append((hap_i, rep_i))
         except Exception as e:
-            logging.error("Invalid --mutation-targets format: '%s' (%s)", t, e)
-            sys.exit(1)
+            raise ValidationError(f"Invalid --mutation-targets format: '{t}' ({e})") from e
     return mutation_positions
 
 
@@ -52,9 +54,15 @@ def find_random_mutation_target(
 
     Returns:
         List with single (haplotype_idx, repeat_idx) tuple
+
+    Raises:
+        MutationError: If mutation not found or no valid targets exist
     """
     if "mutations" not in config or mutation_name not in config["mutations"]:
-        raise ValueError(f"Mutation '{mutation_name}' not in config['mutations']")
+        raise MutationError(
+            f"Mutation '{mutation_name}' not in config['mutations']. "
+            f"Available mutations: {list(config.get('mutations', {}).keys())}"
+        )
 
     mut_def = config["mutations"][mutation_name]
     allowed_repeats = set(mut_def["allowed_repeats"])
@@ -67,7 +75,10 @@ def find_random_mutation_target(
                 possible_targets.append((hap_idx, rep_idx))
 
     if not possible_targets:
-        raise ValueError(f"No repeats match 'allowed_repeats' for '{mutation_name}'")
+        raise MutationError(
+            f"No repeats match 'allowed_repeats' for '{mutation_name}'. "
+            f"Allowed repeats: {mut_def['allowed_repeats']}"
+        )
 
     return [random.choice(possible_targets)]
 
@@ -80,8 +91,20 @@ def apply_mutation_pipeline(
 
     Single Responsibility: Mutation application logic.
 
+    Args:
+        args: Command-line arguments
+        config: Configuration dictionary
+        results: Haplotype results
+        mutation_name: Name of mutation to apply
+        dual_mutation_mode: Whether in dual mutation mode
+        mutation_pair: Pair of mutation names (for dual mode)
+
     Returns:
         Tuple of (results, mutated_results, mutated_units, mutation_positions)
+
+    Raises:
+        MutationError: If mutation application fails
+        ValidationError: If mutation targets are invalid
     """
     mutated_results = None
     mutated_units = None
@@ -111,18 +134,13 @@ def apply_mutation_pipeline(
             logging.info("Dual mutation applied for mutated version.")
             return normal_results, mutated_results, mutated_units, mutation_positions
         except Exception as e:
-            logging.error("Mutation failed: %s", e)
-            sys.exit(1)
+            raise MutationError(f"Dual mutation application failed: {e}") from e
     else:
         # Single mode: mutate in place
         if args.mutation_targets:
             mutation_positions = parse_mutation_targets(args.mutation_targets)
         else:
-            try:
-                mutation_positions = find_random_mutation_target(results, config, mutation_name)
-            except Exception as e:
-                logging.error("Random-target mutation failed: %s", e)
-                sys.exit(1)
+            mutation_positions = find_random_mutation_target(results, config, mutation_name)
 
         try:
             results, mutated_units = apply_mutations(
@@ -134,5 +152,4 @@ def apply_mutation_pipeline(
             logging.info("Mutation applied at targets: %s", mutation_positions)
             return results, mutated_results, mutated_units, mutation_positions
         except Exception as e:
-            logging.error("Mutation failed: %s", e)
-            sys.exit(1)
+            raise MutationError(f"Mutation application failed: {e}") from e

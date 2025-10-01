@@ -8,9 +8,9 @@ This module provides wrapper functions for UCSC tools operations:
 """
 
 import logging
-import sys
 from pathlib import Path
 
+from ...exceptions import ExternalToolError, FileOperationError
 from ..utils import run_command
 
 
@@ -34,11 +34,9 @@ def fa_to_twobit(
     # Check output exists and is non-empty
     output_path = Path(output_2bit)
     if not output_path.exists() or output_path.stat().st_size == 0:
-        logging.error(
-            "Failed to convert FASTA to 2bit: Output file %s missing or empty.",
-            output_2bit,
+        raise FileOperationError(
+            f"Failed to convert FASTA to 2bit: Output file {output_2bit} missing or empty"
         )
-        sys.exit(1)
 
 
 def run_pblat(
@@ -71,8 +69,7 @@ def run_pblat(
     for file in [twobit_file, subset_reference]:
         file_path = Path(file)
         if not file_path.exists() or file_path.stat().st_size == 0:
-            logging.error(f"Input file missing or empty: {file}")
-            sys.exit(1)
+            raise FileOperationError(f"pblat input file missing or empty: {file}")
 
     cmd = [
         tools["pblat"],
@@ -91,7 +88,7 @@ def run_pblat(
             stderr_prefix="[pblat] ",
             stderr_log_level=logging.INFO,
         )
-    except SystemExit:
+    except ExternalToolError as e:
         # Check if output was produced despite error
         output_path = Path(output_psl)
         if output_path.exists() and output_path.stat().st_size > 0:
@@ -99,13 +96,11 @@ def run_pblat(
                 "pblat command failed, but output file exists. Continuing with caution."
             )
         else:
-            logging.error("pblat alignment failed and no output was produced.")
-            sys.exit(1)
+            raise FileOperationError("pblat alignment failed and no output was produced") from e
 
     # Verify output exists and is non-empty
     output_path = Path(output_psl)
     if not output_path.exists() or output_path.stat().st_size == 0:
-        logging.error(f"pblat output file missing or empty: {output_psl}")
-        sys.exit(1)
+        raise FileOperationError(f"pblat output file missing or empty: {output_psl}")
 
     logging.info(f"Successfully created PSL file: {output_psl}")

@@ -9,9 +9,9 @@ This module provides wrapper functions for the reseq toolkit operations:
 """
 
 import logging
-import sys
 from pathlib import Path
 
+from ...exceptions import ExternalToolError, FileOperationError
 from ..utils import run_command
 
 
@@ -65,11 +65,9 @@ def generate_systematic_errors(
     # Verify output exists and is non-empty
     output_path = Path(output_fq)
     if not output_path.exists() or output_path.stat().st_size == 0:
-        logging.error(
-            "Failed to generate systematic errors: Output %s missing or empty.",
-            output_fq,
+        raise FileOperationError(
+            f"Failed to generate systematic errors: Output {output_fq} missing or empty"
         )
-        sys.exit(1)
 
 
 def create_reads(
@@ -120,7 +118,7 @@ def create_reads(
             stderr_log_level=logging.INFO,
             stderr_prefix="[reseq] ",
         )
-    except SystemExit:
+    except ExternalToolError as e:
         # Check if the output file exists and is non-empty despite timeout
         output_path = Path(output_reads)
         if output_path.exists() and output_path.stat().st_size > 0:
@@ -134,12 +132,9 @@ def create_reads(
                 timeout,
             )
         else:
-            logging.error(
-                "Failed to create reads: Output %s missing or empty after %s seconds.",
-                output_reads,
-                timeout,
-            )
-            sys.exit(1)
+            raise FileOperationError(
+                f"Failed to create reads: Output {output_reads} missing or empty after {timeout} seconds"
+            ) from e
 
 
 def split_reads(interleaved_fastq: str, output_fastq1: str, output_fastq2: str) -> None:

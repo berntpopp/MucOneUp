@@ -5,9 +5,9 @@ Single Responsibility: Write simulation outputs (FASTA, structure files, mutated
 """
 
 import logging
-import sys
 from pathlib import Path
 
+from ..exceptions import FileOperationError
 from ..fasta_writer import write_fasta
 from .config import numbered_filename
 from .snps import integrate_snps_unified
@@ -57,8 +57,7 @@ def write_fasta_outputs(
 
             return results, mutated_results, applied_snp_info_normal, applied_snp_info_mut
         except Exception as e:
-            logging.error("Writing FASTA failed: %s", e)
-            sys.exit(1)
+            raise FileOperationError(f"Writing dual FASTA outputs failed: {e}") from e
     else:
         out_file = numbered_filename(out_dir, out_base, sim_index, "simulated.fa")
 
@@ -103,8 +102,7 @@ def write_fasta_outputs(
 
             return results, None, applied_snp_info, {}
         except Exception as e:
-            logging.error("Writing FASTA failed: %s", e)
-            sys.exit(1)
+            raise FileOperationError(f"Writing FASTA output failed: {e}") from e
 
 
 def write_mutated_units(
@@ -123,8 +121,7 @@ def write_mutated_units(
                         muf.write(f">haplotype_{hap_idx}_repeat_{rep_idx}\n{unit_seq}\n")
             logging.info("Mutated VNTR unit FASTA output written: %s", mutated_unit_out)
         except Exception as e:
-            logging.error("Writing mutated VNTR unit FASTA failed: %s", e)
-            sys.exit(1)
+            raise FileOperationError(f"Writing mutated VNTR unit FASTA failed: {e}") from e
 
 
 def write_structure_files(
@@ -166,8 +163,7 @@ def write_structure_files(
 
             logging.info("Structure files written: %s and %s", normal_struct_out, mut_struct_out)
         except Exception as e:
-            logging.error("Writing structure file failed: %s", e)
-            sys.exit(1)
+            raise FileOperationError(f"Writing dual structure files failed: {e}") from e
     else:
         struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt")
         try:
@@ -190,5 +186,4 @@ def write_structure_files(
 
             logging.info("Structure file written to %s", struct_out)
         except Exception as e:
-            logging.error("Writing structure file failed: %s", e)
-            sys.exit(1)
+            raise FileOperationError(f"Writing structure file failed: {e}") from e

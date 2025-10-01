@@ -11,9 +11,10 @@ import os
 import shutil
 import signal
 import subprocess
-import sys
 import threading
 from pathlib import Path
+
+from ..exceptions import ExternalToolError, ValidationError
 
 
 def run_command(
@@ -54,9 +55,13 @@ def run_command(
             universal_newlines=False,
             preexec_fn=os.setsid,
         )
-    except Exception:
-        logging.exception("Failed to start command: %s", cmd_str)
-        sys.exit(1)
+    except Exception as e:
+        raise ExternalToolError(
+            tool="command",
+            exit_code=1,
+            stderr=str(e),
+            cmd=cmd_str
+        ) from e
 
     def log_stream(stream, log_func, level=None, prefix=""):
         """Read lines from a stream and log them using log_func."""
@@ -111,7 +116,12 @@ def run_command(
                 proc.returncode,
                 cmd_str,
             )
-        sys.exit(proc.returncode)
+        raise ExternalToolError(
+            tool="command",
+            exit_code=proc.returncode,
+            stderr="Command failed",
+            cmd=cmd_str
+        )
     return proc.returncode
 
 
@@ -158,8 +168,7 @@ def check_external_tools(tools: dict[str, str]) -> None:
     # Check if tools dictionary has all required tools
     for tool in required_tools:
         if tool not in tools:
-            logging.error(f"Required tool '{tool}' not found in configuration.")
-            sys.exit(1)
+            raise ValidationError(f"Required tool '{tool}' not found in configuration")
 
     # Check if the provided commands involve conda/mamba
     using_conda = any(cmd.startswith(("conda", "mamba")) for cmd in tools.values())
@@ -177,8 +186,7 @@ def check_external_tools(tools: dict[str, str]) -> None:
 
         cmd = command.split()[0]  # Get just the executable part
         if not (shutil.which(cmd) or Path(cmd).is_file()):
-            logging.error(f"Required tool '{tool}' (command: '{cmd}') not found in PATH.")
-            sys.exit(1)
+            raise ValidationError(f"Required tool '{tool}' (command: '{cmd}') not found in PATH")
 
     # Skip detailed validation if using conda (it will be checked when used)
     # Basic validation for specific tools
@@ -191,10 +199,10 @@ def check_external_tools(tools: dict[str, str]) -> None:
         # which is actually expected behavior
 
         logging.info("External tool validation completed successfully.")
-    except SystemExit:
-        logging.error("External tool validation failed.")
-        logging.info("If using conda/mamba environments, ensure they're properly set up")
-        sys.exit(1)
+    except Exception as e:
+        raise ValidationError(
+            f"External tool validation failed. If using conda/mamba environments, ensure they're properly set up: {e}"
+        ) from e
 
 
 def cleanup_files(file_list: list[str]) -> None:

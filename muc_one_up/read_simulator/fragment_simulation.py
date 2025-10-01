@@ -9,8 +9,10 @@ PSL alignments and produces fragment pairs for later sequencing.
 
 import logging
 import random
-import sys
 from pathlib import Path
+
+# Import exceptions
+from ..exceptions import FileOperationError
 
 # Map for DNA complementation
 COMP_MAP = {
@@ -329,7 +331,7 @@ def simulate_fragments(
         logging.info(f"Loaded {len(genome)} sequences from reference")
     except Exception as e:
         logging.error(f"Failed to load reference FASTA: {e!s}")
-        sys.exit(1)
+        raise FileOperationError(f"Failed to load reference FASTA {ref_fa}: {e!s}") from e
 
     # Load systematic errors
     try:
@@ -340,7 +342,7 @@ def simulate_fragments(
         )
     except Exception as e:
         logging.error(f"Failed to load systematic errors: {e!s}")
-        sys.exit(1)
+        raise FileOperationError(f"Failed to load systematic errors file {syser_file}: {e!s}") from e
 
     # Load PSL matches
     try:
@@ -349,11 +351,11 @@ def simulate_fragments(
         logging.info(f"Loaded {len(matches)} matches from PSL file")
     except Exception as e:
         logging.error(f"Failed to load PSL matches: {e!s}")
-        sys.exit(1)
+        raise FileOperationError(f"Failed to load PSL alignments file {psl_file}: {e!s}") from e
 
     if not matches:
         logging.error("No matches found in PSL file. Cannot simulate fragments.")
-        sys.exit(1)
+        raise FileOperationError(f"No matches found in PSL file {psl_file}. Cannot simulate fragments.")
 
     # Simulate fragments and write to FASTA file
     try:
@@ -432,7 +434,7 @@ def simulate_fragments(
         logging.info(f"Fragment simulation completed. Output: {output_fragments}")
     except Exception as e:
         logging.error(f"Error simulating fragments: {e!s}")
-        sys.exit(1)
+        raise FileOperationError(f"Error writing fragments to {output_fragments}: {e!s}") from e
 
     # Check output file exists and is non-empty
     output_path = Path(output_fragments)
@@ -440,4 +442,6 @@ def simulate_fragments(
         logging.error(
             f"Fragment simulation failed: Output file missing or empty: {output_fragments}"
         )
-        sys.exit(1)
+        raise FileOperationError(
+            f"Fragment simulation failed: Output file missing or empty: {output_fragments}"
+        )

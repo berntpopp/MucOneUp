@@ -7,9 +7,9 @@ This module provides wrapper functions for BWA operations:
 """
 
 import logging
-import sys
 from pathlib import Path
 
+from ...exceptions import FileOperationError
 from ..utils import run_command
 
 
@@ -34,13 +34,12 @@ def align_reads(
         threads: Number of threads.
 
     Raises:
-        SystemExit: If any alignment or sorting command fails.
+        FileOperationError: If input files not found or output files missing
     """
     # Check input files exist
     for file in [read1, read2, human_reference]:
         if not Path(file).exists():
-            logging.error(f"Input file not found: {file}")
-            sys.exit(1)
+            raise FileOperationError(f"Input file not found for BWA alignment: {file}")
 
     # Get output directory and filename base for intermediate files
     output_bam_path = Path(output_bam)
@@ -84,8 +83,7 @@ def align_reads(
     for file in [output_bam, f"{output_bam}.bai"]:
         file_path = Path(file)
         if not file_path.exists() or file_path.stat().st_size == 0:
-            logging.error(f"Expected output file missing or empty: {file}")
-            sys.exit(1)
+            raise FileOperationError(f"BWA alignment output file missing or empty: {file}")
 
     # Clean up intermediate files
     unsorted_bam_path = Path(unsorted_bam)

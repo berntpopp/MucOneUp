@@ -231,48 +231,109 @@ def configure_logging(level_str):
         logging.info("Logging configured at level: %s", level_str.upper())
 
 
-def main():
+def main() -> int:
     """
     Main entry point for the CLI.
 
     Orchestrates the simulation pipeline following SOLID principles.
     Each major concern is delegated to focused helper functions.
+    Centralized exception handling ensures clean error messages.
 
-    Total lines: <100 (down from 801!)
+    Returns:
+        Exit code (0 for success, 1 for expected errors, 2 for unexpected errors, 130 for SIGINT)
     """
     # Parse arguments and configure logging
     parser = build_parser()
     args = parser.parse_args()
     configure_logging(args.log_level)
 
-    # Load configuration and setup output
-    config, out_dir, out_base = setup_configuration(args)
+    try:
+        # Load configuration and setup output
+        config, out_dir, out_base = setup_configuration(args)
 
-    # Determine simulation mode
-    simulation_configs, predefined_chains, structure_mutation_info = determine_simulation_mode(
-        args, config
-    )
-
-    # Process mutation configuration
-    dual_mutation_mode, mutation_pair, mutation_name = process_mutation_config(
-        args, structure_mutation_info
-    )
-
-    # Run simulations
-    for sim_index, fixed_conf in enumerate(simulation_configs, start=1):
-        run_single_simulation_iteration(
-            args,
-            config,
-            out_dir,
-            out_base,
-            sim_index,
-            fixed_conf,
-            predefined_chains,
-            dual_mutation_mode,
-            mutation_pair,
-            structure_mutation_info,
+        # Determine simulation mode
+        simulation_configs, predefined_chains, structure_mutation_info = determine_simulation_mode(
+            args, config
         )
 
+        # Process mutation configuration
+        dual_mutation_mode, mutation_pair, mutation_name = process_mutation_config(
+            args, structure_mutation_info
+        )
 
-if __name__ == "__main__":
-    main()
+        # Run simulations
+        for sim_index, fixed_conf in enumerate(simulation_configs, start=1):
+            run_single_simulation_iteration(
+                args,
+                config,
+                out_dir,
+                out_base,
+                sim_index,
+                fixed_conf,
+                predefined_chains,
+                dual_mutation_mode,
+                mutation_pair,
+                structure_mutation_info,
+            )
+
+        logging.info("All simulations completed successfully.")
+        return 0  # Success
+
+    except KeyboardInterrupt:
+        logging.warning("Interrupted by user (Ctrl+C)")
+        return 130  # Standard Unix code for SIGINT
+
+    except Exception as e:
+        # Import here to avoid circular import at module level
+        from ..exceptions import (
+            ConfigurationError,
+            ExternalToolError,
+            FileOperationError,
+            MucOneUpError,
+            MutationError,
+            ReadSimulationError,
+            SimulationError,
+            SNPIntegrationError,
+            ValidationError,
+        )
+
+        # Handle specific exception types with appropriate messages
+        if isinstance(e, ConfigurationError):
+            logging.error("Configuration error: %s", e)
+            return 1
+        elif isinstance(e, ValidationError):
+            logging.error("Validation error: %s", e)
+            return 1
+        elif isinstance(e, SimulationError):
+            logging.error("Simulation error: %s", e)
+            return 1
+        elif isinstance(e, MutationError):
+            logging.error("Mutation error: %s", e)
+            return 1
+        elif isinstance(e, SNPIntegrationError):
+            logging.error("SNP integration error: %s", e)
+            return 1
+        elif isinstance(e, FileOperationError):
+            logging.error("File operation error: %s", e)
+            return 1
+        elif isinstance(e, ReadSimulationError):
+            logging.error("Read simulation error: %s", e)
+            return 1
+        elif isinstance(e, ExternalToolError):
+            logging.error("External tool error: %s", e)
+            if e.stderr:
+                logging.debug("Tool stderr: %s", e.stderr)
+            return 1
+        elif isinstance(e, MucOneUpError):
+            # Catch-all for custom exceptions
+            logging.error("MucOneUp error: %s", e)
+            return 1
+        else:
+            # Unexpected errors - include full traceback
+            logging.exception("Unexpected error occurred: %s", e)
+            return 2
+
+
+if __name__ == "__main__":  # OK: top-level entry point
+    import sys
+    sys.exit(main())

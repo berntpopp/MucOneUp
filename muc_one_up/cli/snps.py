@@ -6,8 +6,8 @@ DRY: Unified SNP integration for both dual and single mutation modes.
 """
 
 import logging
-import sys
 
+from ..exceptions import SNPIntegrationError, ValidationError
 from ..snp_integrator import (
     apply_snps_to_sequences,
     generate_random_snps,
@@ -37,6 +37,10 @@ def integrate_snps_unified(
 
     Returns:
         Tuple of (modified_results, applied_snp_info)
+
+    Raises:
+        SNPIntegrationError: If SNP parsing or application fails
+        ValidationError: If required SNP parameters are missing
     """
     applied_snp_info = {}
     snps_from_source = []
@@ -50,17 +54,16 @@ def integrate_snps_unified(
             snps_from_source = parse_snp_file(args.snp_input_file)
             logging.info(f"Read {len(snps_from_source)} SNPs from {args.snp_input_file}")
         except Exception as e:
-            logging.error(f"Failed to parse SNP input file: {e}. Skipping SNP integration.")
-            snps_from_source = []
+            raise SNPIntegrationError(
+                f"Failed to parse SNP input file {args.snp_input_file}: {e}"
+            ) from e
 
     elif args.random_snps:
         # Validate required parameters
         if not args.random_snp_density:
-            logging.error("--random-snp-density is required when --random-snps is used")
-            sys.exit(1)
+            raise ValidationError("--random-snp-density is required when --random-snps is used")
         if not args.random_snp_output_file:
-            logging.error("--random-snp-output-file is required when --random-snps is used")
-            sys.exit(1)
+            raise ValidationError("--random-snp-output-file is required when --random-snps is used")
 
         # Get VNTR boundaries if region filtering is used
         vntr_bounds = get_vntr_boundaries(results, config)
