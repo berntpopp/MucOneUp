@@ -234,7 +234,7 @@ class TestMutateErrorConditions:
         }
         results = [("TTTTXXXXXGGGG", ["X"])]
 
-        with pytest.raises(ValueError, match="Malformed change.*missing fields"):
+        with pytest.raises(ValueError, match=r"Malformed change.*missing fields"):
             apply_mutations(mutation_config, results, "badChange", [(1, 1)])
 
     def test_insert_out_of_bounds(self, mutation_config):

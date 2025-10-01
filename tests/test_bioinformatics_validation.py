@@ -161,7 +161,7 @@ class TestValidateSNPRecord:
 
     def test_invalid_haplotype_index(self):
         """Invalid haplotype should raise ValidationError."""
-        with pytest.raises(ValidationError, match="haplotype index.*out of range"):
+        with pytest.raises(ValidationError, match=r"haplotype index.*out of range"):
             validate_snp_record(
                 haplotype=3,
                 position=100,
@@ -173,7 +173,7 @@ class TestValidateSNPRecord:
 
     def test_invalid_position(self):
         """Position out of range should raise ValidationError."""
-        with pytest.raises(ValidationError, match="position.*out of range"):
+        with pytest.raises(ValidationError, match=r"position.*out of range"):
             validate_snp_record(
                 haplotype=1,
                 position=1000,
@@ -207,12 +207,12 @@ class TestValidateGCContentRange:
 
     def test_below_range(self):
         """GC content < 0 should raise ValidationError."""
-        with pytest.raises(ValidationError, match="between 0.0 and 100.0"):
+        with pytest.raises(ValidationError, match=r"between 0\.0 and 100\.0"):
             validate_gc_content_range(-1.0)
 
     def test_above_range(self):
         """GC content > 100 should raise ValidationError."""
-        with pytest.raises(ValidationError, match="between 0.0 and 100.0"):
+        with pytest.raises(ValidationError, match=r"between 0\.0 and 100\.0"):
             validate_gc_content_range(101.0)
 
 

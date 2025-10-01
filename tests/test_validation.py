@@ -113,7 +113,7 @@ class TestValidateMutationExists:
     def test_missing_mutation(self):
         """Should raise ValidationError with available mutations."""
         config = {"mutations": {"dupC": {}, "delA": {}}}
-        with pytest.raises(ValidationError, match="dupC.*delA"):
+        with pytest.raises(ValidationError, match=r"dupC.*delA"):
             validate_mutation_exists("missing", config)
 
     def test_no_mutations_section(self):
@@ -136,14 +136,14 @@ class TestValidateMutationTargets:
         """Should raise ValidationError for invalid haplotype."""
         targets = [(3, 5)]
         chains = [["1", "2"], ["1", "2"]]
-        with pytest.raises(ValidationError, match="haplotype index.*out of range"):
+        with pytest.raises(ValidationError, match=r"haplotype index.*out of range"):
             validate_mutation_targets(targets, 2, chains)
 
     def test_invalid_repeat_index(self):
         """Should raise ValidationError for invalid repeat position."""
         targets = [(1, 10)]
         chains = [["1", "2", "7"]]
-        with pytest.raises(ValidationError, match="repeat index.*out of range"):
+        with pytest.raises(ValidationError, match=r"repeat index.*out of range"):
             validate_mutation_targets(targets, 1, chains)
 
 
@@ -212,12 +212,12 @@ class TestValidateProbability:
 
     def test_below_range(self):
         """Values < 0.0 should raise ValidationError."""
-        with pytest.raises(ValidationError, match="between 0.0 and 1.0"):
+        with pytest.raises(ValidationError, match=r"between 0\.0 and 1\.0"):
             validate_probability(-0.1, "prob")
 
     def test_above_range(self):
         """Values > 1.0 should raise ValidationError."""
-        with pytest.raises(ValidationError, match="between 0.0 and 1.0"):
+        with pytest.raises(ValidationError, match=r"between 0\.0 and 1\.0"):
             validate_probability(1.1, "prob")
 
 
