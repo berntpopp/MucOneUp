@@ -2,14 +2,14 @@
 
 **MucOneUp** is a Python tool for simulating **MUC1 VNTR diploid references**. It builds customized references that:
 
-1. **Generate** haplotypes containing a variable‐length VNTR region using a probability model or fixed‐lengths.  
-2. **Force** a canonical terminal block (`6` or `6p` → `7 → 8 → 9`) before appending the right‐hand constant.  
-3. Optionally **introduce mutations** (inserts, deletes, or replacements) in selected repeats with precise control over which haplotypes are affected.  
-4. **Support structure files** with mutation information, allowing for reproducible generation of specific mutated VNTR structures.  
-4. **Generate series of simulations** when fixed-length ranges are provided (via the `--simulate-series` flag) so that a simulation is run for each possible length (or combination of lengths for multiple haplotypes).  
-5. **Run dual simulations** (normal and mutated) when a comma-separated mutation name is provided.  
-6. **Detect Toxic Protein Features:** When ORF prediction is activated (via the `--output-orfs` flag), the tool scans the resulting ORF FASTA file for toxic protein sequence features by analyzing the repeat structure and amino acid composition of the variable region. A quantitative “deviation” (or similarity) score is computed relative to a wild–type model, and if the overall score exceeds a user–defined cutoff, the protein is flagged as toxic.  
-7. **Generate Comprehensive Simulation Statistics:**  
+1. **Generate** haplotypes containing a variable‐length VNTR region using a probability model or fixed‐lengths.
+2. **Force** a canonical terminal block (`6` or `6p` → `7 → 8 → 9`) before appending the right‐hand constant.
+3. Optionally **introduce mutations** (inserts, deletes, or replacements) in selected repeats with precise control over which haplotypes are affected.
+4. **Support structure files** with mutation information, allowing for reproducible generation of specific mutated VNTR structures.
+4. **Generate series of simulations** when fixed-length ranges are provided (via the `--simulate-series` flag) so that a simulation is run for each possible length (or combination of lengths for multiple haplotypes).
+5. **Run dual simulations** (normal and mutated) when a comma-separated mutation name is provided.
+6. **Detect Toxic Protein Features:** When ORF prediction is activated (via the `--output-orfs` flag), the tool scans the resulting ORF FASTA file for toxic protein sequence features by analyzing the repeat structure and amino acid composition of the variable region. A quantitative “deviation” (or similarity) score is computed relative to a wild–type model, and if the overall score exceeds a user–defined cutoff, the protein is flagged as toxic.
+7. **Generate Comprehensive Simulation Statistics:**
    For each simulation run, detailed statistics are generated—including simulation runtime, haplotype-level metrics (repeat counts, VNTR lengths, GC content, repeat length summaries, and mutation details), as well as overall aggregated statistics. In dual simulation mode, separate reports are produced for the normal and mutated outputs.
 
 Additionally, MucOneUp supports **multiple read simulation pipelines**:
@@ -109,18 +109,18 @@ make test        # Run tests
 make check
 ```
 
-> **Optional (Conda/Mamba Environments for Read Simulation):**  
-> 
+> **Optional (Conda/Mamba Environments for Read Simulation):**
+>
 > For **Illumina read simulation** with w-Wessim2, create the environment:
 > ```bash
 > mamba env create -f conda/env_wessim.yaml
 > ```
-> 
+>
 > For **ONT read simulation** with NanoSim, create the environment:
 > ```bash
 > mamba env create -f conda/env_nanosim.yaml
 > ```
-> 
+>
 > After creating these environments, update the `tools` section in your configuration file to reference the executables from the newly created environments. Alternatively, you can install the tools locally.
 
 Once installed, you’ll have a command-line program called **`muconeup`** available.
@@ -145,7 +145,7 @@ This command will:
 - **Download** the reference files (e.g. the GRCh38 human reference and a reseq model file).
 - **Verify** the downloads via MD5 checksum.
 - **Extract** any gzip-compressed files automatically.
-- **Index** FASTA files using BWA if an indexing command is provided in the configuration.  
+- **Index** FASTA files using BWA if an indexing command is provided in the configuration.
   *(If you prefer not to index the FASTA files automatically, use the `--skip-indexing` flag.)*
 
 After the script completes, an `installed_references.json` file is generated in the output directory. This file maps each reference name to its absolute file path.
@@ -308,23 +308,23 @@ Below are the available **command-line arguments**. Use `muconeup --help` for mo
 
 When the ORF prediction is enabled (using the `--output-orfs` flag), **MucOneUp** automatically scans the resulting ORF FASTA file for toxic protein sequence features. This new feature works as follows:
 
-1. **Extracting the Variable Region:**  
+1. **Extracting the Variable Region:**
    The ORF sequence is trimmed by removing the constant left/right flanks (if provided in the configuration), isolating the variable region (i.e. the repeat region).
 
-2. **Detecting and Quantifying Repeats:**  
+2. **Detecting and Quantifying Repeats:**
    A sliding window—whose length equals that of a consensus repeat motif (e.g. `"RCHLGPGHQAGPGLHR"`)—moves across the variable region. For each window, the similarity (using a simple Hamming distance approach) is computed, and windows exceeding a set identity threshold (e.g. 80%) are considered as valid repeats. From these, the number of repeats and the average repeat identity score are calculated.
 
-3. **Amino Acid Composition Analysis:**  
+3. **Amino Acid Composition Analysis:**
    The tool computes the frequency of key residues (such as R, C, and H) in the variable region and compares these frequencies to a wild–type model (by default, an approximation is generated by repeating the consensus motif). A composition similarity score is calculated as:
    ```
    S_composition = 1 - (sum(|f_mut - f_wt|) / sum(f_wt))
    ```
    where a score near 1 indicates high similarity (i.e. normal) and lower scores indicate divergence (i.e. toxicity).
 
-4. **Combining Metrics:**  
+4. **Combining Metrics:**
    The overall similarity (or deviation) score is computed as a weighted sum of the repeat score and the composition similarity. In this implementation, a **higher overall score indicates divergence from the wild–type** (i.e. a toxic protein), while a lower score indicates similarity to the wild–type (normal). If the overall score exceeds a user–defined toxic detection cutoff (e.g. 0.5), the ORF is flagged as toxic.
 
-5. **Output:**  
+5. **Output:**
    The detection metrics for each ORF (including repeat count, average repeat identity, repeat score, composition similarity, overall score, and the toxic flag) are saved in a JSON file (with file extension `orf_stats.txt`) alongside the ORF FASTA output.
 
 ---
@@ -562,8 +562,8 @@ A simplified example:
 ```json
 {
   "repeats": {
-    "1": "CACAGCATTCTTCTC...", 
-    "2": "CTGAGTGGTGGAGGA...", 
+    "1": "CACAGCATTCTTCTC...",
+    "2": "CTGAGTGGTGGAGGA...",
     // ...
     "9": "TGAGCCTGATGCAGA..."
   },
@@ -589,7 +589,7 @@ A simplified example:
   },
   "mutations": {
     "dupC": {
-      "allowed_repeats": ["X", "C", "B", "A"], 
+      "allowed_repeats": ["X", "C", "B", "A"],
       "strict_mode": false,  // Optional: When true, raises an error if target repeat isn't allowed
       "changes": [
         {

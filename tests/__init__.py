@@ -1,0 +1,1 @@
+"""MucOneUp test suite."""

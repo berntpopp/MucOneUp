@@ -214,7 +214,7 @@ def align_ont_reads_with_minimap2(
                 if process.returncode != 0:
                     logging.error("[minimap2] Failed with code %d", process.returncode)
                     logging.error("[minimap2] stderr: %s", stderr)
-                    return None
+                    raise RuntimeError(f"minimap2 alignment failed with code {process.returncode}")
 
         # Convert SAM to BAM
         if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
