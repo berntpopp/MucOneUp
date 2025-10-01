@@ -157,7 +157,7 @@ def generate_random_snps(
     region: str = "all",
     target_haplotypes: str = "all",
     vntr_boundaries: list[dict[str, int]] | None = None,
-) -> list[dict[str, any]]:
+) -> list[dict[str, Any]]:
     """
     Generate random SNPs based on specified parameters.
 
@@ -297,7 +297,7 @@ def apply_snps_to_sequences(
     mutable_sequences = [list(seq) for seq in haplotype_sequences]
 
     # Track successfully applied SNPs
-    applied_snps = {i: [] for i in range(len(haplotype_sequences))}
+    applied_snps: dict[int, list[dict[str, Any]]] = {i: [] for i in range(len(haplotype_sequences))}
 
     # Apply each SNP
     for snp in snps_to_apply:

@@ -96,6 +96,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "ARG", "PLR2004"]  # Allow asserts, unused args, magic values
 "__init__.py" = ["F401"]  # Allow unused imports in __init__
+"helpers/*" = ["N817"]  # Allow common acronyms like ET for ElementTree
 
 [tool.ruff.lint.isort]
 known-first-party = ["muc_one_up"]
@@ -124,6 +125,14 @@ no_implicit_optional = true
 
 [[tool.mypy.overrides]]
 module = "orfipy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "orfipy_core.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "jsonschema.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

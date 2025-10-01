@@ -55,13 +55,13 @@ def assemble_haplotype_from_chain(chain: list[str], config: dict) -> str:
         if base_symbol not in repeats_dict:
             raise ValueError(f"Symbol '{base_symbol}' not found in config repeats.")
 
-        assembled_seq += repeats_dict[base_symbol]
+        assembled_seq += str(repeats_dict[base_symbol])
 
     # Add right constant
     assembled_seq += right_const
 
     logging.info(f"Assembled haplotype with {len(chain)} repeats.")
-    return assembled_seq
+    return assembled_seq  # type: ignore[no-any-return]
 
 
 def simulate_from_chains(

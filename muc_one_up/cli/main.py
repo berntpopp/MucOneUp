@@ -336,4 +336,5 @@ def main() -> int:
 
 if __name__ == "__main__":  # OK: top-level entry point
     import sys
+
     sys.exit(main())

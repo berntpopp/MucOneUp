@@ -64,7 +64,7 @@ def align_reads(
     )
 
     # Sort the BAM file
-    cmd = [
+    cmd = [  # type: ignore[assignment]
         tools["samtools"],
         "sort",
         "-@",
@@ -76,7 +76,7 @@ def align_reads(
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Index the BAM file
-    cmd = [tools["samtools"], "index", output_bam]
+    cmd = [tools["samtools"], "index", output_bam]  # type: ignore[assignment]
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Check output files exist

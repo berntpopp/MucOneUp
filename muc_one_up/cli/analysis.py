@@ -26,7 +26,9 @@ def run_orf_prediction(
         return
 
     if dual_mutation_mode:
-        normal_orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa", variant="normal")
+        normal_orf_out = numbered_filename(
+            out_dir, out_base, sim_index, "orfs.fa", variant="normal"
+        )
         mut_orf_out = numbered_filename(out_dir, out_base, sim_index, "orfs.fa", variant="mut")
 
         try:
@@ -57,18 +59,30 @@ def run_orf_prediction(
             left_const_val = config.get("constants", {}).get("left")
             right_const_val = config.get("constants", {}).get("right")
 
-            normal_stats = scan_orf_fasta(normal_orf_out, left_const=left_const_val, right_const=right_const_val)
-            mut_stats = scan_orf_fasta(mut_orf_out, left_const=left_const_val, right_const=right_const_val)
+            normal_stats = scan_orf_fasta(
+                normal_orf_out, left_const=left_const_val, right_const=right_const_val
+            )
+            mut_stats = scan_orf_fasta(
+                mut_orf_out, left_const=left_const_val, right_const=right_const_val
+            )
 
-            stats_file_normal = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt", variant="normal")
-            stats_file_mut = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt", variant="mut")
+            stats_file_normal = numbered_filename(
+                out_dir, out_base, sim_index, "orf_stats.txt", variant="normal"
+            )
+            stats_file_mut = numbered_filename(
+                out_dir, out_base, sim_index, "orf_stats.txt", variant="mut"
+            )
 
             with Path(stats_file_normal).open("w") as nf:
                 json.dump(normal_stats, nf, indent=4)
             with Path(stats_file_mut).open("w") as mf:
                 json.dump(mut_stats, mf, indent=4)
 
-            logging.info("Toxic protein detection stats written: %s and %s", stats_file_normal, stats_file_mut)
+            logging.info(
+                "Toxic protein detection stats written: %s and %s",
+                stats_file_normal,
+                stats_file_mut,
+            )
         except ImportError as e:
             raise FileOperationError(f"Failed to import toxic_protein_detector module: {e}") from e
     else:
@@ -103,9 +117,7 @@ def run_orf_prediction(
             raise FileOperationError(f"Failed to import toxic_protein_detector module: {e}") from e
 
 
-def run_read_simulation(
-    args, config, out_dir, out_base, sim_index, dual_mutation_mode
-):
+def run_read_simulation(args, config, out_dir, out_base, sim_index, dual_mutation_mode):
     """Run read simulation pipeline if requested."""
     if not args.simulate_reads:
         return
@@ -118,7 +130,9 @@ def run_read_simulation(
     simulator_name = "Oxford Nanopore" if simulator_type == "ont" else "Illumina"
 
     if dual_mutation_mode:
-        normal_fa = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="normal")
+        normal_fa = numbered_filename(
+            out_dir, out_base, sim_index, "simulated.fa", variant="normal"
+        )
         mut_fa = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="mut")
 
         try:
@@ -134,7 +148,9 @@ def run_read_simulation(
                 sim_index,
             )
         except Exception as e:
-            raise ReadSimulationError(f"{simulator_name} read simulation pipeline (normal variant) failed: {e}") from e
+            raise ReadSimulationError(
+                f"{simulator_name} read simulation pipeline (normal variant) failed: {e}"
+            ) from e
 
         try:
             logging.info(
@@ -149,7 +165,9 @@ def run_read_simulation(
                 sim_index,
             )
         except Exception as e:
-            raise ReadSimulationError(f"{simulator_name} read simulation pipeline (mutated variant) failed: {e}") from e
+            raise ReadSimulationError(
+                f"{simulator_name} read simulation pipeline (mutated variant) failed: {e}"
+            ) from e
     else:
         sim_fa = numbered_filename(out_dir, out_base, sim_index, "simulated.fa")
 
@@ -158,9 +176,13 @@ def run_read_simulation(
                 "Starting %s read simulation pipeline for iteration %d.", simulator_name, sim_index
             )
             simulate_reads_pipeline(config, sim_fa)
-            logging.info("%s read simulation pipeline completed for iteration %d.", simulator_name, sim_index)
+            logging.info(
+                "%s read simulation pipeline completed for iteration %d.", simulator_name, sim_index
+            )
         except Exception as e:
-            raise ReadSimulationError(f"{simulator_name} read simulation pipeline failed: {e}") from e
+            raise ReadSimulationError(
+                f"{simulator_name} read simulation pipeline failed: {e}"
+            ) from e
 
 
 def write_simulation_statistics(
@@ -179,7 +201,9 @@ def write_simulation_statistics(
     applied_snp_info_mut,
 ):
     """Generate and write simulation statistics."""
-    vntr_coverage_stats = {}
+    from typing import Any
+
+    vntr_coverage_stats: dict[str, Any] = {}
 
     if dual_mutation_mode:
         normal_stats_report = generate_simulation_statistics(

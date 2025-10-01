@@ -235,7 +235,9 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     human_reference = rs_config.get("human_reference")
     if not human_reference:
         logging.error("Error: human_reference not specified in config.")
-        raise ConfigurationError("human_reference not specified in config 'read_simulation' section")
+        raise ConfigurationError(
+            "human_reference not specified in config 'read_simulation' section"
+        )
     logging.info("9. Aligning reads to reference")
     align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads)
 
@@ -358,7 +360,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
 
     cleanup_files(intermediates)
 
-    return output_bam
+    return output_bam  # type: ignore[no-any-return]
 
 
 # For direct command-line use (backward compatibility)

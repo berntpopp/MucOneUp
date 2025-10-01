@@ -67,7 +67,9 @@ def apply_mutations(
     changes = mutation_def["changes"]
 
     updated_results = list(results)
-    mutated_units = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
+    mutated_units: dict[
+        int, list[tuple[int, str]]
+    ] = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
 
     # Apply the mutation to each specified target.
     for hap_i, rep_i in targets:
@@ -155,10 +157,10 @@ def rebuild_haplotype_sequence(chain: list[str], config: dict[str, Any]) -> str:
     seq = left_const
     for sym in chain:
         pure_sym = sym.replace("m", "")
-        seq += repeats_dict[pure_sym]
+        seq += str(repeats_dict[pure_sym])
     if chain[-1].replace("m", "") == "9":
         seq += right_const
-    return seq
+    return seq  # type: ignore[no-any-return]
 
 
 def apply_changes_to_repeat(

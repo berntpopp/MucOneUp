@@ -62,7 +62,7 @@ def run_nanosim_simulation(
         cmd += f" -t {threads} -x {coverage}"
     else:
         # Build as list for direct command
-        cmd = [
+        cmd = [  # type: ignore[assignment]
             nanosim_cmd,
             "genome",
             "-rg",
@@ -190,7 +190,7 @@ def align_ont_reads_with_minimap2(
             )
         else:
             # Use list form for direct command
-            align_cmd = [
+            align_cmd = [  # type: ignore[assignment]
                 minimap2_cmd,
                 "-t",
                 str(threads),
@@ -272,7 +272,7 @@ def align_ont_reads_with_minimap2(
             )
         else:
             # List form for direct command
-            sort_cmd = [
+            sort_cmd = [  # type: ignore[assignment]
                 samtools_cmd,
                 "sort",
                 "-@",
@@ -307,7 +307,7 @@ def align_ont_reads_with_minimap2(
             )
         else:
             # List form for direct command
-            index_cmd = [samtools_cmd, "index", output_bam]
+            index_cmd = [samtools_cmd, "index", output_bam]  # type: ignore[assignment]
 
             cmd_str = " ".join(str(c) for c in index_cmd)
             logging.info("[samtools] Indexing BAM: %s", cmd_str)

@@ -98,7 +98,7 @@ def count_repeat_types(chain: list[str]) -> dict[str, int]:
         Dict[str, int]: A dictionary mapping each repeat type (without the 'm' marker)
                         to its count.
     """
-    counts = {}
+    counts: dict[str, int] = {}
     for symbol in chain:
         pure_symbol = symbol.rstrip("m")
         counts[pure_symbol] = counts.get(pure_symbol, 0) + 1

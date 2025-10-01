@@ -56,12 +56,7 @@ def run_command(
             preexec_fn=os.setsid,
         )
     except Exception as e:
-        raise ExternalToolError(
-            tool="command",
-            exit_code=1,
-            stderr=str(e),
-            cmd=cmd_str
-        ) from e
+        raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
 
     def log_stream(stream, log_func, level=None, prefix=""):
         """Read lines from a stream and log them using log_func."""
@@ -117,10 +112,7 @@ def run_command(
                 cmd_str,
             )
         raise ExternalToolError(
-            tool="command",
-            exit_code=proc.returncode,
-            stderr="Command failed",
-            cmd=cmd_str
+            tool="command", exit_code=proc.returncode, stderr="Command failed", cmd=cmd_str
         )
     return proc.returncode
 

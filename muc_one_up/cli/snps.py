@@ -6,6 +6,7 @@ DRY: Unified SNP integration for both dual and single mutation modes.
 """
 
 import logging
+from typing import Any
 
 from ..exceptions import SNPIntegrationError, ValidationError
 from ..snp_integrator import (
@@ -42,7 +43,7 @@ def integrate_snps_unified(
         SNPIntegrationError: If SNP parsing or application fails
         ValidationError: If required SNP parameters are missing
     """
-    applied_snp_info = {}
+    applied_snp_info: dict[int, list[dict[str, Any]]] = {}
     snps_from_source = []
     generated_snp_list_for_output = []
 

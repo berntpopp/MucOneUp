@@ -4,14 +4,11 @@ Haplotype generation functions for MucOneUp CLI.
 Single Responsibility: Generate diploid haplotypes from configuration.
 """
 
-
 from ..exceptions import SimulationError
 from ..simulate import simulate_diploid, simulate_from_chains
 
 
-def generate_haplotypes(
-    args, config, fixed_conf, predefined_chains
-) -> list[tuple[str, list[str]]]:
+def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[tuple[str, list[str]]]:
     """
     Generate haplotypes based on simulation mode.
 

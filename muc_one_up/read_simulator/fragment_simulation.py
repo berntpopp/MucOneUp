@@ -45,7 +45,7 @@ def read_fasta_to_dict(fasta_file: str) -> dict[str, str]:
     """
     sequences = {}
     current_chrom = None
-    current_seq = []
+    current_seq: list[str] = []
 
     try:
         with Path(fasta_file).open() as f:
@@ -342,7 +342,9 @@ def simulate_fragments(
         )
     except Exception as e:
         logging.error(f"Failed to load systematic errors: {e!s}")
-        raise FileOperationError(f"Failed to load systematic errors file {syser_file}: {e!s}") from e
+        raise FileOperationError(
+            f"Failed to load systematic errors file {syser_file}: {e!s}"
+        ) from e
 
     # Load PSL matches
     try:
@@ -355,7 +357,9 @@ def simulate_fragments(
 
     if not matches:
         logging.error("No matches found in PSL file. Cannot simulate fragments.")
-        raise FileOperationError(f"No matches found in PSL file {psl_file}. Cannot simulate fragments.")
+        raise FileOperationError(
+            f"No matches found in PSL file {psl_file}. Cannot simulate fragments."
+        )
 
     # Simulate fragments and write to FASTA file
     try:

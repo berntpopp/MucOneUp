@@ -51,7 +51,7 @@ def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, s
 
     # Extract sequences into FASTA format
     # Using shell=True and string command to handle redirection properly
-    cmd = f"{tools['samtools']} fasta -n -F 0x900 {collated_bam} > {output_fa}"
+    cmd = f"{tools['samtools']} fasta -n -F 0x900 {collated_bam} > {output_fa}"  # type: ignore[assignment]
     run_command(
         cmd,
         shell=True,

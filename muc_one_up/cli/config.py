@@ -160,7 +160,9 @@ def determine_simulation_mode(args, config) -> tuple[list, list | None, dict | N
             simulation_configs = ["from_structure"]
             logging.info("Using predefined VNTR chains from structure file.")
         except Exception as e:
-            raise SimulationError(f"Error parsing structure file {args.input_structure}: {e}") from e
+            raise SimulationError(
+                f"Error parsing structure file {args.input_structure}: {e}"
+            ) from e
 
     # Process --fixed-lengths if --input-structure is not provided
     elif args.fixed_lengths is not None:
@@ -186,7 +188,7 @@ def determine_simulation_mode(args, config) -> tuple[list, list | None, dict | N
                 len(simulation_configs),
             )
         else:
-            simulation_configs = [[random.choice(lst) for lst in fixed_matrix]]
+            simulation_configs = [[random.choice(lst) for lst in fixed_matrix]]  # type: ignore[list-item]
             logging.info(
                 "Single simulation iteration generated using a random choice from each fixed-length range."
             )

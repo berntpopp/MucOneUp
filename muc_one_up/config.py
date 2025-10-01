@@ -214,4 +214,4 @@ def load_config(config_path: str) -> dict[str, Any]:
         logging.error("Configuration validation error: %s", e.message)
         raise
 
-    return config
+    return config  # type: ignore[no-any-return]

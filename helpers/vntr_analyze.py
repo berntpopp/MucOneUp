@@ -28,10 +28,10 @@ import statistics
 import sys
 import warnings
 from collections import defaultdict
-from typing import Any, Dict, List, TextIO, Union
+from typing import Any, TextIO
 
 
-def parse_vntr(vntr_str: str) -> List[str]:
+def parse_vntr(vntr_str: str) -> list[str]:
     """
     Parse a VNTR string into a list of repeat unit tokens.
 
@@ -44,12 +44,13 @@ def parse_vntr(vntr_str: str) -> List[str]:
     Returns:
         A list of repeat unit tokens.
     """
-    pattern = r"[-‐–—]"
+    # Match various Unicode hyphen/dash characters (U+002D, U+2010, U+2013, U+2014)
+    pattern = r"[-‐–—]"  # noqa: RUF001 - Intentionally matching multiple hyphen types
     tokens = re.split(pattern, vntr_str.strip())
     return [token for token in tokens if token]
 
 
-def load_config(config_file: TextIO) -> Dict[str, Any]:
+def load_config(config_file: TextIO) -> dict[str, Any]:
     """
     Load a configuration JSON file.
 
@@ -64,11 +65,11 @@ def load_config(config_file: TextIO) -> Dict[str, Any]:
 
 def analyze_vntr_sequences(
     file_handle: TextIO,
-    structure_column: Union[str, int],
+    structure_column: str | int,
     has_header: bool,
-    known_repeats: Dict[str, str],
+    known_repeats: dict[str, str],
     delimiter: str = "\t",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Analyze VNTR sequences from an input file.
 
@@ -96,8 +97,8 @@ def analyze_vntr_sequences(
           - "probabilities": A transition probability matrix (including an "END" state).
     """
     seen = set()
-    lengths: List[int] = []
-    transition_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    lengths: list[int] = []
+    transition_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     unknown_tokens = set()
 
     if has_header:
@@ -127,10 +128,10 @@ def analyze_vntr_sequences(
         reader = csv.reader(file_handle, delimiter=delimiter)
         try:
             col_index = int(structure_column)
-        except ValueError:
+        except ValueError as e:
             raise ValueError(
                 "When no header is present, --structure-column must be an integer index."
-            )
+            ) from e
         for row in reader:
             if not row:
                 continue
@@ -158,7 +159,8 @@ def analyze_vntr_sequences(
     if unknown_tokens:
         warnings.warn(
             "The following repeat tokens were not found in the known repeats: "
-            f"{', '.join(sorted(unknown_tokens))}"
+            f"{', '.join(sorted(unknown_tokens))}",
+            stacklevel=2,
         )
 
     if not lengths:
@@ -169,7 +171,7 @@ def analyze_vntr_sequences(
     mean_repeats = statistics.mean(lengths)
     median_repeats = statistics.median(lengths)
 
-    probabilities: Dict[str, Dict[str, float]] = {}
+    probabilities: dict[str, dict[str, float]] = {}
     for src, dests in transition_counts.items():
         total = sum(dests.values())
         probabilities[src] = {dst: count / total for dst, count in dests.items()}
@@ -227,9 +229,7 @@ def main() -> None:
         "--output",
         type=argparse.FileType("w"),
         default=sys.stdout,
-        help=(
-            "Path to the output file. If not provided, results are printed to stdout."
-        ),
+        help=("Path to the output file. If not provided, results are printed to stdout."),
     )
 
     args = parser.parse_args()

@@ -275,7 +275,7 @@ def scan_orf_fasta(
     """
     results = {}
     header = None
-    seq_lines = []
+    seq_lines: list[str] = []
     with Path(orf_fasta_path).open() as fh:
         for line in fh:
             line = line.strip()

@@ -32,7 +32,9 @@ def write_fasta_outputs(
     Single Responsibility: FASTA file writing.
     """
     if dual_mutation_mode:
-        normal_out = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="normal")
+        normal_out = numbered_filename(
+            out_dir, out_base, sim_index, "simulated.fa", variant="normal"
+        )
         mut_out = numbered_filename(out_dir, out_base, sim_index, "simulated.fa", variant="mut")
 
         try:
@@ -47,7 +49,9 @@ def write_fasta_outputs(
                 normal_out,
                 comment="Normal sequence (no mutations applied)",
             )
-            mutation_comment = f"Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})"
+            mutation_comment = (
+                f"Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})"
+            )
             write_fasta(
                 [seq for seq, chain in mutated_results],
                 mut_out,
@@ -63,7 +67,7 @@ def write_fasta_outputs(
 
         try:
             # Create haplotype-specific comments
-            haplotype_comments = [None] * len(results)
+            haplotype_comments: list[str | None] = [None] * len(results)
 
             if structure_mutation_info or args.mutation_name:
                 mutation_name = (
@@ -85,9 +89,9 @@ def write_fasta_outputs(
 
                 for hap_idx, _rep_idx in mutation_targets:
                     if 1 <= hap_idx <= len(results):
-                        haplotype_comments[
-                            hap_idx - 1
-                        ] = f"Mutation Applied: {mutation_name} (Targets: {mutation_targets})"
+                        haplotype_comments[hap_idx - 1] = (
+                            f"Mutation Applied: {mutation_name} (Targets: {mutation_targets})"
+                        )
 
             # Apply SNPs
             results, applied_snp_info = integrate_snps_unified(args, config, results)
@@ -105,9 +109,7 @@ def write_fasta_outputs(
             raise FileOperationError(f"Writing FASTA output failed: {e}") from e
 
 
-def write_mutated_units(
-    args, out_dir, out_base, sim_index, mutated_units, dual_mutation_mode
-):
+def write_mutated_units(args, out_dir, out_base, sim_index, mutated_units, dual_mutation_mode):
     """Write mutated VNTR unit FASTA if mutation was applied."""
     if args.mutation_name and mutated_units is not None:
         variant_suffix = "mut" if dual_mutation_mode else ""
@@ -155,7 +157,9 @@ def write_structure_files(
                     nf.write(f"haplotype_{i}\t{chain_str}\n")
 
             with Path(mut_struct_out).open("w") as mf:
-                mutation_comment = f"# Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})\n"
+                mutation_comment = (
+                    f"# Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})\n"
+                )
                 mf.write(mutation_comment)
                 for i, (_sequence, chain) in enumerate(mutated_results, start=1):
                     chain_str = "-".join(chain)
@@ -178,7 +182,9 @@ def write_structure_files(
                             f"# Mutation Applied: {args.mutation_name} (Targets: {args.mutation_targets})\n"
                         )
                     else:
-                        struct_fh.write(f"# Mutation Applied: {args.mutation_name} (Target: random)\n")
+                        struct_fh.write(
+                            f"# Mutation Applied: {args.mutation_name} (Target: random)\n"
+                        )
 
                 for i, (_sequence, chain) in enumerate(results, start=1):
                     chain_str = "-".join(chain)

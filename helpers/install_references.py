@@ -22,14 +22,12 @@ import gzip
 import hashlib
 import json
 import logging
-import os
 import shutil
 import subprocess
 import sys
 import tarfile
 from pathlib import Path
-from typing import Any, Dict
-
+from typing import Any
 from urllib.request import urlretrieve
 
 
@@ -47,15 +45,13 @@ def report_progress(block_num: int, block_size: int, total_size: int) -> None:
         percent = downloaded / total_size * 100
         if percent > 100:
             percent = 100
-        sys.stdout.write(
-            f"\rDownloading... {downloaded} of {total_size} bytes ({percent:.1f}%)"
-        )
+        sys.stdout.write(f"\rDownloading... {downloaded} of {total_size} bytes ({percent:.1f}%)")
     else:
         sys.stdout.write(f"\rDownloading... {downloaded} bytes")
     sys.stdout.flush()
 
 
-def load_config(config_path: Path) -> Dict[str, Any]:
+def load_config(config_path: Path) -> dict[str, Any]:
     """Load JSON configuration from a file.
 
     Args:
@@ -154,14 +150,10 @@ def execute_index_command(command_template: str, fasta_path: Path) -> None:
     command = command_template.format(path=str(fasta_path))
     logging.info("Executing command: %s", command)
     try:
-        subprocess.run(
-            command.split(), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
+        subprocess.run(command.split(), check=True, capture_output=True)
         logging.info("Command completed for %s", fasta_path.name)
     except subprocess.CalledProcessError as err:
-        logging.error(
-            "Command failed for %s: %s", fasta_path, err.stderr.decode().strip()
-        )
+        logging.error("Command failed for %s: %s", fasta_path, err.stderr.decode().strip())
         sys.exit(1)
     except Exception as err:
         logging.error("Error executing command for %s: %s", fasta_path, err)
@@ -193,7 +185,7 @@ def setup_logging(output_dir: Path) -> None:
     logging.info("Logging initialized. Log file: %s", log_file)
 
 
-def write_installed_config(installed_refs: Dict[str, str], output_dir: Path) -> None:
+def write_installed_config(installed_refs: dict[str, str], output_dir: Path) -> None:
     """Write a JSON file mapping reference names to installed file paths.
 
     Args:
@@ -212,7 +204,7 @@ def write_installed_config(installed_refs: Dict[str, str], output_dir: Path) -> 
 
 def process_reference(
     ref_name: str,
-    ref_info: Dict[str, Any],
+    ref_info: dict[str, Any],
     output_dir: Path,
     skip_indexing: bool,
     bwa_path: str,
@@ -278,9 +270,7 @@ def process_reference(
                 logging.info("Extracting %s to %s", target_path, extract_dir)
                 tar.extractall(path=extract_dir)
             installed_path = extract_dir
-            logging.info(
-                "Successfully extracted %s to %s", target_path.name, extract_dir
-            )
+            logging.info("Successfully extracted %s to %s", target_path.name, extract_dir)
     # If the file is gzip-compressed, check for extracted file and extract if needed.
     elif target_path.suffix == ".gz":
         extracted_path = target_path.with_suffix("")
@@ -317,9 +307,7 @@ def process_reference(
                 for ext in [".amb", ".ann", ".bwt", ".pac", ".sa"]:
                     f = installed_path.parent / (installed_path.name + ext)
                     if f.exists():
-                        logging.info(
-                            "Force enabled, removing existing index file: %s", f
-                        )
+                        logging.info("Force enabled, removing existing index file: %s", f)
                         f.unlink()
             command = index_command.replace("bwa", bwa_path)
             execute_index_command(command, installed_path)

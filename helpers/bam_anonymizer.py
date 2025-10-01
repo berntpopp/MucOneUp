@@ -33,7 +33,6 @@ import argparse
 import csv
 import hashlib
 import logging
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -213,9 +212,7 @@ def parse_args() -> argparse.Namespace:
             "The final output file is named based on the provided target design."
         )
     )
-    parser.add_argument(
-        "--input-bam", required=True, help="Path to the input BAM file."
-    )
+    parser.add_argument("--input-bam", required=True, help="Path to the input BAM file.")
     parser.add_argument(
         "--target-design",
         required=True,
@@ -285,9 +282,7 @@ def main() -> None:
         # 4. Reheader the anonymized BAM.
         run_samtools_reheader(anon_bam_path, final_bam_path)
 
-        logging.info(
-            "Final anonymized BAM file created successfully: %s", final_bam_path
-        )
+        logging.info("Final anonymized BAM file created successfully: %s", final_bam_path)
 
         # 5. Compute MD5 checksums and write pseudonymisation output.
         old_name = Path(args.input_bam).name
@@ -295,9 +290,7 @@ def main() -> None:
         old_md5 = compute_md5(args.input_bam)
         new_md5 = compute_md5(final_bam_path)
         # Prefix the CSV file with the target design to avoid collisions.
-        ps_output = str(
-            Path(args.output_dir) / f"{args.target_design}_pseudonymisation_output.csv"
-        )
+        ps_output = str(Path(args.output_dir) / f"{args.target_design}_pseudonymisation_output.csv")
         with Path(ps_output).open("w", newline="") as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(["old_name", "old_md5", "new_name", "new_md5"])

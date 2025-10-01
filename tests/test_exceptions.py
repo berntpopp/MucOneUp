@@ -185,7 +185,7 @@ def test_external_tool_error_attributes():
         exit_code=1,
         stderr="Error: file not found",
         stdout="",
-        cmd="samtools view input.bam"
+        cmd="samtools view input.bam",
     )
 
     assert error.tool == "samtools"
@@ -224,7 +224,7 @@ def test_no_sys_exit_in_cli_modules():
     for py_file in cli_dir.glob("*.py"):
         with py_file.open() as f:
             content = f.read()
-            lines = content.split('\n')
+            lines = content.split("\n")
 
             for line_num, line in enumerate(lines, 1):
                 # Skip if it's in the __main__ block (check current and previous lines)
@@ -289,10 +289,7 @@ def test_mutation_error_message_includes_available_mutations():
 def test_external_tool_error_message_includes_command():
     """ExternalToolError should include the command that failed."""
     error = ExternalToolError(
-        tool="bwa",
-        exit_code=1,
-        stderr="alignment failed",
-        cmd="bwa mem ref.fa reads.fq"
+        tool="bwa", exit_code=1, stderr="alignment failed", cmd="bwa mem ref.fa reads.fq"
     )
 
     msg = str(error)
