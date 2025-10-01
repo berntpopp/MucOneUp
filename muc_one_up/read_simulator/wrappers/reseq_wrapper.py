@@ -150,9 +150,11 @@ def split_reads(interleaved_fastq: str, output_fastq1: str, output_fastq2: str) 
         IOError: If the input file can't be read or output files can't be written.
     """
     try:
-        with Path(interleaved_fastq).open() as in_fq, Path(output_fastq1).open(
-            "wb"
-        ) as out_fq1, Path(output_fastq2).open("wb") as out_fq2:
+        with (
+            Path(interleaved_fastq).open() as in_fq,
+            Path(output_fastq1).open("wb") as out_fq1,
+            Path(output_fastq2).open("wb") as out_fq2,
+        ):
             # Create gzip writers
             import gzip
 
