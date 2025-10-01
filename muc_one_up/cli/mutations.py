@@ -11,7 +11,9 @@ from ..exceptions import MutationError, ValidationError
 from ..mutate import apply_mutations
 
 
-def parse_mutation_targets(mutation_targets_list: list[str]) -> list[tuple[int, int]]:
+def parse_mutation_targets(
+    mutation_targets_list: list[str | tuple[int, int]],
+) -> list[tuple[int, int]]:
     """
     Parse mutation target strings into tuples.
 

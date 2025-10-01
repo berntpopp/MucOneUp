@@ -56,13 +56,26 @@ def run_nanosim_simulation(
     # Build the command with required parameters
     if isinstance(nanosim_cmd, str) and (" " in nanosim_cmd):
         # Command contains spaces, it's likely a conda/mamba run command
-        # Let run_command handle it as a string
-        cmd = f"{nanosim_cmd} genome -rg {reference_fasta}"
-        cmd += f" -c {training_model} -o {output_prefix}"
-        cmd += f" -t {threads} -x {coverage}"
+        cmd_str = f"{nanosim_cmd} genome -rg {reference_fasta}"
+        cmd_str += f" -c {training_model} -o {output_prefix}"
+        cmd_str += f" -t {threads} -x {coverage}"
+
+        # Add optional parameters for shell command
+        if min_read_length:
+            cmd_str += f" --min_len {min_read_length}"
+        if max_read_length:
+            cmd_str += f" --max_len {max_read_length}"
+        if other_options:
+            cmd_str += f" {other_options}"
+            if "--fastq" not in other_options:
+                cmd_str += " --fastq"
+        else:
+            cmd_str += " --fastq"
+
+        cmd: str | list[str] = cmd_str
     else:
         # Build as list for direct command
-        cmd = [  # type: ignore[assignment]
+        cmd_list = [
             nanosim_cmd,
             "genome",
             "-rg",
@@ -77,25 +90,19 @@ def run_nanosim_simulation(
             str(coverage),
         ]
 
-    # Add optional parameters if provided
-    if isinstance(cmd, list):
+        # Add optional parameters for list command
         if min_read_length:
-            cmd.extend(["--min_len", str(min_read_length)])
+            cmd_list.extend(["--min_len", str(min_read_length)])
         if max_read_length:
-            cmd.extend(["--max_len", str(max_read_length)])
+            cmd_list.extend(["--max_len", str(max_read_length)])
         if other_options:
-            cmd.extend(other_options.split())
-        if "--fastq" not in other_options:
-            cmd.append("--fastq")
-    else:  # String command
-        if min_read_length:
-            cmd += f" --min_len {min_read_length}"
-        if max_read_length:
-            cmd += f" --max_len {max_read_length}"
-        if other_options:
-            cmd += f" {other_options}"
-        if "--fastq" not in other_options:
-            cmd += " --fastq"
+            cmd_list.extend(other_options.split())
+            if "--fastq" not in other_options:
+                cmd_list.append("--fastq")
+        else:
+            cmd_list.append("--fastq")
+
+        cmd = cmd_list
 
     # Log the command
     logging.info("[NanoSim] Running command: %s", cmd)

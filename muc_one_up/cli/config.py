@@ -110,7 +110,9 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
     return config, out_dir, out_base
 
 
-def determine_simulation_mode(args, config) -> tuple[list, list | None, dict | None]:
+def determine_simulation_mode(
+    args, config
+) -> tuple[list[list[int] | None], list | None, dict | None]:
     """
     Determine simulation mode and return appropriate configurations.
 
@@ -195,7 +197,7 @@ def determine_simulation_mode(args, config) -> tuple[list, list | None, dict | N
     else:
         simulation_configs = [None]  # Use random lengths if not provided
 
-    return simulation_configs, predefined_chains, structure_mutation_info
+    return simulation_configs, predefined_chains, structure_mutation_info  # type: ignore[return-value]
 
 
 def process_mutation_config(

@@ -274,13 +274,13 @@ def scan_orf_fasta(
                                       a dictionary of detection metrics.
     """
     results = {}
-    header = None
+    header: str | None = None
     seq_lines: list[str] = []
     with Path(orf_fasta_path).open() as fh:
         for line in fh:
             line = line.strip()
             if line.startswith(">"):
-                if header and seq_lines:
+                if header is not None and seq_lines:
                     protein_seq = "".join(seq_lines)
                     metrics = detect_toxic_protein_in_sequence(
                         protein_seq, left_const, right_const, **detection_kwargs
@@ -290,7 +290,7 @@ def scan_orf_fasta(
                 seq_lines = []
             else:
                 seq_lines.append(line)
-        if header and seq_lines:
+        if header is not None and seq_lines:
             protein_seq = "".join(seq_lines)
             metrics = detect_toxic_protein_in_sequence(
                 protein_seq, left_const, right_const, **detection_kwargs

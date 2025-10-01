@@ -1,9 +1,18 @@
 import logging
 import random
-from typing import Any
+
+from .type_defs import (
+    ConfigDict,
+    DNASequence,
+    HaplotypeList,
+    MutationDefinition,
+    MutationName,
+    MutationTargets,
+    RepeatChain,
+)
 
 
-def validate_allowed_repeats(mutation_def: dict[str, Any], config: dict[str, Any]) -> set[str]:
+def validate_allowed_repeats(mutation_def: MutationDefinition, config: ConfigDict) -> set[str]:
     """
     Validate that the allowed_repeats in a mutation definition are valid repeat symbols.
 
@@ -28,11 +37,11 @@ def validate_allowed_repeats(mutation_def: dict[str, Any], config: dict[str, Any
 
 
 def apply_mutations(
-    config: dict[str, Any],
-    results: list[tuple[str, list[str]]],
-    mutation_name: str,
-    targets: list[tuple[int, int]],
-) -> tuple[list[tuple[str, list[str]]], dict[int, list[tuple[int, str]]]]:
+    config: ConfigDict,
+    results: HaplotypeList,
+    mutation_name: MutationName,
+    targets: MutationTargets,
+) -> tuple[HaplotypeList, dict[int, list[tuple[int, str]]]]:
     """
     Apply a single named mutation to one or more haplotypes at specific repeat indices,
     and record the mutated VNTR unit(s).
@@ -141,7 +150,7 @@ def apply_mutations(
     return updated_results, mutated_units
 
 
-def rebuild_haplotype_sequence(chain: list[str], config: dict[str, Any]) -> str:
+def rebuild_haplotype_sequence(chain: RepeatChain, config: ConfigDict) -> DNASequence:
     """
     Rebuild the haplotype sequence from the chain of repeats and constant flanks.
 
@@ -150,8 +159,8 @@ def rebuild_haplotype_sequence(chain: list[str], config: dict[str, Any]) -> str:
     :return: Reassembled haplotype sequence.
     """
     reference_assembly = config.get("reference_assembly", "hg38")
-    left_const = config["constants"][reference_assembly]["left"]
-    right_const = config["constants"][reference_assembly]["right"]
+    left_const = str(config["constants"][reference_assembly]["left"])
+    right_const = str(config["constants"][reference_assembly]["right"])
     repeats_dict = config["repeats"]
 
     seq = left_const
@@ -160,17 +169,17 @@ def rebuild_haplotype_sequence(chain: list[str], config: dict[str, Any]) -> str:
         seq += str(repeats_dict[pure_sym])
     if chain[-1].replace("m", "") == "9":
         seq += right_const
-    return seq  # type: ignore[no-any-return]
+    return seq
 
 
 def apply_changes_to_repeat(
-    seq: str,
-    chain: list[str],
+    seq: DNASequence,
+    chain: RepeatChain,
     repeat_index: int,
-    changes: list[dict[str, Any]],
-    config: dict[str, Any],
-    mutation_name: str,
-) -> tuple[str, list[str], str]:
+    changes: list[dict[str, int | str]],
+    config: ConfigDict,
+    mutation_name: MutationName,
+) -> tuple[DNASequence, RepeatChain, DNASequence]:
     """
     Modify the substring of 'seq' corresponding to chain[repeat_index] using the
     list of changes from the mutation definition.
@@ -208,6 +217,12 @@ def apply_changes_to_repeat(
 
         if start is None or end is None or ctype is None:
             raise ValueError(f"Malformed change in mutation '{mutation_name}': missing fields.")
+
+        # Type narrowing: after None check, these must be int (from config validation)
+        if not isinstance(start, int) or not isinstance(end, int):
+            raise ValueError(f"Invalid types for start/end in mutation '{mutation_name}'")
+        if not isinstance(insertion_str, str):
+            insertion_str = str(insertion_str)
 
         start_idx = start - 1
         end_idx = end - 1

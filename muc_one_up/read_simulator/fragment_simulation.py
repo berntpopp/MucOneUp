@@ -44,7 +44,7 @@ def read_fasta_to_dict(fasta_file: str) -> dict[str, str]:
         ValueError: If the FASTA format is invalid.
     """
     sequences = {}
-    current_chrom = None
+    current_chrom: str | None = None
     current_seq: list[str] = []
 
     try:
@@ -65,7 +65,7 @@ def read_fasta_to_dict(fasta_file: str) -> dict[str, str]:
                     current_seq.append(line)
 
             # Save the last chromosome
-            if current_chrom:
+            if current_chrom is not None:
                 sequences[current_chrom] = "".join(current_seq)
     except Exception as e:
         logging.error(f"Error reading FASTA file {fasta_file}: {e!s}")
