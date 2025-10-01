@@ -255,13 +255,18 @@ muconeup --config <file> [--log-level LEVEL] <command> [options]
 
 **Commands:**
 - **`simulate`** - Generate haplotypes ONLY (core functionality)
-- **`reads`** - Simulate sequencing reads from ANY FASTA
+- **`reads`** - Simulate sequencing reads from ANY FASTA (supports batch processing)
   - `illumina` - Short read simulation
   - `ont` - Oxford Nanopore long read simulation
-- **`analyze`** - Analyze ANY FASTA file
+- **`analyze`** - Analyze ANY FASTA file (supports batch processing)
   - `orfs` - Predict ORFs and detect toxic proteins
   - `stats` - Generate sequence statistics
-- **`pipeline`** - Run complete workflow (convenience orchestrator)
+
+**Batch Processing:**
+All `reads` and `analyze` commands support multiple input files:
+- Single file: `muconeup reads illumina file.fa`
+- Multiple files: `muconeup reads illumina file1.fa file2.fa file3.fa`
+- Glob patterns: `muconeup reads illumina *.simulated.fa`
 
 Use `muconeup --help` or `muconeup <command> --help` for detailed options.
 
@@ -326,16 +331,6 @@ muconeup --config X analyze orfs INPUT_FASTA [options]
 muconeup --config X analyze stats INPUT_FASTA [options]
 ```
 - `--out-base` - Base name for statistics file
-
-### Pipeline Command Options
-
-Run complete workflow (convenience orchestrator).
-
-```bash
-muconeup --config X pipeline [simulate options] --with-reads [illumina|ont] --with-orfs
-```
-
-Combines `simulate` → `reads` → `analyze` in a single command.
 
 ### Example Commands
 
@@ -408,15 +403,20 @@ muconeup --config config.json reads illumina output/muc1.001.simulated.fa --out-
 muconeup --config config.json reads ont output/muc1.001.simulated.fa --out-base muc1_ont --coverage 30
 ```
 
-**8. Or use pipeline for convenience:**
+**8. Batch processing multiple files (Unix philosophy):**
 ```bash
-# All-in-one: haplotypes + ORFs + Illumina reads
-muconeup --config config.json pipeline --out-base muc1_complete --out-dir output/ \
-  --with-orfs --with-reads illumina
+# Analyze multiple files at once (glob pattern)
+muconeup --config config.json analyze orfs output/*.simulated.fa
 
-# All-in-one: haplotypes + ORFs + ONT reads
-muconeup --config config.json pipeline --out-base muc1_ont_complete --out-dir output/ \
-  --with-orfs --with-reads ont
+# Read simulation for all files
+muconeup --config config.json reads illumina output/*.simulated.fa --coverage 30
+
+# Or use shell loop for complex workflows
+for file in output/*.simulated.fa; do
+  base=$(basename "$file" .fa)
+  muconeup --config config.json reads illumina "$file"
+  muconeup --config config.json analyze orfs "$file"
+done
 ```
 
 #### SNP Integration
@@ -444,13 +444,15 @@ muconeup --config config.json simulate --out-base muc1_dual_snps \
 
 #### Advanced Workflows
 
-**12. Full pipeline with series:**
+**12. Series generation + batch processing:**
 ```bash
-# Generate series of haplotypes (20-40 repeats) then analyze each
-for i in {20..40}; do
-  muconeup --config config.json simulate --out-base muc1_L${i} --fixed-lengths ${i} --seed 42
-  muconeup --config config.json analyze orfs muc1_L${i}.001.simulated.fa --out-base muc1_L${i}_orfs
-done
+# Generate series of haplotypes
+muconeup --config config.json simulate --out-base muc1_series \
+  --fixed-lengths 20-40 --simulate-series 1 --seed 42
+
+# Batch process ALL generated files at once (Unix philosophy)
+muconeup --config config.json analyze orfs muc1_series.*.simulated.fa
+muconeup --config config.json reads illumina muc1_series.*.simulated.fa --coverage 30
 ```
 
 **13. External FASTA analysis:**

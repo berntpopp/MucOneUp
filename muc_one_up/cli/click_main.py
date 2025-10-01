@@ -76,19 +76,24 @@ def cli(ctx, config, log_level):
     \b
     Philosophy: Each command does ONE thing (Unix philosophy)
       simulate  - Generate haplotypes ONLY
-      reads     - Simulate reads from FASTA
-      analyze   - Analyze FASTA (ORFs, stats)
-      pipeline  - Run complete workflow (convenience)
+      reads     - Simulate reads from FASTA (supports multiple files)
+      analyze   - Analyze FASTA (ORFs, stats) (supports multiple files)
 
     \b
     Examples:
-      # Clean separation - compose commands
+      # Generate haplotypes
       muconeup --config X simulate --out-base Y
-      muconeup --config X reads illumina Y.001.simulated.fa
-      muconeup --config X analyze orfs Y.001.simulated.fa
 
-      # Or use pipeline for convenience
-      muconeup --config X pipeline --out-base Y --with-reads --with-orfs
+      # Process single file
+      muconeup --config X reads illumina Y.001.simulated.fa --out-base reads
+
+      # Process multiple files (batch)
+      muconeup --config X reads illumina Y.*.simulated.fa
+      muconeup --config X analyze orfs Y.*.simulated.fa
+
+      # Shell composition (Unix philosophy)
+      muconeup --config X simulate --fixed-lengths 20-40 --simulate-series 1
+      for f in Y.*.fa; do muconeup --config X reads illumina "$f"; done
     """
     ctx.ensure_object(dict)
     ctx.obj["config_path"] = config
@@ -282,7 +287,9 @@ def reads():
 
 
 @reads.command()
-@click.argument("input_fasta", type=click.Path(exists=True, dir_okay=False))
+@click.argument(
+    "input_fastas", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False)
+)
 @click.option(
     "--out-dir",
     default=".",
@@ -292,8 +299,8 @@ def reads():
 )
 @click.option(
     "--out-base",
-    required=True,
-    help="Base name for output files.",
+    default=None,
+    help="Base name for output files (auto-generated if processing multiple files).",
 )
 @click.option(
     "--coverage",
@@ -310,32 +317,80 @@ def reads():
     help="Number of threads.",
 )
 @click.pass_context
-def illumina(ctx, input_fasta, out_dir, out_base, coverage, threads):
-    """Simulate Illumina short reads from FASTA.
+def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads):
+    """Simulate Illumina short reads from one or more FASTA files.
+
+    Supports batch processing following Unix philosophy:
+    - Single file: muconeup reads illumina file.fa --out-base reads
+    - Multiple files: muconeup reads illumina file1.fa file2.fa file3.fa
+    - Glob pattern: muconeup reads illumina *.simulated.fa
+
+    When processing multiple files, --out-base is auto-generated from input
+    filenames unless explicitly provided (which applies to all files).
 
     \b
-    Example:
-      muconeup --config X reads illumina output.001.simulated.fa --out-base reads_out
+    Examples:
+      # Single file with custom output name
+      muconeup --config X reads illumina sample.001.fa --out-base my_reads
+
+      # Multiple files (auto-generated output names)
+      muconeup --config X reads illumina sample.001.fa sample.002.fa
+
+      # Glob pattern (shell expands)
+      muconeup --config X reads illumina sample.*.simulated.fa
+
+      # Compose with shell (Unix philosophy)
+      for f in *.fa; do muconeup --config X reads illumina "$f"; done
     """
     try:
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
 
-        # Load config
+        # Load config once (DRY principle)
         config_path = Path(ctx.obj["config_path"])
         with config_path.open() as f:
             config = json.load(f)
 
-        # Configure read simulation
+        # Configure read simulation (shared for all files)
         if "read_simulation" not in config:
             config["read_simulation"] = {}
         config["read_simulation"]["simulator"] = "illumina"
         config["read_simulation"]["coverage"] = coverage
         config["read_simulation"]["threads"] = threads
 
-        # Run pipeline
-        logging.info("Simulating Illumina reads for %s", input_fasta)
-        simulate_reads_pipeline(config, input_fasta)
-        logging.info("Illumina read simulation completed.")
+        # Warn if --out-base provided for multiple files
+        if len(input_fastas) > 1 and out_base:
+            logging.warning(
+                "--out-base '%s' will be used for all %d files. "
+                "Consider omitting --out-base for auto-generated names.",
+                out_base,
+                len(input_fastas),
+            )
+
+        # Process each file (KISS principle - simple iteration)
+        total_files = len(input_fastas)
+        logging.info("Processing %d FASTA file(s) for Illumina read simulation", total_files)
+
+        for idx, input_fasta in enumerate(input_fastas, start=1):
+            # Determine output base name
+            if out_base:
+                # User provided: use as-is (or append index for multiple files)
+                actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
+            else:
+                # Auto-generate from input filename
+                actual_out_base = _generate_output_base(Path(input_fasta), "_reads")
+
+            logging.info(
+                "[%d/%d] Simulating Illumina reads: %s -> %s",
+                idx,
+                total_files,
+                input_fasta,
+                actual_out_base,
+            )
+
+            # Run simulation for this file
+            simulate_reads_pipeline(config, input_fasta)
+
+        logging.info("Illumina read simulation completed for all %d file(s).", total_files)
         ctx.exit(0)
 
     except Exception as e:
@@ -344,7 +399,9 @@ def illumina(ctx, input_fasta, out_dir, out_base, coverage, threads):
 
 
 @reads.command()
-@click.argument("input_fasta", type=click.Path(exists=True, dir_okay=False))
+@click.argument(
+    "input_fastas", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False)
+)
 @click.option(
     "--out-dir",
     default=".",
@@ -354,8 +411,8 @@ def illumina(ctx, input_fasta, out_dir, out_base, coverage, threads):
 )
 @click.option(
     "--out-base",
-    required=True,
-    help="Base name for output files.",
+    default=None,
+    help="Base name for output files (auto-generated if processing multiple files).",
 )
 @click.option(
     "--coverage",
@@ -372,22 +429,37 @@ def illumina(ctx, input_fasta, out_dir, out_base, coverage, threads):
     help="Minimum read length.",
 )
 @click.pass_context
-def ont(ctx, input_fasta, out_dir, out_base, coverage, min_read_length):
-    """Simulate Oxford Nanopore long reads from FASTA.
+def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length):
+    """Simulate Oxford Nanopore long reads from one or more FASTA files.
+
+    Supports batch processing following Unix philosophy:
+    - Single file: muconeup reads ont file.fa --out-base reads
+    - Multiple files: muconeup reads ont file1.fa file2.fa file3.fa
+    - Glob pattern: muconeup reads ont *.simulated.fa
+
+    When processing multiple files, --out-base is auto-generated from input
+    filenames unless explicitly provided (which applies to all files).
 
     \b
-    Example:
-      muconeup --config X reads ont output.001.simulated.fa --out-base reads_out
+    Examples:
+      # Single file with custom output name
+      muconeup --config X reads ont sample.001.fa --out-base my_reads
+
+      # Multiple files (auto-generated output names)
+      muconeup --config X reads ont sample.001.fa sample.002.fa
+
+      # Glob pattern (shell expands)
+      muconeup --config X reads ont sample.*.simulated.fa
     """
     try:
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
 
-        # Load config
+        # Load config once (DRY principle)
         config_path = Path(ctx.obj["config_path"])
         with config_path.open() as f:
             config = json.load(f)
 
-        # Configure ONT simulation
+        # Configure ONT simulation (shared for all files)
         if "read_simulation" not in config:
             config["read_simulation"] = {}
         config["read_simulation"]["simulator"] = "ont"
@@ -396,10 +468,40 @@ def ont(ctx, input_fasta, out_dir, out_base, coverage, min_read_length):
             config["nanosim_params"] = {}
         config["nanosim_params"]["min_len"] = min_read_length
 
-        # Run pipeline
-        logging.info("Simulating ONT reads for %s", input_fasta)
-        simulate_reads_pipeline(config, input_fasta)
-        logging.info("ONT read simulation completed.")
+        # Warn if --out-base provided for multiple files
+        if len(input_fastas) > 1 and out_base:
+            logging.warning(
+                "--out-base '%s' will be used for all %d files. "
+                "Consider omitting --out-base for auto-generated names.",
+                out_base,
+                len(input_fastas),
+            )
+
+        # Process each file (KISS principle - simple iteration)
+        total_files = len(input_fastas)
+        logging.info("Processing %d FASTA file(s) for ONT read simulation", total_files)
+
+        for idx, input_fasta in enumerate(input_fastas, start=1):
+            # Determine output base name
+            if out_base:
+                # User provided: use as-is (or append index for multiple files)
+                actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
+            else:
+                # Auto-generate from input filename
+                actual_out_base = _generate_output_base(Path(input_fasta), "_ont_reads")
+
+            logging.info(
+                "[%d/%d] Simulating ONT reads: %s -> %s",
+                idx,
+                total_files,
+                input_fasta,
+                actual_out_base,
+            )
+
+            # Run simulation for this file
+            simulate_reads_pipeline(config, input_fasta)
+
+        logging.info("ONT read simulation completed for all %d file(s).", total_files)
         ctx.exit(0)
 
     except Exception as e:
@@ -423,7 +525,9 @@ def analyze():
 
 
 @analyze.command()
-@click.argument("input_fasta", type=click.Path(exists=True, dir_okay=False))
+@click.argument(
+    "input_fastas", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False)
+)
 @click.option(
     "--out-dir",
     default=".",
@@ -433,8 +537,8 @@ def analyze():
 )
 @click.option(
     "--out-base",
-    required=True,
-    help="Base name for output files.",
+    default=None,
+    help="Base name for output files (auto-generated if processing multiple files).",
 )
 @click.option(
     "--orf-min-aa",
@@ -449,58 +553,105 @@ def analyze():
     help="Filter ORFs by prefix (e.g., MTSSV).",
 )
 @click.pass_context
-def orfs(ctx, input_fasta, out_dir, out_base, orf_min_aa, orf_aa_prefix):
-    """Predict ORFs and detect toxic protein features.
+def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
+    """Predict ORFs and detect toxic protein features from one or more FASTA files.
+
+    Supports batch processing following Unix philosophy:
+    - Single file: muconeup analyze orfs file.fa --out-base analysis
+    - Multiple files: muconeup analyze orfs file1.fa file2.fa file3.fa
+    - Glob pattern: muconeup analyze orfs *.simulated.fa
+
+    When processing multiple files, --out-base is auto-generated from input
+    filenames unless explicitly provided (which applies to all files).
 
     \b
-    Example:
-      muconeup --config X analyze orfs output.001.simulated.fa --out-base analysis
+    Examples:
+      # Single file with custom output name
+      muconeup --config X analyze orfs sample.001.fa --out-base my_analysis
+
+      # Multiple files (auto-generated output names)
+      muconeup --config X analyze orfs sample.001.fa sample.002.fa
+
+      # Glob pattern (shell expands)
+      muconeup --config X analyze orfs sample.*.simulated.fa
     """
     try:
-        # Use orfipy command-line tool
-        orf_output = Path(out_dir) / f"{out_base}.orfs.fa"
-        logging.info("Running ORF prediction on %s", input_fasta)
+        # Load config once for toxic protein detection (DRY principle)
+        config_path = Path(ctx.obj["config_path"])
+        with config_path.open() as f:
+            config = json.load(f)
+        left_const = config.get("constants", {}).get("left")
+        right_const = config.get("constants", {}).get("right")
 
-        cmd = [
-            "orfipy",
-            input_fasta,
-            "--pep",
-            str(orf_output),
-            "--min",
-            str(orf_min_aa * 3),  # Convert AA to nucleotides
-            "--start",
-            "ATG",
-        ]
+        # Warn if --out-base provided for multiple files
+        if len(input_fastas) > 1 and out_base:
+            logging.warning(
+                "--out-base '%s' will be used for all %d files. "
+                "Consider omitting --out-base for auto-generated names.",
+                out_base,
+                len(input_fastas),
+            )
 
-        if orf_aa_prefix:
-            cmd.extend(["--start-codon-prefix", orf_aa_prefix])
+        # Process each file (KISS principle - simple iteration)
+        total_files = len(input_fastas)
+        logging.info("Processing %d FASTA file(s) for ORF prediction", total_files)
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        for idx, input_fasta in enumerate(input_fastas, start=1):
+            # Determine output base name
+            if out_base:
+                # User provided: use as-is (or append index for multiple files)
+                actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
+            else:
+                # Auto-generate from input filename
+                actual_out_base = _generate_output_base(Path(input_fasta), "_orfs")
 
-        if result.returncode != 0:
-            logging.error("orfipy failed: %s", result.stderr)
-            ctx.exit(1)
+            orf_output = Path(out_dir) / f"{actual_out_base}.orfs.fa"
+            logging.info(
+                "[%d/%d] Running ORF prediction: %s -> %s",
+                idx,
+                total_files,
+                input_fasta,
+                orf_output,
+            )
 
-        logging.info("ORF prediction completed: %s", orf_output)
+            # Run orfipy command-line tool
+            cmd = [
+                "orfipy",
+                input_fasta,
+                "--pep",
+                str(orf_output),
+                "--min",
+                str(orf_min_aa * 3),  # Convert AA to nucleotides
+                "--start",
+                "ATG",
+            ]
 
-        # Toxic protein detection
-        if orf_output.exists():
-            from ..toxic_protein_detector import scan_orf_fasta
+            if orf_aa_prefix:
+                cmd.extend(["--start-codon-prefix", orf_aa_prefix])
 
-            config_path = Path(ctx.obj["config_path"])
-            with config_path.open() as f:
-                config = json.load(f)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
-            left_const = config.get("constants", {}).get("left")
-            right_const = config.get("constants", {}).get("right")
-            stats = scan_orf_fasta(str(orf_output), left_const=left_const, right_const=right_const)
+            if result.returncode != 0:
+                logging.error("orfipy failed for %s: %s", input_fasta, result.stderr)
+                continue  # Continue with next file instead of exiting
 
-            stats_file = Path(out_dir) / f"{out_base}.orf_stats.json"
-            with stats_file.open("w") as f:
-                json.dump(stats, f, indent=4)
+            logging.info("ORF prediction completed: %s", orf_output)
 
-            logging.info("Toxic protein stats written: %s", stats_file)
+            # Toxic protein detection
+            if orf_output.exists():
+                from ..toxic_protein_detector import scan_orf_fasta
 
+                stats = scan_orf_fasta(
+                    str(orf_output), left_const=left_const, right_const=right_const
+                )
+
+                stats_file = Path(out_dir) / f"{actual_out_base}.orf_stats.json"
+                with stats_file.open("w") as f:
+                    json.dump(stats, f, indent=4)
+
+                logging.info("Toxic protein stats written: %s", stats_file)
+
+        logging.info("ORF prediction completed for all %d file(s).", total_files)
         ctx.exit(0)
 
     except Exception as e:
@@ -509,7 +660,9 @@ def orfs(ctx, input_fasta, out_dir, out_base, orf_min_aa, orf_aa_prefix):
 
 
 @analyze.command()
-@click.argument("input_fasta", type=click.Path(exists=True, dir_okay=False))
+@click.argument(
+    "input_fastas", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False)
+)
 @click.option(
     "--out-dir",
     default=".",
@@ -519,59 +672,98 @@ def orfs(ctx, input_fasta, out_dir, out_base, orf_min_aa, orf_aa_prefix):
 )
 @click.option(
     "--out-base",
-    required=True,
-    help="Base name for output files.",
+    default=None,
+    help="Base name for output files (auto-generated if processing multiple files).",
 )
 @click.pass_context
-def stats(ctx, input_fasta, out_dir, out_base):
-    """Generate basic sequence statistics.
+def stats(ctx, input_fastas, out_dir, out_base):
+    """Generate basic sequence statistics from one or more FASTA files.
+
+    Supports batch processing following Unix philosophy:
+    - Single file: muconeup analyze stats file.fa --out-base stats
+    - Multiple files: muconeup analyze stats file1.fa file2.fa file3.fa
+    - Glob pattern: muconeup analyze stats *.simulated.fa
+
+    When processing multiple files, --out-base is auto-generated from input
+    filenames unless explicitly provided (which applies to all files).
 
     \b
-    Example:
-      muconeup --config X analyze stats output.001.simulated.fa --out-base stats_out
+    Examples:
+      # Single file with custom output name
+      muconeup --config X analyze stats sample.001.fa --out-base my_stats
+
+      # Multiple files (auto-generated output names)
+      muconeup --config X analyze stats sample.001.fa sample.002.fa
+
+      # Glob pattern (shell expands)
+      muconeup --config X analyze stats sample.*.simulated.fa
     """
     try:
-        logging.info("Generating statistics for %s", input_fasta)
-
-        # Simple FASTA parsing
-        sequences: list[tuple[str, str]] = []
-        current_header: str | None = None
-        current_seq: list[str] = []
-
-        with Path(input_fasta).open() as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith(">"):
-                    if current_header is not None:
-                        sequences.append((current_header, "".join(current_seq)))
-                    current_header = line[1:]
-                    current_seq = []
-                elif line:
-                    current_seq.append(line)
-
-            if current_header is not None:
-                sequences.append((current_header, "".join(current_seq)))
-
-        # Compute stats
-        stats_data: dict[str, Any] = {
-            "input_file": str(input_fasta),
-            "num_sequences": len(sequences),
-            "sequences": [],
-        }
-
-        for header, sequence in sequences:
-            gc_count = sequence.upper().count("G") + sequence.upper().count("C")
-            gc_content = 100.0 * gc_count / len(sequence) if sequence else 0.0
-
-            stats_data["sequences"].append(
-                {"header": header, "length": len(sequence), "gc_content": round(gc_content, 2)}
+        # Warn if --out-base provided for multiple files
+        if len(input_fastas) > 1 and out_base:
+            logging.warning(
+                "--out-base '%s' will be used for all %d files. "
+                "Consider omitting --out-base for auto-generated names.",
+                out_base,
+                len(input_fastas),
             )
 
-        stats_file = Path(out_dir) / f"{out_base}.basic_stats.json"
-        with stats_file.open("w") as f:
-            json.dump(stats_data, f, indent=4)
+        # Process each file (KISS principle - simple iteration)
+        total_files = len(input_fastas)
+        logging.info("Processing %d FASTA file(s) for statistics generation", total_files)
 
-        logging.info("Statistics written: %s", stats_file)
+        for idx, input_fasta in enumerate(input_fastas, start=1):
+            # Determine output base name
+            if out_base:
+                # User provided: use as-is (or append index for multiple files)
+                actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
+            else:
+                # Auto-generate from input filename
+                actual_out_base = _generate_output_base(Path(input_fasta), "_stats")
+
+            logging.info("[%d/%d] Generating statistics: %s", idx, total_files, input_fasta)
+
+            # Simple FASTA parsing
+            sequences: list[tuple[str, str]] = []
+            current_header: str | None = None
+            current_seq: list[str] = []
+
+            with Path(input_fasta).open() as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith(">"):
+                        if current_header is not None:
+                            sequences.append((current_header, "".join(current_seq)))
+                        current_header = line[1:]
+                        current_seq = []
+                    elif line:
+                        current_seq.append(line)
+
+                if current_header is not None:
+                    sequences.append((current_header, "".join(current_seq)))
+
+            # Compute stats
+            stats_data: dict[str, Any] = {
+                "input_file": str(input_fasta),
+                "num_sequences": len(sequences),
+                "sequences": [],
+            }
+
+            for header, sequence in sequences:
+                gc_count = sequence.upper().count("G") + sequence.upper().count("C")
+                gc_content = 100.0 * gc_count / len(sequence) if sequence else 0.0
+
+                stats_data["sequences"].append(
+                    {"header": header, "length": len(sequence), "gc_content": round(gc_content, 2)}
+                )
+
+            stats_file = Path(out_dir) / f"{actual_out_base}.basic_stats.json"
+            with stats_file.open("w") as f:
+                json.dump(stats_data, f, indent=4)
+
+            logging.info("Statistics written: %s", stats_file)
+
+        logging.info("Statistics generation completed for all %d file(s).", total_files)
         ctx.exit(0)
 
     except Exception as e:
@@ -580,142 +772,27 @@ def stats(ctx, input_fasta, out_dir, out_base):
 
 
 # ============================================================================
-# PIPELINE Command - Convenience Orchestrator
-# ============================================================================
-
-
-@cli.command()
-@click.option(
-    "--out-base",
-    default="muc1_simulated",
-    show_default=True,
-    help="Base name for all outputs.",
-)
-@click.option(
-    "--out-dir",
-    default=".",
-    show_default=True,
-    type=click.Path(file_okay=False),
-    help="Output folder.",
-)
-@click.option(
-    "--with-reads",
-    type=click.Choice(["illumina", "ont"]),
-    help="Include read simulation step.",
-)
-@click.option(
-    "--with-orfs",
-    is_flag=True,
-    help="Include ORF prediction step.",
-)
-# Inherit simulation options
-@click.option("--num-haplotypes", default=2, show_default=True, type=int)
-@click.option("--seed", type=int)
-@click.option("--reference-assembly", type=click.Choice(["hg19", "hg38"]))
-@click.option("--output-structure", is_flag=True)
-@click.option("--fixed-lengths", multiple=True, type=str)
-@click.option("--input-structure", type=click.Path(exists=True, dir_okay=False))
-@click.option("--simulate-series", type=int)
-@click.option("--mutation-name")
-@click.option("--mutation-targets", multiple=True)
-@click.option("--snp-input-file", type=click.Path(exists=True, dir_okay=False))
-@click.option("--random-snps", is_flag=True)
-@click.option("--random-snp-density", type=float)
-@click.option("--random-snp-output-file", type=str)
-@click.option(
-    "--random-snp-region",
-    type=click.Choice(["all", "constants_only", "vntr_only"]),
-    default="constants_only",
-)
-@click.option("--random-snp-haplotypes", type=click.Choice(["all", "1", "2"]), default="all")
-# Read/ORF options
-@click.option("--coverage", type=int, default=30, show_default=True)
-@click.option("--threads", type=int, default=8, show_default=True)
-@click.option("--orf-min-aa", type=int, default=100, show_default=True)
-@click.pass_context
-def pipeline(ctx, with_reads, with_orfs, **kwargs):
-    """Run complete workflow (convenience command).
-
-    \b
-    Orchestrates: simulate → reads → analyze
-    Use this for quick full pipelines, or chain individual commands for flexibility.
-
-    \b
-    Example:
-      muconeup --config X pipeline --out-base Y --with-reads illumina --with-orfs
-    """
-    try:
-        # Step 1: Run simulate command
-        logging.info("Pipeline Step 1/3: Generating haplotypes...")
-        ctx.invoke(
-            simulate,
-            out_base=kwargs["out_base"],
-            out_dir=kwargs["out_dir"],
-            num_haplotypes=kwargs["num_haplotypes"],
-            seed=kwargs["seed"],
-            reference_assembly=kwargs["reference_assembly"],
-            output_structure=kwargs["output_structure"],
-            fixed_lengths=kwargs["fixed_lengths"],
-            input_structure=kwargs["input_structure"],
-            simulate_series=kwargs["simulate_series"],
-            mutation_name=kwargs["mutation_name"],
-            mutation_targets=kwargs["mutation_targets"],
-            snp_input_file=kwargs["snp_input_file"],
-            random_snps=kwargs["random_snps"],
-            random_snp_density=kwargs["random_snp_density"],
-            random_snp_output_file=kwargs["random_snp_output_file"],
-            random_snp_region=kwargs["random_snp_region"],
-            random_snp_haplotypes=kwargs["random_snp_haplotypes"],
-        )
-
-        # Determine output FASTA path
-        fasta_file = Path(kwargs["out_dir"]) / f"{kwargs['out_base']}.001.simulated.fa"
-
-        # Step 2: Read simulation (if requested)
-        if with_reads:
-            logging.info("Pipeline Step 2/3: Simulating %s reads...", with_reads)
-            if with_reads == "illumina":
-                ctx.invoke(
-                    illumina,
-                    input_fasta=str(fasta_file),
-                    out_dir=kwargs["out_dir"],
-                    out_base=f"{kwargs['out_base']}_reads",
-                    coverage=kwargs["coverage"],
-                    threads=kwargs["threads"],
-                )
-            else:  # ont
-                ctx.invoke(
-                    ont,
-                    input_fasta=str(fasta_file),
-                    out_dir=kwargs["out_dir"],
-                    out_base=f"{kwargs['out_base']}_reads",
-                    coverage=kwargs["coverage"],
-                    min_read_length=100,
-                )
-
-        # Step 3: ORF prediction (if requested)
-        if with_orfs:
-            logging.info("Pipeline Step 3/3: Predicting ORFs...")
-            ctx.invoke(
-                orfs,
-                input_fasta=str(fasta_file),
-                out_dir=kwargs["out_dir"],
-                out_base=f"{kwargs['out_base']}_orfs",
-                orf_min_aa=kwargs["orf_min_aa"],
-                orf_aa_prefix=None,
-            )
-
-        logging.info("Pipeline completed successfully!")
-        ctx.exit(0)
-
-    except Exception as e:
-        logging.error("Pipeline failed: %s", e)
-        ctx.exit(1)
-
-
-# ============================================================================
 # Helper Functions
 # ============================================================================
+
+
+def _generate_output_base(input_path: Path, suffix: str) -> str:
+    """Generate output base name from input file path.
+
+    Args:
+        input_path: Path to input FASTA file
+        suffix: Suffix to append (e.g., '_reads', '_orfs')
+
+    Returns:
+        Output base name (e.g., 'sample.001.simulated_reads')
+
+    Examples:
+        >>> _generate_output_base(Path('sample.001.simulated.fa'), '_reads')
+        'sample.001.simulated_reads'
+        >>> _generate_output_base(Path('/path/sample.fa'), '_orfs')
+        'sample_orfs'
+    """
+    return input_path.stem + suffix
 
 
 def _make_args_namespace(config_path, kwargs):
