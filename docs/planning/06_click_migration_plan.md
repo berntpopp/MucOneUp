@@ -163,6 +163,21 @@ class LazyGroup(click.Group):
 
 ## 3. Proposed CLI Architecture
 
+### Design Philosophy: **Hybrid Approach**
+
+After researching Click best practices and bioinformatics CLI patterns, we adopt a **hybrid approach**:
+
+1. **`simulate`** = **Main workflow command** (does everything in one invocation)
+   - Supports pipeline flags (`--simulate-reads`, `--output-orfs`) for integrated workflows
+   - Maintains familiar single-command UX from argparse version
+
+2. **`reads`** and **`analyze`** = **Standalone utility commands**
+   - Work with any FASTA file (not just MucOneUp outputs)
+   - Enable advanced users to run individual pipeline steps
+   - Support external tool integration
+
+**Rationale:** This balances convenience (common case = one command) with flexibility (can run steps independently), following the pattern of tools like `git pull` (fetch+merge) vs separate `git fetch`/`git merge`.
+
 ### High-Level Command Structure
 
 ```
@@ -171,13 +186,15 @@ muconeup
 ├── --config <path>              # Global: Required for all commands
 ├── --log-level <level>          # Global: DEBUG/INFO/WARNING/ERROR/CRITICAL/NONE
 │
-├── simulate                     # Generate MUC1 VNTR haplotypes
-│   ├── --out-dir <dir>
-│   ├── --out-base <name>
-│   ├── --num-haplotypes <N>
-│   ├── --seed <int>
-│   ├── --reference-assembly <hg19|hg38>
-│   ├── --output-structure       # Flag: Write structure file
+├── simulate                     # MAIN WORKFLOW - Complete pipeline in one command
+│   │
+│   ├── [Core Simulation Options]
+│   │   ├── --out-dir <dir>
+│   │   ├── --out-base <name>
+│   │   ├── --num-haplotypes <N>
+│   │   ├── --seed <int>
+│   │   ├── --reference-assembly <hg19|hg38>
+│   │   └── --output-structure       # Flag: Write structure file
 │   │
 │   ├── [Length Options - Mutually Exclusive]
 │   │   ├── --fixed-lengths <values>
@@ -188,43 +205,43 @@ muconeup
 │   │   ├── --mutation-name <name>
 │   │   └── --mutation-targets <pairs>
 │   │
-│   └── [SNP Options - Mutually Exclusive]
-│       ├── --snp-input-file <file>
-│       └── --random-snps
-│           ├── --random-snp-density <float>
-│           ├── --random-snp-output-file <file>
-│           ├── --random-snp-region <all|constants_only|vntr_only>
-│           └── --random-snp-haplotypes <indices>
+│   ├── [SNP Options - Mutually Exclusive]
+│   │   ├── --snp-input-file <file>
+│   │   └── --random-snps
+│   │       ├── --random-snp-density <float>
+│   │       ├── --random-snp-output-file <file>
+│   │       ├── --random-snp-region <all|constants_only|vntr_only>
+│   │       └── --random-snp-haplotypes <indices>
+│   │
+│   └── [Pipeline Options - Enable integrated workflow]
+│       ├── --simulate-reads <illumina|ont>  # Run read simulation after haplotype generation
+│       ├── --output-orfs                    # Run ORF prediction after haplotype generation
+│       ├── --orf-min-aa <int>               # ORF minimum length (requires --output-orfs)
+│       └── --orf-aa-prefix <prefix>         # ORF prefix filter (requires --output-orfs)
 │
-├── analyze                      # Post-simulation analysis
-│   ├── orfs                     # ORF prediction and toxic detection
-│   │   ├── <input_fasta>        # Positional argument
+├── reads                        # STANDALONE UTILITY - Work with any FASTA
+│   ├── illumina <input_fasta>   # Simulate Illumina short reads
 │   │   ├── --out-dir <dir>
 │   │   ├── --out-base <name>
-│   │   ├── --orf-min-aa <int>
-│   │   └── --orf-aa-prefix [<prefix>]
+│   │   ├── --coverage <int>
+│   │   └── --threads <int>
 │   │
-│   └── stats                    # Generate simulation statistics
-│       ├── <input_fasta>
+│   └── ont <input_fasta>        # Simulate Oxford Nanopore long reads
 │       ├── --out-dir <dir>
-│       └── --out-base <name>
+│       ├── --out-base <name>
+│       ├── --coverage <int>
+│       └── --min-read-length <int>
 │
-└── reads                        # Read simulation
-    ├── illumina                 # Simulate Illumina reads
-    │   ├── <input_fasta>
-    │   ├── --config <path>      # Overrides global config
+└── analyze                      # STANDALONE UTILITY - Work with any FASTA
+    ├── orfs <input_fasta>       # ORF prediction and toxic protein detection
     │   ├── --out-dir <dir>
     │   ├── --out-base <name>
-    │   ├── --coverage <int>
-    │   └── --threads <int>
+    │   ├── --orf-min-aa <int>
+    │   └── --orf-aa-prefix [<prefix>]
     │
-    └── ont                      # Simulate Oxford Nanopore reads
-        ├── <input_fasta>
-        ├── --config <path>
+    └── stats <input_fasta>      # Generate simulation statistics
         ├── --out-dir <dir>
-        ├── --out-base <name>
-        ├── --coverage <int>
-        └── --min-read-length <int>
+        └── --out-base <name>
 ```
 
 ### Command Invocation Examples
@@ -237,62 +254,73 @@ muconeup --config config.json --out-base output --out-dir results/
 # With mutation
 muconeup --config config.json --out-base output --mutation-name dupC --mutation-targets 1,25
 
-# With read simulation
-muconeup --config config.json --out-base output --simulate-reads illumina
-
-# ORF prediction
-muconeup --config config.json --out-base output --output-orfs --orf-min-aa 100
+# Full pipeline in one command
+muconeup --config config.json --out-base output --simulate-reads illumina --output-orfs
 ```
 
-#### After (Click - proposed)
+#### After (Click - proposed) - **Minimal Breaking Changes**
+
 ```bash
-# Basic simulation
+# Basic simulation (nearly identical)
 muconeup --config config.json simulate --out-dir results/ --out-base output
 
-# With mutation
+# With mutation (nearly identical)
 muconeup --config config.json simulate --out-base output \
     --mutation-name dupC --mutation-targets 1,25
 
-# Separate read simulation (cleaner)
-muconeup --config config.json simulate --out-base output
-muconeup --config config.json reads illumina results/output.001.simulated.fa
+# Full pipeline in ONE command (like current!) ✅
+muconeup --config config.json simulate --out-base output \
+    --simulate-reads illumina --output-orfs --orf-min-aa 100
 
-# ORF prediction (separate command)
-muconeup --config config.json analyze orfs results/output.001.simulated.fa --orf-min-aa 100
+# NEW: Standalone utilities for flexibility
+muconeup --config config.json reads illumina external_file.fa --out-base reads_output
+muconeup --config config.json analyze orfs external_file.fa --out-base analysis
 ```
 
-### Benefits of New Structure
+### Benefits of Hybrid Structure
 
-1. **Clear Command Hierarchy:**
-   - `simulate` - Main workflow
-   - `analyze` - Post-processing
-   - `reads` - Read simulation
+1. **Minimal Breaking Changes:**
+   - Common workflow stays **one command** (like current argparse)
+   - Users can do full pipeline: `simulate --simulate-reads illumina --output-orfs`
+   - Only change: Add `simulate` word after config
 
-2. **Separation of Concerns:**
-   - Simulation and analysis are independent
-   - Read simulation can work on any FASTA (not just MucOneUp output)
-   - ORF prediction reusable for other tools
+2. **Flexibility for Advanced Users:**
+   - Standalone `reads` and `analyze` commands work with **any FASTA**
+   - Not limited to MucOneUp outputs
+   - Supports external tool integration
 
-3. **Better Discovery:**
+3. **Clear Command Hierarchy:**
    ```bash
    $ muconeup --help
    Commands:
-     simulate  Generate MUC1 VNTR haplotypes
-     analyze   Post-simulation analysis
-     reads     Read simulation
+     simulate  Main workflow - generate haplotypes and run pipeline
+     analyze   Standalone utilities for FASTA analysis
+     reads     Standalone utilities for read simulation
+   ```
+
+4. **Better Discoverability:**
+   ```bash
+   $ muconeup simulate --help
+   # Shows all simulation options + pipeline flags (--simulate-reads, --output-orfs)
 
    $ muconeup reads --help
    Commands:
-     illumina  Simulate Illumina reads
-     ont       Simulate Oxford Nanopore reads
+     illumina  Simulate Illumina short reads
+     ont       Simulate Oxford Nanopore long reads
    ```
 
-4. **Testability:**
+5. **Superior Testability:**
    ```python
-   # Test individual commands in isolation
+   # CliRunner for isolated testing (no subprocess)
    result = runner.invoke(cli, ['simulate', '--config', 'test.json'])
    result = runner.invoke(cli, ['reads', 'illumina', 'input.fa'])
+   # Much faster and cleaner than subprocess.run()
    ```
+
+6. **Real-World Pattern:**
+   - Like `git pull` (fetch+merge in one) vs separate `git fetch`/`git merge`
+   - Like `apt upgrade` (update+upgrade) vs separate `apt update`
+   - Common case = convenient; advanced case = flexible
 
 ---
 
