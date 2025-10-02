@@ -332,6 +332,27 @@ muconeup --config X analyze stats INPUT_FASTA [options]
 ```
 - `--out-base` - Base name for statistics file
 
+**VNTR-stats subcommand:**
+```bash
+muconeup --config CONFIG analyze vntr-stats INPUT_FILE [options]
+```
+Analyze VNTR structures and compute transition probabilities.
+
+- `INPUT_FILE` - CSV/TSV file containing VNTR structures
+- `--structure-column` - Column name or index containing VNTR structure (default: `vntr`)
+- `--delimiter` - Field delimiter (default: tab)
+- `--header` - Specify if input file has header row
+- `--output, -o` - Output file path (default: stdout)
+
+Example:
+```bash
+# Analyze VNTR database with header
+muconeup --config config.json analyze vntr-stats data/examples/vntr_database.tsv --header
+
+# With custom column and output file
+muconeup --config config.json analyze vntr-stats input.tsv --header --structure-column vntr --output analysis.json
+```
+
 ### Example Commands
 
 #### Basic Workflows

@@ -772,6 +772,121 @@ def stats(ctx, input_fastas, out_dir, out_base):
 
 
 # ============================================================================
+# ANALYZE vntr-stats - VNTR Transition Probability Analysis
+# ============================================================================
+
+
+@analyze.command("vntr-stats")
+@click.argument("input_file", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--structure-column",
+    default="vntr",
+    show_default=True,
+    help="Column name (if header) or 0-based index containing VNTR structure.",
+)
+@click.option(
+    "--delimiter",
+    default="\t",
+    show_default=True,
+    help="Field delimiter for input file.",
+)
+@click.option(
+    "--header",
+    is_flag=True,
+    help="Specify if input file has header row.",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output JSON file (default: stdout).",
+)
+@click.pass_context
+def vntr_stats(ctx, input_file, structure_column, delimiter, header, output):
+    """Analyze VNTR structures and compute transition probabilities.
+
+    Processes a CSV/TSV file containing VNTR structures, calculates statistics
+    (min/max/mean/median repeat units), and builds a transition probability
+    matrix showing the likelihood of each repeat unit following another.
+
+    The analysis removes duplicate VNTR structures and includes an "END" state
+    representing sequence termination. Unknown repeat tokens (not in config)
+    trigger warnings but don't cause failure.
+
+    \b
+    Examples:
+      # Analyze example VNTR database
+      muconeup --config X analyze vntr-stats data/examples/vntr_database.tsv --header
+
+      # Use custom column and save to file
+      muconeup --config X analyze vntr-stats data.csv \\
+        --delimiter "," --structure-column "sequence" --output stats.json
+
+      # Column index without header
+      muconeup --config X analyze vntr-stats data.tsv --structure-column 3
+
+      # Pipe to jq for filtering
+      muconeup --config X analyze vntr-stats data/examples/vntr_database.tsv \\
+        --header | jq '.mean_repeats'
+
+    \b
+    Output JSON contains:
+      - Statistics: min/max/mean/median repeat counts
+      - Probabilities: State transition matrix (including END state)
+      - Repeats: Known repeat dictionary from config
+    """
+    try:
+        # Load config for known repeats (DRY principle - reuse existing pattern)
+        config_path = Path(ctx.obj["config_path"])
+        with config_path.open() as f:
+            config = json.load(f)
+
+        known_repeats = config.get("repeats", {})
+        if not known_repeats:
+            logging.error("Configuration file does not contain 'repeats' key")
+            ctx.exit(1)
+
+        logging.info("Analyzing VNTR structures from %s", input_file)
+
+        # Import analysis module
+        from ..analysis.vntr_statistics import analyze_vntr_sequences
+
+        # Run analysis
+        with Path(input_file).open() as f:
+            results = analyze_vntr_sequences(f, structure_column, header, known_repeats, delimiter)
+
+        # Build output (matches original helper behavior)
+        output_data = {
+            "min_repeats": results["min_repeats"],
+            "max_repeats": results["max_repeats"],
+            "mean_repeats": results["mean_repeats"],
+            "median_repeats": results["median_repeats"],
+            "repeats": known_repeats,
+            "probabilities": results["probabilities"],
+        }
+
+        # Write output
+        if output:
+            output_path = Path(output)
+            with output_path.open("w") as out:
+                json.dump(output_data, out, indent=2)
+            logging.info("VNTR statistics written to %s", output)
+        else:
+            # Output to stdout (pipeable)
+            click.echo(json.dumps(output_data, indent=2))
+
+        logging.info(
+            "Analysis complete: %d unique structures, %d repeat types",
+            len(results["probabilities"]),
+            len([t for t in results["probabilities"] if t != "END"]),
+        )
+
+    except Exception as e:
+        logging.error("VNTR analysis failed: %s", e, exc_info=True)
+        ctx.exit(1)
+
+
+# ============================================================================
 # Helper Functions
 # ============================================================================
 
