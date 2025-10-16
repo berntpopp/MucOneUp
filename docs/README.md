@@ -15,6 +15,26 @@ docs/
 
 ## ✅ Completed Work
 
+### 08. VNTR Stats Integration (v0.11.0)
+**Status:** ✅ Complete
+**Location:** `completed/08_vntr_analyze/`
+**Completion Date:** 2025-10-02
+
+Successfully integrated VNTR structure analysis as `muconeup analyze vntr-stats` CLI command.
+
+**Key Achievements:**
+- ✅ New command: `muconeup analyze vntr-stats` with full CLI integration
+- ✅ Core library: `muc_one_up.analysis.vntr_statistics` (77 lines, 92% coverage)
+- ✅ 32 new tests (20 unit + 12 CLI integration tests)
+- ✅ Example data moved to `data/examples/vntr_database.tsv`
+- ✅ Transition probability matrix with validation (all states sum to 1.0)
+- ✅ Clean removal of `helpers/vntr_analyze.py` (no users affected)
+
+**Files:**
+- `08_vntr_analyze_integration.md` - Complete implementation plan (965 lines)
+
+---
+
 ### 06. Click CLI Migration (v0.10.0)
 **Status:** ✅ Complete
 **Location:** `completed/06_click_migration/`
@@ -159,6 +179,7 @@ The `planning/` directory is currently empty - all major refactoring work has be
 - ✅ Code quality infrastructure
 - ✅ Click CLI migration
 - ✅ Batch processing implementation
+- ✅ VNTR stats integration
 
 ---
 
@@ -187,26 +208,28 @@ Detailed 3-week implementation plan for:
 | 05 | Code Quality (Phase 1) | ✅ Complete | v0.9.0 | 70% |
 | 06 | Click CLI Migration | ✅ Complete | v0.10.0 | 95% |
 | 07 | Batch Processing | ✅ Complete | v0.10.0 | 100% |
+| 08 | VNTR Stats Integration | ✅ Complete | v0.11.0 | 100% |
 
-**Overall Completion:** 6/6 core items complete ✅
+**Overall Completion:** 7/7 core items complete ✅
 
 ---
 
-## 🎯 Current State Summary (v0.10.0)
+## 🎯 Current State Summary (v0.11.0)
 
 **What's Working:**
 - ✅ Clean, modular CLI architecture
 - ✅ Professional exception handling
-- ✅ 50% test coverage with 357 passing tests
+- ✅ 57% test coverage with 389 passing tests
 - ✅ Zero linting/type errors
 - ✅ Automated quality gates (pre-commit + CI/CD)
 - ✅ Modern Click CLI with Unix philosophy
 - ✅ Comprehensive batch processing support
 - ✅ xargs/parallel compatibility
+- ✅ VNTR structure analysis with transition probability matrix
 - ✅ Extensive documentation
 
 **What's Next (Optional Enhancements):**
-- ⏳ Test coverage increase to 70%+ (currently 50%)
+- ⏳ Test coverage increase to 70%+ (currently 57%)
 - ⏳ Security scanning with Bandit
 - ⏳ Performance benchmarks
 - ⏳ Shell completion (bash/zsh)
@@ -251,6 +274,7 @@ Detailed 3-week implementation plan for:
 - Code Quality → `completed/05_code_quality/`
 - CLI Framework → `completed/06_click_migration/`
 - Batch Processing → `completed/07_batch_processing/`
+- VNTR Analysis → `completed/08_vntr_analyze/`
 
 **Key Documents:**
 - User documentation → `../README.md`
@@ -262,7 +286,14 @@ Detailed 3-week implementation plan for:
 
 ## 🎉 Project Milestones
 
-### v0.10.0 (Current) - Click CLI + Batch Processing
+### v0.11.0 (Current) - VNTR Stats Integration
+- ✅ New `muconeup analyze vntr-stats` command
+- ✅ Transition probability matrix computation
+- ✅ VNTR structure analysis library
+- ✅ 32 new tests (389 total, 57% coverage)
+- ✅ Example data organization
+
+### v0.10.0 - Click CLI + Batch Processing
 - ✅ Modern Click CLI framework
 - ✅ Comprehensive batch processing
 - ✅ xargs/parallel support
@@ -288,6 +319,6 @@ Detailed 3-week implementation plan for:
 
 ---
 
-**Last Updated:** 2025-10-01 (v0.10.0)
+**Last Updated:** 2025-10-02 (v0.11.0)
 **Maintained By:** Development Team
 **Current Branch:** `dev/modern-python-refactor`
