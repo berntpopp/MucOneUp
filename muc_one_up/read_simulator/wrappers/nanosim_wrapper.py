@@ -8,10 +8,12 @@ command construction, execution, and error handling.
 """
 
 import logging
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
 
+from ...exceptions import ExternalToolError
 from ..utils import run_command
 
 
@@ -54,29 +56,18 @@ def run_nanosim_simulation(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Build the command with required parameters
+    # SECURITY: Always use list form, never shell=True
+    # If command contains spaces (conda/mamba), use shlex.split() to parse safely
     if isinstance(nanosim_cmd, str) and (" " in nanosim_cmd):
         # Command contains spaces, it's likely a conda/mamba run command
-        cmd_str = f"{nanosim_cmd} genome -rg {reference_fasta}"
-        cmd_str += f" -c {training_model} -o {output_prefix}"
-        cmd_str += f" -t {threads} -x {coverage}"
-
-        # Add optional parameters for shell command
-        if min_read_length:
-            cmd_str += f" --min_len {min_read_length}"
-        if max_read_length:
-            cmd_str += f" --max_len {max_read_length}"
-        if other_options:
-            cmd_str += f" {other_options}"
-            if "--fastq" not in other_options:
-                cmd_str += " --fastq"
-        else:
-            cmd_str += " --fastq"
-
-        cmd: str | list[str] = cmd_str
+        # Use shlex.split to safely parse it
+        cmd_list = shlex.split(nanosim_cmd)
     else:
-        # Build as list for direct command
-        cmd_list = [
-            nanosim_cmd,
+        cmd_list = [nanosim_cmd]
+
+    # Add NanoSim arguments
+    cmd_list.extend(
+        [
             "genome",
             "-rg",
             reference_fasta,
@@ -89,29 +80,29 @@ def run_nanosim_simulation(
             "-x",
             str(coverage),
         ]
+    )
 
-        # Add optional parameters for list command
-        if min_read_length:
-            cmd_list.extend(["--min_len", str(min_read_length)])
-        if max_read_length:
-            cmd_list.extend(["--max_len", str(max_read_length)])
-        if other_options:
-            cmd_list.extend(other_options.split())
-            if "--fastq" not in other_options:
-                cmd_list.append("--fastq")
-        else:
+    # Add optional parameters
+    if min_read_length:
+        cmd_list.extend(["--min_len", str(min_read_length)])
+    if max_read_length:
+        cmd_list.extend(["--max_len", str(max_read_length)])
+    if other_options:
+        cmd_list.extend(shlex.split(other_options))
+        if "--fastq" not in other_options:
             cmd_list.append("--fastq")
-
-        cmd = cmd_list
+    else:
+        cmd_list.append("--fastq")
 
     # Log the command
-    logging.info("[NanoSim] Running command: %s", cmd)
+    logging.info("[NanoSim] Running command: %s", " ".join(cmd_list))
 
     try:
         # Run the command using the project's run_command utility
+        # SECURITY: Never use shell=True
         run_command(
-            cmd,
-            shell=isinstance(cmd, str),
+            cmd_list,
+            shell=False,
             timeout=timeout,
             stderr_log_level=logging.INFO,
             stderr_prefix="[NanoSim] ",
@@ -182,65 +173,67 @@ def align_ont_reads_with_minimap2(
 
     try:
         # Construct alignment command
+        # SECURITY: Always use list form with subprocess, never shell=True
         if isinstance(minimap2_cmd, str) and (" " in minimap2_cmd):
-            # Command has spaces, handle as a string command
-            align_cmd = f"{minimap2_cmd} -t {threads} -ax map-ont "
-            align_cmd += f"{human_reference} {reads_fastq} > {sam_path}"
-            logging.info("[minimap2] Running alignment: %s", align_cmd)
-            # Run alignment with shell=True since we're using redirection
-            run_command(
-                align_cmd,
-                shell=True,
-                timeout=timeout,
-                stderr_log_level=logging.INFO,
-                stderr_prefix="[minimap2] ",
-            )
+            # Command has spaces (conda/mamba), use shlex.split() to parse safely
+            align_cmd_list = shlex.split(minimap2_cmd)
         else:
-            # Use list form for direct command
-            align_cmd = [  # type: ignore[assignment]
-                minimap2_cmd,
+            align_cmd_list = [minimap2_cmd]
+
+        # Add minimap2 arguments
+        align_cmd_list.extend(
+            [
                 "-t",
                 str(threads),
                 "-ax",
-                "map-ont",  # Preset for Oxford Nanopore reads
+                "map-ont",
                 human_reference,
                 reads_fastq,
             ]
-            align_cmd_str = " ".join(str(c) for c in align_cmd)
-            logging.info("Running minimap2 alignment: %s", align_cmd_str)
+        )
 
-            # Run with output redirection to SAM file
+        logging.info("[minimap2] Running alignment: %s > %s", " ".join(align_cmd_list), sam_path)
+
+        # Run with output redirection to SAM file using subprocess
+        try:
             with Path(sam_path).open("w") as sam_file:
-                # Use run_command when possible, but for file redirection
-                # we need to use subprocess.Popen directly
-                process = subprocess.Popen(
-                    align_cmd, stdout=sam_file, stderr=subprocess.PIPE, text=True
+                result = subprocess.run(
+                    align_cmd_list,
+                    stdout=sam_file,
+                    stderr=subprocess.PIPE,
+                    timeout=timeout,
+                    check=True,
+                    text=True,
                 )
-                # Get stderr for logging
-                _, stderr = process.communicate(timeout=timeout)
-                if process.returncode != 0:
-                    logging.error("[minimap2] Failed with code %d", process.returncode)
-                    logging.error("[minimap2] stderr: %s", stderr)
-                    raise RuntimeError(f"minimap2 alignment failed with code {process.returncode}")
+            if result.stderr:
+                logging.info("[minimap2] %s", result.stderr)
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else "Unknown error"
+            raise ExternalToolError(
+                tool="minimap2",
+                exit_code=e.returncode,
+                stderr=error_msg,
+                cmd=" ".join(align_cmd_list),
+            ) from e
+        except subprocess.TimeoutExpired as e:
+            raise ExternalToolError(
+                tool="minimap2",
+                exit_code=-1,
+                stderr=f"Timed out after {timeout}s",
+                cmd=" ".join(align_cmd_list),
+            ) from e
 
         # Convert SAM to BAM
+        # SECURITY: Always use list form, never shell=True
         if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
-            # Execute as string command
-            view_cmd = (
-                f"{samtools_cmd} view -@ {threads} -b -h -F 4 -o {output_bam}.unsorted {sam_path}"
-            )
-            logging.info("[samtools] Converting SAM to BAM: %s", view_cmd)
-            run_command(
-                view_cmd,
-                shell=True,
-                timeout=timeout,
-                stderr_log_level=logging.INFO,
-                stderr_prefix="[samtools] ",
-            )
+            # Command has spaces (conda/mamba), use shlex.split() to parse safely
+            sam_to_bam_cmd = shlex.split(samtools_cmd)
         else:
-            # List form for direct command
-            sam_to_bam_cmd = [
-                samtools_cmd,
+            sam_to_bam_cmd = [samtools_cmd]
+
+        # Add samtools view arguments
+        sam_to_bam_cmd.extend(
+            [
                 "view",
                 "-@",
                 str(threads),
@@ -252,34 +245,30 @@ def align_ont_reads_with_minimap2(
                 output_bam + ".unsorted",
                 sam_path,
             ]
+        )
 
-            cmd_str = " ".join(str(c) for c in sam_to_bam_cmd)
-            logging.info("[samtools] Converting SAM to BAM: %s", cmd_str)
+        logging.info("[samtools] Converting SAM to BAM: %s", " ".join(sam_to_bam_cmd))
 
-            # Run SAM to BAM conversion
-            run_command(
-                sam_to_bam_cmd,
-                timeout=timeout,
-                stderr_log_level=logging.INFO,
-                stderr_prefix="[samtools] ",
-            )
+        # Run SAM to BAM conversion
+        run_command(
+            sam_to_bam_cmd,
+            shell=False,
+            timeout=timeout,
+            stderr_log_level=logging.INFO,
+            stderr_prefix="[samtools] ",
+        )
 
         # Sort BAM
+        # SECURITY: Always use list form, never shell=True
         if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
-            # Execute as string command
-            sort_cmd = f"{samtools_cmd} sort -@ {threads} -o {output_bam} {output_bam}.unsorted"
-            logging.info("[samtools] Sorting BAM: %s", sort_cmd)
-            run_command(
-                sort_cmd,
-                shell=True,
-                timeout=timeout,
-                stderr_log_level=logging.INFO,
-                stderr_prefix="[samtools] ",
-            )
+            # Command has spaces (conda/mamba), use shlex.split() to parse safely
+            sort_cmd_list = shlex.split(samtools_cmd)
         else:
-            # List form for direct command
-            sort_cmd = [  # type: ignore[assignment]
-                samtools_cmd,
+            sort_cmd_list = [samtools_cmd]
+
+        # Add samtools sort arguments
+        sort_cmd_list.extend(
+            [
                 "sort",
                 "-@",
                 str(threads),
@@ -287,44 +276,40 @@ def align_ont_reads_with_minimap2(
                 output_bam,
                 output_bam + ".unsorted",
             ]
+        )
 
-            cmd_str = " ".join(str(c) for c in sort_cmd)
-            logging.info("[samtools] Sorting BAM: %s", cmd_str)
+        logging.info("[samtools] Sorting BAM: %s", " ".join(sort_cmd_list))
 
-            # Run BAM sorting
-            run_command(
-                sort_cmd,
-                timeout=timeout,
-                stderr_log_level=logging.INFO,
-                stderr_prefix="[samtools] ",
-            )
+        # Run BAM sorting
+        run_command(
+            sort_cmd_list,
+            shell=False,
+            timeout=timeout,
+            stderr_log_level=logging.INFO,
+            stderr_prefix="[samtools] ",
+        )
 
         # Index BAM
+        # SECURITY: Always use list form, never shell=True
         if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
-            # Execute as string command
-            index_cmd = f"{samtools_cmd} index {output_bam}"
-            logging.info("[samtools] Indexing BAM: %s", index_cmd)
-            run_command(
-                index_cmd,
-                shell=True,
-                timeout=timeout,
-                stderr_log_level=logging.INFO,
-                stderr_prefix="[samtools] ",
-            )
+            # Command has spaces (conda/mamba), use shlex.split() to parse safely
+            index_cmd_list = shlex.split(samtools_cmd)
         else:
-            # List form for direct command
-            index_cmd = [samtools_cmd, "index", output_bam]  # type: ignore[assignment]
+            index_cmd_list = [samtools_cmd]
 
-            cmd_str = " ".join(str(c) for c in index_cmd)
-            logging.info("[samtools] Indexing BAM: %s", cmd_str)
+        # Add samtools index arguments
+        index_cmd_list.extend(["index", output_bam])
 
-            # Run BAM indexing
-            run_command(
-                index_cmd,
-                timeout=timeout,
-                stderr_log_level=logging.INFO,
-                stderr_prefix="[samtools] ",
-            )
+        logging.info("[samtools] Indexing BAM: %s", " ".join(index_cmd_list))
+
+        # Run BAM indexing
+        run_command(
+            index_cmd_list,
+            shell=False,
+            timeout=timeout,
+            stderr_log_level=logging.INFO,
+            stderr_prefix="[samtools] ",
+        )
 
         logging.info("[minimap2] ONT read alignment completed successfully")
         logging.info("[samtools] Generated BAM: %s", output_bam)

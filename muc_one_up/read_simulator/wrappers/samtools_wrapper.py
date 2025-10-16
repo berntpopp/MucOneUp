@@ -10,9 +10,10 @@ This module provides wrapper functions for samtools operations:
 """
 
 import logging
+import subprocess
 from pathlib import Path
 
-from ...exceptions import FileOperationError
+from ...exceptions import ExternalToolError, FileOperationError
 from ..utils import run_command
 
 
@@ -50,15 +51,31 @@ def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, s
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Extract sequences into FASTA format
-    # Using shell=True and string command to handle redirection properly
-    cmd = f"{tools['samtools']} fasta -n -F 0x900 {collated_bam} > {output_fa}"  # type: ignore[assignment]
-    run_command(
-        cmd,
-        shell=True,
-        timeout=60,
-        stderr_prefix="[samtools] ",
-        stderr_log_level=logging.INFO,
-    )
+    # SECURITY: Use subprocess.run with file handle redirection, never shell=True
+    cmd = [tools["samtools"], "fasta", "-n", "-F", "0x900", collated_bam]
+
+    try:
+        logging.info(f"[samtools] Running: {' '.join(cmd)} > {output_fa}")
+        with Path(output_fa).open("w") as fasta_out:
+            result = subprocess.run(
+                cmd, stdout=fasta_out, stderr=subprocess.PIPE, timeout=60, check=True
+            )
+        if result.stderr:
+            logging.info(f"[samtools] {result.stderr.decode('utf-8', errors='ignore')}")
+    except subprocess.CalledProcessError as e:
+        raise ExternalToolError(
+            tool="samtools fasta",
+            exit_code=e.returncode,
+            stderr=e.stderr.decode("utf-8", errors="ignore") if e.stderr else "Unknown error",
+            cmd=" ".join(cmd),
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise ExternalToolError(
+            tool="samtools fasta",
+            exit_code=-1,
+            stderr="Timed out after 60s",
+            cmd=" ".join(cmd),
+        ) from e
 
     # Verify the output FASTA exists and is non-empty
     if not output_path.exists() or output_path.stat().st_size == 0:
@@ -98,6 +115,7 @@ def calculate_vntr_coverage(
     depth_file = str(Path(output_dir) / f"{output_name}_vntr_depth.txt")
 
     # Run samtools depth to get per-base coverage
+    # SECURITY: Use subprocess.run with file handle redirection, never shell=True
     cmd = [
         samtools_exe,
         "depth",
@@ -107,16 +125,30 @@ def calculate_vntr_coverage(
         "-@",
         str(threads),  # Threads
         bam_file,
-        ">",
-        depth_file,
     ]
-    run_command(
-        cmd,
-        shell=True,
-        timeout=60,
-        stderr_prefix="[samtools] ",
-        stderr_log_level=logging.INFO,
-    )
+
+    try:
+        logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
+        with Path(depth_file).open("w") as depth_out:
+            result = subprocess.run(
+                cmd, stdout=depth_out, stderr=subprocess.PIPE, timeout=60, check=True
+            )
+        if result.stderr:
+            logging.info(f"[samtools] {result.stderr.decode('utf-8', errors='ignore')}")
+    except subprocess.CalledProcessError as e:
+        raise ExternalToolError(
+            tool="samtools depth",
+            exit_code=e.returncode,
+            stderr=e.stderr.decode("utf-8", errors="ignore") if e.stderr else "Unknown error",
+            cmd=" ".join(cmd),
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise ExternalToolError(
+            tool="samtools depth",
+            exit_code=-1,
+            stderr="Timed out after 60s",
+            cmd=" ".join(cmd),
+        ) from e
 
     # Calculate mean coverage from depth file
     total_depth = 0
@@ -176,6 +208,7 @@ def calculate_target_coverage(
     depth_file = str(Path(output_dir) / f"{output_name}_target_depth.txt")
 
     # Run samtools depth with BED file to get per-base coverage
+    # SECURITY: Use subprocess.run with file handle redirection, never shell=True
     cmd = [
         samtools_exe,
         "depth",
@@ -185,10 +218,30 @@ def calculate_target_coverage(
         "-@",
         str(threads),  # Threads
         bam_file,
-        ">",
-        depth_file,
     ]
-    run_command(cmd, shell=True, timeout=60)
+
+    try:
+        logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
+        with Path(depth_file).open("w") as depth_out:
+            result = subprocess.run(
+                cmd, stdout=depth_out, stderr=subprocess.PIPE, timeout=60, check=True
+            )
+        if result.stderr:
+            logging.info(f"[samtools] {result.stderr.decode('utf-8', errors='ignore')}")
+    except subprocess.CalledProcessError as e:
+        raise ExternalToolError(
+            tool="samtools depth",
+            exit_code=e.returncode,
+            stderr=e.stderr.decode("utf-8", errors="ignore") if e.stderr else "Unknown error",
+            cmd=" ".join(cmd),
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise ExternalToolError(
+            tool="samtools depth",
+            exit_code=-1,
+            stderr="Timed out after 60s",
+            cmd=" ".join(cmd),
+        ) from e
 
     # Calculate mean coverage from depth file
     total_depth = 0
