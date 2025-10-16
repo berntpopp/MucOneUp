@@ -18,8 +18,7 @@ from ..exceptions import ExternalToolError, ValidationError
 
 
 def run_command(
-    cmd: list[str] | str,
-    shell: bool = False,
+    cmd: list[str],
     timeout: int | None = None,
     stderr_log_level: int = logging.ERROR,
     stderr_prefix: str = "",
@@ -28,27 +27,31 @@ def run_command(
     Run a command in its own process group so that it can be killed on timeout.
     Capture both stdout and stderr live and log them line-by-line.
 
+    SECURITY: This function NEVER uses shell=True to prevent command injection.
+    All commands must be provided as lists, not strings.
+
     Args:
-        cmd: Command (list or string) to run.
-        shell: Whether to run the command in the shell.
+        cmd: Command as a list of strings (e.g., ["bwa", "mem", "-t", "4"]).
         timeout: Timeout in seconds (None means wait indefinitely).
+        stderr_log_level: Logging level for stderr output (default: ERROR).
+        stderr_prefix: Prefix for stderr log messages.
 
     Returns:
         The process return code.
 
     Raises:
-        SystemExit: If the process fails to start or returns non-zero.
+        ExternalToolError: If the process fails to start or returns non-zero.
     """
-    if isinstance(cmd, list) and not shell and " " in cmd[0]:
-        shell = True
-        cmd = " ".join(cmd)
-    cmd_str = cmd if isinstance(cmd, str) else " ".join(cmd)
+    if not isinstance(cmd, list):
+        raise TypeError("cmd must be a list of strings, not a string (security requirement)")
+
+    cmd_str = " ".join(cmd)
     logging.info("Running command: %s (timeout=%s)", cmd_str, timeout)
 
     try:
         proc = subprocess.Popen(
             cmd,
-            shell=shell,
+            shell=False,  # SECURITY: Never use shell=True
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             # Use binary mode and handle encoding manually to avoid decode errors

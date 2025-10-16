@@ -102,7 +102,6 @@ def run_nanosim_simulation(
         # SECURITY: Never use shell=True
         run_command(
             cmd_list,
-            shell=False,
             timeout=timeout,
             stderr_log_level=logging.INFO,
             stderr_prefix="[NanoSim] ",
@@ -252,7 +251,6 @@ def align_ont_reads_with_minimap2(
         # Run SAM to BAM conversion
         run_command(
             sam_to_bam_cmd,
-            shell=False,
             timeout=timeout,
             stderr_log_level=logging.INFO,
             stderr_prefix="[samtools] ",
@@ -283,7 +281,6 @@ def align_ont_reads_with_minimap2(
         # Run BAM sorting
         run_command(
             sort_cmd_list,
-            shell=False,
             timeout=timeout,
             stderr_log_level=logging.INFO,
             stderr_prefix="[samtools] ",
@@ -305,7 +302,6 @@ def align_ont_reads_with_minimap2(
         # Run BAM indexing
         run_command(
             index_cmd_list,
-            shell=False,
             timeout=timeout,
             stderr_log_level=logging.INFO,
             stderr_prefix="[samtools] ",
