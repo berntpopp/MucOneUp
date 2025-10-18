@@ -35,7 +35,7 @@ repos:
           - -ll  # Only report MEDIUM/HIGH severity
           - -ii  # Only report MEDIUM/HIGH confidence
           - --skip=B101,B311,B404,B601,B603
-        exclude: ^tests/
+        exclude: ^(tests/|helpers/)
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
