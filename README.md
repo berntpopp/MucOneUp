@@ -28,21 +28,6 @@ MucOneUp is a **Python toolkit for simulating realistic MUC1 Variable Number Tan
 
 ---
 
-## Core Design Principles
-
-MucOneUp follows modern software engineering best practices:
-
-- **Unix Philosophy** - Each command does ONE thing well; compose for complex workflows
-- **SOLID Architecture** - Modular, testable components with clear separation of concerns
-- **Type Safety** - Comprehensive type hints with mypy validation
-- **DRY (Don't Repeat Yourself)** - Centralized utilities, zero code duplication
-- **KISS (Keep It Simple)** - Minimal configuration, sensible defaults
-- **Quality First** - 100% Google-style docstrings, 77% test coverage, zero linting errors
-
-**Built with:** Python 3.10+, Click CLI, pytest, ruff, mypy, pre-commit hooks
-
----
-
 ## Installation
 
 ### Quick Install (Users)
