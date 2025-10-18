@@ -33,7 +33,7 @@ MucOneUp is a **Python toolkit for simulating realistic MUC1 Variable Number Tan
 ### Quick Install (Users)
 
 ```bash
-pip install .
+make install
 ```
 
 ### Development Setup
@@ -41,20 +41,15 @@ pip install .
 Modern Python tooling with **uv**, **ruff**, **mypy**, and automated **pre-commit hooks**:
 
 ```bash
-# Install uv (fast package manager)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Setup environment and dependencies
-make init
-
-# Verify installation
-make check
+make init    # Installs uv, dev dependencies, pre-commit hooks
+make check   # Verify installation
 ```
 
-**Development Commands:**
+**Common Commands:**
 
 | Command | Action |
 |---------|--------|
+| `make install` | Install package for users |
 | `make init` | Setup complete dev environment |
 | `make test` | Run tests with coverage (568 tests) |
 | `make lint` | Check code quality (ruff + mypy) |
