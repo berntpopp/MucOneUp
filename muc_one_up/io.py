@@ -17,22 +17,42 @@ from typing import Any
 def parse_vntr_structure_file(
     filepath: str, config: dict
 ) -> tuple[list[list[str]], dict[str, Any] | None]:
-    """
-    Parse a VNTR structure file for use in simulation.
+    """Parse VNTR structure file for predefined chain simulation.
 
-    The file format should be:
-    haplotype_1<TAB>1-2-3-4-5-C-X-X-A-...-6p-7-8-9
-    haplotype_2<TAB>1-2-3-4-5-C-X-X-X-...-6-7-8-9
+    Reads tab-delimited file with haplotype IDs and repeat chains. Extracts
+    mutation information from comment lines if present. Validates all repeat
+    symbols against config["repeats"].
 
-    Each line represents one haplotype, and the symbols should be separated by
-    dashes (-). The first column is the haplotype identifier, and the second
-    column is the chain of repeat symbols.
+    File Format:
+        # Mutation Applied: dupC (Targets: [(1, 25)])
+        haplotype_1<TAB>1-2-3-4-5-C-X-X-A-...-6p-7-8-9
+        haplotype_2<TAB>1-2-3-4-5-C-X-X-X-...-6-7-8-9
 
-    :param filepath: Path to the VNTR structure file.
-    :param config: Configuration dict with valid repeat symbols.
-    :return: List of lists, where each inner list contains symbols for one haplotype.
-    :raises ValueError: If a symbol in the structure file is not found in the config.
-    :raises FileNotFoundError: If the structure file cannot be found or read.
+    Args:
+        filepath: Path to the VNTR structure file
+        config: Configuration dict with valid repeat symbols in config["repeats"]
+
+    Returns:
+        Tuple containing:
+        - List of repeat chains (one list per haplotype)
+        - Mutation info dict or None if no mutation comment found
+          Format: {"name": str, "targets": list[(int, int)]}
+
+    Raises:
+        ValueError: If repeat symbol not found in config or file format invalid
+        FileNotFoundError: If structure file doesn't exist
+
+    Example:
+        >>> config = load_config("config.json")
+        >>> chains, mut_info = parse_vntr_structure_file("structure.txt", config)
+        >>> chains
+        [['1', '2', '3', 'X'], ['1', '2', 'A', 'B']]
+        >>> mut_info
+        {'name': 'dupC', 'targets': [(1, 25)]}
+
+    Note:
+        Symbols with 'm' suffix (mutation markers) are validated by stripping
+        the marker before checking against config["repeats"].
     """
     valid_repeat_symbols = set(config["repeats"].keys())
     haplotype_chains = []
@@ -104,14 +124,32 @@ def parse_vntr_structure_file(
 def extract_mutation_info_from_comments(
     comments: list[str],
 ) -> dict[str, Any] | None:
-    """
-    Extract mutation information from structure file comments.
+    """Extract mutation information from structure file comment lines.
 
-    Looks for comments in the format:
-    # Mutation Applied: dupC (Targets: [(1, 25)])
+    Parses comment lines to find mutation metadata in standardized format.
+    Returns first valid mutation information found.
 
-    :param comments: List of comment strings (without the leading '#')
-    :return: Dictionary with mutation information or None if no valid info found
+    Expected Format:
+        Mutation Applied: <name> (Targets: [(hap_idx, rep_idx), ...])
+
+    Args:
+        comments: List of comment strings (without leading '#' character)
+
+    Returns:
+        Dictionary with mutation data or None if not found:
+        {
+            "name": mutation_name (str),
+            "targets": [(haplotype_idx, repeat_idx), ...]  (1-based indices)
+        }
+
+    Example:
+        >>> comments = ["Mutation Applied: dupC (Targets: [(1, 25), (2, 30)])"]
+        >>> extract_mutation_info_from_comments(comments)
+        {'name': 'dupC', 'targets': [(1, 25), (2, 30)]}
+
+    Note:
+        Malformed targets are logged as warnings and skipped. Uses ast.literal_eval
+        for safe parsing of target tuples.
     """
     if not comments:
         return None

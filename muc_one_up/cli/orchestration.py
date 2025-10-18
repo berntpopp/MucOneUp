@@ -33,10 +33,46 @@ def run_single_simulation_iteration(
     mutation_pair,
     structure_mutation_info,
 ):
-    """
-    Run a single simulation iteration with all processing steps.
+    """Run complete simulation iteration with all processing steps.
 
-    Single Responsibility: Orchestrate one complete simulation iteration.
+    Orchestrates a single simulation iteration from haplotype generation
+    through mutation application, FASTA output, ORF prediction, read
+    simulation, and statistics generation. Handles both normal and dual
+    mutation modes.
+
+    Args:
+        args: Namespace containing all CLI arguments from argparse
+        config: Configuration dictionary from load_config()
+        out_dir: Output directory path for all generated files
+        out_base: Base filename for outputs (without iteration suffix)
+        sim_index: Current iteration index (for numbered outputs)
+        fixed_conf: Fixed length configuration or "from_structure" flag
+        predefined_chains: Predefined repeat chains from structure file (or None)
+        dual_mutation_mode: Boolean indicating dual simulation mode (normal + mutated)
+        mutation_pair: Tuple of (normal_name, mutated_name) for dual mode
+        structure_mutation_info: Mutation metadata from structure file comments
+
+    Returns:
+        None (all outputs written to files)
+
+    Raises:
+        SimulationError: If haplotype generation fails
+        ValidationError: If configuration or parameters are invalid
+        FileOperationError: If file writing fails
+
+    Side Effects:
+        Creates multiple output files:
+        - FASTA files (*.fa or *.normal.fa + *.mut.fa)
+        - Structure files (*.structure.txt)
+        - Mutated units files (*.mutated_units.txt)
+        - Statistics JSON (*.simulation_stats.json)
+        - Optional: ORF peptides (*.pep.fa)
+        - Optional: Read simulation BAM files
+
+    Note:
+        Single Responsibility: Orchestrate one complete simulation iteration.
+        This function delegates to specialized modules (haplotypes, mutations,
+        outputs, analysis) following SOLID principles.
     """
     iteration_start = time.time()
 

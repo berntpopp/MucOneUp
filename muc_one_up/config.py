@@ -1,4 +1,46 @@
 # muc_one_up/config.py
+"""Configuration loading and validation for MucOneUp.
+
+This module handles JSON configuration file parsing, schema validation, and
+format normalization. Validates all required sections (repeats, constants,
+probabilities, mutations, tools, read_simulation) and enforces structural
+constraints via CONFIG_SCHEMA.
+
+Key Functions:
+    load_config: Load, validate, and normalize configuration from JSON file
+
+Key Constants:
+    CONFIG_SCHEMA: JSON Schema defining required configuration structure
+
+Configuration Sections:
+    - repeats: Mapping of repeat symbols (1, 2, X, A, B...) to DNA sequences
+    - constants: Left/right flanking sequences for hg19 and hg38 assemblies
+    - probabilities: State transition matrix for repeat chain generation
+    - length_model: Distribution parameters (normal/uniform) for VNTR length
+    - mutations: Named mutation definitions with allowed_repeats and changes
+    - tools: Command paths for external tools (reseq, bwa, samtools...)
+    - read_simulation: Parameters for Illumina pipeline (coverage, threads...)
+    - nanosim_params: Parameters for ONT pipeline (model path, read lengths...)
+
+Example:
+    Load and access configuration::
+
+        from muc_one_up.config import load_config
+
+        config = load_config("config.json")
+        repeats = config["repeats"]  # Dict[str, str]
+        probs = config["probabilities"]  # Dict[str, Dict[str, float]]
+
+Notes:
+    - Automatically normalizes flat constants format to nested format
+    - Validates mutation allowed_repeats against valid repeat symbols
+    - Supports both hg19 and hg38 reference assemblies
+
+Raises:
+    FileNotFoundError: If config file doesn't exist
+    json.JSONDecodeError: If config file contains invalid JSON
+    ValidationError: If config doesn't conform to CONFIG_SCHEMA
+"""
 
 import json
 import logging
@@ -7,7 +49,58 @@ from typing import Any
 
 from jsonschema import ValidationError, validate
 
-# Define a JSON schema that matches the current config structure.
+#: JSON Schema for validating MucOneUp configuration files.
+#:
+#: Defines the complete structure and validation rules for configuration
+#: dictionaries. All sections are required except where specified.
+#:
+#: Required Sections:
+#:     repeats: Mapping of repeat symbols (str) to DNA sequences (str)
+#:         Example: {"1": "ACGACT", "2": "CAGACT", "X": "TCGACT", ...}
+#:
+#:     constants: Flanking sequences for each reference assembly
+#:         Nested format: {assembly: {left: str, right: str, vntr_region: str}}
+#:         Supported assemblies: hg19, hg38
+#:
+#:     probabilities: State transition matrix for repeat chain generation
+#:         Format: {current_symbol: {next_symbol: probability, ...}, ...}
+#:         Example: {"1": {"2": 0.7, "7": 0.3}, "2": {"7": 1.0}}
+#:
+#:     length_model: Distribution parameters for VNTR length sampling
+#:         Required keys: distribution, min_repeats, max_repeats,
+#:                       mean_repeats, median_repeats
+#:
+#:     mutations: Named mutation definitions
+#:         Each mutation has:
+#:         - allowed_repeats: List of valid repeat symbols for this mutation
+#:         - strict_mode: Boolean (optional, default: false)
+#:         - changes: List of operations with type, start, end, sequence
+#:         Operation types: insert, delete, replace, delete_insert
+#:
+#:     tools: Command paths for external executables
+#:         Required: samtools
+#:         Optional: reseq, faToTwoBit, pblat, bwa, nanosim, minimap2
+#:
+#:     read_simulation: Parameters for Illumina read simulation
+#:         Required: human_reference, threads
+#:         Simulator type: illumina or ont
+#:
+#:     nanosim_params: Parameters for Oxford Nanopore simulation (optional)
+#:         Required: training_data_path, coverage
+#:
+#: Example:
+#:     Accessing schema in code::
+#:
+#:         from muc_one_up.config import CONFIG_SCHEMA
+#:         from jsonschema import validate
+#:
+#:         validate(instance=config_dict, schema=CONFIG_SCHEMA)
+#:
+#: Notes:
+#:     - Constants support both flat format (backward compatibility) and
+#:       nested format (hg19/hg38)
+#:     - Mutations are validated to ensure allowed_repeats are valid symbols
+#:     - All numeric fields are validated for type and range
 CONFIG_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -160,14 +253,29 @@ CONFIG_SCHEMA: dict[str, Any] = {
 
 
 def load_config(config_path: str) -> dict[str, Any]:
-    """
-    Load and validate the JSON config for MucOneUp.
+    """Load and validate MucOneUp configuration from JSON file.
 
-    :param config_path: Path to the JSON config file.
-    :return: Python dict with validated configuration data.
-    :raises FileNotFoundError: if the config file does not exist.
-    :raises json.JSONDecodeError: if the config file is not valid JSON.
-    :raises ValidationError: if the config does not conform to the required schema.
+    Validates configuration against CONFIG_SCHEMA and normalizes constants
+    format (converts flat format to nested hg19/hg38 structure if needed).
+    Performs additional validation for mutation allowed_repeats.
+
+    Args:
+        config_path: Path to the JSON config file
+
+    Returns:
+        Validated configuration dictionary containing all required sections
+        (repeats, constants, probabilities, length_model, mutations,
+        tools, read_simulation, nanosim_params)
+
+    Raises:
+        FileNotFoundError: If the config file does not exist
+        json.JSONDecodeError: If the config file is not valid JSON
+        ValidationError: If the config does not conform to CONFIG_SCHEMA or
+                        contains invalid mutation allowed_repeats
+
+    Note:
+        Flat constants format (for backward compatibility) is automatically
+        converted to nested format with default reference assembly (hg38).
     """
     if not Path(config_path).exists():
         logging.error("Config file not found: %s", config_path)

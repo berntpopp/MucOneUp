@@ -1,4 +1,38 @@
 # muc_one_up/simulate.py
+"""VNTR haplotype simulation engine.
+
+This module implements the core simulation logic for generating MUC1 VNTR
+haplotype chains using probability-based state transitions. It supports both
+random generation (sampling from configured distributions) and simulation from
+predefined repeat chains.
+
+Key Functions:
+    simulate_diploid: Generate multiple haplotypes with configurable parameters
+    simulate_single_haplotype: Build single haplotype by chaining repeats
+    simulate_from_chains: Simulate haplotypes from predefined repeat chains
+    assemble_haplotype_from_chain: Concatenate constants + repeats into sequence
+
+Design:
+    All haplotypes enforce canonical terminal block (6/6p → 7 → 8 → 9) to match
+    biological MUC1 structure. Probability transitions prevent premature
+    termination during chain building.
+
+Example:
+    Basic diploid simulation::
+
+        from muc_one_up.config import load_config
+        from muc_one_up.simulate import simulate_diploid
+
+        config = load_config("config.json")
+        results = simulate_diploid(config, num_haplotypes=2, fixed_lengths=[50, 60])
+        for seq, chain in results:
+            print(f"Chain: {'-'.join(chain)}, Length: {len(seq)} bp")
+
+See Also:
+    - probabilities.py: Weighted random repeat selection
+    - distribution.py: Target length sampling
+    - mutate.py: Post-simulation mutation application
+"""
 
 import logging
 import random
