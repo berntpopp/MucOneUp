@@ -47,7 +47,7 @@ class TestReadFastaToDict:
     def test_parses_multiple_sequences(self, tmp_path):
         """Test parsing FASTA with multiple chromosomes."""
         fasta = tmp_path / "test.fa"
-        fasta.write_text(">chr1\nACGT\n" ">chr2\nTGCA\n" ">chr3\nGGCC\n")
+        fasta.write_text(">chr1\nACGT\n>chr2\nTGCA\n>chr3\nGGCC\n")
 
         result = read_fasta_to_dict(str(fasta))
 
@@ -59,7 +59,7 @@ class TestReadFastaToDict:
     def test_handles_multiline_sequences(self, tmp_path):
         """Test that sequences split across lines are concatenated."""
         fasta = tmp_path / "test.fa"
-        fasta.write_text(">chr1\n" "ACGT\n" "TGCA\n" "GGCC\n")
+        fasta.write_text(">chr1\nACGT\nTGCA\nGGCC\n")
 
         result = read_fasta_to_dict(str(fasta))
 
@@ -79,7 +79,7 @@ class TestReadFastaToDict:
     def test_ignores_empty_lines(self, tmp_path):
         """Test that empty lines are ignored."""
         fasta = tmp_path / "test.fa"
-        fasta.write_text(">chr1\n" "\n" "ACGT\n" "\n" "TGCA\n")
+        fasta.write_text(">chr1\n\nACGT\n\nTGCA\n")
 
         result = read_fasta_to_dict(str(fasta))
 
@@ -99,9 +99,7 @@ class TestReadSyserFile:
     def test_parses_forward_and_reverse_sections(self, tmp_path):
         """Test parsing syser file with forward and reverse sections."""
         syser = tmp_path / "test.syser"
-        syser.write_text(
-            "@chr1 forward\n" "NACGT\n" "+\n" "!!III\n" "@chr1 reverse\n" "TGCAN\n" "+\n" "III!!\n"
-        )
+        syser.write_text("@chr1 forward\nNACGT\n+\n!!III\n@chr1 reverse\nTGCAN\n+\nIII!!\n")
 
         tenden_f, tenden_r, rates_f, rates_r = read_syser_file(str(syser))
 
@@ -121,11 +119,9 @@ class TestReadSyserFile:
     def test_handles_multiple_chromosomes(self, tmp_path):
         """Test parsing syser with multiple chromosomes."""
         syser = tmp_path / "test.syser"
-        syser.write_text(
-            "@chr1 forward\n" "NNNN\n" "+\n" "!!!!\n" "@chr2 forward\n" "AAAA\n" "+\n" "IIII\n"
-        )
+        syser.write_text("@chr1 forward\nNNNN\n+\n!!!!\n@chr2 forward\nAAAA\n+\nIIII\n")
 
-        tenden_f, tenden_r, rates_f, rates_r = read_syser_file(str(syser))
+        tenden_f, _tenden_r, _rates_f, _rates_r = read_syser_file(str(syser))
 
         assert "chr1" in tenden_f
         assert "chr2" in tenden_f
@@ -135,20 +131,18 @@ class TestReadSyserFile:
     def test_extracts_identifier_from_header(self, tmp_path):
         """Test that identifier is extracted correctly from @ header."""
         syser = tmp_path / "test.syser"
-        syser.write_text(
-            "@identifier_with_underscores forward extra text\n" "ACGT\n" "+\n" "IIII\n"
-        )
+        syser.write_text("@identifier_with_underscores forward extra text\nACGT\n+\nIIII\n")
 
-        tenden_f, tenden_r, rates_f, rates_r = read_syser_file(str(syser))
+        tenden_f, _tenden_r, _rates_f, _rates_r = read_syser_file(str(syser))
 
         assert "identifier_with_underscores" in tenden_f
 
     def test_ignores_empty_lines(self, tmp_path):
         """Test that empty lines are ignored."""
         syser = tmp_path / "test.syser"
-        syser.write_text("\n" "@chr1 forward\n" "ACGT\n" "\n" "+\n" "IIII\n" "\n")
+        syser.write_text("\n@chr1 forward\nACGT\n\n+\nIIII\n\n")
 
-        tenden_f, tenden_r, rates_f, rates_r = read_syser_file(str(syser))
+        tenden_f, _tenden_r, _rates_f, _rates_r = read_syser_file(str(syser))
 
         assert "chr1" in tenden_f
         assert tenden_f["chr1"] == "ACGT"
@@ -222,7 +216,7 @@ class TestReadPslFile:
     def test_returns_empty_list_for_no_matches(self, tmp_path):
         """Test that file with only headers returns empty list."""
         psl = tmp_path / "test.psl"
-        psl.write_text("psLayout version 3\n" "match\tmismatch\n" "------\n")
+        psl.write_text("psLayout version 3\nmatch\tmismatch\n------\n")
 
         matches = read_psl_file(str(psl))
 
@@ -331,7 +325,7 @@ class TestPickFragment:
 
         result = pick_fragment(match, ins, bind)
 
-        chrom, fstart, fend, strand = result
+        _chrom, fstart, fend, _strand = result
 
         assert fstart == 0  # Clamped to 0
         assert fend == 300  # 0 + ins

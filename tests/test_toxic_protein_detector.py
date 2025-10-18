@@ -272,9 +272,7 @@ class TestScanOrfFasta:
         """Test scanning a FASTA file with multiple ORFs."""
         # Create test FASTA file with 3 ORFs
         fasta_file = tmp_path / "test.fasta"
-        fasta_file.write_text(
-            ">ORF1\n" "ABCDABCD\n" ">ORF2\n" "XYZXYZXYZ\n" ">ORF3\n" "ABCDABCDABCDABCD\n"
-        )
+        fasta_file.write_text(">ORF1\nABCDABCD\n>ORF2\nXYZXYZXYZ\n>ORF3\nABCDABCDABCDABCD\n")
 
         results = scan_orf_fasta(str(fasta_file), consensus="ABCD")
 
@@ -292,7 +290,7 @@ class TestScanOrfFasta:
         """Test that multiline sequences are correctly concatenated."""
         # Create test FASTA with sequence split across lines
         fasta_file = tmp_path / "test.fasta"
-        fasta_file.write_text(">ORF1\n" "ABCD\n" "ABCD\n" "ABCD\n")
+        fasta_file.write_text(">ORF1\nABCD\nABCD\nABCD\n")
 
         results = scan_orf_fasta(str(fasta_file), consensus="ABCD")
 

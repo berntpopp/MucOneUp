@@ -1,5 +1,5 @@
 {
-    "input_file": "/tmp/pytest-of-bernt/pytest-15/test_analyze_stats_with_file0/test.fa",
+    "input_file": "/tmp/pytest-of-bernt/pytest-12/test_analyze_stats_with_file0/test.fa",
     "num_sequences": 1,
     "sequences": [
         {

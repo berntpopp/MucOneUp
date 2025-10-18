@@ -249,7 +249,7 @@ class TestBWAWrapperErrorHandling:
         mocker.patch("subprocess.Popen", return_value=mock_bwa)
 
         # Act & Assert: Should raise ExternalToolError with details
-        with pytest.raises(ExternalToolError, match="bwa mem.*failed"):
+        with pytest.raises(ExternalToolError, match=r"bwa mem.*failed"):
             align_reads(
                 str(r1),
                 str(r2),
@@ -281,7 +281,7 @@ class TestBWAWrapperErrorHandling:
         mocker.patch("subprocess.Popen", side_effect=[mock_bwa, mock_samtools])
 
         # Act & Assert
-        with pytest.raises(ExternalToolError, match="samtools view.*failed"):
+        with pytest.raises(ExternalToolError, match=r"samtools view.*failed"):
             align_reads(
                 str(r1),
                 str(r2),
@@ -317,7 +317,7 @@ class TestBWAWrapperErrorHandling:
         )
 
         # Act & Assert
-        with pytest.raises(ExternalToolError, match="samtools sort.*failed"):
+        with pytest.raises(ExternalToolError, match=r"samtools sort.*failed"):
             align_reads(
                 str(r1),
                 str(r2),
