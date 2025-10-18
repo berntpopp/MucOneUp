@@ -5,7 +5,7 @@ This directory contains technical documentation for the MucOneUp modernization p
 ## 📁 Directory Structure
 
 ```
-docs/
+plan/
 ├── completed/             # Finished work with implementation summaries
 │   ├── 01_cli_refactoring/
 │   ├── 02_error_handling/
@@ -16,6 +16,10 @@ docs/
 │   ├── 07_batch_processing/
 │   ├── 08_vntr_analyze/
 │   └── 09_security_e2e_fixes/
+├── development/           # Current development documentation
+│   ├── README_REFACTORING_PLAN.md
+│   ├── DOCUMENTATION_COMPLETE_PLAN.md
+│   └── ...                # Other planning documents
 ├── roadmaps/              # Future work plans
 ├── archive/               # Deprecated documents
 └── MIGRATION_v2.md        # Click migration guide
@@ -23,7 +27,43 @@ docs/
 
 ## ✅ Completed Work
 
-### 10. Documentation Standardization (v0.12.0) **LATEST**
+### 11. README Modernization (v0.13.0) **LATEST**
+**Status:** ✅ Complete
+**Location:** `development/`
+**Completion Date:** 2025-10-18
+
+**MAJOR UX IMPROVEMENT:** Refactored README from 909 lines to 261 lines (-71%) following 2025 Python packaging best practices.
+
+**Key Achievements:**
+- ✅ Modern structure with badges, core principles, and citation section
+- ✅ Reduced from 909 → 261 lines (71% reduction, target was 73%)
+- ✅ ONE comprehensive quick start example (vs. 14 scattered examples)
+- ✅ 10 clear sections: Header, Overview, Features, Principles, Install, Quick Start, Docs, Dev, Citation, License
+- ✅ Professional badges (Python version, CI/CD, License)
+- ✅ Scientific credibility: BibTeX citation with transparent pre-publication status
+- ✅ Core Design Principles section highlighting Unix philosophy, SOLID, DRY, KISS
+- ✅ All links verified, referenced files exist
+
+**Content Organization:**
+- Installation: 154 → 25 lines (-84%)
+- Quick Start: 140+ examples → 35 lines ONE workflow
+- Removed: Table of contents (not needed), redundant sections
+- Maintained: Links to plan/ for detailed docs until Sphinx implementation
+
+**Principles Applied:**
+- **Scanability:** Users understand project in 30 seconds
+- **Show, Don't Tell:** One perfect example beats 14 incomplete ones
+- **Professional Appearance:** Badges, clear structure, emoji icons
+- **Scientific Standards:** Proper citation format, transparent status
+- **Future-Ready:** Links prepared for Sphinx/GitHub Pages docs
+
+**Files:**
+- `README_REFACTORING_PLAN.md` - Complete refactoring plan (781 lines)
+- `README.md` - New concise README (261 lines)
+
+---
+
+### 10. Documentation Standardization (v0.12.0)
 **Status:** ✅ Complete
 **Location:** `development/`
 **Completion Date:** 2025-10-18
@@ -309,17 +349,19 @@ Detailed 3-week implementation plan for:
 | 07 | Batch Processing | ✅ Complete | v0.10.0 | 100% |
 | 08 | VNTR Stats Integration | ✅ Complete | v0.11.0 | 100% |
 | 09 | Security & E2E Fixes | ✅ Complete | v0.11.1 | 100% |
+| 10 | Documentation Standardization | ✅ Complete | v0.12.0 | 100% |
+| 11 | README Modernization | ✅ Complete | v0.13.0 | 100% |
 
-**Overall Completion:** 9/9 core items complete ✅
+**Overall Completion:** 11/11 core items complete ✅
 
 ---
 
-## 🎯 Current State Summary (v0.11.1)
+## 🎯 Current State Summary (v0.13.0)
 
 **What's Working:**
 - ✅ Clean, modular CLI architecture
 - ✅ Professional exception handling
-- ✅ 77% test coverage with 543 passing tests
+- ✅ 77% test coverage with 568 passing tests
 - ✅ Zero linting/type errors
 - ✅ Automated quality gates (pre-commit + CI/CD)
 - ✅ Modern Click CLI with Unix philosophy
@@ -330,13 +372,18 @@ Detailed 3-week implementation plan for:
 - ✅ Security-compliant command building (no shell injection)
 - ✅ Centralized DRY/SOLID architecture for wrappers
 - ✅ ORF amino acid prefix filtering
+- ✅ **100% Google-style docstring coverage**
+- ✅ **Modern, concise README (261 lines, -71%)**
+- ✅ Professional project presentation with badges and citation
 - ✅ Extensive documentation
 
 **What's Next (Optional Enhancements):**
+- ⏳ Sphinx documentation + GitHub Pages deployment (planned in README refactoring)
 - ⏳ Test coverage increase to 80%+ (currently 77%)
 - ⏳ Performance benchmarks
 - ⏳ Shell completion (bash/zsh)
 - ⏳ Docker/Singularity container support
+- ⏳ Zenodo DOI registration (after preprint/publication)
 
 ---
 
@@ -392,7 +439,26 @@ Detailed 3-week implementation plan for:
 
 ## 🎉 Project Milestones
 
-### v0.11.1 (Current) - Security & E2E Fixes
+### v0.13.0 (Current) - README Modernization
+- ✅ **MAJOR UX IMPROVEMENT:** README refactored from 909 → 261 lines (-71%)
+- ✅ Modern structure with badges, core principles, citation
+- ✅ ONE comprehensive quick start example (vs 14 scattered)
+- ✅ 10 clear sections following 2025 Python packaging best practices
+- ✅ Professional appearance: Python/CI/License badges
+- ✅ Scientific credibility: BibTeX citation with transparent status
+- ✅ All links verified, content organized for future Sphinx docs
+
+### v0.12.0 - Documentation Standardization
+- ✅ **MAJOR QUALITY IMPROVEMENT:** 100% Google-style docstring coverage
+- ✅ Eliminated all 42 old-style (Sphinx/reST) directives
+- ✅ Documented 2 key constants (CONFIG_SCHEMA, CODON_TABLE)
+- ✅ Converted 18 functions to modern Google-style
+- ✅ Added 7 comprehensive module docstrings
+- ✅ Zero type duplication (DRY principle)
+- ✅ 708 lines of documentation added
+- ✅ All 568 tests passing
+
+### v0.11.1 - Security & E2E Fixes
 - ✅ **CRITICAL:** Fixed E2E workflow breakage
 - ✅ Centralized command builder utility (DRY/SOLID)
 - ✅ Eliminated 26 code duplications (96% reduction)
@@ -435,6 +501,6 @@ Detailed 3-week implementation plan for:
 
 ---
 
-**Last Updated:** 2025-10-18 (v0.11.1)
+**Last Updated:** 2025-10-18 (v0.13.0)
 **Maintained By:** Development Team
 **Current Branch:** `dev/modern-python-refactor`
