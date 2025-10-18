@@ -167,6 +167,11 @@ cython_debug/
 /*.bai
 *.fq.gz
 
+# Test output pollution (prevent test files in root)
+/test.*.json
+/test.*.fa
+/test.*.orfs.fa
+
 # reference folder
 reference/
 

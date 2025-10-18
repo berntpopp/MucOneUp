@@ -108,7 +108,47 @@ make check  # Run all checks before committing
 >
 > After creating these environments, update the `tools` section in your configuration file to reference the executables from the newly created environments. Alternatively, you can install the tools locally.
 
-Once installed, you’ll have a command-line program called **`muconeup`** available.
+Once installed, you'll have a command-line program called **`muconeup`** available.
+
+### Shell Completion (Optional)
+
+MucOneUp supports tab completion via Click's built-in completion system.
+
+**Enable for your shell:**
+
+```bash
+# Bash
+eval "$(_MUCONEUP_COMPLETE=bash_source muconeup)"
+
+# Zsh
+eval "$(_MUCONEUP_COMPLETE=zsh_source muconeup)"
+
+# Fish
+_MUCONEUP_COMPLETE=fish_source muconeup | source
+```
+
+**Permanent installation:**
+
+```bash
+# Bash - add to ~/.bashrc
+_MUCONEUP_COMPLETE=bash_source muconeup > ~/.muconeup-complete.bash
+echo 'source ~/.muconeup-complete.bash' >> ~/.bashrc
+
+# Zsh - add to ~/.zshrc
+_MUCONEUP_COMPLETE=zsh_source muconeup > ~/.muconeup-complete.zsh
+echo 'source ~/.muconeup-complete.zsh' >> ~/.zshrc
+
+# Fish - add to completions directory
+_MUCONEUP_COMPLETE=fish_source muconeup > ~/.config/fish/completions/muconeup.fish
+```
+
+Now you can use tab completion:
+```bash
+muconeup <TAB>              # Shows: simulate, reads, analyze
+muconeup simulate --<TAB>   # Shows all simulate options
+```
+
+For more details, see the [Click shell completion documentation](https://click.palletsprojects.com/en/8.1.x/shell-completion/).
 
 ---
 

@@ -14,6 +14,7 @@ Follows SOLID principles: Single Responsibility, Dependency Inversion.
 import json
 import logging
 import subprocess
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -69,8 +70,14 @@ def configure_logging(level_str: str) -> None:
     default="INFO",
     help="Set logging level.",
 )
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Enable verbose output (sets log level to DEBUG).",
+)
 @click.pass_context
-def cli(ctx, config, log_level):
+def cli(ctx, config, log_level, verbose):
     """MucOneUp - MUC1 VNTR diploid reference simulator.
 
     \b
@@ -95,6 +102,10 @@ def cli(ctx, config, log_level):
       muconeup --config X simulate --fixed-lengths 20-40 --simulate-series 1
       for f in Y.*.fa; do muconeup --config X reads illumina "$f"; done
     """
+    # KISS: Simple precedence - verbose overrides log_level
+    if verbose:
+        log_level = "DEBUG"
+
     ctx.ensure_object(dict)
     ctx.obj["config_path"] = config
     ctx.obj["log_level"] = log_level
@@ -241,19 +252,35 @@ def simulate(ctx, **kwargs):
         )
 
         # Run haplotype generation ONLY
-        for sim_index, fixed_conf in enumerate(simulation_configs, start=1):
-            run_single_simulation_iteration(
-                args,
-                config,
-                out_dir,
-                out_base,
-                sim_index,
-                fixed_conf,
-                predefined_chains,
-                dual_mutation_mode,
-                mutation_pair,
-                structure_mutation_info,
+        total_iterations = len(simulation_configs)
+
+        # Show progress bar only for series mode (DRY - no code duplication)
+        # Use nullcontext for single iterations to avoid if/else duplication
+        progress_ctx = (
+            click.progressbar(
+                simulation_configs,
+                label=f"Simulating {total_iterations} iterations",
+                show_eta=True,
+                show_pos=True,
             )
+            if total_iterations > 1
+            else nullcontext(simulation_configs)
+        )
+
+        with progress_ctx as configs:
+            for sim_index, fixed_conf in enumerate(configs, start=1):
+                run_single_simulation_iteration(
+                    args,
+                    config,
+                    out_dir,
+                    out_base,
+                    sim_index,
+                    fixed_conf,
+                    predefined_chains,
+                    dual_mutation_mode,
+                    mutation_pair,
+                    structure_mutation_info,
+                )
 
         logging.info("Haplotype generation completed successfully.")
         return  # Click handles exit automatically
