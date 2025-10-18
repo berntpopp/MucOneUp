@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 
 from ...exceptions import ExternalToolError, FileOperationError
+from ..command_utils import build_tool_command
 from ..utils import run_command
 
 
@@ -28,7 +29,8 @@ def fa_to_twobit(
     Raises:
         SystemExit: If the conversion fails.
     """
-    cmd = [tools["faToTwoBit"], input_fa, output_2bit]
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(tools["faToTwoBit"], input_fa, output_2bit)
     run_command(cmd, timeout=60, stderr_prefix="[ucsc] ", stderr_log_level=logging.INFO)
 
     # Check output exists and is non-empty
@@ -71,7 +73,8 @@ def run_pblat(
         if not file_path.exists() or file_path.stat().st_size == 0:
             raise FileOperationError(f"pblat input file missing or empty: {file}")
 
-    cmd = [
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
         tools["pblat"],
         f"-threads={threads}",
         f"-minScore={min_score}",
@@ -79,7 +82,7 @@ def run_pblat(
         twobit_file,
         subset_reference,
         output_psl,
-    ]
+    )
 
     try:
         run_command(

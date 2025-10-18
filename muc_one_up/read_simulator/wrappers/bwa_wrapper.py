@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 from ...exceptions import ExternalToolError, FileOperationError
+from ..command_utils import build_tool_command
 
 
 def align_reads(
@@ -53,13 +54,17 @@ def align_reads(
     # SECURITY: Use subprocess.Popen for piping, never shell=True
     try:
         # Start BWA mem process
-        bwa_cmd = [tools["bwa"], "mem", "-t", str(threads), human_reference, read1, read2]
+        # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+        bwa_cmd = build_tool_command(
+            tools["bwa"], "mem", "-t", threads, human_reference, read1, read2
+        )
 
         logging.info(f"Running BWA mem: {' '.join(bwa_cmd)}")
         bwa_process = subprocess.Popen(bwa_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Start samtools view process (reads from BWA stdout)
-        samtools_cmd = [tools["samtools"], "view", "-bS", "-"]
+        # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+        samtools_cmd = build_tool_command(tools["samtools"], "view", "-bS", "-")
 
         with Path(unsorted_bam).open("wb") as bam_out:
             samtools_process = subprocess.Popen(
@@ -120,15 +125,10 @@ def align_reads(
         ) from e
 
     # Sort the BAM file using subprocess.run (secure - no shell)
-    sort_cmd = [
-        tools["samtools"],
-        "sort",
-        "-@",
-        str(threads),
-        "-o",
-        output_bam,
-        unsorted_bam,
-    ]
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    sort_cmd = build_tool_command(
+        tools["samtools"], "sort", "-@", threads, "-o", output_bam, unsorted_bam
+    )
 
     try:
         logging.info(f"[samtools] Sorting BAM: {' '.join(sort_cmd)}")
@@ -151,7 +151,8 @@ def align_reads(
         ) from e
 
     # Index the BAM file using subprocess.run (secure - no shell)
-    index_cmd = [tools["samtools"], "index", output_bam]
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    index_cmd = build_tool_command(tools["samtools"], "index", output_bam)
 
     try:
         logging.info(f"[samtools] Indexing BAM: {' '.join(index_cmd)}")

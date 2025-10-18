@@ -8,12 +8,12 @@ command construction, execution, and error handling.
 """
 
 import logging
-import shlex
 import subprocess
 import tempfile
 from pathlib import Path
 
 from ...exceptions import ExternalToolError
+from ..command_utils import build_tool_command
 from ..utils import run_command
 
 
@@ -57,29 +57,20 @@ def run_nanosim_simulation(
 
     # Build the command with required parameters
     # SECURITY: Always use list form, never shell=True
-    # If command contains spaces (conda/mamba), use shlex.split() to parse safely
-    if isinstance(nanosim_cmd, str) and (" " in nanosim_cmd):
-        # Command contains spaces, it's likely a conda/mamba run command
-        # Use shlex.split to safely parse it
-        cmd_list = shlex.split(nanosim_cmd)
-    else:
-        cmd_list = [nanosim_cmd]
-
-    # Add NanoSim arguments
-    cmd_list.extend(
-        [
-            "genome",
-            "-rg",
-            reference_fasta,
-            "-c",
-            training_model,
-            "-o",
-            output_prefix,
-            "-t",
-            str(threads),
-            "-x",
-            str(coverage),
-        ]
+    # Use centralized build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd_list = build_tool_command(
+        nanosim_cmd,
+        "genome",
+        "-rg",
+        reference_fasta,
+        "-c",
+        training_model,
+        "-o",
+        output_prefix,
+        "-t",
+        threads,  # build_tool_command handles conversion
+        "-x",
+        coverage,  # build_tool_command handles conversion
     )
 
     # Add optional parameters
@@ -88,8 +79,15 @@ def run_nanosim_simulation(
     if max_read_length:
         cmd_list.extend(["--max_len", str(max_read_length)])
     if other_options:
-        cmd_list.extend(shlex.split(other_options))
-        if "--fastq" not in other_options:
+        # Note: other_options may need splitting if it contains spaces
+        # For now, assuming it's already a properly formatted string or list
+        if isinstance(other_options, str) and " " in other_options:
+            # Build a temporary command to split other_options safely
+            other_parts = build_tool_command(other_options)
+            cmd_list.extend(other_parts)
+        else:
+            cmd_list.append(other_options)
+        if "--fastq" not in str(other_options):
             cmd_list.append("--fastq")
     else:
         cmd_list.append("--fastq")
@@ -173,22 +171,15 @@ def align_ont_reads_with_minimap2(
     try:
         # Construct alignment command
         # SECURITY: Always use list form with subprocess, never shell=True
-        if isinstance(minimap2_cmd, str) and (" " in minimap2_cmd):
-            # Command has spaces (conda/mamba), use shlex.split() to parse safely
-            align_cmd_list = shlex.split(minimap2_cmd)
-        else:
-            align_cmd_list = [minimap2_cmd]
-
-        # Add minimap2 arguments
-        align_cmd_list.extend(
-            [
-                "-t",
-                str(threads),
-                "-ax",
-                "map-ont",
-                human_reference,
-                reads_fastq,
-            ]
+        # Use centralized build_tool_command to safely handle multi-word commands (conda/mamba)
+        align_cmd_list = build_tool_command(
+            minimap2_cmd,
+            "-t",
+            threads,  # build_tool_command handles conversion
+            "-ax",
+            "map-ont",
+            human_reference,
+            reads_fastq,
         )
 
         logging.info("[minimap2] Running alignment: %s > %s", " ".join(align_cmd_list), sam_path)
@@ -224,26 +215,19 @@ def align_ont_reads_with_minimap2(
 
         # Convert SAM to BAM
         # SECURITY: Always use list form, never shell=True
-        if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
-            # Command has spaces (conda/mamba), use shlex.split() to parse safely
-            sam_to_bam_cmd = shlex.split(samtools_cmd)
-        else:
-            sam_to_bam_cmd = [samtools_cmd]
-
-        # Add samtools view arguments
-        sam_to_bam_cmd.extend(
-            [
-                "view",
-                "-@",
-                str(threads),
-                "-b",
-                "-h",
-                "-F",
-                "4",  # Filter unmapped reads
-                "-o",
-                output_bam + ".unsorted",
-                sam_path,
-            ]
+        # Use centralized build_tool_command to safely handle multi-word commands (conda/mamba)
+        sam_to_bam_cmd = build_tool_command(
+            samtools_cmd,
+            "view",
+            "-@",
+            threads,  # build_tool_command handles conversion
+            "-b",
+            "-h",
+            "-F",
+            "4",  # Filter unmapped reads
+            "-o",
+            output_bam + ".unsorted",
+            sam_path,
         )
 
         logging.info("[samtools] Converting SAM to BAM: %s", " ".join(sam_to_bam_cmd))
@@ -258,22 +242,15 @@ def align_ont_reads_with_minimap2(
 
         # Sort BAM
         # SECURITY: Always use list form, never shell=True
-        if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
-            # Command has spaces (conda/mamba), use shlex.split() to parse safely
-            sort_cmd_list = shlex.split(samtools_cmd)
-        else:
-            sort_cmd_list = [samtools_cmd]
-
-        # Add samtools sort arguments
-        sort_cmd_list.extend(
-            [
-                "sort",
-                "-@",
-                str(threads),
-                "-o",
-                output_bam,
-                output_bam + ".unsorted",
-            ]
+        # Use centralized build_tool_command to safely handle multi-word commands (conda/mamba)
+        sort_cmd_list = build_tool_command(
+            samtools_cmd,
+            "sort",
+            "-@",
+            threads,  # build_tool_command handles conversion
+            "-o",
+            output_bam,
+            output_bam + ".unsorted",
         )
 
         logging.info("[samtools] Sorting BAM: %s", " ".join(sort_cmd_list))
@@ -288,14 +265,8 @@ def align_ont_reads_with_minimap2(
 
         # Index BAM
         # SECURITY: Always use list form, never shell=True
-        if isinstance(samtools_cmd, str) and (" " in samtools_cmd):
-            # Command has spaces (conda/mamba), use shlex.split() to parse safely
-            index_cmd_list = shlex.split(samtools_cmd)
-        else:
-            index_cmd_list = [samtools_cmd]
-
-        # Add samtools index arguments
-        index_cmd_list.extend(["index", output_bam])
+        # Use centralized build_tool_command to safely handle multi-word commands (conda/mamba)
+        index_cmd_list = build_tool_command(samtools_cmd, "index", output_bam)
 
         logging.info("[samtools] Indexing BAM: %s", " ".join(index_cmd_list))
 

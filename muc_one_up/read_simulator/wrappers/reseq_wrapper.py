@@ -12,6 +12,7 @@ import logging
 from pathlib import Path
 
 from ...exceptions import ExternalToolError, FileOperationError
+from ..command_utils import build_tool_command
 from ..utils import run_command
 
 
@@ -28,7 +29,8 @@ def replace_Ns(input_fa: str, output_fa: str, tools: dict[str, str]) -> None:
         SystemExit: If the command fails.
     """
     # From reseq help: replaceN expects -r for input and -R for output
-    cmd = [tools["reseq"], "replaceN", "-r", input_fa, "-R", output_fa]
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(tools["reseq"], "replaceN", "-r", input_fa, "-R", output_fa)
     run_command(cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] ")
 
 
@@ -49,7 +51,8 @@ def generate_systematic_errors(
     """
     # Based on the error and original code, this needs to be exactly like the original
     # ERROR: Either bamIn or statsIn option are mandatory.
-    cmd = [
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
         tools["reseq"],
         "illuminaPE",
         "-r",
@@ -59,7 +62,7 @@ def generate_systematic_errors(
         "--stopAfterEstimation",
         "--writeSysError",
         output_fq,  # Output FASTQ filename
-    ]
+    )
     run_command(cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] ")
 
     # Verify output exists and is non-empty
@@ -96,18 +99,19 @@ def create_reads(
         SystemExit: If the command fails and the output file is not created.
     """
     # Based on the original code, these must be the exact parameters
-    cmd = [
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
         tools["reseq"],
         "seqToIllumina",
         "-j",
-        str(threads),  # Number of threads
+        threads,  # Number of threads (build_tool_command handles conversion)
         "-s",
         reseq_model,  # Reseq model file
         "-i",
         input_fragments,  # Input fragments file
         "-o",
         output_reads,  # Output file
-    ]
+    )
 
     try:
         # Execute with a short timeout - reseq seqToIllumina tends to keep running

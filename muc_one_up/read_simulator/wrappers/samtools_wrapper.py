@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 from ...exceptions import ExternalToolError, FileOperationError
+from ..command_utils import build_tool_command
 from ..utils import run_command
 
 
@@ -41,18 +42,14 @@ def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, s
     collated_bam = str(output_dir / f"{output_base}_collated.bam")
 
     # Collate the BAM file (group by read name)
-    cmd = [
-        tools["samtools"],
-        "collate",
-        "-o",
-        collated_bam,
-        sample_bam,
-    ]
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(tools["samtools"], "collate", "-o", collated_bam, sample_bam)
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Extract sequences into FASTA format
     # SECURITY: Use subprocess.run with file handle redirection, never shell=True
-    cmd = [tools["samtools"], "fasta", "-n", "-F", "0x900", collated_bam]
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(tools["samtools"], "fasta", "-n", "-F", "0x900", collated_bam)
 
     try:
         logging.info(f"[samtools] Running: {' '.join(cmd)} > {output_fa}")
@@ -116,16 +113,17 @@ def calculate_vntr_coverage(
 
     # Run samtools depth to get per-base coverage
     # SECURITY: Use subprocess.run with file handle redirection, never shell=True
-    cmd = [
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
         samtools_exe,
         "depth",
         "-a",  # Output all positions including zero coverage
         "-r",
         region,  # Target region
         "-@",
-        str(threads),  # Threads
+        threads,  # Threads (build_tool_command handles conversion)
         bam_file,
-    ]
+    )
 
     try:
         logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
@@ -209,16 +207,17 @@ def calculate_target_coverage(
 
     # Run samtools depth with BED file to get per-base coverage
     # SECURITY: Use subprocess.run with file handle redirection, never shell=True
-    cmd = [
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
         samtools_exe,
         "depth",
         "-a",  # Output all positions including zero coverage
         "-b",
         bed_file,  # Target regions from BED file
         "-@",
-        str(threads),  # Threads
+        threads,  # Threads (build_tool_command handles conversion)
         bam_file,
-    ]
+    )
 
     try:
         logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
@@ -296,52 +295,56 @@ def downsample_bam(
     fraction_str = f"{seed}.{int(fraction * 10000):04d}"
 
     # Extract reads from the target region, downsample, and save to temporary BAM
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     region_bam = output_bam.replace(".bam", "_region_only.bam")
-    cmd = [
+    cmd = build_tool_command(
         samtools_exe,
         "view",
         "-b",  # Output BAM
         "-s",
         fraction_str,  # Downsampling fraction with seed
         "-@",
-        str(threads),  # Threads
+        threads,  # Threads (build_tool_command handles conversion)
         input_bam,
         region,
         "-o",
         region_bam,
-    ]
+    )
     run_command(cmd, timeout=60)
 
     # Extract reads from outside the target region (keep all)
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     other_bam = output_bam.replace(".bam", "_other_regions.bam")
-    cmd = [
+    cmd = build_tool_command(
         samtools_exe,
         "view",
         "-b",  # Output BAM
         "-@",
-        str(threads),  # Threads
+        threads,  # Threads (build_tool_command handles conversion)
         input_bam,
         f"^{region}",  # Exclude target region
         "-o",
         other_bam,
-    ]
+    )
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Merge the downsampled region BAM with the unchanged "other" BAM
-    cmd = [
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
         samtools_exe,
         "merge",
         "-f",  # Force overwrite output
         "-@",
-        str(threads),  # Threads
+        threads,  # Threads (build_tool_command handles conversion)
         output_bam,
         region_bam,
         other_bam,
-    ]
+    )
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Index the final BAM
-    cmd = [samtools_exe, "index", output_bam]
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(samtools_exe, "index", output_bam)
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Clean up intermediate files
@@ -384,22 +387,24 @@ def downsample_entire_bam(
     fraction_str = f"{seed}.{int(fraction * 10000):04d}"
 
     # Downsample the entire BAM file
-    cmd = [
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
         samtools_exe,
         "view",
         "-b",  # Output BAM
         "-s",
         fraction_str,  # Downsampling fraction with seed
         "-@",
-        str(threads),  # Threads
+        threads,  # Threads (build_tool_command handles conversion)
         "-o",
         output_bam,
         input_bam,
-    ]
+    )
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Index the output BAM
-    cmd = [samtools_exe, "index", output_bam]
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(samtools_exe, "index", output_bam)
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     logging.info(f"Downsampled entire BAM file to fraction {fraction:.4f} (seed: {seed})")
@@ -435,17 +440,19 @@ def sort_and_index_bam(
     temp_bam = f"{output_bam}.sorting.bam"
 
     # Sort the BAM file
-    sort_cmd = [
-        samtools_exe,
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    sort_extra_args = [
         "sort",
         "-@",
-        str(threads),
+        threads,  # build_tool_command handles conversion
     ]
 
     if by_name:
-        sort_cmd.append("-n")  # Sort by name
+        sort_extra_args.append("-n")  # Sort by name
 
-    sort_cmd.extend(["-o", temp_bam, input_bam])
+    sort_extra_args.extend(["-o", temp_bam, input_bam])
+
+    sort_cmd = build_tool_command(samtools_exe, *sort_extra_args)
 
     run_command(sort_cmd, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
@@ -458,8 +465,9 @@ def sort_and_index_bam(
         temp_bam_path.rename(output_bam_path)
 
     # Index the BAM file (only if sorted by coordinate)
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     if not by_name:
-        cmd = [samtools_exe, "index", output_bam]
+        cmd = build_tool_command(samtools_exe, "index", output_bam)
         run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     return output_bam

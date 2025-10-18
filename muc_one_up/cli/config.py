@@ -10,7 +10,7 @@ import json
 import logging
 import random
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ..exceptions import ConfigurationError, SimulationError, ValidationError
 from ..io import parse_vntr_structure_file
@@ -195,7 +195,7 @@ def determine_simulation_mode(
                 "Single simulation iteration generated using a random choice from each fixed-length range."
             )
     else:
-        simulation_configs = [None]  # Use random lengths if not provided
+        simulation_configs = cast(Any, [None])  # Use random lengths if not provided
 
     return simulation_configs, predefined_chains, structure_mutation_info  # type: ignore[return-value]
 

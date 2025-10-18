@@ -256,7 +256,7 @@ def simulate(ctx, **kwargs):
             )
 
         logging.info("Haplotype generation completed successfully.")
-        ctx.exit(0)
+        return  # Click handles exit automatically
 
     except KeyboardInterrupt:
         logging.warning("Interrupted by user (Ctrl+C)")
@@ -391,7 +391,7 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads):
             simulate_reads_pipeline(config, input_fasta)
 
         logging.info("Illumina read simulation completed for all %d file(s).", total_files)
-        ctx.exit(0)
+        return  # Click handles exit automatically
 
     except Exception as e:
         logging.error("Read simulation failed: %s", e)
@@ -502,7 +502,7 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length):
             simulate_reads_pipeline(config, input_fasta)
 
         logging.info("ONT read simulation completed for all %d file(s).", total_files)
-        ctx.exit(0)
+        return  # Click handles exit automatically
 
     except Exception as e:
         logging.error("Read simulation failed: %s", e)
@@ -615,19 +615,25 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
             )
 
             # Run orfipy command-line tool
+            # Note: orfipy creates its own output directory, so we must:
+            # 1. Use --outdir to specify the output directory
+            # 2. Use just the filename (not full path) for --pep
+            orf_filename = f"{actual_out_base}.orfs.fa"
             cmd = [
                 "orfipy",
                 input_fasta,
+                "--outdir",
+                str(out_dir),
                 "--pep",
-                str(orf_output),
+                orf_filename,
                 "--min",
                 str(orf_min_aa * 3),  # Convert AA to nucleotides
                 "--start",
                 "ATG",
             ]
 
-            if orf_aa_prefix:
-                cmd.extend(["--start-codon-prefix", orf_aa_prefix])
+            # Note: Amino acid prefix filtering is done in translate.py after orfipy runs,
+            # not via orfipy flags (which don't support this feature)
 
             result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
@@ -636,6 +642,28 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
                 continue  # Continue with next file instead of exiting
 
             logging.info("ORF prediction completed: %s", orf_output)
+
+            # Filter by amino acid prefix if specified
+            if orf_aa_prefix and orf_output.exists():
+                from Bio import SeqIO
+
+                filtered_orfs = []
+                total_orfs = 0
+
+                for record in SeqIO.parse(str(orf_output), "fasta"):
+                    total_orfs += 1
+                    # Check if protein sequence starts with required prefix
+                    if str(record.seq).startswith(orf_aa_prefix):
+                        filtered_orfs.append(record)
+
+                # Write filtered ORFs back to file
+                SeqIO.write(filtered_orfs, str(orf_output), "fasta")
+                logging.info(
+                    "Filtered ORFs by prefix '%s': %d/%d ORFs retained",
+                    orf_aa_prefix,
+                    len(filtered_orfs),
+                    total_orfs,
+                )
 
             # Toxic protein detection
             if orf_output.exists():
@@ -652,7 +680,7 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
                 logging.info("Toxic protein stats written: %s", stats_file)
 
         logging.info("ORF prediction completed for all %d file(s).", total_files)
-        ctx.exit(0)
+        return  # Click handles exit automatically
 
     except Exception as e:
         logging.error("ORF analysis failed: %s", e)
@@ -764,7 +792,7 @@ def stats(ctx, input_fastas, out_dir, out_base):
             logging.info("Statistics written: %s", stats_file)
 
         logging.info("Statistics generation completed for all %d file(s).", total_files)
-        ctx.exit(0)
+        return  # Click handles exit automatically
 
     except Exception as e:
         logging.error("Statistics generation failed: %s", e)
