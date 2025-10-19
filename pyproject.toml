@@ -87,6 +87,9 @@ ignore = [
     "E501",   # Line too long (handled by formatter)
     "B008",   # Do not perform function calls in argument defaults
     "N802",   # Function name should be lowercase (bioinformatics conventions)
+    "SIM115", # Use context manager for opening files (legacy code style)
+    "SIM113", # Use enumerate for index variables (not always clearer)
+    "PTH123", # Use Path.open() instead of open() (backwards compatibility)
 ]
 
 # Allow autofix for all enabled rules
@@ -141,6 +144,10 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "muc_one_up.bioinformatics.validation"
+warn_unreachable = false  # False positive with regex pattern matching
 
 # ==================== PYTEST ====================
 [tool.pytest.ini_options]

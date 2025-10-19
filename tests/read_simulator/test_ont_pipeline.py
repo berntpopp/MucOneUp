@@ -236,7 +236,8 @@ class TestWrapperIntegration:
         assert call_kwargs["nanosim_cmd"] == "/path/to/nanosim"
         assert call_kwargs["reference_fasta"] == str(input_fa)
         assert call_kwargs["training_model"] == "/path/to/model"
-        assert call_kwargs["coverage"] == 50.0
+        # Coverage is corrected by default correction factor (0.325), so 50 / 0.325 ≈ 153.85
+        assert call_kwargs["coverage"] == pytest.approx(153.85, rel=0.01)
         assert call_kwargs["threads"] == 8
         assert call_kwargs["min_read_length"] == 1000
         assert call_kwargs["max_read_length"] == 50000
@@ -515,3 +516,190 @@ class TestReturnValue:
         # Assert
         assert result.endswith("sample_ont.bam")
         assert str(tmp_path) in result
+
+
+class TestDiploidSplitSimulation:
+    """Test diploid split-simulation mode."""
+
+    def test_uses_split_simulation_for_diploid_reference(self, mocker, tmp_path):
+        """Test that split-simulation is used when diploid reference is detected and enabled."""
+        # Create diploid FASTA
+        input_fa = tmp_path / "sample.fa"
+        input_fa.write_text(">haplotype_1\nACGTACGT\n>haplotype_2\nTGCATGCA\n")
+
+        config = {
+            "tools": {
+                "nanosim": "nanosim",
+                "minimap2": "minimap2",
+                "samtools": "samtools",
+            },
+            "nanosim_params": {
+                "training_data_path": "model",
+                "coverage": 100,
+                "enable_split_simulation": True,
+                "enable_coverage_correction": True,
+                "correction_factor": 0.325,
+            },
+        }
+
+        # Mock diploid detection
+        mocker.patch(
+            "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference",
+            return_value=True,
+        )
+
+        # Mock split-simulation function
+        from muc_one_up.read_simulator.utils.diploid_handler import DiploidSimulationResult
+
+        mock_split_sim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_split_simulation")
+        mock_split_sim.return_value = DiploidSimulationResult(
+            merged_fastq=str(tmp_path / "sample_ont_merged.fastq"),
+            hap1_fastq=str(tmp_path / "hap1.fastq"),
+            hap2_fastq=str(tmp_path / "hap2.fastq"),
+            hap1_reference=str(tmp_path / "hap1.fa"),
+            hap2_reference=str(tmp_path / "hap2.fa"),
+            reads_hap1=100,
+            reads_hap2=100,
+        )
+
+        # Mock alignment
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+
+        # Act
+        result = simulate_ont_reads_pipeline(config, str(input_fa))
+
+        # Assert
+        mock_split_sim.assert_called_once()
+        assert mock_split_sim.call_args[1]["diploid_fasta"] == str(input_fa)
+        assert result.endswith("sample_ont.bam")
+
+    def test_logs_diploid_mode_information(self, mocker, tmp_path, caplog):
+        """Test that appropriate logging messages are shown for diploid mode."""
+        # Create diploid FASTA
+        input_fa = tmp_path / "sample.fa"
+        input_fa.write_text(">haplotype_1\nACGT\n>haplotype_2\nTGCA\n")
+
+        config = {
+            "tools": {
+                "nanosim": "nanosim",
+                "minimap2": "minimap2",
+                "samtools": "samtools",
+            },
+            "nanosim_params": {
+                "training_data_path": "model",
+                "coverage": 100,
+                "enable_split_simulation": True,
+                "correction_factor": 0.325,
+            },
+        }
+
+        # Mock diploid detection
+        mocker.patch(
+            "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference",
+            return_value=True,
+        )
+
+        # Mock split-simulation
+        from muc_one_up.read_simulator.utils.diploid_handler import DiploidSimulationResult
+
+        mocker.patch(
+            "muc_one_up.read_simulator.ont_pipeline.run_split_simulation",
+            return_value=DiploidSimulationResult(
+                merged_fastq=str(tmp_path / "merged.fastq"),
+                hap1_fastq=str(tmp_path / "hap1.fastq"),
+                hap2_fastq=str(tmp_path / "hap2.fastq"),
+                hap1_reference=str(tmp_path / "hap1.fa"),
+                hap2_reference=str(tmp_path / "hap2.fa"),
+                reads_hap1=100,
+                reads_hap2=95,
+            ),
+        )
+
+        # Mock alignment
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+
+        # Act
+        with caplog.at_level("INFO"):
+            simulate_ont_reads_pipeline(config, str(input_fa))
+
+        # Assert - check for diploid mode logging
+        assert "DIPLOID REFERENCE DETECTED" in caplog.text
+        assert "Split-simulation" in caplog.text
+        assert "Haplotype 1: 100 reads" in caplog.text
+        assert "Haplotype 2: 95 reads" in caplog.text
+        assert "Total: 195 reads" in caplog.text
+
+    def test_uses_standard_simulation_when_split_disabled(self, mocker, tmp_path, caplog):
+        """Test that standard simulation is used when split-simulation is disabled."""
+        # Create diploid FASTA
+        input_fa = tmp_path / "sample.fa"
+        input_fa.write_text(">haplotype_1\nACGT\n>haplotype_2\nTGCA\n")
+
+        config = {
+            "tools": {
+                "nanosim": "nanosim",
+                "minimap2": "minimap2",
+                "samtools": "samtools",
+            },
+            "nanosim_params": {
+                "training_data_path": "model",
+                "coverage": 100,
+                "enable_split_simulation": False,  # DISABLED
+            },
+        }
+
+        # Mock diploid detection
+        mocker.patch(
+            "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference",
+            return_value=True,
+        )
+
+        # Mock standard simulation
+        mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
+        mock_nanosim.return_value = str(tmp_path / "reads.fastq")
+
+        # Mock alignment
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+
+        # Act
+        with caplog.at_level("INFO"):
+            simulate_ont_reads_pipeline(config, str(input_fa))
+
+        # Assert - standard simulation should be used
+        mock_nanosim.assert_called_once()
+        assert "standard simulation (split-simulation disabled)" in caplog.text.lower()
+
+    def test_raises_runtime_error_when_split_simulation_fails(self, mocker, tmp_path):
+        """Test that RuntimeError is raised when split-simulation fails."""
+        # Create diploid FASTA
+        input_fa = tmp_path / "sample.fa"
+        input_fa.write_text(">haplotype_1\nACGT\n>haplotype_2\nTGCA\n")
+
+        config = {
+            "tools": {
+                "nanosim": "nanosim",
+                "minimap2": "minimap2",
+                "samtools": "samtools",
+            },
+            "nanosim_params": {
+                "training_data_path": "model",
+                "coverage": 100,
+                "enable_split_simulation": True,
+            },
+        }
+
+        # Mock diploid detection
+        mocker.patch(
+            "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference",
+            return_value=True,
+        )
+
+        # Mock split-simulation to fail
+        mocker.patch(
+            "muc_one_up.read_simulator.ont_pipeline.run_split_simulation",
+            side_effect=Exception("Split simulation failed"),
+        )
+
+        # Act & Assert
+        with pytest.raises(RuntimeError, match="ONT split-simulation failed"):
+            simulate_ont_reads_pipeline(config, str(input_fa))

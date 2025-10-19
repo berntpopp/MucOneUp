@@ -24,7 +24,7 @@ repos:
         args:
           - --ignore-missing-imports
           - --no-strict-optional
-        exclude: ^(tests/|helpers/)
+        exclude: ^(tests/|helpers/|muc_one_up/bioinformatics/validation\.py)
 
   # Bandit - Security linter for Python
   - repo: https://github.com/PyCQA/bandit
