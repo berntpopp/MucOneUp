@@ -11,11 +11,15 @@
 | Issue | Status | Original Issues | File |
 |-------|--------|----------------|------|
 | [#31](issue_31_nanosim_allelic_imbalance.md) | ✅ **APPROVED** | None | issue_31_nanosim_allelic_imbalance.md |
-| [#30](issue_30_deterministic_simulation.md) | ✅ **APPROVED** | None | issue_30_deterministic_simulation.md |
-| [#28](issue_28_reference_assemblies.md) | ✅ **CORRECTED** | DRY violation fixed | issue_28_reference_assemblies.md |
 | [#18](issue_18_docker_containerization.md) | ✅ **SIMPLIFIED** | KISS violation fixed | issue_18_docker_containerization.md |
 | [#15](issue_15_snapshot_assay_validation.md) | ✅ **CORRECTED** | DRY violation fixed | issue_15_snapshot_assay_validation.md |
 | [#1](issue_01_pacbio_support.md) | ✅ **REWRITTEN** | Incorrect analysis fixed | issue_01_pacbio_support.md |
+
+**Completed and Moved**:
+| Issue | Completed | Location |
+|-------|-----------|----------|
+| [#30](../completed/12_deterministic_simulation/) | ✅ 2025-10-19 | plan/completed/12_deterministic_simulation/ |
+| [#28](../completed/11_reference_assemblies/) | ✅ 2025-10-19 | plan/completed/11_reference_assemblies/ |
 
 ---
 
@@ -60,10 +64,8 @@ muconeup --config config.json reads ont sample.fa
 ## Implementation Priority (Revised)
 
 ### Phase 1: Quick Wins (Week 1)
-1. **Issue #30** - Deterministic seeding ✅ APPROVED
-   - Add `--seed` parameter to read simulators
-   - Tools verified: NanoSim ✅, pbsim3 ✅, w-Wessim2 ✅
-   - File: [issue_30_deterministic_simulation.md](issue_30_deterministic_simulation.md)
+1. **Issue #30** - Deterministic seeding ✅ **COMPLETED** (2025-10-19)
+   - Moved to: [plan/completed/12_deterministic_simulation/](../completed/12_deterministic_simulation/)
 
 ### Phase 2: Bug Verification (Week 1-2)
 2. **Issue #31** - NanoSim allelic imbalance ⚠️ NEEDS EMPIRICAL TEST
@@ -72,10 +74,8 @@ muconeup --config config.json reads ont sample.fa
    - File: [issue_31_nanosim_allelic_imbalance.md](issue_31_nanosim_allelic_imbalance.md)
 
 ### Phase 3: Infrastructure (Week 2-3)
-3. **Issue #28** - Reference management
-   - Extend existing `reference_validation.py` module
-   - DO NOT create new `ReferenceManager` class
-   - File: [issue_28_reference_assemblies.md](issue_28_reference_assemblies.md)
+3. **Issue #28** - Reference management ✅ **COMPLETED** (2025-10-19)
+   - Moved to: [plan/completed/11_reference_assemblies/](../completed/11_reference_assemblies/)
 
 4. **Issue #18** - Docker
    - Single Dockerfile, two targets
@@ -144,15 +144,16 @@ All files have been cleaned up - only corrected/approved versions remain:
 
 ```
 plan/issues/
-├── EXPERT_REVIEW.md                        ← Review methodology & findings
 ├── README.md                               ← This file
 │
 ├── issue_01_pacbio_support.md              ← PacBio simulation (CORRECTED)
-├── issue_15_snapshot_assay_validation.md   ← SNaPshot validation (CORRECTED)
+├── issue_15_*.md                           ← SNaPshot validation (IN PROGRESS)
 ├── issue_18_docker_containerization.md     ← Docker support (SIMPLIFIED)
-├── issue_28_reference_assemblies.md        ← Reference management (CORRECTED)
-├── issue_30_deterministic_simulation.md    ← Deterministic seeding (APPROVED)
 └── issue_31_nanosim_allelic_imbalance.md   ← Allelic balance fix (APPROVED)
+
+plan/completed/
+├── 11_reference_assemblies/                ← Issue #28 (2025-10-19)
+└── 12_deterministic_simulation/            ← Issue #30 (2025-10-19)
 ```
 
 **Note**: All files are production-ready. Original versions with violations have been removed.
