@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 from Bio import SeqIO
-from Bio.SeqRecord import SeqRecord
 
 from ...exceptions import ValidationError
 
@@ -26,6 +25,7 @@ class ReferenceInfo(NamedTuple):
         total_length: Total length of all sequences combined.
         is_diploid: True if file contains exactly 2 sequences.
     """
+
     num_sequences: int
     sequence_ids: list[str]
     sequence_lengths: list[int]
@@ -62,9 +62,7 @@ def get_reference_info(fasta_path: str | Path) -> ReferenceInfo:
     try:
         sequences = list(SeqIO.parse(str(fasta_path), "fasta"))
     except Exception as e:
-        raise ValidationError(
-            f"Failed to parse FASTA file {fasta_path}: {e}"
-        ) from e
+        raise ValidationError(f"Failed to parse FASTA file {fasta_path}: {e}") from e
 
     if not sequences:
         raise ValidationError(f"FASTA file is empty: {fasta_path}")
@@ -182,9 +180,7 @@ def extract_haplotypes(
         SeqIO.write([hap1_seq], str(hap1_path), "fasta")
         SeqIO.write([hap2_seq], str(hap2_path), "fasta")
     except Exception as e:
-        raise ValidationError(
-            f"Failed to write haplotype files: {e}"
-        ) from e
+        raise ValidationError(f"Failed to write haplotype files: {e}") from e
 
     logging.info(
         "Extracted haplotypes from %s:",

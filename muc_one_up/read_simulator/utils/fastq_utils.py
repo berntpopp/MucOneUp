@@ -57,7 +57,7 @@ def validate_fastq(fastq_path: str | Path, check_quality: bool = True) -> bool:
         if str(fastq_path).endswith(".gz"):
             file_handle = gzip.open(fastq_path, "rt")
         else:
-            file_handle = open(fastq_path, "r")
+            file_handle = open(fastq_path)
     except Exception as e:
         raise ValidationError(f"Cannot open FASTQ file {fastq_path}: {e}") from e
 
@@ -68,9 +68,7 @@ def validate_fastq(fastq_path: str | Path, check_quality: bool = True) -> bool:
             line = file_handle.readline()
             line_num += 1
             if not line:
-                raise ValidationError(
-                    f"FASTQ file {fastq_path} is too short (fewer than 4 lines)"
-                )
+                raise ValidationError(f"FASTQ file {fastq_path} is too short (fewer than 4 lines)")
 
             if i == 0 and not line.startswith("@"):
                 raise ValidationError(
@@ -91,11 +89,11 @@ def validate_fastq(fastq_path: str | Path, check_quality: bool = True) -> bool:
             if str(fastq_path).endswith(".gz"):
                 file_handle = gzip.open(fastq_path, "rt")
             else:
-                file_handle = open(fastq_path, "r")
+                file_handle = open(fastq_path)
 
-            header = file_handle.readline().strip()
+            file_handle.readline().strip()
             seq = file_handle.readline().strip()
-            plus = file_handle.readline().strip()
+            file_handle.readline().strip()
             qual = file_handle.readline().strip()
 
             if len(seq) != len(qual):
@@ -143,7 +141,7 @@ def count_fastq_reads(fastq_path: str | Path) -> int:
         if str(fastq_path).endswith(".gz"):
             file_handle = gzip.open(fastq_path, "rt")
         else:
-            file_handle = open(fastq_path, "r")
+            file_handle = open(fastq_path)
     except Exception as e:
         raise ValidationError(f"Cannot open FASTQ file {fastq_path}: {e}") from e
 
@@ -154,9 +152,8 @@ def count_fastq_reads(fastq_path: str | Path) -> int:
 
         if line_count % 4 != 0:
             logging.warning(
-                "FASTQ file %s has %d lines (not divisible by 4), "
-                "may be truncated or malformed",
-                fastq_path.name,
+                "FASTQ file %s has %d lines (not divisible by 4), may be truncated or malformed",
+                Path(fastq_path).name,
                 line_count,
             )
 
@@ -230,10 +227,7 @@ def merge_fastq_files(
 
     try:
         # Open output file
-        if compress_output:
-            out_handle = gzip.open(output_file, "wt")
-        else:
-            out_handle = open(output_file, "w")
+        out_handle = gzip.open(output_file, "wt") if compress_output else open(output_file, "w")
 
         total_reads = 0
 
@@ -243,7 +237,7 @@ def merge_fastq_files(
             if str(input_file).endswith(".gz"):
                 in_handle = gzip.open(input_file, "rt")
             else:
-                in_handle = open(input_file, "r")
+                in_handle = open(input_file)
 
             # Copy lines
             read_count = 0
@@ -259,7 +253,7 @@ def merge_fastq_files(
             logging.info(
                 "Merged %d reads from %s",
                 read_count,
-                input_file.name,
+                Path(input_file).name,
             )
 
         out_handle.close()

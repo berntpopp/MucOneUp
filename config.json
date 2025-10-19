@@ -444,7 +444,10 @@
     "num_threads": 12,
     "min_read_length": 3000,
     "max_read_length": null,
-    "other_options": "--fastq"
+    "other_options": "--fastq",
+    "correction_factor": 0.325,
+    "enable_split_simulation": true,
+    "enable_coverage_correction": true
   },
   "read_simulation": {
     "simulator": "illumina",

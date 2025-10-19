@@ -204,8 +204,8 @@ def test_extract_haplotypes_preserves_sequences(diploid_fasta, temp_dir):
     original_seqs = list(SeqIO.parse(diploid_fasta, "fasta"))
 
     # Read extracted
-    hap1_seq = list(SeqIO.parse(hap1_path, "fasta"))[0]
-    hap2_seq = list(SeqIO.parse(hap2_path, "fasta"))[0]
+    hap1_seq = next(iter(SeqIO.parse(hap1_path, "fasta")))
+    hap2_seq = next(iter(SeqIO.parse(hap2_path, "fasta")))
 
     assert str(hap1_seq.seq) == str(original_seqs[0].seq)
     assert str(hap2_seq.seq) == str(original_seqs[1].seq)
@@ -218,8 +218,8 @@ def test_extract_haplotypes_unequal_lengths(diploid_unequal_fasta, temp_dir):
     output_dir = temp_dir / "output"
     hap1_path, hap2_path = extract_haplotypes(diploid_unequal_fasta, output_dir, "test")
 
-    hap1_seq = list(SeqIO.parse(hap1_path, "fasta"))[0]
-    hap2_seq = list(SeqIO.parse(hap2_path, "fasta"))[0]
+    hap1_seq = next(iter(SeqIO.parse(hap1_path, "fasta")))
+    hap2_seq = next(iter(SeqIO.parse(hap2_path, "fasta")))
 
     assert len(hap1_seq.seq) == 20
     assert len(hap2_seq.seq) == 100
@@ -262,9 +262,7 @@ def test_extract_haplotypes_fails_on_triploid(triploid_fasta, temp_dir):
 def test_extract_haplotypes_accepts_string_paths(diploid_fasta, temp_dir):
     """Test that function accepts string paths (not just Path objects)."""
     output_dir = temp_dir / "output"
-    hap1_path, hap2_path = extract_haplotypes(
-        str(diploid_fasta), str(output_dir), "test"
-    )
+    hap1_path, hap2_path = extract_haplotypes(str(diploid_fasta), str(output_dir), "test")
 
     assert Path(hap1_path).exists()
     assert Path(hap2_path).exists()
@@ -327,8 +325,7 @@ def test_validate_reference_compatibility_parametrized(
     # Create FASTA with specified number of sequences
     fasta_path = temp_dir / "test.fa"
     records = [
-        SeqRecord(Seq("ATCG" * (i + 1)), id=f"seq{i}", description="")
-        for i in range(num_sequences)
+        SeqRecord(Seq("ATCG" * (i + 1)), id=f"seq{i}", description="") for i in range(num_sequences)
     ]
     SeqIO.write(records, fasta_path, "fasta")
 
@@ -336,4 +333,6 @@ def test_validate_reference_compatibility_parametrized(
         validate_reference_compatibility(fasta_path, min_sequences=min_seq, max_sequences=max_seq)
     else:
         with pytest.raises(ValidationError):
-            validate_reference_compatibility(fasta_path, min_sequences=min_seq, max_sequences=max_seq)
+            validate_reference_compatibility(
+                fasta_path, min_sequences=min_seq, max_sequences=max_seq
+            )

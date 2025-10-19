@@ -14,11 +14,12 @@ This reduces allelic imbalance from ~3.27:1 to ~1.40:1 for divergent haplotypes.
 
 import logging
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
-from .reference_utils import extract_haplotypes, get_reference_info, is_diploid_reference
 from .fastq_utils import merge_fastq_files
+from .reference_utils import extract_haplotypes, get_reference_info, is_diploid_reference
 
 
 class DiploidSimulationResult(NamedTuple):
@@ -33,6 +34,7 @@ class DiploidSimulationResult(NamedTuple):
         reads_hap1: Number of reads generated for haplotype 1.
         reads_hap2: Number of reads generated for haplotype 2.
     """
+
     merged_fastq: str
     hap1_fastq: str
     hap2_fastq: str
@@ -74,21 +76,16 @@ def calculate_corrected_coverage(
         >>> # After merging: ~100x per haplotype = ~200x total
     """
     if correction_factor <= 0 or correction_factor > 1:
-        raise ValueError(
-            f"Correction factor must be between 0 and 1, got {correction_factor}"
-        )
+        raise ValueError(f"Correction factor must be between 0 and 1, got {correction_factor}")
 
     if desired_coverage <= 0:
         raise ValueError(f"Desired coverage must be positive, got {desired_coverage}")
 
-    if is_split_simulation:
-        # For diploid: simulate each haplotype at half coverage, then merge
-        target_per_haplotype = desired_coverage / 2.0
-    else:
-        # For haploid or standard simulation
-        target_per_haplotype = desired_coverage
+    # For diploid: simulate each haplotype at half coverage, then merge
+    # For haploid or standard simulation, use full coverage
+    target_per_haplotype = desired_coverage / 2.0 if is_split_simulation else desired_coverage
 
-    # Apply correction factor: actual = requested × factor
+    # Apply correction factor: actual = requested * factor
     # So: requested = actual / factor
     corrected = target_per_haplotype / correction_factor
 
@@ -157,7 +154,7 @@ def prepare_diploid_simulation(
 
 def run_split_simulation(
     diploid_fasta: str | Path,
-    simulation_func: callable,
+    simulation_func: Callable,
     simulation_params: dict,
     output_fastq: str | Path,
     correction_factor: float = 0.325,
@@ -215,10 +212,10 @@ def run_split_simulation(
     output_fastq = Path(output_fastq)
 
     # Get desired coverage from params
-    desired_coverage = simulation_params.get('coverage', 30)
+    desired_coverage = simulation_params.get("coverage", 30)
 
     # Create clean params dict without coverage (will be passed separately with correction)
-    clean_params = {k: v for k, v in simulation_params.items() if k != 'coverage'}
+    clean_params = {k: v for k, v in simulation_params.items() if k != "coverage"}
 
     # Create temporary directory for intermediate files
     with tempfile.TemporaryDirectory(prefix="diploid_sim_") as temp_dir:
@@ -228,8 +225,11 @@ def run_split_simulation(
         logging.info("DIPLOID SPLIT-SIMULATION WORKFLOW")
         logging.info("=" * 70)
         logging.info("Reference: %s", diploid_fasta)
-        logging.info("Desired coverage: %.1fx (per haplotype after merge: %.1fx)",
-                     desired_coverage, desired_coverage / 2)
+        logging.info(
+            "Desired coverage: %.1fx (per haplotype after merge: %.1fx)",
+            desired_coverage,
+            desired_coverage / 2,
+        )
         logging.info("Correction factor: %.3f", correction_factor)
         logging.info("Seed: %s", seed if seed is not None else "random")
         logging.info("=" * 70)
@@ -294,6 +294,7 @@ def run_split_simulation(
 
         # Get read counts (import here to avoid circular dependency)
         from .fastq_utils import count_fastq_reads
+
         reads_hap1 = count_fastq_reads(hap1_fastq)
         reads_hap2 = count_fastq_reads(hap2_fastq)
 
@@ -311,6 +312,7 @@ def run_split_simulation(
 
         if keep_intermediate:
             import shutil
+
             output_dir = output_fastq.parent
             final_hap1_fastq = str(output_dir / "hap1_reads.fastq.gz")
             final_hap2_fastq = str(output_dir / "hap2_reads.fastq.gz")

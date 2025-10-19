@@ -302,9 +302,7 @@ def test_merge_fastq_files_skip_validation(temp_dir):
 def test_merge_fastq_files_accepts_string_paths(hap1_fastq, hap2_fastq, temp_dir):
     """Test that function accepts string paths."""
     output = temp_dir / "merged.fastq"
-    result = merge_fastq_files(
-        [str(hap1_fastq), str(hap2_fastq)], str(output)
-    )
+    result = merge_fastq_files([str(hap1_fastq), str(hap2_fastq)], str(output))
 
     assert Path(result).exists()
     assert count_fastq_reads(result) == 12

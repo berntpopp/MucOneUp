@@ -9,7 +9,6 @@ Tests cover:
 
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, call
 
 import pytest
 from Bio import SeqIO
@@ -125,11 +124,11 @@ def test_calculate_corrected_coverage_invalid_coverage_negative():
 @pytest.mark.parametrize(
     "desired,factor,is_split,expected",
     [
-        (200, 0.325, True, 307.69),   # Diploid standard
+        (200, 0.325, True, 307.69),  # Diploid standard
         (200, 0.325, False, 615.38),  # Haploid standard
-        (100, 0.5, True, 100.0),      # Diploid 50% efficiency
-        (50, 0.25, True, 100.0),      # Diploid 25% efficiency
-        (300, 0.3, True, 500.0),      # Diploid 30% efficiency
+        (100, 0.5, True, 100.0),  # Diploid 50% efficiency
+        (50, 0.25, True, 100.0),  # Diploid 25% efficiency
+        (300, 0.3, True, 500.0),  # Diploid 30% efficiency
     ],
 )
 def test_calculate_corrected_coverage_parametrized(desired, factor, is_split, expected):
@@ -162,8 +161,8 @@ def test_prepare_diploid_simulation_preserves_sequences(diploid_fasta, temp_dir)
     original = list(SeqIO.parse(diploid_fasta, "fasta"))
 
     # Read extracted
-    hap1_seq = list(SeqIO.parse(hap1, "fasta"))[0]
-    hap2_seq = list(SeqIO.parse(hap2, "fasta"))[0]
+    hap1_seq = next(iter(SeqIO.parse(hap1, "fasta")))
+    hap2_seq = next(iter(SeqIO.parse(hap2, "fasta")))
 
     assert str(hap1_seq.seq) == str(original[0].seq)
     assert str(hap2_seq.seq) == str(original[1].seq)
@@ -189,9 +188,7 @@ def test_prepare_diploid_simulation_fails_on_haploid(haploid_fasta, temp_dir):
 def test_prepare_diploid_simulation_accepts_string_paths(diploid_fasta, temp_dir):
     """Test that function accepts string paths."""
     output_dir = temp_dir / "sim_prep"
-    hap1, hap2, prep_dir = prepare_diploid_simulation(
-        str(diploid_fasta), str(output_dir)
-    )
+    hap1, hap2, prep_dir = prepare_diploid_simulation(str(diploid_fasta), str(output_dir))
 
     assert Path(hap1).exists()
     assert Path(hap2).exists()
@@ -216,7 +213,7 @@ def test_run_split_simulation_basic_workflow(diploid_fasta, temp_dir):
     result = run_split_simulation(
         diploid_fasta,
         mock_sim_func,
-        {'coverage': 200, 'threads': 4},
+        {"coverage": 200, "threads": 4},
         output_fastq,
         correction_factor=0.325,
         seed=42,
@@ -243,7 +240,7 @@ def test_run_split_simulation_uses_corrected_coverage(diploid_fasta, temp_dir):
     run_split_simulation(
         diploid_fasta,
         mock_sim_func,
-        {'coverage': 200, 'threads': 4},
+        {"coverage": 200, "threads": 4},
         output_fastq,
         correction_factor=0.325,
     )
@@ -269,7 +266,7 @@ def test_run_split_simulation_uses_different_seeds(diploid_fasta, temp_dir):
     run_split_simulation(
         diploid_fasta,
         mock_sim_func,
-        {'coverage': 200},
+        {"coverage": 200},
         output_fastq,
         seed=42,
     )
@@ -293,7 +290,7 @@ def test_run_split_simulation_no_seed_passes_none(diploid_fasta, temp_dir):
     run_split_simulation(
         diploid_fasta,
         mock_sim_func,
-        {'coverage': 200},
+        {"coverage": 200},
         output_fastq,
         seed=None,
     )
@@ -317,16 +314,16 @@ def test_run_split_simulation_passes_extra_params(diploid_fasta, temp_dir):
     run_split_simulation(
         diploid_fasta,
         mock_sim_func,
-        {'coverage': 200, 'threads': 8, 'custom_param': 'value'},
+        {"coverage": 200, "threads": 8, "custom_param": "value"},
         output_fastq,
     )
 
     # Both calls should receive extra params
     assert len(received_params) == 2
-    assert received_params[0]['threads'] == 8
-    assert received_params[0]['custom_param'] == 'value'
-    assert received_params[1]['threads'] == 8
-    assert received_params[1]['custom_param'] == 'value'
+    assert received_params[0]["threads"] == 8
+    assert received_params[0]["custom_param"] == "value"
+    assert received_params[1]["threads"] == 8
+    assert received_params[1]["custom_param"] == "value"
 
 
 def test_run_split_simulation_merged_fastq_has_all_reads(diploid_fasta, temp_dir):
@@ -342,12 +339,13 @@ def test_run_split_simulation_merged_fastq_has_all_reads(diploid_fasta, temp_dir
     result = run_split_simulation(
         diploid_fasta,
         mock_sim_func,
-        {'coverage': 200},
+        {"coverage": 200},
         output_fastq,
     )
 
     # Check merged file has correct total
     from muc_one_up.read_simulator.utils.fastq_utils import count_fastq_reads
+
     total_reads = count_fastq_reads(result.merged_fastq)
     assert total_reads == 25  # 10 + 15
 
@@ -364,7 +362,7 @@ def test_run_split_simulation_creates_output_directory(diploid_fasta, temp_dir):
     result = run_split_simulation(
         diploid_fasta,
         mock_sim_func,
-        {'coverage': 200},
+        {"coverage": 200},
         output_fastq,
     )
 
@@ -384,7 +382,7 @@ def test_run_split_simulation_accepts_string_paths(diploid_fasta, temp_dir):
     result = run_split_simulation(
         str(diploid_fasta),
         mock_sim_func,
-        {'coverage': 200},
+        {"coverage": 200},
         str(output_fastq),
     )
 
@@ -403,7 +401,7 @@ def test_run_split_simulation_result_structure(diploid_fasta, temp_dir):
     result = run_split_simulation(
         diploid_fasta,
         mock_sim_func,
-        {'coverage': 200},
+        {"coverage": 200},
         output_fastq,
     )
 

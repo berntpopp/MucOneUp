@@ -20,7 +20,7 @@ Configuration Sections:
     - mutations: Named mutation definitions with allowed_repeats and changes
     - tools: Command paths for external tools (reseq, bwa, samtools...)
     - read_simulation: Parameters for Illumina pipeline (coverage, threads...)
-    - nanosim_params: Parameters for ONT pipeline (model path, read lengths...)
+    - nanosim_params: Parameters for ONT pipeline (model path, read lengths, split-simulation...)
 
 Example:
     Load and access configuration::
@@ -87,6 +87,10 @@ from jsonschema import ValidationError, validate
 #:
 #:     nanosim_params: Parameters for Oxford Nanopore simulation (optional)
 #:         Required: training_data_path, coverage
+#:         Optional: num_threads, min_read_length, max_read_length, other_options, seed,
+#:                   correction_factor (default: 0.325),
+#:                   enable_split_simulation (default: True),
+#:                   enable_coverage_correction (default: True)
 #:
 #: Example:
 #:     Accessing schema in code::
@@ -115,6 +119,9 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "max_read_length": {"type": ["number", "null"]},
                 "other_options": {"type": ["string", "null"]},
                 "seed": {"type": ["number", "null"]},
+                "correction_factor": {"type": ["number", "null"]},
+                "enable_split_simulation": {"type": ["boolean", "null"]},
+                "enable_coverage_correction": {"type": ["boolean", "null"]},
             },
             "required": ["training_data_path", "coverage"],
             "additionalProperties": False,

@@ -222,21 +222,15 @@ def analyze_allelic_balance(
         chi2_stat, chi2_pval = chisquare(observed, expected)
         # Binomial test: Is the ratio consistent with p=0.5?
         # Handle scipy version compatibility
-        if hasattr(binomtest, '__call__') and not hasattr(binomtest, 'pvalue'):
+        if callable(binomtest) and not hasattr(binomtest, "pvalue"):
             # Old scipy: binom_test returns p-value directly
             binom_pval = binomtest(
-                hap1_cov.read_count,
-                total_reads,
-                expected_ratio,
-                alternative='two-sided'
+                hap1_cov.read_count, total_reads, expected_ratio, alternative="two-sided"
             )
         else:
             # New scipy: binomtest returns object with pvalue attribute
             result = binomtest(
-                hap1_cov.read_count,
-                n=total_reads,
-                p=expected_ratio,
-                alternative='two-sided'
+                hap1_cov.read_count, n=total_reads, p=expected_ratio, alternative="two-sided"
             )
             binom_pval = result.pvalue
     else:
@@ -301,8 +295,12 @@ def generate_summary_markdown(reports: list[AllelicBalanceReport], output_file: 
         f.write("# Allelic Balance Analysis Summary\n\n")
         f.write("## Test Results\n\n")
 
-        f.write("| Test ID | Hap1 Reads | Hap2 Reads | Allelic Ratio | Deviation | Balanced? | p-value |\n")
-        f.write("|---------|-----------|-----------|---------------|-----------|-----------|----------|\n")
+        f.write(
+            "| Test ID | Hap1 Reads | Hap2 Reads | Allelic Ratio | Deviation | Balanced? | p-value |\n"
+        )
+        f.write(
+            "|---------|-----------|-----------|---------------|-----------|-----------|----------|\n"
+        )
 
         for report in reports:
             status = "✅" if report.is_balanced else "❌"
@@ -329,7 +327,7 @@ def generate_summary_markdown(reports: list[AllelicBalanceReport], output_file: 
             f.write(f"- Coverage: {report.haplotype_2.mean_coverage:.2f}x\n")
             f.write(f"- Reference length: {report.haplotype_2.reference_length:,} bp\n\n")
 
-            f.write(f"**Statistics**\n")
+            f.write("**Statistics**\n")
             f.write(f"- Chi-square statistic: {report.chi_square_statistic:.4f}\n")
             f.write(f"- Chi-square p-value: {report.chi_square_pvalue:.6f}\n")
             f.write(f"- Binomial p-value: {report.binomial_pvalue:.6f}\n\n")

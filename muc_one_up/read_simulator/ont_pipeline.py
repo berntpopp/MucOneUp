@@ -176,27 +176,27 @@ def simulate_ont_reads_pipeline(
         def simulation_wrapper(reference_fasta, output_prefix, coverage, seed, **params):
             """Wrapper to call run_nanosim_simulation with expected signature."""
             return run_nanosim_simulation(
-                nanosim_cmd=params['nanosim_cmd'],
+                nanosim_cmd=params["nanosim_cmd"],
                 reference_fasta=reference_fasta,
                 output_prefix=output_prefix,
-                training_model=params['training_model'],
+                training_model=params["training_model"],
                 coverage=coverage,
-                threads=params['threads'],
-                min_read_length=params.get('min_read_length'),
-                max_read_length=params.get('max_read_length'),
-                other_options=params.get('other_options', ''),
+                threads=params["threads"],
+                min_read_length=params.get("min_read_length"),
+                max_read_length=params.get("max_read_length"),
+                other_options=params.get("other_options", ""),
                 seed=seed,
             )
 
         # Prepare simulation parameters
         sim_params = {
-            'nanosim_cmd': nanosim_cmd,
-            'training_model': training_model,
-            'coverage': float(coverage),
-            'threads': int(threads),
-            'min_read_length': min_read_length,
-            'max_read_length': max_read_length,
-            'other_options': other_options,
+            "nanosim_cmd": nanosim_cmd,
+            "training_model": training_model,
+            "coverage": float(coverage),
+            "threads": int(threads),
+            "min_read_length": min_read_length,
+            "max_read_length": max_read_length,
+            "other_options": other_options,
         }
 
         # Run split-simulation
