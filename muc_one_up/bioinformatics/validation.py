@@ -81,7 +81,7 @@ def validate_fasta_format(fasta_path: str | Path) -> None:
 
         if in_sequence and not DNA_PATTERN.match(line):
             # Truncate long lines for error message
-            display_line = line[:50] + "..." if len(line) > 50 else line  # type: ignore[unreachable]
+            display_line = line[:50] + "..." if len(line) > 50 else line
             raise ValidationError(f"Invalid DNA sequence at line {i}: {display_line}")
 
 

@@ -146,9 +146,8 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = "muc_one_up.read_simulator.allelic_balance_analyzer"
-ignore_missing_imports = true  # Standalone analysis utility, not core pipeline
-disallow_untyped_defs = false
+module = "muc_one_up.bioinformatics.validation"
+warn_unreachable = false  # False positive with regex pattern matching
 
 # ==================== PYTEST ====================
 [tool.pytest.ini_options]
@@ -180,7 +179,6 @@ omit = [
     "*/tests/*",
     "*/__pycache__/*",
     "*/site-packages/*",
-    "*/allelic_balance_analyzer.py",  # Standalone analysis utility, not core pipeline
 ]
 
 [tool.coverage.report]
