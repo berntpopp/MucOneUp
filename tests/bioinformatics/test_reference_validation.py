@@ -251,7 +251,7 @@ class TestBEDValidation:
         bed_file = tmp_path / "test.bed"
         bed_file.write_text("chr1\t200\t100\n")  # start > end
 
-        with pytest.raises(ValidationError, match="start.*>=.*end"):
+        with pytest.raises(ValidationError, match=r"start.*>=.*end"):
             validate_bed_file(bed_file)
 
     def test_validate_bed_skip_comments(self, tmp_path):
