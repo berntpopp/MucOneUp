@@ -68,10 +68,6 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/_build/
-docs/
-
 # PyBuilder
 .pybuilder/
 target/
@@ -170,6 +166,11 @@ cython_debug/
 /*.bam
 /*.bai
 *.fq.gz
+
+# Test output pollution (prevent test files in root)
+/test.*.json
+/test.*.fa
+/test.*.orfs.fa
 
 # reference folder
 reference/

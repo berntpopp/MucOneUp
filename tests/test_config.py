@@ -1,6 +1,6 @@
-import os
-import pytest
 import json
+from pathlib import Path
+
 from muc_one_up.config import load_config
 
 
@@ -37,10 +37,12 @@ def test_load_config_valid(tmp_path):
         },
     }
     config_file = tmp_path / "config.json"
-    with open(config_file, "w") as fh:
+    with Path(config_file).open("w") as fh:
         json.dump(config_data, fh)
 
     config = load_config(str(config_file))
     assert "repeats" in config
     assert config["repeats"]["1"] == "ABC"
-    assert config["constants"]["left"] == "AAA"
+    # After normalization, flat constants are converted to nested format (default: hg38)
+    ref_assembly = config.get("reference_assembly", "hg38")
+    assert config["constants"][ref_assembly]["left"] == "AAA"

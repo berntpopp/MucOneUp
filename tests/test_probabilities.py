@@ -1,5 +1,5 @@
-import pytest
 import random
+
 from muc_one_up.probabilities import pick_next_repeat
 
 

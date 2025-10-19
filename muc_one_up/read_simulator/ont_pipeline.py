@@ -14,18 +14,18 @@ Key features:
 """
 
 import logging
-import os
 from datetime import datetime
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Any
 
 from .wrappers.nanosim_wrapper import (
-    run_nanosim_simulation,
     align_ont_reads_with_minimap2,
+    run_nanosim_simulation,
 )
 
 
 def simulate_ont_reads_pipeline(
-    config: Dict[str, Any], input_fa: str, human_reference: Optional[str] = None
+    config: dict[str, Any], input_fa: str, human_reference: str | None = None
 ) -> str:
     """
     Run the complete Oxford Nanopore read simulation pipeline.
@@ -87,9 +87,7 @@ def simulate_ont_reads_pipeline(
     coverage = ns_params.get("coverage")
 
     if not training_model:
-        raise ValueError(
-            "Missing 'training_data_path' in nanosim_params configuration."
-        )
+        raise ValueError("Missing 'training_data_path' in nanosim_params configuration.")
     if not coverage:
         raise ValueError("Missing 'coverage' in nanosim_params configuration.")
 
@@ -100,12 +98,13 @@ def simulate_ont_reads_pipeline(
     other_options = ns_params.get("other_options", "")
 
     # Setup output paths
-    input_basename = os.path.splitext(os.path.basename(input_fa))[0]
-    output_dir = rs_config.get("output_dir", os.path.dirname(input_fa))
-    output_prefix = os.path.join(output_dir, f"{input_basename}_ont")
+    input_path = Path(input_fa)
+    input_basename = input_path.stem
+    output_dir = rs_config.get("output_dir", str(input_path.parent))
+    output_prefix = str(Path(output_dir) / f"{input_basename}_ont")
 
     # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # 1. Run NanoSim simulation
     logging.info("1. Starting NanoSim simulation")
@@ -124,7 +123,7 @@ def simulate_ont_reads_pipeline(
         logging.info("NanoSim simulation completed successfully")
     except Exception as e:
         logging.error("NanoSim simulation failed: %s", e)
-        raise RuntimeError(f"ONT read simulation failed: {str(e)}")
+        raise RuntimeError(f"ONT read simulation failed: {e!s}") from e
 
     # 2. Align reads with minimap2
     logging.info("2. Starting read alignment with minimap2")
@@ -146,7 +145,7 @@ def simulate_ont_reads_pipeline(
         logging.info("Read alignment completed successfully")
     except Exception as e:
         logging.error("Read alignment failed: %s", e)
-        raise RuntimeError(f"ONT read alignment failed: {str(e)}")
+        raise RuntimeError(f"ONT read alignment failed: {e!s}") from e
 
     # Calculate elapsed time
     end_time = datetime.now()

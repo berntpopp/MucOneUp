@@ -10,20 +10,21 @@ for each simulation run. Statistics include:
         * Number of repeats (the VNTR chain length).
         * VNTR region length (in nucleotides).
         * GC content of the simulated sequence.
-        * Repeat lengths (each repeat’s nucleotide length, plus summary: min, max, average).
+        * Repeat lengths (each repeat`s nucleotide length, plus summary: min, max, average).
         * Count and breakdown of repeat types.
         * Mutation details (positions and count of mutated repeats).
     - Overall aggregated statistics across haplotypes.
     - Mutation information (if any mutation was applied).
     - VNTR coverage statistics extracted from BAM files (if available).
 
-The report is output as a JSON file and can be integrated into the pipeline’s logging
+The report is output as a JSON file and can be integrated into the pipeline`s logging
 and reporting systems.
 """
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Utility functions
@@ -46,7 +47,7 @@ def compute_gc_content(seq: str) -> float:
     return 100.0 * gc_count / len(seq)
 
 
-def extract_vntr_region(seq: str, config: Dict[str, Any]) -> str:
+def extract_vntr_region(seq: str, config: dict[str, Any]) -> str:
     """
     Extract the VNTR region from a simulated haplotype sequence by removing
     the left and right constant flanks.
@@ -66,7 +67,7 @@ def extract_vntr_region(seq: str, config: Dict[str, Any]) -> str:
     return seq
 
 
-def get_repeat_lengths(chain: List[str], config: Dict[str, Any]) -> List[int]:
+def get_repeat_lengths(chain: list[str], config: dict[str, Any]) -> list[int]:
     """
     Calculate the nucleotide lengths of each repeat in the chain.
 
@@ -86,7 +87,7 @@ def get_repeat_lengths(chain: List[str], config: Dict[str, Any]) -> List[int]:
     return lengths
 
 
-def count_repeat_types(chain: List[str]) -> Dict[str, int]:
+def count_repeat_types(chain: list[str]) -> dict[str, int]:
     """
     Count the frequency of each repeat type in the chain.
 
@@ -97,14 +98,14 @@ def count_repeat_types(chain: List[str]) -> Dict[str, int]:
         Dict[str, int]: A dictionary mapping each repeat type (without the 'm' marker)
                         to its count.
     """
-    counts = {}
+    counts: dict[str, int] = {}
     for symbol in chain:
         pure_symbol = symbol.rstrip("m")
         counts[pure_symbol] = counts.get(pure_symbol, 0) + 1
     return counts
 
 
-def get_mutation_details(chain: List[str]) -> List[Dict[str, Any]]:
+def get_mutation_details(chain: list[str]) -> list[dict[str, Any]]:
     """
     Identify the positions in the chain where mutations have been applied.
 
@@ -129,8 +130,8 @@ def get_mutation_details(chain: List[str]) -> List[Dict[str, Any]]:
 
 
 def generate_haplotype_stats(
-    simulation_results: List[tuple], config: Dict[str, Any]
-) -> List[Dict[str, Any]]:
+    simulation_results: list[tuple], config: dict[str, Any]
+) -> list[dict[str, Any]]:
     """
     Generate statistics for each haplotype simulation result.
 
@@ -162,9 +163,7 @@ def generate_haplotype_stats(
             "repeat_lengths_summary": {
                 "min": min(repeat_lengths) if repeat_lengths else 0,
                 "max": max(repeat_lengths) if repeat_lengths else 0,
-                "average": (
-                    sum(repeat_lengths) / len(repeat_lengths) if repeat_lengths else 0
-                ),
+                "average": (sum(repeat_lengths) / len(repeat_lengths) if repeat_lengths else 0),
             },
             "repeat_type_counts": count_repeat_types(chain),
             "mutant_repeat_count": sum(1 for r in chain if r.endswith("m")),
@@ -177,7 +176,7 @@ def generate_haplotype_stats(
     return hap_stats
 
 
-def generate_overall_stats(hap_stats: List[Dict[str, Any]]) -> Dict[str, Any]:
+def generate_overall_stats(hap_stats: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Generate overall aggregated statistics from haplotype-level data.
 
@@ -223,12 +222,12 @@ def generate_overall_stats(hap_stats: List[Dict[str, Any]]) -> Dict[str, Any]:
 def generate_simulation_statistics(
     start_time: float,
     end_time: float,
-    simulation_results: List[tuple],
-    config: Dict[str, Any],
-    mutation_info: Optional[Dict[str, Any]] = None,
-    vntr_coverage: Optional[Dict[str, Any]] = None,
-    applied_snp_info: Optional[Dict[int, List[Dict[str, Any]]]] = None,
-) -> Dict[str, Any]:
+    simulation_results: list[tuple],
+    config: dict[str, Any],
+    mutation_info: dict[str, Any] | None = None,
+    vntr_coverage: dict[str, Any] | None = None,
+    applied_snp_info: dict[int, list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
     """
     Generate a comprehensive simulation statistics report.
 
@@ -298,7 +297,7 @@ def generate_simulation_statistics(
     return report
 
 
-def write_statistics_report(report: Dict[str, Any], output_path: str) -> None:
+def write_statistics_report(report: dict[str, Any], output_path: str) -> None:
     """
     Write the simulation statistics report to a JSON file.
 
@@ -307,7 +306,7 @@ def write_statistics_report(report: Dict[str, Any], output_path: str) -> None:
         output_path (str): File path for the JSON report.
     """
     try:
-        with open(output_path, "w") as fh:
+        with Path(output_path).open("w") as fh:
             json.dump(report, fh, indent=4)
         logging.info("Simulation statistics report written to %s", output_path)
     except Exception as exc:

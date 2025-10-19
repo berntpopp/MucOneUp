@@ -1,6 +1,8 @@
 # Helpers
 
-This directory contains helper scripts for the muconeup pipeline. Each helper script automates a specific task required by the pipeline. The following sections describe each helper script and its usage.
+This directory contains helper scripts for the muconeup pipeline. Each helper script automates a specific task required by the pipeline.
+
+**Note:** This directory is for **setup/utility scripts only**, not for data files or core functionality. Core analysis features are integrated into the main CLI.
 
 ---
 
@@ -184,62 +186,45 @@ This example downloads the hg38 reference sequences with a 10,000bp padding on e
 
 ---
 
-## 4. VNTR Analyzer Helper
+## 4. VNTR Analyzer
 
-The `vntr_analyze.py` script analyzes VNTR repeat units from a CSV/TSV file using a configuration file that defines known repeat sequences. It computes summary statistics and builds a transition probability matrix that describes the likelihood of one repeat unit following another.
+> **✅ INTEGRATED**: VNTR analysis functionality is now available as `muconeup analyze vntr-stats`.
 
-### Overview
+The VNTR analyzer functionality has been integrated into the main CLI. Use the following command:
 
-- **Configuration**: Requires a configuration JSON file (specified via `--config`) containing at least a `"repeats"` key with a dictionary of known repeat units. Additional keys (e.g. `"constants"`, `"length_model"`, `"mutations"`) may be present.
-- **Input**: Accepts a CSV/TSV file with VNTR structures. The VNTR sequence column can be specified by name (if a header is present) or by a 0-based column index.
-- **Duplicate Removal**: Each unique VNTR structure is processed only once.
-- **Analysis**: The script calculates:
-  - **Statistics**: Minimum, maximum, mean, and median number of repeat units per structure.
-  - **Transition Probabilities**: A probability matrix detailing the likelihood of each repeat unit following another, with an `"END"` state for sequence termination.
-- **Validation**: Checks that all tokens in the input file are found in the known repeats dictionary and issues a warning for any unknown tokens.
-- **Output**: Produces a JSON output containing the computed statistics, the known repeats, and the transition probability matrix.
-
-### Requirements
-
-- Python 3.6 or higher.
-
-### Installation
-
-No additional installation is required. All dependencies are part of the Python Standard Library.
+```bash
+muconeup --config config.json analyze vntr-stats INPUT_FILE [OPTIONS]
+```
 
 ### Usage
 
-Run the script from the command line. The basic usage is as follows:
-
 ```bash
-python helpers/vntr_analyze.py input.tsv --config config.json --header --structure-column vntr --output vntr_analysis.json
+# Analyze example VNTR database from literature
+muconeup --config config.json analyze vntr-stats data/examples/vntr_database.tsv --header
+
+# Save results to file
+muconeup --config config.json analyze vntr-stats input.tsv --header --structure-column vntr --output analysis.json
+
+# Custom delimiter (CSV)
+muconeup --config config.json analyze vntr-stats input.csv --header --delimiter "," --structure-column vntr
 ```
 
-#### Options
+### Options
 
-- `input_file`: **(Required)** Path to the input CSV/TSV file containing VNTR structures.
-- `--config`: **(Required)** Path to the configuration JSON file with the known repeat units.
-- `--structure-column`: *(Optional)* Column name (if a header exists) or column index (0-based) that contains the VNTR structure. The default is `"vntr"`.
-- `--delimiter`: *(Optional)* Field delimiter for the input file. Default is tab (`\t`).
-- `--header`: *(Optional)* Use this flag if the input file has a header row.
-- `--output`: *(Optional)* Path to the output file. If not provided, the JSON result is printed to standard output.
+- `INPUT_FILE`: Path to the input CSV/TSV file containing VNTR structures
+- `--structure-column`: Column name or index (0-based) containing VNTR structure (default: `vntr`)
+- `--delimiter`: Field delimiter (default: tab)
+- `--header`: Specify if input file has header row
+- `--output, -o`: Output file path (default: stdout)
 
-#### Example
+### Output
 
-Analyze VNTR structures from `input.tsv`, using `config.json` for the configuration, with a header and a structure column named `vntr`, and write the output to `vntr_analysis.json`:
+The command produces JSON output containing:
+- **Statistics**: min/max/mean/median number of repeat units
+- **Transition probabilities**: Markov chain transition matrix with END state
+- **Repeat sequences**: Dictionary of known repeat units from configuration
 
+For more details, see the main README.md or run:
 ```bash
-python helpers/vntr_analyze.py input.tsv --config config.json --header --structure-column vntr --output vntr_analysis.json
+muconeup --config config.json analyze vntr-stats --help
 ```
-
-### Output Files
-
-The JSON output will contain:
-- **`min_repeats`**: Minimum number of repeat units observed.
-- **`max_repeats`**: Maximum number of repeat units observed.
-- **`mean_repeats`**: Mean number of repeat units.
-- **`median_repeats`**: Median number of repeat units.
-- **`repeats`**: The dictionary of known repeat units from the configuration.
-- **`probabilities`**: The transition probability matrix (including an `"END"` state).
-
-Any unknown repeat tokens encountered during analysis will be reported as warnings.

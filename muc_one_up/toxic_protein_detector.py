@@ -3,13 +3,13 @@
 toxic_protein_detector.py
 
 This module implements detection of a toxic protein sequence from ORF FASTA outputs.
-The detection algorithm is based on quantifying how far the protein’s variable (repeat)
-region deviates from the wild–type. The analysis proceeds through four main steps:
+The detection algorithm is based on quantifying how far the protein`s variable (repeat)
+region deviates from the wild-type. The analysis proceeds through four main steps:
 
 1. **Preprocessing & Region Extraction:**
    - If constant left/right flanks are provided, they are removed from the ORF sequence,
      leaving only the variable (repeat) region for analysis.
-   - If the mutated region is known (or determined by alignment with a wild–type),
+   - If the mutated region is known (or determined by alignment with a wild-type),
      it is extracted accordingly.
 
 2. **Detection and Quantification of Repeats:**
@@ -25,7 +25,7 @@ region deviates from the wild–type. The analysis proceeds through four main st
 
 3. **Amino Acid Composition Analysis:**
    - The frequencies of key amino acids (by default R, C, and H) in the variable region are computed.
-   - A wild–type composition is defined (by default, the consensus motif repeated a given number of times)
+   - A wild-type composition is defined (by default, the consensus motif repeated a given number of times)
      and the similarity score is computed as:
 
        S_composition = 1 - (sum(|f_mut - f_wt|) / sum(f_wt))
@@ -35,8 +35,8 @@ region deviates from the wild–type. The analysis proceeds through four main st
 4. **Combining Metrics into an Overall Score:**
    - The overall deviation (or similarity) score is calculated as a weighted sum of the repeat score and
      the composition similarity. In this implementation, a **higher overall score indicates a greater deviation
-     from the wild–type (i.e. the protein is toxic)**.
-   - If the overall score exceeds a user–defined toxic cutoff (e.g. 0.5), the ORF is flagged as toxic.
+     from the wild-type (i.e. the protein is toxic)**.
+   - If the overall score exceeds a user-defined toxic cutoff (e.g. 0.5), the ORF is flagged as toxic.
 
 The module also provides a function to scan an ORF FASTA file and generate a dictionary mapping each ORF header
 to its detection metrics.
@@ -57,12 +57,12 @@ All parameters (consensus motif, identity threshold, expected repeat count, weig
 
 import argparse
 import json
-from typing import Dict, List, Optional, Tuple
+from pathlib import Path
 
 
 def sliding_window_repeat_analysis(
     region: str, consensus: str, identity_threshold: float = 0.8
-) -> Tuple[int, float]:
+) -> tuple[int, float]:
     """
     Slide a window of length equal to the consensus motif along the given region
     and compute repeat matches based on identity.
@@ -86,19 +86,17 @@ def sliding_window_repeat_analysis(
     detected_repeats = []
     for i in range(len(region) - motif_len + 1):
         candidate = region[i : i + motif_len]
-        identity = sum(1 for a, b in zip(candidate, consensus) if a == b) / motif_len
+        identity = sum(1 for a, b in zip(candidate, consensus, strict=True) if a == b) / motif_len
         if identity >= identity_threshold:
             detected_repeats.append((i, candidate, identity))
     repeat_count = len(detected_repeats)
     avg_identity = (
-        sum(rep[2] for rep in detected_repeats) / repeat_count
-        if repeat_count > 0
-        else 0.0
+        sum(rep[2] for rep in detected_repeats) / repeat_count if repeat_count > 0 else 0.0
     )
     return repeat_count, avg_identity
 
 
-def compute_amino_acid_composition(seq: str, residues: List[str]) -> Dict[str, float]:
+def compute_amino_acid_composition(seq: str, residues: list[str]) -> dict[str, float]:
     """
     Compute the frequency of each specified amino acid in a protein sequence.
 
@@ -119,21 +117,19 @@ def compute_amino_acid_composition(seq: str, residues: List[str]) -> Dict[str, f
     return freq
 
 
-def composition_similarity(
-    mutant_seq: str, wildtype_seq: str, key_residues: List[str]
-) -> float:
+def composition_similarity(mutant_seq: str, wildtype_seq: str, key_residues: list[str]) -> float:
     """
     Compute a similarity score based on the frequencies of key amino acids
-    between the mutant (toxic) and wild–type protein sequences.
+    between the mutant (toxic) and wild-type protein sequences.
 
     The score is calculated as:
         1 - (sum(|f_mut - f_wt|) / sum(f_wt))
-    so that a score close to 1 indicates that the composition is very similar to wild–type,
+    so that a score close to 1 indicates that the composition is very similar to wild-type,
     while lower scores indicate divergence.
 
     Args:
         mutant_seq (str): Protein sequence from the toxic variant.
-        wildtype_seq (str): Protein sequence from the wild–type.
+        wildtype_seq (str): Protein sequence from the wild-type.
         key_residues (List[str]): List of key amino acids (e.g., ['R', 'C', 'H']).
 
     Returns:
@@ -148,20 +144,20 @@ def composition_similarity(
 
 def detect_toxic_protein_in_sequence(
     protein_seq: str,
-    left_const: Optional[str] = None,
-    right_const: Optional[str] = None,
+    left_const: str | None = None,
+    right_const: str | None = None,
     consensus: str = "RCHLGPGHQAGPGLHR",
     identity_threshold: float = 0.8,
-    key_residues: Optional[List[str]] = None,
+    key_residues: list[str] | None = None,
     expected_repeat_count: int = 10,
     w_repeat: float = 0.6,
     w_composition: float = 0.4,
-    wildtype_variable_region: Optional[str] = None,
+    wildtype_variable_region: str | None = None,
     toxic_detection_cutoff: float = 0.5,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Analyze a protein sequence for toxic protein features by quantifying its repeat structure
-    and amino acid composition relative to a wild–type model.
+    and amino acid composition relative to a wild-type model.
 
     **Step 1: Region Extraction**
       - If constant left/right flanks are provided, they are removed from the sequence,
@@ -176,14 +172,14 @@ def detect_toxic_protein_in_sequence(
 
     **Step 3: Composition Analysis**
       - The frequency of key residues (default: R, C, H) is computed for both the variable region and
-        a wild–type model (by default, the consensus motif repeated).
+        a wild-type model (by default, the consensus motif repeated).
       - A composition similarity score is computed such that values near 1 indicate high similarity to
-        the wild–type.
+        the wild-type.
 
     **Step 4: Combining Metrics**
       - The overall deviation score is calculated as a weighted sum of the repeat score and the composition
         similarity score.
-      - In this implementation, a higher overall score indicates a greater deviation from the wild–type,
+      - In this implementation, a higher overall score indicates a greater deviation from the wild-type,
         and thus flags the protein as toxic.
       - If the overall score exceeds the specified toxic detection cutoff, the function flags the protein
         as toxic (toxic_flag = 1.0); otherwise, it is considered normal (toxic_flag = 0.0).
@@ -196,10 +192,10 @@ def detect_toxic_protein_in_sequence(
         identity_threshold (float): Identity threshold for a window to be considered a repeat.
         key_residues (Optional[List[str]]): List of key amino acids for composition analysis.
                                           Defaults to ['R', 'C', 'H'] if not provided.
-        expected_repeat_count (int): Expected number of repeats in the wild–type.
+        expected_repeat_count (int): Expected number of repeats in the wild-type.
         w_repeat (float): Weight for the repeat analysis score.
         w_composition (float): Weight for the composition similarity score.
-        wildtype_variable_region (Optional[str]): Wild–type variable region sequence. If not provided,
+        wildtype_variable_region (Optional[str]): Wild-type variable region sequence. If not provided,
                                                   it is approximated as the consensus motif repeated.
         toxic_detection_cutoff (float): Overall score cutoff above which the protein is flagged as toxic.
 
@@ -228,18 +224,14 @@ def detect_toxic_protein_in_sequence(
         variable_region, consensus, identity_threshold
     )
     # Scale the average identity by the minimum of detected repeats and expected repeat count.
-    repeat_score = (
-        avg_identity * min(repeat_count, expected_repeat_count) / expected_repeat_count
-    )
+    repeat_score = avg_identity * min(repeat_count, expected_repeat_count) / expected_repeat_count
 
     # --- Step 3: Composition Analysis ---
     # Define the wild-type variable region if not provided.
     if wildtype_variable_region is None:
         wildtype_variable_region = consensus * expected_repeat_count
     # Compute the composition similarity between the variable region and the wild-type.
-    comp_sim = composition_similarity(
-        variable_region, wildtype_variable_region, key_residues
-    )
+    comp_sim = composition_similarity(variable_region, wildtype_variable_region, key_residues)
 
     # --- Step 4: Combine Metrics ---
     overall_score = w_repeat * repeat_score + w_composition * comp_sim
@@ -259,10 +251,10 @@ def detect_toxic_protein_in_sequence(
 
 def scan_orf_fasta(
     orf_fasta_path: str,
-    left_const: Optional[str] = None,
-    right_const: Optional[str] = None,
-    **detection_kwargs
-) -> Dict[str, Dict[str, float]]:
+    left_const: str | None = None,
+    right_const: str | None = None,
+    **detection_kwargs,
+) -> dict[str, dict[str, float]]:
     """
     Scan an ORF FASTA file for toxic protein sequence features.
 
@@ -282,13 +274,13 @@ def scan_orf_fasta(
                                       a dictionary of detection metrics.
     """
     results = {}
-    header = None
-    seq_lines = []
-    with open(orf_fasta_path, "r") as fh:
+    header: str | None = None
+    seq_lines: list[str] = []
+    with Path(orf_fasta_path).open() as fh:
         for line in fh:
             line = line.strip()
             if line.startswith(">"):
-                if header and seq_lines:
+                if header is not None and seq_lines:
                     protein_seq = "".join(seq_lines)
                     metrics = detect_toxic_protein_in_sequence(
                         protein_seq, left_const, right_const, **detection_kwargs
@@ -298,7 +290,7 @@ def scan_orf_fasta(
                 seq_lines = []
             else:
                 seq_lines.append(line)
-        if header and seq_lines:
+        if header is not None and seq_lines:
             protein_seq = "".join(seq_lines)
             metrics = detect_toxic_protein_in_sequence(
                 protein_seq, left_const, right_const, **detection_kwargs
@@ -324,12 +316,8 @@ def main() -> None:
         description="Scan an ORF FASTA file for toxic protein sequence features."
     )
     parser.add_argument("orf_fasta", help="Path to the ORF FASTA file.")
-    parser.add_argument(
-        "--left-const", help="Left constant region (to remove).", default=None
-    )
-    parser.add_argument(
-        "--right-const", help="Right constant region (to remove).", default=None
-    )
+    parser.add_argument("--left-const", help="Left constant region (to remove).", default=None)
+    parser.add_argument("--right-const", help="Right constant region (to remove).", default=None)
     parser.add_argument(
         "--consensus",
         help="Consensus motif for repeat detection.",
@@ -344,7 +332,7 @@ def main() -> None:
     parser.add_argument(
         "--expected-repeat-count",
         type=int,
-        help="Expected repeat count in wild–type.",
+        help="Expected repeat count in wild-type.",
         default=10,
     )
     parser.add_argument(

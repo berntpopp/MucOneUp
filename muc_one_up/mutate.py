@@ -1,18 +1,71 @@
-import random
+"""Mutation application engine for simulated VNTR haplotypes.
+
+This module applies targeted mutations to repeat units within simulated
+haplotypes. Supports four mutation types: insert, delete, replace, and
+delete_insert. Mutations are validated against allowed_repeats and can
+operate in strict mode (reject invalid targets) or permissive mode (auto-convert).
+
+Key Functions:
+    apply_mutations: Apply named mutation to specific haplotype positions
+    validate_allowed_repeats: Ensure mutation targets are valid repeat symbols
+    apply_changes_to_repeat: Execute insertion/deletion/replacement operations
+    rebuild_haplotype_sequence: Reassemble sequence after mutations
+
+Mutation Structure:
+    Mutations are defined in config["mutations"][name] with:
+    - allowed_repeats: Valid repeat symbols for this mutation
+    - strict_mode: Boolean controlling auto-conversion behavior
+    - changes: List of operations (type, start, end, sequence)
+
+Example:
+    Apply dupC mutation to haplotype 1, repeat position 25::
+
+        from muc_one_up.mutate import apply_mutations
+
+        config = load_config("config.json")
+        results, mutated_units = apply_mutations(
+            config=config,
+            results=[(seq1, chain1), (seq2, chain2)],
+            mutation_name="dupC",
+            targets=[(1, 25)]  # 1-based indexing
+        )
+
+Notes:
+    - Positions use 1-based indexing (matching biological conventions)
+    - Mutated repeats are marked with 'm' suffix in chains
+    - Strict mode prevents silent auto-conversions (recommended for reproducibility)
+
+See Also:
+    - config.py: CONFIG_SCHEMA for mutation definitions
+    - simulate.py: Haplotype generation
+"""
+
 import logging
-from typing import Dict, List, Tuple, Any, Set
+import random
+
+from .type_defs import (
+    ConfigDict,
+    DNASequence,
+    HaplotypeList,
+    MutationDefinition,
+    MutationName,
+    MutationTargets,
+    RepeatChain,
+)
 
 
-def validate_allowed_repeats(
-    mutation_def: Dict[str, Any], config: Dict[str, Any]
-) -> Set[str]:
-    """
-    Validate that the allowed_repeats in a mutation definition are valid repeat symbols.
+def validate_allowed_repeats(mutation_def: MutationDefinition, config: ConfigDict) -> set[str]:
+    """Validate that allowed_repeats contains only valid repeat symbols.
 
-    :param mutation_def: Mutation definition from config["mutations"][name].
-    :param config: The entire config dict containing the "repeats" section.
-    :return: Set of validated allowed repeat symbols.
-    :raises ValueError: If any allowed repeat is not a valid repeat symbol.
+    Args:
+        mutation_def: Mutation definition from config["mutations"][name]
+        config: Configuration dict containing the "repeats" section
+
+    Returns:
+        Set of validated allowed repeat symbols
+
+    Raises:
+        ValueError: If any allowed repeat is not a valid repeat symbol
     """
     allowed_repeats = set(mutation_def.get("allowed_repeats", []))
     valid_repeats = set(config["repeats"].keys())
@@ -30,32 +83,42 @@ def validate_allowed_repeats(
 
 
 def apply_mutations(
-    config: Dict[str, Any],
-    results: List[Tuple[str, List[str]]],
-    mutation_name: str,
-    targets: List[Tuple[int, int]],
-) -> Tuple[List[Tuple[str, List[str]]], Dict[int, List[Tuple[int, str]]]]:
-    """
-    Apply a single named mutation to one or more haplotypes at specific repeat indices,
-    and record the mutated VNTR unit(s).
+    config: ConfigDict,
+    results: HaplotypeList,
+    mutation_name: MutationName,
+    targets: MutationTargets,
+) -> tuple[HaplotypeList, dict[int, list[tuple[int, str]]]]:
+    """Apply named mutation to specific haplotype positions.
 
-    :param config: The entire config dict.
-    :param results: List of (sequence, chain) for each haplotype.
-    :param mutation_name: Key in config["mutations"].
-    :param targets: List of (haplotype_idx, repeat_idx) (1-based indexing).
-    :return: Tuple (updated_results, mutated_units) where:
-             - updated_results: List of (sequence, chain) for each haplotype after mutation.
-             - mutated_units: Dict mapping haplotype index (1-based) to a list of tuples
-               (repeat_index, mutated_unit_sequence).
-    :raises ValueError: if configuration or target indices are invalid.
+    Applies the mutation defined in config["mutations"][mutation_name] to each
+    target position. Validates allowed_repeats, handles strict mode enforcement,
+    and tracks mutated VNTR unit sequences for reporting.
+
+    Args:
+        config: Configuration dict containing mutations section
+        results: List of (sequence, chain) tuples for each haplotype
+        mutation_name: Key in config["mutations"] defining the mutation
+        targets: List of (haplotype_idx, repeat_idx) tuples using 1-based indexing
+
+    Returns:
+        Tuple containing:
+        - updated_results: Modified haplotypes with mutations applied
+        - mutated_units: Dict mapping haplotype index (1-based) to list of
+          (repeat_index, mutated_sequence) tuples
+
+    Raises:
+        ValueError: If mutation name not found, target indices invalid, or
+                   strict mode rejects invalid repeat symbol
+
+    Note:
+        Mutated repeats are marked with 'm' suffix in the chain.
+        Positions use 1-based indexing (haplotype and repeat).
     """
     if "mutations" not in config:
         raise ValueError("No 'mutations' section in config; cannot apply mutations.")
 
     if mutation_name not in config["mutations"]:
-        raise ValueError(
-            f"Mutation '{mutation_name}' not found in config['mutations']."
-        )
+        raise ValueError(f"Mutation '{mutation_name}' not found in config['mutations'].")
 
     mutation_def = config["mutations"][mutation_name]
 
@@ -71,9 +134,9 @@ def apply_mutations(
     changes = mutation_def["changes"]
 
     updated_results = list(results)
-    mutated_units = (
-        {}
-    )  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
+    mutated_units: dict[
+        int, list[tuple[int, str]]
+    ] = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
 
     # Apply the mutation to each specified target.
     for hap_i, rep_i in targets:
@@ -81,9 +144,7 @@ def apply_mutations(
         repeat_index = rep_i - 1
 
         if hap_index < 0 or hap_index >= len(updated_results):
-            raise ValueError(
-                f"Haplotype index {hap_i} out of range (1..{len(updated_results)})."
-            )
+            raise ValueError(f"Haplotype index {hap_i} out of range (1..{len(updated_results)}).")
 
         seq, chain = updated_results[hap_index]
 
@@ -147,47 +208,70 @@ def apply_mutations(
     return updated_results, mutated_units
 
 
-def rebuild_haplotype_sequence(chain: List[str], config: Dict[str, Any]) -> str:
-    """
-    Rebuild the haplotype sequence from the chain of repeats and constant flanks.
+def rebuild_haplotype_sequence(chain: RepeatChain, config: ConfigDict) -> DNASequence:
+    """Rebuild haplotype sequence from repeat chain and flanking constants.
 
-    :param chain: List of repeat symbols (with possible appended 'm').
-    :param config: Configuration dict containing 'constants' and 'repeats'.
-    :return: Reassembled haplotype sequence.
+    Concatenates left constant + repeat units + right constant (if terminal repeat is 9).
+    Strips mutation markers ('m') from symbols when looking up sequences.
+
+    Args:
+        chain: List of repeat symbols, possibly with 'm' suffix marking mutations
+        config: Configuration dict containing 'constants' and 'repeats' sections
+
+    Returns:
+        Reassembled haplotype DNA sequence
     """
     reference_assembly = config.get("reference_assembly", "hg38")
-    left_const = config["constants"][reference_assembly]["left"]
-    right_const = config["constants"][reference_assembly]["right"]
+    left_const = str(config["constants"][reference_assembly]["left"])
+    right_const = str(config["constants"][reference_assembly]["right"])
     repeats_dict = config["repeats"]
 
     seq = left_const
     for sym in chain:
         pure_sym = sym.replace("m", "")
-        seq += repeats_dict[pure_sym]
+        seq += str(repeats_dict[pure_sym])
     if chain[-1].replace("m", "") == "9":
         seq += right_const
     return seq
 
 
 def apply_changes_to_repeat(
-    seq: str,
-    chain: List[str],
+    seq: DNASequence,
+    chain: RepeatChain,
     repeat_index: int,
-    changes: List[Dict[str, Any]],
-    config: Dict[str, Any],
-    mutation_name: str,
-) -> Tuple[str, List[str], str]:
-    """
-    Modify the substring of 'seq' corresponding to chain[repeat_index] using the
-    list of changes from the mutation definition.
+    changes: list[dict[str, int | str]],
+    config: ConfigDict,
+    mutation_name: MutationName,
+) -> tuple[DNASequence, RepeatChain, DNASequence]:
+    """Modify repeat unit sequence using mutation change operations.
 
-    :param seq: Original haplotype sequence.
-    :param chain: The repeat chain.
-    :param repeat_index: Index (0-based) of the repeat to modify.
-    :param changes: List of change dictionaries.
-    :param config: Configuration dict.
-    :param mutation_name: Name of the mutation.
-    :return: Tuple (new_seq, chain, mutated_repeat) after applying the changes.
+    Applies a series of change operations (insert, delete, replace, delete_insert)
+    to the repeat unit at the specified index. Operations use 1-based positioning
+    within the repeat unit.
+
+    Args:
+        seq: Full haplotype sequence before mutation
+        chain: Repeat chain identifying unit positions
+        repeat_index: Index (0-based) of the repeat to modify
+        changes: List of change dicts with 'type', 'start', 'end', 'sequence' keys
+        config: Configuration dict for assembly constants and repeat lookups
+        mutation_name: Name of mutation (for error messages)
+
+    Returns:
+        Tuple containing:
+        - new_seq: Updated haplotype sequence with mutation applied
+        - chain: Repeat chain (unmodified, marker added separately)
+        - mutated_repeat: The modified repeat unit sequence
+
+    Raises:
+        ValueError: If change coordinates are out of bounds or type is unknown
+
+    Note:
+        Change operations:
+        - insert: Insert sequence at position (inclusive)
+        - delete: Delete bases from start to end (inclusive)
+        - replace: Replace bases from start to end with sequence
+        - delete_insert: Delete between boundaries, insert at boundary
     """
     repeats_dict = config["repeats"]
     reference_assembly = config.get("reference_assembly", "hg38")
@@ -213,9 +297,13 @@ def apply_changes_to_repeat(
         insertion_str = change.get("sequence", "")
 
         if start is None or end is None or ctype is None:
-            raise ValueError(
-                f"Malformed change in mutation '{mutation_name}': missing fields."
-            )
+            raise ValueError(f"Malformed change in mutation '{mutation_name}': missing fields.")
+
+        # Type narrowing: after None check, these must be int (from config validation)
+        if not isinstance(start, int) or not isinstance(end, int):
+            raise ValueError(f"Invalid types for start/end in mutation '{mutation_name}'")
+        if not isinstance(insertion_str, str):
+            insertion_str = str(insertion_str)
 
         start_idx = start - 1
         end_idx = end - 1
@@ -250,9 +338,7 @@ def apply_changes_to_repeat(
             # Insert the provided sequence at position start_idx+1.
             repeat_chars[start_idx + 1 : start_idx + 1] = list(insertion_str)
         else:
-            raise ValueError(
-                f"Unknown mutation type '{ctype}' in mutation '{mutation_name}'"
-            )
+            raise ValueError(f"Unknown mutation type '{ctype}' in mutation '{mutation_name}'")
 
     mutated_repeat = "".join(repeat_chars)
     new_seq = seq[:start_pos] + mutated_repeat + seq[end_pos + 1 :]

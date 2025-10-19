@@ -25,14 +25,14 @@ Args:
 import argparse
 import json
 import logging
-import os
 import shutil
 import subprocess
 import sys
 import tarfile
-from pathlib import Path
-import requests
 import xml.etree.ElementTree as ET
+from pathlib import Path
+
+import requests
 
 # Set up basic logging
 logging.basicConfig(
@@ -60,9 +60,7 @@ def parse_region(region_str: str) -> tuple:
         start, end = map(int, pos.split("-"))
         return chrom, start, end
     except ValueError:
-        logging.error(
-            f"Invalid region format: {region_str}, expected format: chrX:start-end"
-        )
+        logging.error(f"Invalid region format: {region_str}, expected format: chrX:start-end")
         sys.exit(1)
 
 
@@ -110,9 +108,7 @@ def get_ucsc_region_das(
         sequence = "".join(dna_element.text.split())
         # Convert sequence to uppercase
         sequence = sequence.upper()
-        logging.info(
-            f"Successfully fetched sequence for {segment} ({len(sequence)} bp)."
-        )
+        logging.info(f"Successfully fetched sequence for {segment} ({len(sequence)} bp).")
         return sequence
 
     except requests.exceptions.Timeout:
@@ -133,9 +129,7 @@ def get_ucsc_region_das(
         return None
     except Exception as e:
         # Catch any other unexpected errors
-        logging.error(
-            f"An unexpected error occurred while fetching {segment}: {e}", exc_info=True
-        )
+        logging.error(f"An unexpected error occurred while fetching {segment}: {e}", exc_info=True)
         return None
 
 
@@ -229,7 +223,7 @@ def update_config_with_sequences(
         bool: True if successful, False otherwise
     """
     try:
-        with open(config_path, "r") as f:
+        with Path(config_path).open("r") as f:
             config = json.load(f)
 
         # Update the sequences in the constants section
@@ -238,7 +232,7 @@ def update_config_with_sequences(
             config["constants"][assembly]["right"] = right_seq
 
             # Write back the updated config
-            with open(config_path, "w") as f:
+            with Path(config_path).open("w") as f:
                 json.dump(config, f, indent=2)
 
             logging.info(f"Updated config with {assembly} sequences")
@@ -284,7 +278,7 @@ def download_nanosim_model(output_dir, force=False):
     try:
         response = requests.get(model_url, stream=True)
         response.raise_for_status()
-        with open(tar_path, "wb") as f:
+        with tar_path.open("wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         logging.info(f"Downloaded NanoSim model to {tar_path}")
@@ -351,8 +345,7 @@ def create_minimap2_index(reference_path, output_dir, minimap2_cmd="minimap2"):
             shell=True,
             check=True,
             text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
         )
         logging.info(f"Successfully created minimap2 index at {index_path}")
         return index_path
@@ -373,16 +366,12 @@ def main():
     )
     parser.add_argument(
         "--config",
-        default=os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json"
-        ),
+        default=str(Path(__file__).resolve().parent.parent / "config.json"),
         help="Path to the configuration file",
     )
     parser.add_argument(
         "--references-dir",
-        default=os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "reference"
-        ),
+        default=str(Path(__file__).resolve().parent.parent / "reference"),
         help="Path to the references directory",
     )
     parser.add_argument(
@@ -421,7 +410,7 @@ def main():
     args = parser.parse_args()
 
     # Check if the config file exists
-    if not os.path.exists(args.config):
+    if not Path(args.config).exists():
         logging.error(f"Config file not found: {args.config}")
         sys.exit(1)
 
@@ -431,15 +420,12 @@ def main():
     )
 
     # Load the config
-    with open(args.config, "r") as f:
+    with Path(args.config).open("r") as f:
         config = json.load(f)
 
     # Process assembly choice
     assemblies = []
-    if args.assembly == "both":
-        assemblies = ["hg19", "hg38"]
-    else:
-        assemblies = [args.assembly]
+    assemblies = ["hg19", "hg38"] if args.assembly == "both" else [args.assembly]
 
     # Download flanking regions if explicitly requested or if no specific operations are requested
     if args.download_flanking or not specific_ops_requested:
@@ -453,20 +439,14 @@ def main():
                     vntr_region_key = f"vntr_region_{assembly}"
                     vntr_region = config["read_simulation"][vntr_region_key]
 
-                logging.info(
-                    f"Downloading {assembly} flanking regions for VNTR: {vntr_region}"
-                )
-                left_seq, right_seq = download_flanking_regions(
-                    assembly, vntr_region, args.padding
-                )
+                logging.info(f"Downloading {assembly} flanking regions for VNTR: {vntr_region}")
+                left_seq, right_seq = download_flanking_regions(assembly, vntr_region, args.padding)
 
                 if left_seq and right_seq:
                     logging.info(
                         f"Downloaded {assembly} sequences: LEFT={len(left_seq)}bp, RIGHT={len(right_seq)}bp"
                     )
-                    update_config_with_sequences(
-                        args.config, assembly, left_seq, right_seq
-                    )
+                    update_config_with_sequences(args.config, assembly, left_seq, right_seq)
                 else:
                     logging.error(f"Failed to download {assembly} sequences")
             except KeyError as e:
@@ -481,19 +461,17 @@ def main():
         if nanosim_model_path:
             # Update the config with the NanoSim model path
             try:
-                with open(args.config, "r") as f:
+                with Path(args.config).open("r") as f:
                     config = json.load(f)
 
                 # Update the NanoSim training model path in config
                 if "nanosim_params" in config:
-                    rel_path = os.path.relpath(
-                        nanosim_model_path, os.path.dirname(args.config)
-                    )
+                    rel_path = nanosim_model_path.relative_to(Path(args.config).parent)
                     config["nanosim_params"]["training_data_path"] = str(rel_path)
                     logging.info(f"Updated config with NanoSim model path: {rel_path}")
 
                     # Write the updated config
-                    with open(args.config, "w") as f:
+                    with Path(args.config).open("w") as f:
                         json.dump(config, f, indent=2)
                 else:
                     logging.warning(
@@ -506,25 +484,24 @@ def main():
     if args.create_minimap2_index or not specific_ops_requested:
         logging.info("Creating minimap2 indices for human references...")
         try:
-            with open(args.config, "r") as f:
+            with Path(args.config).open("r") as f:
                 config = json.load(f)
 
             # Get the human reference path from config
             human_reference = config.get("read_simulation", {}).get("human_reference")
             if human_reference:
                 # Convert to absolute path
-                if not os.path.isabs(human_reference):
-                    human_reference = os.path.join(
-                        os.path.dirname(args.config), human_reference
-                    )
+                human_ref_path = Path(human_reference)
+                if not human_ref_path.is_absolute():
+                    human_ref_path = Path(args.config).parent / human_reference
 
                 # Ensure the path exists
-                if not os.path.exists(human_reference):
-                    logging.error(f"Human reference file not found: {human_reference}")
+                if not human_ref_path.exists():
+                    logging.error(f"Human reference file not found: {human_ref_path}")
                 else:
                     # Create the index
                     index_path = create_minimap2_index(
-                        human_reference, os.path.dirname(human_reference)
+                        str(human_ref_path), str(human_ref_path.parent)
                     )
                 if index_path:
                     logging.info(f"Successfully created minimap2 index at {index_path}")
@@ -540,12 +517,12 @@ def main():
 
 if __name__ == "__main__":
     # Ensure required libraries are available
-    try:
-        import requests
-        import xml.etree.ElementTree
-    except ImportError as e:
-        print(f"Error: Required library not found: {e.name}", file=sys.stderr)
-        print("Please install it using: pip install requests", file=sys.stderr)
-        sys.exit(1)
+    import importlib.util
+
+    for lib in ["requests", "xml.etree.ElementTree"]:
+        if importlib.util.find_spec(lib.split(".")[0]) is None:
+            print(f"Error: Required library not found: {lib}", file=sys.stderr)
+            print("Please install it using: pip install requests", file=sys.stderr)
+            sys.exit(1)
 
     main()

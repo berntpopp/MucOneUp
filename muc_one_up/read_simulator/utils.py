@@ -11,15 +11,15 @@ import os
 import shutil
 import signal
 import subprocess
-import sys
 import threading
-from typing import Dict, List, Optional, Union
+from pathlib import Path
+
+from ..exceptions import ExternalToolError, ValidationError
 
 
 def run_command(
-    cmd: Union[List[str], str],
-    shell: bool = False,
-    timeout: Optional[int] = None,
+    cmd: list[str],
+    timeout: int | None = None,
     stderr_log_level: int = logging.ERROR,
     stderr_prefix: str = "",
 ) -> int:
@@ -27,36 +27,39 @@ def run_command(
     Run a command in its own process group so that it can be killed on timeout.
     Capture both stdout and stderr live and log them line-by-line.
 
+    SECURITY: This function NEVER uses shell=True to prevent command injection.
+    All commands must be provided as lists, not strings.
+
     Args:
-        cmd: Command (list or string) to run.
-        shell: Whether to run the command in the shell.
+        cmd: Command as a list of strings (e.g., ["bwa", "mem", "-t", "4"]).
         timeout: Timeout in seconds (None means wait indefinitely).
+        stderr_log_level: Logging level for stderr output (default: ERROR).
+        stderr_prefix: Prefix for stderr log messages.
 
     Returns:
         The process return code.
 
     Raises:
-        SystemExit: If the process fails to start or returns non-zero.
+        ExternalToolError: If the process fails to start or returns non-zero.
     """
-    if isinstance(cmd, list) and not shell and " " in cmd[0]:
-        shell = True
-        cmd = " ".join(cmd)
-    cmd_str = cmd if isinstance(cmd, str) else " ".join(cmd)
+    if not isinstance(cmd, list):
+        raise TypeError("cmd must be a list of strings, not a string (security requirement)")
+
+    cmd_str = " ".join(cmd)
     logging.info("Running command: %s (timeout=%s)", cmd_str, timeout)
 
     try:
         proc = subprocess.Popen(
             cmd,
-            shell=shell,
+            shell=False,  # SECURITY: Never use shell=True
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             # Use binary mode and handle encoding manually to avoid decode errors
             universal_newlines=False,
             preexec_fn=os.setsid,
         )
-    except Exception:
-        logging.exception("Failed to start command: %s", cmd_str)
-        sys.exit(1)
+    except Exception as e:
+        raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
 
     def log_stream(stream, log_func, level=None, prefix=""):
         """Read lines from a stream and log them using log_func."""
@@ -79,9 +82,7 @@ def run_command(
         stream.close()
 
     # Log stdout always as INFO
-    stdout_thread = threading.Thread(
-        target=log_stream, args=(proc.stdout, logging.info)
-    )
+    stdout_thread = threading.Thread(target=log_stream, args=(proc.stdout, logging.info))
     # Log stderr with configurable level
     logger = logging.getLogger()
     stderr_thread = threading.Thread(
@@ -94,9 +95,7 @@ def run_command(
     try:
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        logging.warning(
-            "Command timed out after %s seconds. Killing process group.", timeout
-        )
+        logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
         except Exception:
@@ -108,16 +107,16 @@ def run_command(
     if proc.returncode != 0:
         # Check if this is a timeout-related exit code (-15 is typical for SIGTERM)
         if timeout is not None and proc.returncode == -15:
-            logging.info(
-                "Command terminated due to timeout (%d seconds): %s", timeout, cmd_str
-            )
+            logging.info("Command terminated due to timeout (%d seconds): %s", timeout, cmd_str)
         else:
             logging.error(
                 "Command exited with non-zero exit code %d: %s",
                 proc.returncode,
                 cmd_str,
             )
-        sys.exit(proc.returncode)
+        raise ExternalToolError(
+            tool="command", exit_code=proc.returncode, stderr="Command failed", cmd=cmd_str
+        )
     return proc.returncode
 
 
@@ -139,7 +138,7 @@ def fix_field(field: str, desired_length: int, pad_char: str) -> str:
         return field + pad_char * (desired_length - len(field))
 
 
-def check_external_tools(tools: Dict[str, str]) -> None:
+def check_external_tools(tools: dict[str, str]) -> None:
     """
     Check that all external tools required for read simulation are available.
 
@@ -164,8 +163,7 @@ def check_external_tools(tools: Dict[str, str]) -> None:
     # Check if tools dictionary has all required tools
     for tool in required_tools:
         if tool not in tools:
-            logging.error(f"Required tool '{tool}' not found in configuration.")
-            sys.exit(1)
+            raise ValidationError(f"Required tool '{tool}' not found in configuration")
 
     # Check if the provided commands involve conda/mamba
     using_conda = any(cmd.startswith(("conda", "mamba")) for cmd in tools.values())
@@ -182,11 +180,8 @@ def check_external_tools(tools: Dict[str, str]) -> None:
             continue
 
         cmd = command.split()[0]  # Get just the executable part
-        if not (shutil.which(cmd) or os.path.isfile(cmd)):
-            logging.error(
-                f"Required tool '{tool}' (command: '{cmd}') not found in PATH."
-            )
-            sys.exit(1)
+        if not (shutil.which(cmd) or Path(cmd).is_file()):
+            raise ValidationError(f"Required tool '{tool}' (command: '{cmd}') not found in PATH")
 
     # Skip detailed validation if using conda (it will be checked when used)
     # Basic validation for specific tools
@@ -199,15 +194,13 @@ def check_external_tools(tools: Dict[str, str]) -> None:
         # which is actually expected behavior
 
         logging.info("External tool validation completed successfully.")
-    except SystemExit:
-        logging.error("External tool validation failed.")
-        logging.info(
-            "If using conda/mamba environments, ensure they're properly set up"
-        )
-        sys.exit(1)
+    except Exception as e:
+        raise ValidationError(
+            f"External tool validation failed. If using conda/mamba environments, ensure they're properly set up: {e}"
+        ) from e
 
 
-def cleanup_files(file_list: List[str]) -> None:
+def cleanup_files(file_list: list[str]) -> None:
     """
     Remove files in the provided list if they exist.
 
@@ -215,9 +208,11 @@ def cleanup_files(file_list: List[str]) -> None:
         file_list: List of filenames.
     """
     for file in file_list:
-        if file and os.path.exists(file):
-            try:
-                os.remove(file)
-                logging.info("Removed intermediate file: %s", file)
-            except Exception as e:
-                logging.warning("Failed to remove file %s: %s", file, str(e))
+        if file:
+            file_path = Path(file)
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                    logging.info("Removed intermediate file: %s", file)
+                except Exception as e:
+                    logging.warning("Failed to remove file %s: %s", file, str(e))

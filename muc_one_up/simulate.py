@@ -1,19 +1,69 @@
 # muc_one_up/simulate.py
+"""VNTR haplotype simulation engine.
 
-import random
+This module implements the core simulation logic for generating MUC1 VNTR
+haplotype chains using probability-based state transitions. It supports both
+random generation (sampling from configured distributions) and simulation from
+predefined repeat chains.
+
+Key Functions:
+    simulate_diploid: Generate multiple haplotypes with configurable parameters
+    simulate_single_haplotype: Build single haplotype by chaining repeats
+    simulate_from_chains: Simulate haplotypes from predefined repeat chains
+    assemble_haplotype_from_chain: Concatenate constants + repeats into sequence
+
+Design:
+    All haplotypes enforce canonical terminal block (6/6p → 7 → 8 → 9) to match
+    biological MUC1 structure. Probability transitions prevent premature
+    termination during chain building.
+
+Example:
+    Basic diploid simulation::
+
+        from muc_one_up.config import load_config
+        from muc_one_up.simulate import simulate_diploid
+
+        config = load_config("config.json")
+        results = simulate_diploid(config, num_haplotypes=2, fixed_lengths=[50, 60])
+        for seq, chain in results:
+            print(f"Chain: {'-'.join(chain)}, Length: {len(seq)} bp")
+
+See Also:
+    - probabilities.py: Weighted random repeat selection
+    - distribution.py: Target length sampling
+    - mutate.py: Post-simulation mutation application
+"""
+
 import logging
-from typing import List, Tuple, Optional
+import random
+
 from .distribution import sample_repeat_count
+from .type_defs import (
+    ConfigDict,
+    DNASequence,
+    Haplotype,
+    HaplotypeList,
+    MutationTargets,
+    ProbabilitiesDict,
+    RepeatChain,
+)
 
 
-def pick_next_symbol_no_end(probabilities, current_symbol):
-    """
-    Pick the next symbol from the probability table for the current symbol,
-    excluding forbidden symbols (6, 6p, 9, END).
+def pick_next_symbol_no_end(
+    probabilities: ProbabilitiesDict,
+    current_symbol: str,
+) -> str | None:
+    """Pick next symbol excluding forbidden terminal symbols.
 
-    :param probabilities: Dict with probability options.
-    :param current_symbol: The current repeat symbol.
-    :return: Next symbol (str) or None if no valid symbol is available.
+    Excludes forbidden symbols (6, 6p, 9, END) to prevent premature termination
+    of the repeat chain.
+
+    Args:
+        probabilities: Probability table for state transitions
+        current_symbol: The current repeat symbol
+
+    Returns:
+        Next symbol as string, or None if no valid symbol is available
     """
     if current_symbol not in probabilities:
         logging.debug("Current symbol '%s' not in probabilities.", current_symbol)
@@ -21,26 +71,33 @@ def pick_next_symbol_no_end(probabilities, current_symbol):
 
     next_options = probabilities[current_symbol]
     forbidden = {"6", "6p", "9", "END"}
-    filtered = [
-        (sym, prob) for (sym, prob) in next_options.items() if sym not in forbidden
-    ]
+    filtered = [(sym, prob) for (sym, prob) in next_options.items() if sym not in forbidden]
     if not filtered:
         logging.debug("No valid next symbol available from '%s'.", current_symbol)
         return None
 
-    symbols, weights = zip(*filtered)
+    symbols, weights = zip(*filtered, strict=True)
     chosen = random.choices(symbols, weights=weights, k=1)[0]
     logging.debug("Picked next symbol '%s' from '%s'.", chosen, current_symbol)
-    return chosen
+    return str(chosen) if chosen is not None else None
 
 
-def assemble_haplotype_from_chain(chain: List[str], config: dict) -> str:
-    """
-    Assemble a complete haplotype sequence from a given repeat chain.
+def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNASequence:
+    """Assemble complete haplotype sequence from repeat chain.
 
-    :param chain: List of repeat symbols to assemble.
-    :param config: Configuration dict with repeats and constants.
-    :return: Assembled haplotype sequence.
+    Concatenates left constant + repeat units + right constant to form
+    the final haplotype sequence.
+
+    Args:
+        chain: List of repeat symbols to assemble (e.g., ['1', '2', '7', '8', '9'])
+        config: Configuration with repeats and constants
+
+    Returns:
+        Assembled haplotype DNA sequence
+
+    Raises:
+        ValueError: If repeat symbol not found in config
+        KeyError: If reference assembly constants not found
     """
     reference_assembly = config.get("reference_assembly", "hg38")
     left_const = config["constants"][reference_assembly]["left"]
@@ -57,30 +114,39 @@ def assemble_haplotype_from_chain(chain: List[str], config: dict) -> str:
         if base_symbol not in repeats_dict:
             raise ValueError(f"Symbol '{base_symbol}' not found in config repeats.")
 
-        assembled_seq += repeats_dict[base_symbol]
+        assembled_seq += str(repeats_dict[base_symbol])
 
     # Add right constant
     assembled_seq += right_const
 
     logging.info(f"Assembled haplotype with {len(chain)} repeats.")
-    return assembled_seq
+    return assembled_seq  # type: ignore[no-any-return]
 
 
 def simulate_from_chains(
-    predefined_chains: List[List[str]],
-    config: dict,
-    mutation_name: Optional[str] = None,
-    mutation_targets: Optional[List[Tuple[int, int]]] = None,
-) -> List[Tuple[str, List[str]]]:
-    """
-    Simulate multiple haplotypes using predefined repeat chains.
+    predefined_chains: list[RepeatChain],
+    config: ConfigDict,
+    mutation_name: str | None = None,
+    mutation_targets: MutationTargets | None = None,
+) -> HaplotypeList:
+    """Simulate haplotypes from predefined repeat chains.
 
-    :param predefined_chains: List of repeat chains, one per haplotype.
-    :param config: Configuration dict.
-    :param mutation_name: Optional mutation name to apply.
-    :param mutation_targets: Optional list of tuples (haplotype_index, repeat_index)
-        specifying where to apply mutations.
-    :return: List of tuples (haplotype_sequence, repeat_chain).
+    Takes predefined repeat chains and assembles them into haplotype sequences.
+    Optionally marks positions with mutation markers ('m' suffix) if
+    mutation_targets are specified.
+
+    Args:
+        predefined_chains: List of repeat chains, one per haplotype
+        config: Configuration dictionary
+        mutation_name: Optional mutation name (for logging)
+        mutation_targets: Optional list of (haplotype_idx, repeat_idx) tuples
+                         using 1-based indexing
+
+    Returns:
+        List of (haplotype_sequence, repeat_chain) tuples
+
+    Note:
+        mutation_targets use 1-based indexing for both haplotype and repeat positions
     """
     haplotypes = []
 
@@ -100,20 +166,18 @@ def simulate_from_chains(
                         # Only add mutation marker if it doesn't already have one
                         if not working_chain[zero_based_idx].endswith("m"):
                             logging.info(
-                                f"Applying mutation '{mutation_name}' to haplotype {i+1}, "
+                                f"Applying mutation '{mutation_name}' to haplotype {i + 1}, "
                                 f"repeat position {repeat_idx} (0-based: {zero_based_idx})"
                             )
-                            working_chain[zero_based_idx] = (
-                                working_chain[zero_based_idx] + "m"
-                            )
+                            working_chain[zero_based_idx] = working_chain[zero_based_idx] + "m"
                     else:
                         logging.warning(
                             f"Mutation target repeat index {repeat_idx} (0-based: {zero_based_idx}) "
-                            f"is out of range for haplotype {i+1} (length {len(working_chain)})"
+                            f"is out of range for haplotype {i + 1} (length {len(working_chain)})"
                         )
 
         logging.info(
-            f"Assembling haplotype {i+1} from predefined chain with {len(working_chain)} repeats"
+            f"Assembling haplotype {i + 1} from predefined chain with {len(working_chain)} repeats"
         )
         seq = assemble_haplotype_from_chain(working_chain, config)
         haplotypes.append((seq, working_chain))
@@ -121,15 +185,28 @@ def simulate_from_chains(
     return haplotypes
 
 
-def simulate_diploid(config, num_haplotypes=2, fixed_lengths=None, seed=None):
-    """
-    Simulate multiple haplotypes using the provided config and parameters.
+def simulate_diploid(
+    config: ConfigDict,
+    num_haplotypes: int = 2,
+    fixed_lengths: list[int] | None = None,
+    seed: int | None = None,
+) -> HaplotypeList:
+    """Simulate multiple haplotypes with configurable parameters.
 
-    :param config: Configuration dict.
-    :param num_haplotypes: Number of haplotypes to simulate.
-    :param fixed_lengths: Optional list of fixed repeat lengths.
-    :param seed: Optional random seed.
-    :return: List of tuples (haplotype_sequence, repeat_chain).
+    Generates the specified number of haplotypes, either with fixed repeat lengths
+    or by sampling from the configured length distribution.
+
+    Args:
+        config: Configuration dictionary with repeats, probabilities, and length model
+        num_haplotypes: Number of haplotypes to simulate (default: 2 for diploid)
+        fixed_lengths: Optional list of fixed repeat lengths for each haplotype
+        seed: Optional random seed for reproducibility
+
+    Returns:
+        List of (haplotype_sequence, repeat_chain) tuples
+
+    Raises:
+        IndexError: If fixed_lengths is provided but has wrong length
     """
     if seed is not None:
         random.seed(seed)
@@ -141,27 +218,32 @@ def simulate_diploid(config, num_haplotypes=2, fixed_lengths=None, seed=None):
             target_length = fixed_lengths[i]
         else:
             target_length = sample_repeat_count(config["length_model"])
-        logging.info(
-            "Simulating haplotype %d with target length %d", i + 1, target_length
-        )
+        logging.info("Simulating haplotype %d with target length %d", i + 1, target_length)
         seq, chain = simulate_single_haplotype(config, target_length)
         haplotypes.append((seq, chain))
     return haplotypes
 
 
-def simulate_single_haplotype(config, target_length, min_length=10):
-    """
-    Build a single haplotype by chaining repeats according to probabilities,
-    while respecting a target length.
+def simulate_single_haplotype(
+    config: ConfigDict,
+    target_length: int,
+    min_length: int = 10,
+) -> Haplotype:
+    """Build single haplotype by chaining repeats probabilistically.
 
-    The final 4 repeats are forced to be 6/6p -> 7 -> 8 -> 9 and then the right
-    flank is appended.
+    Chains repeats according to configured probabilities to reach target length.
+    Enforces canonical terminal block: 6/6p -> 7 -> 8 -> 9 at the end.
 
-    :param config: Configuration dict.
-    :param target_length: Desired total number of repeats.
-    :param min_length: Minimum allowed repeats.
-    :return: Tuple (assembled_seq, repeat_chain).
-    :raises ValueError: if target_length is below the minimum.
+    Args:
+        config: Configuration with repeats, probabilities, and constants
+        target_length: Desired total number of repeats
+        min_length: Minimum allowed repeats (default: 10)
+
+    Returns:
+        Tuple of (assembled_sequence, repeat_chain)
+
+    Raises:
+        ValueError: If target_length is below min_length
     """
     if target_length < min_length:
         raise ValueError(

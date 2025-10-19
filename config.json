@@ -190,7 +190,9 @@
           "end": 61,
           "sequence": "C"
         }
-      ]
+      ],
+      "type": "real",
+      "citation": "Kirby et al. 2013, PMID:23396133, 10.1038/ng.2543"
     },
     "insCCCC": {
       "allowed_repeats": [
@@ -203,7 +205,9 @@
           "end": 61,
           "sequence": "CCCC"
         }
-      ]
+      ],
+      "type": "real",
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
     },
     "insG": {
       "allowed_repeats": [
@@ -216,7 +220,9 @@
           "end": 60,
           "sequence": "G"
         }
-      ]
+      ],
+      "type": "real",
+      "citation": "Olinger et al. 2020, PMID:32647000, 10.1016/j.kint.2020.04.038"
     },
     "dupA": {
       "allowed_repeats": [
@@ -229,7 +235,9 @@
           "end": 61,
           "sequence": "A"
         }
-      ]
+      ],
+      "type": "real",
+      "citation": "Olinger et al. 2020, PMID:32647000, 10.1016/j.kint.2020.04.038"
     },
     "delinsAT": {
       "allowed_repeats": [
@@ -242,7 +250,9 @@
           "end": 56,
           "sequence": "AT"
         }
-      ]
+      ],
+      "type": "real",
+      "citation": "Olinger et al. 2020, PMID:32647000, 10.1016/j.kint.2020.04.038"
     },
     "bigDel": {
       "allowed_repeats": [
@@ -254,7 +264,8 @@
           "start": 1,
           "end": 26
         }
-      ]
+      ],
+      "type": "synthetic"
     },
     "snpA_testing": {
       "allowed_repeats": [
@@ -267,17 +278,165 @@
           "end": 2,
           "sequence": "A"
         }
-      ]
+      ],
+      "type": "synthetic"
+    },
+    "insC_pos23": {
+      "allowed_repeats": [
+        "A",
+        "E"
+      ],
+      "changes": [
+        {
+          "type": "insert",
+          "start": 23,
+          "end": 24,
+          "sequence": "C"
+        }
+      ],
+      "type": "real",
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+    },
+    "insG_pos58": {
+      "allowed_repeats": [
+        "B",
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "insert",
+          "start": 58,
+          "end": 59,
+          "sequence": "G"
+        }
+      ],
+      "type": "real",
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+    },
+    "insG_pos54": {
+      "allowed_repeats": [
+        "B",
+        "J"
+      ],
+      "changes": [
+        {
+          "type": "insert",
+          "start": 54,
+          "end": 55,
+          "sequence": "G"
+        }
+      ],
+      "type": "real",
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+    },
+    "insA_pos54": {
+      "allowed_repeats": [
+        "A",
+        "H"
+      ],
+      "changes": [
+        {
+          "type": "insert",
+          "start": 54,
+          "end": 55,
+          "sequence": "A"
+        }
+      ],
+      "type": "real",
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+    },
+    "del18_31": {
+      "allowed_repeats": [
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "delete",
+          "start": 18,
+          "end": 31
+        }
+      ],
+      "type": "real",
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+    },
+    "ins16bp": {
+      "allowed_repeats": [
+        "C"
+      ],
+      "changes": [
+        {
+          "type": "insert",
+          "start": 57,
+          "end": 58,
+          "sequence": "GGGCTCCACCGCCCCC"
+        }
+      ],
+      "type": "real",
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+    },
+    "insCCC_benign": {
+      "allowed_repeats": [
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "insert",
+          "start": 60,
+          "end": 61,
+          "sequence": "CCC"
+        }
+      ],
+      "type": "synthetic"
+    },
+    "insCCCCCC_benign": {
+      "allowed_repeats": [
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "insert",
+          "start": 60,
+          "end": 61,
+          "sequence": "CCCCCC"
+        }
+      ],
+      "type": "synthetic"
+    },
+    "delCCC_benign": {
+      "allowed_repeats": [
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "delete",
+          "start": 57,
+          "end": 60
+        }
+      ],
+      "type": "synthetic"
+    },
+    "del3bp_pos30_benign": {
+      "allowed_repeats": [
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "delete",
+          "start": 30,
+          "end": 33
+        }
+      ],
+      "type": "synthetic"
     }
   },
   "tools": {
-    "reseq": "mamba run --no-capture-output -n env_wessim reseq",
-    "faToTwoBit": "mamba run --no-capture-output -n env_wessim faToTwoBit",
-    "samtools": "mamba run --no-capture-output -n env_wessim samtools",
-    "pblat": "mamba run --no-capture-output -n env_wessim pblat",
-    "bwa": "mamba run --no-capture-output -n env_wessim bwa",
-    "nanosim": "mamba run --no-capture-output -n env_nanosim simulator.py",
-    "minimap2": "mamba run --no-capture-output -n env_nanosim minimap2"
+    "reseq": "mamba run -n env_wessim reseq",
+    "faToTwoBit": "mamba run -n env_wessim faToTwoBit",
+    "samtools": "mamba run -n env_wessim samtools",
+    "pblat": "mamba run -n env_wessim pblat",
+    "bwa": "mamba run -n env_wessim bwa",
+    "nanosim": "mamba run -n env_nanosim simulator.py",
+    "minimap2": "mamba run -n env_nanosim minimap2"
   },
   "nanosim_params": {
     "training_data_path": "reference/nanosim/human_giab_hg002_sub1M_kitv14_dorado_v3.2.1/training",

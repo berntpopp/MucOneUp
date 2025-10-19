@@ -1,4 +1,5 @@
 import pytest
+
 from muc_one_up.mutate import apply_mutations, validate_allowed_repeats
 
 
@@ -7,7 +8,7 @@ def mutation_config():
     """A minimal config that includes a mutation definition."""
     return {
         "repeats": {"X": "XXXXX", "C": "CCCCC"},  # 5-base sequence
-        "constants": {"left": "TTTT", "right": "GGGG"},
+        "constants": {"hg38": {"left": "TTTT", "right": "GGGG"}},  # Use nested format
         "probabilities": {},
         "length_model": {},
         "mutations": {
@@ -176,3 +177,154 @@ def test_invalid_allowed_repeats_in_mutations(mutation_config):
     assert "Invalid repeats in allowed_repeats" in str(exc.value)
     assert "Y" in str(exc.value)
     assert "Valid repeats are: C, X" in str(exc.value)
+
+
+@pytest.mark.unit
+class TestMutateErrorConditions:
+    """Comprehensive tests for error conditions in mutate module."""
+
+    def test_missing_mutations_section_in_config(self):
+        """Test error when config lacks mutations section."""
+        config = {
+            "repeats": {"X": "XXX"},
+            "constants": {"hg38": {"left": "TT", "right": "GG"}},
+        }
+        results = [("TTXXXGG", ["X"])]
+
+        with pytest.raises(ValueError, match="No 'mutations' section in config"):
+            apply_mutations(config, results, "someMut", [(1, 1)])
+
+    def test_mutation_name_not_found(self, mutation_config):
+        """Test error when mutation name doesn't exist."""
+        results = [("TTTTXXXXXGGGG", ["X"])]
+
+        with pytest.raises(ValueError, match="Mutation 'nonExistent' not found"):
+            apply_mutations(mutation_config, results, "nonExistent", [(1, 1)])
+
+    def test_haplotype_index_out_of_range(self, mutation_config):
+        """Test error when haplotype index exceeds number of haplotypes."""
+        results = [("TTTTXXXXXGGGG", ["X"])]
+
+        with pytest.raises(ValueError, match="Haplotype index 5 out of range"):
+            apply_mutations(mutation_config, results, "testMut", [(5, 1)])
+
+    def test_repeat_index_out_of_range(self, mutation_config):
+        """Test error when repeat index exceeds chain length."""
+        results = [("TTTTXXXXXGGGG", ["X"])]
+
+        with pytest.raises(ValueError, match="Repeat index 10 out of range"):
+            apply_mutations(mutation_config, results, "testMut", [(1, 10)])
+
+    def test_empty_allowed_repeats_raises_error(self, mutation_config):
+        """Test error when mutation has no allowed_repeats and symbol doesn't match."""
+        mutation_config["mutations"]["emptyAllowed"] = {
+            "allowed_repeats": [],
+            "changes": [{"type": "replace", "start": 1, "end": 1, "sequence": "Z"}],
+        }
+        results = [("TTTTCCCCC", ["C"])]
+
+        with pytest.raises(ValueError, match="has no allowed_repeats, cannot fix symbol"):
+            apply_mutations(mutation_config, results, "emptyAllowed", [(1, 1)])
+
+    def test_malformed_change_missing_fields(self, mutation_config):
+        """Test error when change definition is missing required fields."""
+        mutation_config["mutations"]["badChange"] = {
+            "allowed_repeats": ["X"],
+            "changes": [{"type": "replace", "start": 1}],  # Missing 'end'
+        }
+        results = [("TTTTXXXXXGGGG", ["X"])]
+
+        with pytest.raises(ValueError, match=r"Malformed change.*missing fields"):
+            apply_mutations(mutation_config, results, "badChange", [(1, 1)])
+
+    def test_insert_out_of_bounds(self, mutation_config):
+        """Test error when insert position is out of bounds."""
+        mutation_config["mutations"]["badInsert"] = {
+            "allowed_repeats": ["X"],
+            "changes": [{"type": "insert", "start": 100, "end": 100, "sequence": "ZZZ"}],
+        }
+        results = [("TTTTXXXXXGGGG", ["X"])]
+
+        with pytest.raises(ValueError, match="Insert out of bounds"):
+            apply_mutations(mutation_config, results, "badInsert", [(1, 1)])
+
+    def test_delete_out_of_bounds(self, mutation_config):
+        """Test error when delete range is out of bounds."""
+        mutation_config["mutations"]["badDelete"] = {
+            "allowed_repeats": ["X"],
+            "changes": [{"type": "delete", "start": 1, "end": 100, "sequence": ""}],
+        }
+        results = [("TTTTXXXXXGGGG", ["X"])]
+
+        with pytest.raises(ValueError, match="Delete out of bounds"):
+            apply_mutations(mutation_config, results, "badDelete", [(1, 1)])
+
+    def test_delete_insert_operation(self, mutation_config):
+        """Test delete_insert mutation type."""
+        mutation_config["mutations"]["delIns"] = {
+            "allowed_repeats": ["X"],
+            "changes": [
+                {"type": "delete_insert", "start": 1, "end": 4, "sequence": "ZZZ"}
+            ],  # Delete between positions 1 and 4, insert ZZZ
+        }
+        results = [("TTTTXXXXXGGGG", ["X"])]
+
+        updated, _ = apply_mutations(mutation_config, results, "delIns", [(1, 1)])
+
+        # Should have applied delete_insert successfully
+        assert len(updated) == 1
+        _new_seq, new_chain = updated[0]
+        assert new_chain[0] == "Xm"
+
+    def test_delete_insert_out_of_bounds(self, mutation_config):
+        """Test error when delete_insert range is invalid."""
+        mutation_config["mutations"]["badDelIns"] = {
+            "allowed_repeats": ["X"],
+            "changes": [{"type": "delete_insert", "start": 1, "end": 100, "sequence": "Z"}],
+        }
+        results = [("TTTTXXXXXGGGG", ["X"])]
+
+        with pytest.raises(ValueError, match="delete_insert out of bounds"):
+            apply_mutations(mutation_config, results, "badDelIns", [(1, 1)])
+
+    def test_unknown_mutation_type(self, mutation_config):
+        """Test error for unknown mutation type."""
+        mutation_config["mutations"]["unknownType"] = {
+            "allowed_repeats": ["X"],
+            "changes": [{"type": "unknown_op", "start": 1, "end": 1, "sequence": "Z"}],
+        }
+        results = [("TTTTXXXXXGGGG", ["X"])]
+
+        with pytest.raises(ValueError, match="Unknown mutation type 'unknown_op'"):
+            apply_mutations(mutation_config, results, "unknownType", [(1, 1)])
+
+    def test_chain_not_ending_with_9(self, mutation_config):
+        """Test sequence assembly when chain doesn't end with '9'."""
+        from muc_one_up.mutate import rebuild_haplotype_sequence
+
+        mutation_config["repeats"]["A"] = "AAAAA"
+        chain = ["X", "A"]  # Doesn't end with "9"
+
+        seq = rebuild_haplotype_sequence(chain, mutation_config)
+
+        # Should not include right constant
+        left = mutation_config["constants"]["hg38"]["left"]
+        right = mutation_config["constants"]["hg38"]["right"]
+        assert seq.startswith(left)
+        assert not seq.endswith(right)  # Right constant not added
+
+    def test_multi_repeat_offset_calculation(self, mutation_config):
+        """Test mutation targeting later repeats in chain (offset calculation)."""
+        mutation_config["repeats"]["A"] = "AAAAA"
+        mutation_config["repeats"]["B"] = "BBBBB"
+        mutation_config["mutations"]["testMut"]["allowed_repeats"] = ["X", "A", "B"]
+
+        # Chain with multiple repeats
+        results = [("TTTTXXXXXAAAAABBBBB", ["X", "A", "B"])]
+
+        # Target the 3rd repeat (B)
+        updated, _ = apply_mutations(mutation_config, results, "testMut", [(1, 3)])
+
+        _new_seq, new_chain = updated[0]
+        # Third repeat should be marked
+        assert new_chain[2] == "Bm"

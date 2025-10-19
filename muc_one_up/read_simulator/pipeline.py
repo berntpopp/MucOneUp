@@ -21,36 +21,38 @@ For usage information, see the main read_simulation.py module.
 """
 
 import logging
-import os
-import sys
 from datetime import datetime
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any
 
-# Import wrapper modules
-from .wrappers.reseq_wrapper import (
-    replace_Ns,
-    generate_systematic_errors,
-    create_reads,
-    split_reads,
-)
-from .wrappers.samtools_wrapper import (
-    extract_subset_reference,
-    calculate_vntr_coverage,
-    calculate_target_coverage,
-    downsample_bam,
-    downsample_entire_bam,
-)
-from .wrappers.bwa_wrapper import align_reads
-from .wrappers.ucsc_tools_wrapper import fa_to_twobit, run_pblat
+# Import exceptions
+from ..exceptions import ConfigurationError
 
 # Import fragment simulation
 from .fragment_simulation import simulate_fragments
 
 # Import utilities
 from .utils import check_external_tools, cleanup_files
+from .wrappers.bwa_wrapper import align_reads
+
+# Import wrapper modules
+from .wrappers.reseq_wrapper import (
+    create_reads,
+    generate_systematic_errors,
+    replace_Ns,
+    split_reads,
+)
+from .wrappers.samtools_wrapper import (
+    calculate_target_coverage,
+    calculate_vntr_coverage,
+    downsample_bam,
+    downsample_entire_bam,
+    extract_subset_reference,
+)
+from .wrappers.ucsc_tools_wrapper import fa_to_twobit, run_pblat
 
 
-def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
+def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     """
     Run the complete read simulation pipeline.
 
@@ -60,7 +62,7 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
     3. Convert FASTA to 2bit format using faToTwoBit
     4. Extract a subset reference from a sample BAM using samtools
     5. Align the 2bit file to the subset reference using pblat
-    6. Simulate fragments using a ported version of w‑Wessim2
+    6. Simulate fragments using a ported version of w-Wessim2
     7. Create reads from fragments using reseq seqToIllumina
     8. Split the interleaved FASTQ into paired FASTQ files
     9. Align the reads to a human reference using BWA MEM
@@ -105,22 +107,17 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
     check_external_tools(tools)
 
     # Create output directory if it doesn't exist
-    output_dir = rs_config.get("output_dir", os.path.dirname(input_fa))
-    os.makedirs(output_dir, exist_ok=True)
+    input_path = Path(input_fa)
+    output_dir = rs_config.get("output_dir", str(input_path.parent))
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # Define the common base name for all output files
-    output_base = os.path.basename(input_fa).replace(".fa", "").replace(".fasta", "")
+    output_base = input_path.name.replace(".fa", "").replace(".fasta", "")
 
     # Use consistent naming for all output files based on the output_base
-    reads_fq1 = rs_config.get(
-        "output_fastq1", os.path.join(output_dir, f"{output_base}_R1.fastq.gz")
-    )
-    reads_fq2 = rs_config.get(
-        "output_fastq2", os.path.join(output_dir, f"{output_base}_R2.fastq.gz")
-    )
-    output_bam = rs_config.get(
-        "output_bam", os.path.join(output_dir, f"{output_base}.bam")
-    )
+    reads_fq1 = rs_config.get("output_fastq1", str(Path(output_dir) / f"{output_base}_R1.fastq.gz"))
+    reads_fq2 = rs_config.get("output_fastq2", str(Path(output_dir) / f"{output_base}_R2.fastq.gz"))
+    output_bam = rs_config.get("output_bam", str(Path(output_dir) / f"{output_base}.bam"))
 
     # Log the output filenames for clarity
     logging.info("Output filenames:")
@@ -130,23 +127,23 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
     # Stage 1: Replace Ns in the input FASTA
     # Define all intermediate filenames consistently with underscore prefix
     # to distinguish them from final outputs
-    noNs_fa = os.path.join(output_dir, f"_{output_base}_noNs.fa")
+    no_ns_fa = str(Path(output_dir) / f"_{output_base}_noNs.fa")
     logging.info("1. Replacing Ns in FASTA")
-    replace_Ns(input_fa, noNs_fa, tools)
+    replace_Ns(input_fa, no_ns_fa, tools)
 
     # Stage 2: Generate systematic errors
     reseq_model = rs_config.get("reseq_model")
     if not reseq_model:
         logging.error("Error: reseq_model not specified in config.")
-        sys.exit(1)
-    syser_fq = os.path.join(output_dir, f"_{output_base}_syser.fq")
+        raise ConfigurationError("reseq_model not specified in config 'read_simulation' section")
+    syser_fq = str(Path(output_dir) / f"_{output_base}_syser.fq")
     logging.info("2. Generating systematic errors")
-    generate_systematic_errors(noNs_fa, reseq_model, syser_fq, tools)
+    generate_systematic_errors(no_ns_fa, reseq_model, syser_fq, tools)
 
     # Stage 3: Convert FASTA to 2bit
-    twobit_file = os.path.join(output_dir, f"_{output_base}_noNs.2bit")
+    twobit_file = str(Path(output_dir) / f"_{output_base}_noNs.2bit")
     logging.info("3. Converting FASTA to 2bit format")
-    fa_to_twobit(noNs_fa, twobit_file, tools)
+    fa_to_twobit(no_ns_fa, twobit_file, tools)
 
     # Stage 4: Extract subset reference from BAM
     # Get the reference assembly setting from the config
@@ -170,15 +167,18 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
             f"Error: No sample BAM specified for {reference_assembly}. "
             f"Please add 'sample_bam_{reference_assembly}' or 'sample_bam' to the config."
         )
-        sys.exit(1)
+        raise ConfigurationError(
+            f"No sample BAM specified for {reference_assembly}. "
+            f"Add 'sample_bam_{reference_assembly}' or 'sample_bam' to config"
+        )
 
     logging.info(f"Using sample BAM for {reference_assembly}: {sample_bam}")
-    subset_ref = os.path.join(output_dir, f"_{output_base}_subset_ref.fa")
+    subset_ref = str(Path(output_dir) / f"_{output_base}_subset_ref.fa")
     logging.info("4. Extracting subset reference from BAM")
     collated_bam = extract_subset_reference(sample_bam, subset_ref, tools)
 
     # Stage 5: Run pblat alignment
-    psl_file = os.path.join(output_dir, f"_{output_base}_alignment.psl")
+    psl_file = str(Path(output_dir) / f"_{output_base}_alignment.psl")
     threads = rs_config.get("threads", 4)
     pblat_threads = min(rs_config.get("pblat_threads", 24), threads)
     logging.info("5. Running pblat alignment")
@@ -188,12 +188,12 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
         psl_file,
         tools,
         threads=pblat_threads,
-        minScore=rs_config.get("pblat_min_score", 95),
-        minIdentity=rs_config.get("pblat_min_identity", 95),
+        min_score=rs_config.get("pblat_min_score", 95),
+        min_identity=rs_config.get("pblat_min_identity", 95),
     )
 
     # Stage 6: Simulate fragments
-    fragments_fa = os.path.join(output_dir, f"_{output_base}_fragments.fa")
+    fragments_fa = str(Path(output_dir) / f"_{output_base}_fragments.fa")
     read_number = rs_config.get("read_number", 100000)
     fragment_size = rs_config.get("fragment_size", 350)
     fragment_sd = rs_config.get("fragment_sd", 50)
@@ -201,7 +201,7 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
     bind = rs_config.get("binding_min", 0.5)
     logging.info("6. Simulating fragments (w-Wessim2)")
     simulate_fragments(
-        noNs_fa,
+        no_ns_fa,
         syser_fq,
         psl_file,
         read_number,
@@ -213,13 +213,11 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
     )
 
     # Stage 7: Create reads from fragments
-    reads_fq = os.path.join(output_dir, f"_{output_base}_reads.fq")
+    reads_fq = str(Path(output_dir) / f"_{output_base}_reads.fq")
     logging.info("7. Creating reads from fragments")
     # Use a timeout of 120 seconds for seqToIllumina - the tool tends to keep running
     # indefinitely even after producing complete output
-    seqtoillumina_timeout = rs_config.get(
-        "seqtoillumina_timeout", 120
-    )  # Default 120 seconds
+    seqtoillumina_timeout = rs_config.get("seqtoillumina_timeout", 120)  # Default 120 seconds
     create_reads(
         fragments_fa,
         reseq_model,
@@ -237,7 +235,9 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
     human_reference = rs_config.get("human_reference")
     if not human_reference:
         logging.error("Error: human_reference not specified in config.")
-        sys.exit(1)
+        raise ConfigurationError(
+            "human_reference not specified in config 'read_simulation' section"
+        )
     logging.info("9. Aligning reads to reference")
     align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads)
 
@@ -251,17 +251,18 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
             vntr_region_key = f"vntr_region_{reference_assembly}"
             vntr_region = rs_config.get(vntr_region_key)
             if not vntr_region:
-                logging.error(
-                    f"VNTR region not specified in config for {reference_assembly}."
+                logging.error(f"VNTR region not specified in config for {reference_assembly}.")
+                raise ConfigurationError(
+                    f"VNTR region not specified in config for {reference_assembly}. "
+                    f"Add '{vntr_region_key}' to config"
                 )
-                sys.exit(1)
             current_cov = calculate_vntr_coverage(
                 tools["samtools"],
                 output_bam,
                 vntr_region,
                 threads,
-                os.path.dirname(output_bam),
-                os.path.basename(output_bam).replace(".bam", ""),
+                str(Path(output_bam).parent),
+                Path(output_bam).name.replace(".bam", ""),
             )
             region_info = vntr_region
         elif mode == "non_vntr":
@@ -270,21 +271,23 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
                 logging.error(
                     "For non-VNTR downsampling, 'sample_target_bed' must be provided in config."
                 )
-                sys.exit(1)
+                raise ConfigurationError(
+                    "For non-VNTR downsampling, 'sample_target_bed' must be provided in config"
+                )
             current_cov = calculate_target_coverage(
                 tools["samtools"],
                 output_bam,
                 bed_file,
                 threads,
-                os.path.dirname(output_bam),
-                os.path.basename(output_bam).replace(".bam", ""),
+                str(Path(output_bam).parent),
+                Path(output_bam).name.replace(".bam", ""),
             )
             region_info = f"BED file: {bed_file}"
         else:
-            logging.error(
-                "Invalid downsample_mode in config; use 'vntr' or 'non_vntr'."
+            logging.error("Invalid downsample_mode in config; use 'vntr' or 'non_vntr'.")
+            raise ConfigurationError(
+                f"Invalid downsample_mode '{mode}' in config; use 'vntr' or 'non_vntr'"
             )
-            sys.exit(1)
         if current_cov > downsample_target:
             fraction = downsample_target / current_cov
             fraction = min(max(fraction, 0.0), 1.0)
@@ -295,9 +298,8 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
                 fraction,
                 region_info,
             )
-            downsampled_bam = os.path.join(
-                os.path.dirname(output_bam),
-                os.path.basename(output_bam).replace(".bam", "_downsampled.bam"),
+            downsampled_bam = str(
+                Path(output_bam).parent / Path(output_bam).name.replace(".bam", "_downsampled.bam")
             )
             if mode == "vntr":
                 downsample_bam(
@@ -341,7 +343,7 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
 
     # Clean up intermediate files
     intermediates = [
-        noNs_fa,
+        no_ns_fa,
         syser_fq,
         twobit_file,
         subset_ref,
@@ -358,17 +360,16 @@ def simulate_reads_pipeline(config: Dict[str, Any], input_fa: str) -> str:
 
     cleanup_files(intermediates)
 
-    return output_bam
+    return output_bam  # type: ignore[no-any-return]
 
 
 # For direct command-line use (backward compatibility)
-if __name__ == "__main__":
+if __name__ == "__main__":  # OK: top-level entry point
     import json
+    import sys
 
     # Configure logging
-    logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
     if len(sys.argv) != 3:
         print("Usage: python pipeline.py <config.json> <input_fasta>")
@@ -377,7 +378,7 @@ if __name__ == "__main__":
     config_file = sys.argv[1]
     input_fa = sys.argv[2]
 
-    with open(config_file, "r") as fh:
+    with Path(config_file).open() as fh:
         config = json.load(fh)
 
     simulate_reads_pipeline(config, input_fa)

@@ -1,0 +1,76 @@
+# Pre-commit hooks for MucOneUp
+# Run: pre-commit install
+# Update: pre-commit autoupdate
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Ruff - Python linter and formatter (replaces Black, isort, flake8, and more)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      # Run the linter (with unsafe fixes to match CI)
+      - id: ruff
+        args: [--fix, --unsafe-fixes, --exit-non-zero-on-fix]
+      # Run the formatter
+      - id: ruff-format
+
+  # mypy - Static type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-jsonschema>=4.0.0
+        args:
+          - --ignore-missing-imports
+          - --no-strict-optional
+        exclude: ^(tests/|helpers/)
+
+  # Bandit - Security linter for Python
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        args:
+          - -ll  # Only report MEDIUM/HIGH severity
+          - -ii  # Only report MEDIUM/HIGH confidence
+          - --skip=B101,B311,B404,B601,B603
+        exclude: ^(tests/|helpers/)
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.txt$|\.tsv$|\.csv$'
+      - id: end-of-file-fixer
+        exclude: '\.txt$|\.tsv$|\.csv$'
+      - id: check-yaml
+      - id: check-json
+        exclude: ^tests/fixtures/
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=5000]
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-case-conflict
+      - id: check-docstring-first
+
+  # Pytest check - ensure tests pass before commit (optional, can be slow)
+  # Uncomment if you want tests to run on every commit
+  # - repo: local
+  #   hooks:
+  #     - id: pytest-check
+  #       name: pytest-check
+  #       entry: pytest
+  #       language: system
+  #       pass_filenames: false
+  #       always_run: true
+  #       args: [--no-cov, -x, -q]
+
+# Configuration
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+fail_fast: false

@@ -1,6 +1,186 @@
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "muc_one_up"
+version = "0.12.0"
+description = "MucOneUp: a tool to simulate MUC1 VNTR diploid references"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Bernt Popp", email = "bernt.popp.md@gmail.com"},
 ]
-build-backend = "setuptools.build_meta"
+keywords = ["bioinformatics", "genomics", "MUC1", "VNTR", "simulation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+dependencies = [
+    "click>=8.1.0,<9.0",
+    "orfipy>=0.0.3,<1.0",
+    "jsonschema>=3.2.0,<5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.0",  # Required for mocker fixture in tests
+    "ruff>=0.8.0",
+    "mypy>=1.8.0",
+    "types-jsonschema>=4.0.0",
+    "biopython>=1.80",  # Required for test_orf_prefix_filtering.py
+]
+
+[project.scripts]
+muconeup = "muc_one_up.cli.click_main:main"
+
+[project.urls]
+Homepage = "https://github.com/berntpopp/MucOneUp"
+Repository = "https://github.com/berntpopp/MucOneUp"
+Issues = "https://github.com/berntpopp/MucOneUp/issues"
+
+# ==================== RUFF ====================
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+indent-width = 4
+
+# Exclude build artifacts and caches
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+# Select comprehensive rule set
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "SIM",    # flake8-simplify
+    "I",      # isort
+    "N",      # pep8-naming
+    "C4",     # flake8-comprehensions
+    "PTH",    # flake8-use-pathlib
+    "RUF",    # Ruff-specific rules
+]
+
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # Do not perform function calls in argument defaults
+    "N802",   # Function name should be lowercase (bioinformatics conventions)
+]
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "ARG", "PLR2004"]  # Allow asserts, unused args, magic values
+"__init__.py" = ["F401"]  # Allow unused imports in __init__
+"helpers/*" = ["N817"]  # Allow common acronyms like ET for ElementTree
+
+[tool.ruff.lint.isort]
+known-first-party = ["muc_one_up"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ==================== MYPY ====================
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true
+check_untyped_defs = true
+
+# Start with gradual typing - can be made stricter over time
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = "orfipy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "orfipy_core.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "jsonschema.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# ==================== PYTEST ====================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--cov=muc_one_up",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "unit: marks tests as unit tests (fast, isolated)",
+    "integration: marks tests as integration tests (slower, multiple components)",
+    "slow: marks tests as slow (> 1 second)",
+    "cli: marks tests as CLI interface tests",
+    "bioinformatics: marks tests as bioinformatics-specific (sequence validation, etc.)",
+    "requires_tools: marks tests requiring external tools (samtools, bwa, etc.)",
+]
+
+# ==================== COVERAGE ====================
+[tool.coverage.run]
+source = ["muc_one_up"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]

@@ -43,22 +43,21 @@ where <input_fasta> is typically the output from muconeup
 """
 
 import logging
-import sys
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Any
+
+from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
 
 # Import the refactored pipelines
 from muc_one_up.read_simulator.pipeline import (
     simulate_reads_pipeline as simulate_illumina_reads,
 )
-from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
 
 # Configure logging
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
-def simulate_reads(config: Dict[str, Any], input_fa: str) -> str:
+def simulate_reads(config: dict[str, Any], input_fa: str) -> str:
     """
     Run the complete read simulation pipeline.
 
@@ -81,9 +80,7 @@ def simulate_reads(config: Dict[str, Any], input_fa: str) -> str:
     simulator = config.get("read_simulation", {}).get("simulator", "illumina")
 
     if simulator.lower() == "ont":
-        logging.info(
-            "Using Oxford Nanopore (ONT) read simulation pipeline with NanoSim"
-        )
+        logging.info("Using Oxford Nanopore (ONT) read simulation pipeline with NanoSim")
         # Extract human reference from config, just like the Illumina pipeline does
         human_reference = config.get("read_simulation", {}).get("human_reference")
         if not human_reference:
@@ -97,14 +94,15 @@ def simulate_reads(config: Dict[str, Any], input_fa: str) -> str:
         return simulate_illumina_reads(config, input_fa)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # OK: top-level entry point
     import json
+    import sys
 
     if len(sys.argv) != 3:
         print("Usage: python read_simulation.py <config.json> <input_fasta>")
         sys.exit(1)
     config_file = sys.argv[1]
     input_fa = sys.argv[2]
-    with open(config_file, "r") as fh:
+    with Path(config_file).open() as fh:
         config = json.load(fh)
     simulate_reads(config, input_fa)
