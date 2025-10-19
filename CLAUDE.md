@@ -167,10 +167,41 @@ Uses a port of w-Wessim2 with these steps:
 10. Optional coverage-based downsampling
 
 #### ONT Pipeline (`read_simulator/ont_pipeline.py`)
-Uses NanoSim for Oxford Nanopore reads:
+Uses NanoSim for Oxford Nanopore long reads with automatic diploid split-simulation support.
+
+**Standard Mode (Haploid/Single Sequence)**:
 1. Run NanoSim simulation with pre-trained models
-2. Align reads with minimap2
-3. Create indexed BAM output
+2. Apply coverage correction factor (default: 0.325)
+3. Align reads with minimap2
+4. Create indexed BAM output
+
+**Diploid Split-Simulation Mode (2 Sequences)** - NEW in v0.14.0:
+Automatically activated when reference contains exactly 2 sequences. Eliminates allelic bias in diploid references.
+
+Workflow:
+1. **Diploid Detection**: Automatically identifies 2-sequence FASTA files
+2. **Haplotype Extraction**: Splits diploid reference into separate haplotype files
+3. **Coverage Calculation**: Divides target coverage by 2, applies correction factor
+4. **Independent Simulation**: Simulates each haplotype separately with unique seeds (seed, seed+1)
+5. **FASTQ Merging**: Combines reads from both haplotypes
+6. **Alignment**: Aligns merged reads to reference
+7. **BAM Output**: Creates indexed BAM file
+
+Features:
+- Automatic mode detection (no user intervention)
+- Eliminates length-proportional sampling bias
+- Maintains reproducibility with seed support
+- Backward compatible with haploid references
+
+**Read Length Control** (recommended for diploid):
+```json
+"nanosim_params": {
+  "min_read_length": 1500,
+  "max_read_length": 5000,
+  "correction_factor": 0.325,
+  "enable_split_simulation": true
+}
+```
 
 ### Key Modules
 

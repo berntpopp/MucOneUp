@@ -228,7 +228,7 @@ def test_extract_haplotypes_unequal_lengths(diploid_unequal_fasta, temp_dir):
 def test_extract_haplotypes_creates_output_dir(diploid_fasta, temp_dir):
     """Test that output directory is created if it doesn't exist."""
     output_dir = temp_dir / "new_dir" / "nested"
-    hap1_path, hap2_path = extract_haplotypes(diploid_fasta, output_dir, "test")
+    hap1_path, _hap2_path = extract_haplotypes(diploid_fasta, output_dir, "test")
 
     assert output_dir.exists()
     assert Path(hap1_path).exists()
@@ -247,7 +247,7 @@ def test_extract_haplotypes_fails_on_haploid(haploid_fasta, temp_dir):
     """Test that extraction fails for non-diploid reference."""
     output_dir = temp_dir / "output"
 
-    with pytest.raises(ValidationError, match="Expected diploid.*found 1"):
+    with pytest.raises(ValidationError, match=r"Expected diploid.*found 1"):
         extract_haplotypes(haploid_fasta, output_dir, "test")
 
 
@@ -255,7 +255,7 @@ def test_extract_haplotypes_fails_on_triploid(triploid_fasta, temp_dir):
     """Test that extraction fails for triploid reference."""
     output_dir = temp_dir / "output"
 
-    with pytest.raises(ValidationError, match="Expected diploid.*found 3"):
+    with pytest.raises(ValidationError, match=r"Expected diploid.*found 3"):
         extract_haplotypes(triploid_fasta, output_dir, "test")
 
 

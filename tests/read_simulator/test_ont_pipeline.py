@@ -236,7 +236,8 @@ class TestWrapperIntegration:
         assert call_kwargs["nanosim_cmd"] == "/path/to/nanosim"
         assert call_kwargs["reference_fasta"] == str(input_fa)
         assert call_kwargs["training_model"] == "/path/to/model"
-        assert call_kwargs["coverage"] == 50.0
+        # Coverage is corrected by default correction factor (0.325), so 50 / 0.325 ≈ 153.85
+        assert call_kwargs["coverage"] == pytest.approx(153.85, rel=0.01)
         assert call_kwargs["threads"] == 8
         assert call_kwargs["min_read_length"] == 1000
         assert call_kwargs["max_read_length"] == 50000

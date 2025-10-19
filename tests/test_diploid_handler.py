@@ -181,14 +181,14 @@ def test_prepare_diploid_simulation_fails_on_haploid(haploid_fasta, temp_dir):
     """Test that preparation fails for non-diploid reference."""
     output_dir = temp_dir / "sim_prep"
 
-    with pytest.raises(ValueError, match="Expected diploid.*found 1"):
+    with pytest.raises(ValueError, match=r"Expected diploid.*found 1"):
         prepare_diploid_simulation(haploid_fasta, output_dir)
 
 
 def test_prepare_diploid_simulation_accepts_string_paths(diploid_fasta, temp_dir):
     """Test that function accepts string paths."""
     output_dir = temp_dir / "sim_prep"
-    hap1, hap2, prep_dir = prepare_diploid_simulation(str(diploid_fasta), str(output_dir))
+    hap1, hap2, _prep_dir = prepare_diploid_simulation(str(diploid_fasta), str(output_dir))
 
     assert Path(hap1).exists()
     assert Path(hap2).exists()

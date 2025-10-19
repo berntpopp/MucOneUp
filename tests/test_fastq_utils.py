@@ -145,7 +145,7 @@ def test_validate_fastq_malformed_no_separator(temp_dir):
 
 def test_validate_fastq_wrong_quality_length(wrong_quality_length_fastq):
     """Test validation fails when quality length != sequence length."""
-    with pytest.raises(ValidationError, match="Sequence length.*!= quality length"):
+    with pytest.raises(ValidationError, match=r"Sequence length.*!= quality length"):
         validate_fastq(wrong_quality_length_fastq, check_quality=True)
 
 

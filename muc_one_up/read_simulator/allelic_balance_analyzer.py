@@ -132,8 +132,7 @@ def calculate_haplotype_coverage(
         if haplotype_name not in bam.references:
             available = ", ".join(bam.references)
             raise ValueError(
-                f"Haplotype '{haplotype_name}' not found in BAM. "
-                f"Available references: {available}"
+                f"Haplotype '{haplotype_name}' not found in BAM. Available references: {available}"
             )
 
         # Count reads mapping to this haplotype
@@ -144,7 +143,8 @@ def calculate_haplotype_coverage(
             if not read.is_unmapped and not read.is_secondary and not read.is_supplementary:
                 read_count += 1
                 # Count aligned bases (excludes soft/hard clipped)
-                total_bases += read.reference_length
+                if read.reference_length is not None:
+                    total_bases += read.reference_length
 
         # Calculate mean coverage
         mean_coverage = total_bases / reference_length if reference_length > 0 else 0.0
@@ -258,7 +258,7 @@ def analyze_allelic_balance(
     logging.info(f"Deviation: {deviation_percent:.2f}%")
     logging.info(f"Chi-square p-value: {chi2_pval:.6f}")
     logging.info(f"Binomial p-value: {binom_pval:.6f}")
-    logging.info(f"Balanced: {is_balanced} (tolerance: {tolerance*100}%)")
+    logging.info(f"Balanced: {is_balanced} (tolerance: {tolerance * 100}%)")
 
     return report
 
