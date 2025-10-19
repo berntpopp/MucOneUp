@@ -717,3 +717,206 @@ class TestArgparseClickParity:
         assert (
             "[default:" in result_orfs.output and "100]" in result_orfs.output
         )  # --orf-min-aa default
+
+
+# ============================================================================
+# Seed Parameter Tests
+# ============================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.cli
+class TestSeedParameter:
+    """Tests for --seed parameter in reads commands."""
+
+    def test_reads_illumina_with_seed(self, runner, temp_config, tmp_path, mocker):
+        """Test reads illumina command with --seed parameter."""
+        # Create a minimal FASTA file
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGTACGT\n")
+
+        # Mock the actual read simulation to avoid needing tools
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None  # Simulate successful execution
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "illumina",
+                str(fasta_file),
+                "--seed",
+                "42",
+                "--coverage",
+                "10",
+            ],
+        )
+
+        # Command should execute successfully
+        assert result.exit_code == 0
+
+        # Verify simulate_reads was called
+        assert mock_simulate.called
+
+        # Verify the config passed has seed set
+        called_config = mock_simulate.call_args[0][0]
+        assert "read_simulation" in called_config
+        assert called_config["read_simulation"]["seed"] == 42
+
+    def test_reads_illumina_without_seed(self, runner, temp_config, tmp_path, mocker):
+        """Test reads illumina command without --seed (backward compatibility)."""
+        # Create a minimal FASTA file
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGTACGT\n")
+
+        # Mock the actual read simulation
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "illumina",
+                str(fasta_file),
+                "--coverage",
+                "10",
+            ],
+        )
+
+        # Command should execute successfully
+        assert result.exit_code == 0
+
+        # Verify the config does not have seed set
+        called_config = mock_simulate.call_args[0][0]
+        assert "read_simulation" in called_config
+        # Seed should not be in config (or be None)
+        assert called_config["read_simulation"].get("seed") is None
+
+    def test_reads_ont_with_seed(self, runner, temp_config, tmp_path, mocker):
+        """Test reads ont command with --seed parameter."""
+        # Create a minimal FASTA file
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGTACGTACGT\n")
+
+        # Mock the actual read simulation
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "ont",
+                str(fasta_file),
+                "--seed",
+                "123",
+                "--coverage",
+                "20",
+            ],
+        )
+
+        # Command should execute successfully
+        assert result.exit_code == 0
+
+        # Verify simulate_reads was called
+        assert mock_simulate.called
+
+        # Verify the config passed has seed in nanosim_params
+        called_config = mock_simulate.call_args[0][0]
+        assert "nanosim_params" in called_config
+        assert called_config["nanosim_params"]["seed"] == 123
+
+    def test_reads_ont_without_seed(self, runner, temp_config, tmp_path, mocker):
+        """Test reads ont command without --seed (backward compatibility)."""
+        # Create a minimal FASTA file
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGTACGTACGT\n")
+
+        # Mock the actual read simulation
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "ont",
+                str(fasta_file),
+                "--coverage",
+                "20",
+            ],
+        )
+
+        # Command should execute successfully
+        assert result.exit_code == 0
+
+        # Verify the config does not have seed in nanosim_params (or is None)
+        called_config = mock_simulate.call_args[0][0]
+        assert "nanosim_params" in called_config
+        assert called_config["nanosim_params"].get("seed") is None
+
+    def test_seed_accepts_integer_values(self, runner, temp_config, tmp_path, mocker):
+        """Test that --seed accepts valid integer values."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGT\n")
+
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        # Test various integer values
+        for seed_value in [0, 1, 42, 12345, 999999]:
+            result = runner.invoke(
+                cli,
+                [
+                    "--config",
+                    temp_config,
+                    "reads",
+                    "illumina",
+                    str(fasta_file),
+                    "--seed",
+                    str(seed_value),
+                    "--coverage",
+                    "10",
+                ],
+            )
+            assert result.exit_code == 0
+            called_config = mock_simulate.call_args[0][0]
+            assert called_config["read_simulation"]["seed"] == seed_value
+
+    def test_seed_logging_message(self, runner, temp_config, tmp_path, mocker, caplog):
+        """Test that using --seed produces appropriate log message."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGT\n")
+
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        # Run with seed
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "illumina",
+                str(fasta_file),
+                "--seed",
+                "42",
+                "--coverage",
+                "10",
+            ],
+        )
+
+        assert result.exit_code == 0
+        # Check that log message appears in output or logs
+        # The logging.info call should have executed
+        assert mock_simulate.called

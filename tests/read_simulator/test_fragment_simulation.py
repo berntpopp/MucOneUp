@@ -533,3 +533,107 @@ class TestSimulateFragments:
 
         assert output.exists()
         # Fragment should be generated (though possibly truncated)
+
+
+class TestFragmentSimulationSeeding:
+    """Test deterministic behavior with seeds."""
+
+    def test_same_seed_produces_identical_fragments(self, tmp_path):
+        """Test that same seed generates identical fragment files."""
+        # Arrange: Create input files
+        ref_fa = tmp_path / "ref.fa"
+        ref_fa.write_text(">chr1\n" + "ACGT" * 100 + "\n")  # 400 bases
+
+        syser = tmp_path / "test.syser"
+        syser.write_text(
+            "@chr1 forward\n" + "N" * 400 + "\n+\n" + "!" * 400 + "\n"
+            "@chr1 reverse\n" + "N" * 400 + "\n+\n" + "!" * 400 + "\n"
+        )
+
+        psl = tmp_path / "test.psl"
+        psl.write_text(
+            "100\t0\t0\t0\t0\t0\t0\t0\t+\tquery\t150\t0\t100\tchr1\t1000\t50\t150\t1\t100\t0\t50\n"
+        )
+
+        # Act: Run simulation twice with same seed
+        output1 = tmp_path / "fragments1.fa"
+        simulate_fragments(
+            str(ref_fa), str(syser), str(psl), 10, 300, 50, 200, 0.5, str(output1), seed=42
+        )
+
+        output2 = tmp_path / "fragments2.fa"
+        simulate_fragments(
+            str(ref_fa), str(syser), str(psl), 10, 300, 50, 200, 0.5, str(output2), seed=42
+        )
+
+        # Assert: Files should be identical
+        content1 = output1.read_text()
+        content2 = output2.read_text()
+        assert content1 == content2, "Same seed should produce identical fragments"
+
+    def test_different_seeds_produce_different_fragments(self, tmp_path):
+        """Test that different seeds generate different fragment files."""
+        # Arrange
+        ref_fa = tmp_path / "ref.fa"
+        ref_fa.write_text(">chr1\n" + "ACGT" * 100 + "\n")
+
+        syser = tmp_path / "test.syser"
+        syser.write_text(
+            "@chr1 forward\n" + "N" * 400 + "\n+\n" + "!" * 400 + "\n"
+            "@chr1 reverse\n" + "N" * 400 + "\n+\n" + "!" * 400 + "\n"
+        )
+
+        psl = tmp_path / "test.psl"
+        psl.write_text(
+            "100\t0\t0\t0\t0\t0\t0\t0\t+\tquery\t150\t0\t100\tchr1\t1000\t50\t150\t1\t100\t0\t50\n"
+        )
+
+        # Act: Run with different seeds
+        output1 = tmp_path / "fragments1.fa"
+        simulate_fragments(
+            str(ref_fa), str(syser), str(psl), 10, 300, 50, 200, 0.5, str(output1), seed=42
+        )
+
+        output2 = tmp_path / "fragments2.fa"
+        simulate_fragments(
+            str(ref_fa), str(syser), str(psl), 10, 300, 50, 200, 0.5, str(output2), seed=123
+        )
+
+        # Assert: Files should be different
+        content1 = output1.read_text()
+        content2 = output2.read_text()
+        assert content1 != content2, "Different seeds should produce different fragments"
+
+    def test_no_seed_produces_random_output(self, tmp_path):
+        """Test that omitting seed produces non-deterministic output."""
+        # Arrange
+        ref_fa = tmp_path / "ref.fa"
+        ref_fa.write_text(">chr1\n" + "ACGT" * 100 + "\n")
+
+        syser = tmp_path / "test.syser"
+        syser.write_text(
+            "@chr1 forward\n" + "N" * 400 + "\n+\n" + "!" * 400 + "\n"
+            "@chr1 reverse\n" + "N" * 400 + "\n+\n" + "!" * 400 + "\n"
+        )
+
+        psl = tmp_path / "test.psl"
+        psl.write_text(
+            "100\t0\t0\t0\t0\t0\t0\t0\t+\tquery\t150\t0\t100\tchr1\t1000\t50\t150\t1\t100\t0\t50\n"
+        )
+
+        # Act: Run twice without seed
+        output1 = tmp_path / "fragments1.fa"
+        simulate_fragments(
+            str(ref_fa), str(syser), str(psl), 10, 300, 50, 200, 0.5, str(output1), seed=None
+        )
+
+        output2 = tmp_path / "fragments2.fa"
+        simulate_fragments(
+            str(ref_fa), str(syser), str(psl), 10, 300, 50, 200, 0.5, str(output2), seed=None
+        )
+
+        # Assert: Files are very likely different (probabilistic test)
+        content1 = output1.read_text()
+        content2 = output2.read_text()
+        # Note: There's a tiny chance they could be identical, but astronomically unlikely
+        assert content1 != content2, "No seed should produce random (likely different) output"

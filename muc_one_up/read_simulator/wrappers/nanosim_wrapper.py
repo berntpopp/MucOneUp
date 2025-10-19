@@ -28,6 +28,7 @@ def run_nanosim_simulation(
     max_read_length: int | None = None,
     other_options: str = "",
     timeout: int = 3600,
+    seed: int | None = None,
 ) -> str:
     """
     Run NanoSim simulation to generate Oxford Nanopore reads.
@@ -43,6 +44,7 @@ def run_nanosim_simulation(
         max_read_length: Maximum read length (optional)
         other_options: Additional NanoSim options (optional)
         timeout: Timeout in seconds (default: 3600)
+        seed: Random seed for reproducibility (optional)
 
     Returns:
         Path to the generated FASTQ file
@@ -72,6 +74,11 @@ def run_nanosim_simulation(
         "-x",
         coverage,  # build_tool_command handles conversion
     )
+
+    # Add seed if provided
+    if seed is not None:
+        cmd_list.extend(["--seed", str(seed)])
+        logging.info(f"[NanoSim] Using random seed: {seed}")
 
     # Add optional parameters
     if min_read_length:

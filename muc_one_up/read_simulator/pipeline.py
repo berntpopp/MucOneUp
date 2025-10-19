@@ -199,6 +199,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     fragment_sd = rs_config.get("fragment_sd", 50)
     min_fragment = rs_config.get("min_fragment", 200)
     bind = rs_config.get("binding_min", 0.5)
+    seed = rs_config.get("seed")
     logging.info("6. Simulating fragments (w-Wessim2)")
     simulate_fragments(
         no_ns_fa,
@@ -210,6 +211,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
         min_fragment,
         bind,
         fragments_fa,
+        seed=seed,
     )
 
     # Stage 7: Create reads from fragments

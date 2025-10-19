@@ -304,6 +304,7 @@ def simulate_fragments(
     min_fragment: int,
     bind: float,
     output_fragments: str,
+    seed: int | None = None,
 ) -> None:
     """
     Simulate fragments (port of w-Wessim2) and write paired fragment sequences to a FASTA file.
@@ -318,10 +319,16 @@ def simulate_fragments(
         min_fragment: Minimum fragment size.
         bind: Minimum fraction (%) for overlap.
         output_fragments: Output FASTA filename for fragments.
+        seed: Random seed for reproducibility. If None, uses system randomness.
 
     Raises:
         SystemExit: If the simulation fails or produces invalid output.
     """
+    # Initialize random seed for reproducibility if provided
+    if seed is not None:
+        random.seed(seed)
+        logging.info(f"Fragment simulation using random seed: {seed}")
+
     logging.info("Starting fragment simulation (ported w-Wessim2 logic)...")
 
     # Load reference sequences
