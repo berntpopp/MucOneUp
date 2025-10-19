@@ -14,7 +14,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from ..exceptions import ExternalToolError, ValidationError
+from ...exceptions import ExternalToolError, ValidationError
 
 
 def run_command(
