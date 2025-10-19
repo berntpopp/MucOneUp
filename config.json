@@ -47,6 +47,20 @@
       "vntr_region": "chr1:155160963-155162030"
     }
   },
+  "reference_genomes": {
+    "hg38": {
+      "fasta_path": "reference/hg38/hg38.fa",
+      "vntr_region": "chr1:155188487-155192239",
+      "display_name": "Human Reference Genome (GRCh38/hg38)",
+      "source_url": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz"
+    },
+    "hg19": {
+      "fasta_path": "reference/hg19/hg19.fa",
+      "vntr_region": "chr1:155160963-155162030",
+      "display_name": "Human Reference Genome (GRCh37/hg19)",
+      "source_url": "https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.fa.gz"
+    }
+  },
   "probabilities": {
     "1": {
       "2": 1.0

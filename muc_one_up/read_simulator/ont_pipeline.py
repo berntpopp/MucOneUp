@@ -20,6 +20,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..bioinformatics.reference_validation import (
+    get_reference_path_for_assembly,
+    validate_reference_for_assembly,
+)
+from ..exceptions import FileOperationError, ValidationError
 from .utils import is_diploid_reference, run_split_simulation
 from .wrappers.nanosim_wrapper import (
     align_ont_reads_with_minimap2,
@@ -256,8 +261,33 @@ def simulate_ont_reads_pipeline(
     logging.info("2. Starting read alignment with minimap2")
     output_bam = f"{output_prefix}.bam"
 
-    # Use human_reference if provided, otherwise use input_fa
-    reference_for_alignment = human_reference if human_reference else input_fa
+    # Use human_reference if provided, otherwise get from config (Issue #28)
+    if human_reference is None:
+        try:
+            # Get assembly from config (default: hg38)
+            assembly = config.get("reference_assembly", "hg38")
+
+            # Get reference path for assembly
+            ref_path = get_reference_path_for_assembly(config, assembly)
+            reference_for_alignment = str(ref_path)
+
+            # Validate reference and indices for minimap2 (logs warnings automatically)
+            warnings = validate_reference_for_assembly(config, assembly, aligner="minimap2")
+
+            logging.info("Using reference from config: %s (%s)", reference_for_alignment, assembly)
+
+            # Log index warnings if any
+            if warnings:
+                for warning in warnings:
+                    logging.warning("%s", warning)
+        except (ValidationError, FileOperationError) as e:
+            logging.warning("Could not load reference from config: %s", e)
+            logging.warning("Falling back to aligning against simulated reference")
+            reference_for_alignment = input_fa
+    else:
+        reference_for_alignment = human_reference
+        logging.info("Using user-provided reference: %s", reference_for_alignment)
+
     logging.info("Aligning ONT reads to reference: %s", reference_for_alignment)
 
     try:

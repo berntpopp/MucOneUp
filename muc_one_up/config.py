@@ -109,6 +109,23 @@ CONFIG_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "repeats": {"type": "object", "additionalProperties": {"type": "string"}},
+        "reference_genomes": {
+            "type": "object",
+            "patternProperties": {
+                "^[a-zA-Z0-9_]+$": {  # Assembly name pattern
+                    "type": "object",
+                    "properties": {
+                        "fasta_path": {"type": "string"},
+                        "vntr_region": {"type": "string"},
+                        "display_name": {"type": "string"},
+                        "source_url": {"type": "string"},
+                    },
+                    "required": ["fasta_path", "vntr_region"],
+                    "additionalProperties": False,
+                }
+            },
+            "additionalProperties": False,
+        },
         "nanosim_params": {
             "type": "object",
             "properties": {
@@ -311,6 +328,31 @@ def load_config(config_path: str) -> dict[str, Any]:
             old_constants = config["constants"].copy()
             config["constants"] = {ref_assembly: old_constants}
             logging.debug("Normalized flat constants format to nested format")
+
+        # AUTO-MIGRATION (Issue #28): Create reference_genomes from constants if missing
+        if "reference_genomes" not in config and "constants" in config:
+            logging.info("Auto-migrating config: adding reference_genomes section")
+
+            config["reference_genomes"] = {}
+
+            # Migrate from nested constants format
+            for assembly in ["hg38", "hg19"]:
+                if assembly in config["constants"]:
+                    assembly_const = config["constants"][assembly]
+                    if isinstance(assembly_const, dict) and "vntr_region" in assembly_const:
+                        # Create minimal reference_genomes entry
+                        config["reference_genomes"][assembly] = {
+                            "fasta_path": f"reference/{assembly}/{assembly}.fa",
+                            "vntr_region": assembly_const["vntr_region"],
+                            "display_name": f"Auto-migrated {assembly.upper()}",
+                        }
+                        logging.debug(f"Auto-migrated {assembly} to reference_genomes")
+
+            if config["reference_genomes"]:
+                logging.warning(
+                    "Config format is outdated. Please add 'reference_genomes' section "
+                    "with proper fasta_path values. See documentation for details."
+                )
 
         # Extra validation for allowed_repeats in mutations
         if "repeats" in config and "mutations" in config:
