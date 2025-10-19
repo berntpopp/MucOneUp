@@ -257,7 +257,7 @@ class TestBEDValidation:
     def test_validate_bed_skip_comments(self, tmp_path):
         """Test BED validation skips comments and empty lines."""
         bed_file = tmp_path / "test.bed"
-        bed_file.write_text("# This is a comment\n" "\n" "chr1\t100\t200\n")
+        bed_file.write_text("# This is a comment\n\nchr1\t100\t200\n")
 
         # Should not raise
         validate_bed_file(bed_file)

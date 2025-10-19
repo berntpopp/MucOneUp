@@ -216,8 +216,7 @@ def get_reference_path_for_assembly(
 
     if not ref_genomes:
         raise ValidationError(
-            "No 'reference_genomes' section in config. "
-            "Please add reference genome configuration."
+            "No 'reference_genomes' section in config. Please add reference genome configuration."
         )
 
     # Get assembly config
