@@ -239,12 +239,14 @@ def merge_fastq_files(
             else:
                 in_handle = open(input_file)
 
-            # Copy lines
+            # Copy lines and count reads
+            # FASTQ has exactly 4 lines per read, so use modulo arithmetic
+            # to count correctly (quality scores can contain '@' character)
             read_count = 0
-            for line in in_handle:
+            for i, line in enumerate(in_handle):
                 out_handle.write(line)
-                # Count reads (every 4th line is end of a read)
-                if line.startswith("@"):
+                # Increment counter on first line of each 4-line FASTQ record
+                if i % 4 == 0:
                     read_count += 1
 
             in_handle.close()

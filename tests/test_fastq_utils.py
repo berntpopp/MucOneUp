@@ -360,3 +360,43 @@ def test_merge_fastq_files_parametrized(temp_dir, num_files, reads_per_file):
 
     expected_reads = num_files * reads_per_file
     assert count_fastq_reads(result) == expected_reads
+
+
+def test_merge_fastq_files_quality_with_at_symbol(temp_dir):
+    """
+    Test that merging correctly counts reads when quality scores contain '@'.
+
+    This is a regression test for a bug where counting reads by checking if
+    lines start with '@' would overcount when quality score lines contain
+    '@' character (which is valid ASCII encoding for Phred+33 quality score 31).
+
+    FASTQ format has exactly 4 lines per read, so proper counting must use
+    modulo arithmetic (line_num % 4 == 0) rather than checking for '@'.
+    """
+    # Create FASTQ with quality scores containing '@' character
+    # '@' is ASCII 64, which in Phred+33 encoding represents quality score 31
+    content_lines = []
+    for i in range(3):
+        content_lines.append(f"@read_{i}")
+        content_lines.append("ATCGATCG")  # 8 bp sequence
+        content_lines.append("+")
+        content_lines.append("@@@@@@@@")  # Quality scores with @ symbols (Q31)
+
+    file1 = temp_dir / "quality_at.fastq"
+    file1.write_text("\n".join(content_lines) + "\n")
+
+    # Also create a normal file to merge with
+    file2 = temp_dir / "normal.fastq"
+    file2.write_text(create_fastq_content(2, "normal"))
+
+    output = temp_dir / "merged.fastq"
+    result = merge_fastq_files([file1, file2], output)
+
+    # Should count exactly 5 reads (3 + 2), not more due to '@' in quality
+    assert count_fastq_reads(result) == 5
+
+    # Verify content is preserved
+    merged_content = Path(result).read_text()
+    assert "read_0" in merged_content
+    assert "read_2" in merged_content
+    assert "normal_0" in merged_content
