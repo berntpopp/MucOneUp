@@ -46,7 +46,7 @@ def write_fasta(
     filename: str,
     prefix: str = "haplotype",
     comment: str | None = None,
-    comments: list[str] | None = None,
+    comments: list[str | None] | None = None,
 ) -> None:
     """Write DNA/protein sequences to FASTA file with formatting.
 
