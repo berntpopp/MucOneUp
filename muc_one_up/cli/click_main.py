@@ -343,8 +343,14 @@ def reads():
     show_default=True,
     help="Number of threads.",
 )
+@click.option(
+    "--seed",
+    type=int,
+    default=None,
+    help="Random seed for reproducibility (same seed = identical reads).",
+)
 @click.pass_context
-def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads):
+def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed):
     """Simulate Illumina short reads from one or more FASTA files.
 
     Supports batch processing following Unix philosophy:
@@ -383,6 +389,11 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads):
         config["read_simulation"]["simulator"] = "illumina"
         config["read_simulation"]["coverage"] = coverage
         config["read_simulation"]["threads"] = threads
+
+        # Set seed if provided
+        if seed is not None:
+            config["read_simulation"]["seed"] = seed
+            logging.info(f"Using random seed: {seed} (results will be reproducible)")
 
         # Warn if --out-base provided for multiple files
         if len(input_fastas) > 1 and out_base:
@@ -455,8 +466,14 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads):
     show_default=True,
     help="Minimum read length.",
 )
+@click.option(
+    "--seed",
+    type=int,
+    default=None,
+    help="Random seed for reproducibility (same seed = identical reads).",
+)
 @click.pass_context
-def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length):
+def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed):
     """Simulate Oxford Nanopore long reads from one or more FASTA files.
 
     Supports batch processing following Unix philosophy:
@@ -494,6 +511,11 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length):
         if "nanosim_params" not in config:
             config["nanosim_params"] = {}
         config["nanosim_params"]["min_len"] = min_read_length
+
+        # Set seed if provided
+        if seed is not None:
+            config["nanosim_params"]["seed"] = seed
+            logging.info(f"Using random seed: {seed} (results will be reproducible)")
 
         # Warn if --out-base provided for multiple files
         if len(input_fastas) > 1 and out_base:

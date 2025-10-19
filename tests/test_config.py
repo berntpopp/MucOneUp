@@ -46,3 +46,94 @@ def test_load_config_valid(tmp_path):
     # After normalization, flat constants are converted to nested format (default: hg38)
     ref_assembly = config.get("reference_assembly", "hg38")
     assert config["constants"][ref_assembly]["left"] == "AAA"
+
+
+def test_read_simulation_accepts_seed(tmp_path):
+    """Test that read_simulation section accepts seed parameter."""
+    config_data = {
+        "repeats": {"1": "ACGACT"},
+        "constants": {"hg38": {"left": "A", "right": "T", "vntr_region": "chr1:1-100"}},
+        "probabilities": {},
+        "length_model": {
+            "distribution": "normal",
+            "min_repeats": 10,
+            "max_repeats": 100,
+            "mean_repeats": 50,
+            "median_repeats": 50,
+        },
+        "mutations": {},
+        "tools": {"samtools": "samtools"},
+        "read_simulation": {
+            "human_reference": "/ref/hg38.fa",
+            "threads": 4,
+            "seed": 42,  # Should be valid
+        },
+    }
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(config_data))
+
+    # Should not raise ValidationError
+    config = load_config(str(config_file))
+    assert config["read_simulation"]["seed"] == 42
+
+
+def test_nanosim_params_accepts_seed(tmp_path):
+    """Test that nanosim_params section accepts seed parameter."""
+    config_data = {
+        "repeats": {"1": "ACGACT"},
+        "constants": {"hg38": {"left": "A", "right": "T", "vntr_region": "chr1:1-100"}},
+        "probabilities": {},
+        "length_model": {
+            "distribution": "normal",
+            "min_repeats": 10,
+            "max_repeats": 100,
+            "mean_repeats": 50,
+            "median_repeats": 50,
+        },
+        "mutations": {},
+        "tools": {"samtools": "samtools"},
+        "read_simulation": {
+            "human_reference": "/ref/hg38.fa",
+            "threads": 4,
+        },
+        "nanosim_params": {
+            "training_data_path": "/path/to/model",
+            "coverage": 30,
+            "seed": 12345,  # Should be valid
+        },
+    }
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(config_data))
+
+    # Should not raise ValidationError
+    config = load_config(str(config_file))
+    assert config["nanosim_params"]["seed"] == 12345
+
+
+def test_seed_can_be_null(tmp_path):
+    """Test that seed can be explicitly null (for JSON compatibility)."""
+    config_data = {
+        "repeats": {"1": "ACGACT"},
+        "constants": {"hg38": {"left": "A", "right": "T", "vntr_region": "chr1:1-100"}},
+        "probabilities": {},
+        "length_model": {
+            "distribution": "normal",
+            "min_repeats": 10,
+            "max_repeats": 100,
+            "mean_repeats": 50,
+            "median_repeats": 50,
+        },
+        "mutations": {},
+        "tools": {"samtools": "samtools"},
+        "read_simulation": {
+            "human_reference": "/ref/hg38.fa",
+            "threads": 4,
+            "seed": None,  # Explicit null
+        },
+    }
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(config_data))
+
+    # Should not raise ValidationError
+    config = load_config(str(config_file))
+    assert config["read_simulation"]["seed"] is None

@@ -543,3 +543,83 @@ class TestAlignONTReadsWithMinimap2:
         assert "-n" in minimap2_cmd
         assert "ont" in minimap2_cmd
         assert "minimap2" in minimap2_cmd
+
+
+def test_run_nanosim_with_seed(mocker, tmp_path):
+    """Test that seed parameter is correctly passed to NanoSim command."""
+    # Arrange
+    mock_run_command = mocker.patch(
+        "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command"
+    )
+    mock_run_command.return_value = None
+
+    ref_fa = tmp_path / "ref.fa"
+    ref_fa.write_text(">chr1\nACGT\n")
+
+    output_prefix = str(tmp_path / "output")
+    training_model = "/path/to/model"
+
+    # Create expected output file
+    expected_fastq = f"{output_prefix}_aligned_reads.fastq"
+    Path(expected_fastq).write_text("@read1\nACGT\n+\nIIII\n")
+
+    # Act
+    from muc_one_up.read_simulator.wrappers.nanosim_wrapper import run_nanosim_simulation
+
+    run_nanosim_simulation(
+        nanosim_cmd="nanosim",
+        reference_fasta=str(ref_fa),
+        output_prefix=output_prefix,
+        training_model=training_model,
+        coverage=30.0,
+        threads=4,
+        seed=42,
+    )
+
+    # Assert
+    mock_run_command.assert_called_once()
+    called_cmd = mock_run_command.call_args[0][0]
+
+    # Verify --seed is in command
+    assert "--seed" in called_cmd
+    seed_index = called_cmd.index("--seed")
+    assert called_cmd[seed_index + 1] == "42"
+
+
+def test_run_nanosim_without_seed(mocker, tmp_path):
+    """Test that NanoSim runs without seed when not provided."""
+    # Arrange
+    mock_run_command = mocker.patch(
+        "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command"
+    )
+    mock_run_command.return_value = None
+
+    ref_fa = tmp_path / "ref.fa"
+    ref_fa.write_text(">chr1\nACGT\n")
+
+    output_prefix = str(tmp_path / "output")
+    training_model = "/path/to/model"
+
+    # Create expected output file
+    expected_fastq = f"{output_prefix}_aligned_reads.fastq"
+    Path(expected_fastq).write_text("@read1\nACGT\n+\nIIII\n")
+
+    # Act
+    from muc_one_up.read_simulator.wrappers.nanosim_wrapper import run_nanosim_simulation
+
+    run_nanosim_simulation(
+        nanosim_cmd="nanosim",
+        reference_fasta=str(ref_fa),
+        output_prefix=output_prefix,
+        training_model=training_model,
+        coverage=30.0,
+        threads=4,
+        seed=None,  # Explicitly no seed
+    )
+
+    # Assert
+    mock_run_command.assert_called_once()
+    called_cmd = mock_run_command.call_args[0][0]
+
+    # Verify --seed is NOT in command
+    assert "--seed" not in called_cmd

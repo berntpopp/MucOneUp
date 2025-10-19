@@ -96,6 +96,7 @@ def simulate_ont_reads_pipeline(
     min_read_length = ns_params.get("min_read_length")
     max_read_length = ns_params.get("max_read_length")
     other_options = ns_params.get("other_options", "")
+    seed = ns_params.get("seed")
 
     # Setup output paths
     input_path = Path(input_fa)
@@ -119,6 +120,7 @@ def simulate_ont_reads_pipeline(
             min_read_length=min_read_length,
             max_read_length=max_read_length,
             other_options=other_options,
+            seed=seed,
         )
         logging.info("NanoSim simulation completed successfully")
     except Exception as e:

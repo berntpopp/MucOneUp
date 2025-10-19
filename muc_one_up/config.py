@@ -114,6 +114,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "min_read_length": {"type": ["number", "null"]},
                 "max_read_length": {"type": ["number", "null"]},
                 "other_options": {"type": ["string", "null"]},
+                "seed": {"type": ["number", "null"]},
             },
             "required": ["training_data_path", "coverage"],
             "additionalProperties": False,
@@ -231,6 +232,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "vntr_region_hg19": {"type": "string"},
                 "vntr_region_hg38": {"type": "string"},
                 "aligner": {"type": "string", "enum": ["bwa", "minimap2"]},
+                "seed": {"type": ["number", "null"]},
             },
             "required": [
                 "human_reference",
