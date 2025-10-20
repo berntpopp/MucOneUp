@@ -369,7 +369,7 @@ def validate_complete_workflow(template_seq: str, sample_name: str) -> dict[str,
     Returns:
         Complete workflow results
     """
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"COMPLETE SNAPSHOT WORKFLOW: {sample_name}")
     print("=" * 80)
 
@@ -417,13 +417,13 @@ def validate_complete_workflow(template_seq: str, sample_name: str) -> dict[str,
             result = simulate_snapshot_extension(
                 template_seq=survivor["sequence"],
                 primer_seq=SnapshotPrimers.SNAPSHOT_PRIMER_7C,
-                primer_name=f"Survivor_{idx+1}_Primer7C",
+                primer_name=f"Survivor_{idx + 1}_Primer7C",
             )
 
             snapshot_results.append(result)
 
             if result.get("binds"):
-                print(f"\n  Survivor {idx+1}:")
+                print(f"\n  Survivor {idx + 1}:")
                 print(f"    Mutation type: {survivor['mutation_type']}")
                 print(f"    Amplicon length: {survivor['length']} bp")
                 print("    Primer binds: Yes")
