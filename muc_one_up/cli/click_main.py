@@ -558,6 +558,220 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed):
         ctx.exit(1)
 
 
+@reads.command()
+@click.argument(
+    "input_fastas", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False)
+)
+@click.option(
+    "--out-dir",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False),
+    help="Output folder.",
+)
+@click.option(
+    "--out-base",
+    default=None,
+    help="Base name for output files (auto-generated if processing multiple files).",
+)
+@click.option(
+    "--coverage",
+    type=int,
+    default=None,
+    help="Target coverage (overrides config if provided).",
+)
+@click.option(
+    "--pass-num",
+    type=int,
+    default=None,
+    help="Number of passes per molecule for multi-pass CLR simulation (≥2, overrides config if provided).",
+)
+@click.option(
+    "--min-passes",
+    type=int,
+    default=None,
+    help="Minimum passes required for CCS HiFi consensus (≥1, overrides config if provided).",
+)
+@click.option(
+    "--min-rq",
+    type=float,
+    default=None,
+    help="Minimum predicted accuracy for HiFi reads (0.0-1.0, overrides config if provided). 0.99 = Q20 (standard HiFi).",
+)
+@click.option(
+    "--model-type",
+    type=click.Choice(["qshmm", "errhmm"]),
+    default=None,
+    help="pbsim3 model type (overrides config if provided).",
+)
+@click.option(
+    "--model-file",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Path to pbsim3 model file (overrides config if provided).",
+)
+@click.option(
+    "--threads",
+    type=int,
+    default=4,
+    show_default=True,
+    help="Number of threads.",
+)
+@click.option(
+    "--seed",
+    type=int,
+    default=None,
+    help="Random seed for reproducibility (same seed = identical reads).",
+)
+@click.pass_context
+def pacbio(
+    ctx,
+    input_fastas,
+    out_dir,
+    out_base,
+    coverage,
+    pass_num,
+    min_passes,
+    min_rq,
+    model_type,
+    model_file,
+    threads,
+    seed,
+):
+    """Simulate PacBio HiFi reads from one or more FASTA files.
+
+    Supports batch processing following Unix philosophy:
+    - Single file: muconeup reads pacbio file.fa --model-file X.model --out-base reads
+    - Multiple files: muconeup reads pacbio file1.fa file2.fa --model-file X.model
+    - Glob pattern: muconeup reads pacbio *.simulated.fa --model-file X.model
+
+    When processing multiple files, --out-base is auto-generated from input
+    filenames unless explicitly provided (which applies to all files).
+
+    \b
+    Workflow:
+      1. Multi-pass CLR simulation (pbsim3)
+      2. HiFi consensus generation (CCS)
+      3. Read alignment (minimap2 with map-hifi preset)
+
+    \b
+    Examples:
+      # Single file with standard HiFi settings (Q20)
+      muconeup --config X reads pacbio sample.001.fa \\
+        --model-file /models/QSHMM-SEQUEL.model \\
+        --out-base my_hifi
+
+      # Multiple files with high-accuracy HiFi (Q30)
+      muconeup --config X reads pacbio sample.*.fa \\
+        --model-file /models/QSHMM-SEQUEL.model \\
+        --min-rq 0.999 --min-passes 5
+
+      # Ultra-deep coverage simulation
+      muconeup --config X reads pacbio sample.fa \\
+        --model-file /models/QSHMM-SEQUEL.model \\
+        --coverage 100 --pass-num 5
+
+    \b
+    Model Files:
+      Download from: https://github.com/yukiteruono/pbsim3/tree/master/data
+      - QSHMM-SEQUEL.model: Sequel II chemistry
+      - QSHMM-RSII.model: RS II chemistry
+      - ERRHMM-SEQUEL.model: Alternative error model
+
+    \b
+    Quality Control:
+      - pass_num ≥2 required for multi-pass (≥3 recommended)
+      - min_passes controls CCS stringency (higher = better quality, lower yield)
+      - min_rq=0.99 is Q20 (standard HiFi threshold)
+      - min_rq=0.999 is Q30 (ultra-high accuracy)
+    """
+    try:
+        from ..read_simulation import simulate_reads as simulate_reads_pipeline
+
+        # Load config once (DRY principle)
+        config_path = Path(ctx.obj["config_path"])
+        with config_path.open() as f:
+            config = json.load(f)
+
+        # Configure PacBio simulation (shared for all files)
+        if "read_simulation" not in config:
+            config["read_simulation"] = {}
+        config["read_simulation"]["simulator"] = "pacbio"
+
+        # Initialize pacbio_params if not in config (config-first principle)
+        if "pacbio_params" not in config:
+            config["pacbio_params"] = {}
+
+        # Override config with CLI params only if provided (CLI takes precedence)
+        # This follows the ONT pattern: defaults → config → CLI override hierarchy
+        if model_type is not None:
+            config["pacbio_params"]["model_type"] = model_type
+        if model_file is not None:
+            config["pacbio_params"]["model_file"] = model_file
+        if coverage is not None:
+            config["pacbio_params"]["coverage"] = coverage
+        if pass_num is not None:
+            config["pacbio_params"]["pass_num"] = pass_num
+        if min_passes is not None:
+            config["pacbio_params"]["min_passes"] = min_passes
+        if min_rq is not None:
+            config["pacbio_params"]["min_rq"] = min_rq
+        if threads != 4:  # threads has explicit default, so keep this check
+            config["pacbio_params"]["threads"] = threads
+        if seed is not None:
+            config["pacbio_params"]["seed"] = seed
+            logging.info(f"Using random seed: {seed} (results will be reproducible)")
+
+        # Validate required config parameters exist
+        required_params = ["model_type", "model_file"]
+        missing_params = [p for p in required_params if p not in config["pacbio_params"]]
+        if missing_params:
+            raise click.ClickException(
+                f"Missing required PacBio parameters in config: {', '.join(missing_params)}. "
+                f"Either add them to config.json pacbio_params section or provide via CLI options."
+            )
+
+        # Warn if --out-base provided for multiple files
+        if len(input_fastas) > 1 and out_base:
+            logging.warning(
+                "--out-base '%s' will be used for all %d files. "
+                "Consider omitting --out-base for auto-generated names.",
+                out_base,
+                len(input_fastas),
+            )
+
+        # Process each file (KISS principle - simple iteration)
+        total_files = len(input_fastas)
+        logging.info("Processing %d FASTA file(s) for PacBio HiFi read simulation", total_files)
+
+        for idx, input_fasta in enumerate(input_fastas, start=1):
+            # Determine output base name
+            if out_base:
+                # User provided: use as-is (or append index for multiple files)
+                actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
+            else:
+                # Auto-generate from input filename
+                actual_out_base = _generate_output_base(Path(input_fasta), "_pacbio_hifi")
+
+            logging.info(
+                "[%d/%d] Simulating PacBio HiFi reads: %s -> %s",
+                idx,
+                total_files,
+                input_fasta,
+                actual_out_base,
+            )
+
+            # Run simulation for this file
+            simulate_reads_pipeline(config, input_fasta)
+
+        logging.info("PacBio HiFi read simulation completed for all %d file(s).", total_files)
+        return  # Click handles exit automatically
+
+    except Exception as e:
+        logging.error("PacBio HiFi read simulation failed: %s", e)
+        ctx.exit(1)
+
+
 # ============================================================================
 # ANALYZE Command Group - Pure Analysis Utilities
 # ============================================================================

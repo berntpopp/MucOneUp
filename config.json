@@ -506,7 +506,9 @@
     "pblat": "mamba run -n env_wessim pblat",
     "bwa": "mamba run -n env_wessim bwa",
     "nanosim": "mamba run -n env_nanosim simulator.py",
-    "minimap2": "mamba run -n env_nanosim minimap2"
+    "minimap2": "mamba run -n env_nanosim minimap2",
+    "pbsim3": "mamba run -n env_pacbio pbsim",
+    "ccs": "mamba run -n env_pacbio ccs"
   },
   "nanosim_params": {
     "training_data_path": "reference/nanosim/human_giab_hg002_sub1M_kitv14_dorado_v3.2.1/training",
@@ -518,6 +520,15 @@
     "correction_factor": 0.325,
     "enable_split_simulation": true,
     "enable_coverage_correction": true
+  },
+  "pacbio_params": {
+    "model_type": "errhmm",
+    "model_file": "reference/pbsim3/ERRHMM-SEQUEL.model",
+    "coverage": 30,
+    "pass_num": 10,
+    "min_passes": 3,
+    "min_rq": 0.99,
+    "threads": 8
   },
   "read_simulation": {
     "simulator": "illumina",

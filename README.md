@@ -20,7 +20,7 @@ MucOneUp is a **Python toolkit for simulating realistic MUC1 Variable Number Tan
 
 - 🧬 **Realistic VNTR Simulation** - Probability-based repeat transitions with canonical terminal blocks (6/6p → 7 → 8 → 9)
 - 🔬 **Flexible Mutation Engine** - Insert, delete, replace, or delete-insert operations with strict mode validation
-- 📊 **Multi-Platform Read Simulation** - Illumina (w-Wessim2) and Oxford Nanopore (NanoSim) integration
+- 📊 **Multi-Platform Read Simulation** - Illumina (w-Wessim2), Oxford Nanopore (NanoSim), and PacBio HiFi (pbsim3/CCS) integration
 - 🧪 **ORF Prediction & Toxic Detection** - Automated open reading frame analysis with toxicity scoring
 - 🧮 **SNP Integration** - Random or predefined SNP application with haplotype-specific variants
 - 🔄 **Batch Processing** - Unix-style composable commands (`simulate` → `analyze` → `reads`)
@@ -126,7 +126,7 @@ output/
 
 **Core Commands:**
 - `muconeup simulate` - Generate haplotypes ONLY (core functionality)
-- `muconeup reads {illumina|ont}` - Simulate sequencing reads from ANY FASTA
+- `muconeup reads {illumina|ont|pacbio}` - Simulate sequencing reads from ANY FASTA
 - `muconeup analyze {orfs|stats|vntr-stats}` - Analyze ANY FASTA file
 
 **Batch Processing:**

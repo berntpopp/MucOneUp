@@ -80,9 +80,10 @@ def validate_fasta_format(fasta_path: str | Path) -> None:
             continue
 
         if in_sequence and not DNA_PATTERN.match(line):
-            # Truncate long lines for error message
-            display_line = line[:50] + "..." if len(line) > 50 else line
-            raise ValidationError(f"Invalid DNA sequence at line {i}: {display_line}")
+            # Truncate long lines for error message (inline to avoid mypy unreachable warning)
+            raise ValidationError(
+                f"Invalid DNA sequence at line {i}: {line[:50] + '...' if len(line) > 50 else line}"
+            )
 
 
 def validate_repeat_structure(

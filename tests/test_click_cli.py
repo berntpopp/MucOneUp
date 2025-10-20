@@ -418,15 +418,136 @@ class TestReadsCommand:
         # May fail on missing NanoSim, but parsing should work
         assert result.exit_code in [0, 1]
 
+    def test_reads_pacbio_help(self, runner, temp_config):
+        """Test reads pacbio command help."""
+        result = runner.invoke(cli, ["--config", temp_config, "reads", "pacbio", "--help"])
+        assert result.exit_code == 0
+        assert "Simulate PacBio HiFi reads" in result.output
+        assert "--coverage" in result.output
+        assert "--pass-num" in result.output
+        assert "--min-passes" in result.output
+        assert "--min-rq" in result.output
+
+    def test_reads_pacbio_with_file(self, runner, temp_config, tmp_path):
+        """Test reads pacbio with single FASTA file (parity with illumina/ont)."""
+        # Create a minimal FASTA file
+        fasta_file = tmp_path / "test_pacbio.fa"
+        fasta_file.write_text(">test_sequence\nACGTACGTACGTACGTACGTACGTACGTACGT\n")
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "pacbio",
+                str(fasta_file),
+                "--out-base",
+                "test_pacbio",
+                "--coverage",
+                "20",
+                "--pass-num",
+                "10",
+                "--min-passes",
+                "3",
+                "--min-rq",
+                "0.99",
+            ],
+        )
+
+        # May fail on missing pbsim3/CCS, but parsing should work
+        assert result.exit_code in [0, 1]
+
+    def test_reads_pacbio_with_all_parameters(self, runner, temp_config, tmp_path, mocker):
+        """Test reads pacbio with all CLI parameters specified."""
+        # Create test files
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGTACGTACGT\n")
+
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model data")
+
+        # Mock simulate_reads to avoid needing actual tools
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "pacbio",
+                str(fasta_file),
+                "--out-base",
+                "test_output",
+                "--out-dir",
+                str(tmp_path),
+                "--model-type",
+                "errhmm",
+                "--model-file",
+                str(model_file),
+                "--coverage",
+                "25",
+                "--pass-num",
+                "15",
+                "--min-passes",
+                "5",
+                "--min-rq",
+                "0.995",
+                "--threads",
+                "16",
+                "--seed",
+                "789",
+            ],
+        )
+
+        # Command should parse correctly
+        assert result.exit_code == 0
+
+        # Verify parameters were passed correctly
+        assert mock_simulate.called
+        called_config = mock_simulate.call_args[0][0]
+        assert called_config["pacbio_params"]["coverage"] == 25
+        assert called_config["pacbio_params"]["pass_num"] == 15
+        assert called_config["pacbio_params"]["min_passes"] == 5
+        assert called_config["pacbio_params"]["min_rq"] == 0.995
+        assert called_config["pacbio_params"]["threads"] == 16
+        assert called_config["pacbio_params"]["seed"] == 789
+        assert called_config["pacbio_params"]["model_type"] == "errhmm"
+        assert called_config["pacbio_params"]["model_file"] == str(model_file)
+
+    def test_reads_pacbio_missing_file_error(self, runner, temp_config, tmp_path):
+        """Test reads pacbio with non-existent input file."""
+        missing_file = tmp_path / "nonexistent.fa"
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "pacbio",
+                str(missing_file),
+                "--coverage",
+                "10",
+            ],
+        )
+
+        # Should fail with error
+        assert result.exit_code != 0
+        assert "does not exist" in result.output or "Error" in result.output
+
     @pytest.mark.parametrize(
         "command,subcommand,file_count,extra_options",
         [
             ("reads", "illumina", 3, ["--coverage", "10", "--threads", "4"]),
             ("reads", "ont", 3, ["--coverage", "20", "--min-read-length", "50"]),
+            ("reads", "pacbio", 3, ["--coverage", "15", "--pass-num", "5", "--min-passes", "2"]),
             ("analyze", "orfs", 2, ["--orf-min-aa", "10"]),
             ("analyze", "stats", 3, []),
         ],
-        ids=["illumina-batch", "ont-batch", "orfs-batch", "stats-batch"],
+        ids=["illumina-batch", "ont-batch", "pacbio-batch", "orfs-batch", "stats-batch"],
     )
     def test_batch_processing(
         self, runner, temp_config, tmp_path, command, subcommand, file_count, extra_options
@@ -863,6 +984,91 @@ class TestSeedParameter:
         called_config = mock_simulate.call_args[0][0]
         assert "nanosim_params" in called_config
         assert called_config["nanosim_params"].get("seed") is None
+
+    def test_reads_pacbio_with_seed(self, runner, temp_config, tmp_path, mocker):
+        """Test reads pacbio command with --seed parameter (for reproducibility)."""
+        # Create test files
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGTACGTACGT\n")
+
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model data")
+
+        # Mock the actual read simulation
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "pacbio",
+                str(fasta_file),
+                "--model-type",
+                "qshmm",
+                "--model-file",
+                str(model_file),
+                "--seed",
+                "456",
+                "--coverage",
+                "15",
+                "--pass-num",
+                "5",
+            ],
+        )
+
+        # Command should execute successfully
+        assert result.exit_code == 0
+
+        # Verify simulate_reads was called
+        assert mock_simulate.called
+
+        # Verify the config passed has seed in pacbio_params
+        called_config = mock_simulate.call_args[0][0]
+        assert "pacbio_params" in called_config
+        assert called_config["pacbio_params"]["seed"] == 456
+
+    def test_reads_pacbio_without_seed(self, runner, temp_config, tmp_path, mocker):
+        """Test reads pacbio command without --seed (backward compatibility)."""
+        # Create test files
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGTACGTACGT\n")
+
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model data")
+
+        # Mock the actual read simulation
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "pacbio",
+                str(fasta_file),
+                "--model-type",
+                "qshmm",
+                "--model-file",
+                str(model_file),
+                "--coverage",
+                "15",
+                "--pass-num",
+                "5",
+            ],
+        )
+
+        # Command should execute successfully
+        assert result.exit_code == 0
+
+        # Verify the config does not have seed in pacbio_params (or is None)
+        called_config = mock_simulate.call_args[0][0]
+        assert "pacbio_params" in called_config
+        assert called_config["pacbio_params"].get("seed") is None
 
     def test_seed_accepts_integer_values(self, runner, temp_config, tmp_path, mocker):
         """Test that --seed accepts valid integer values."""
