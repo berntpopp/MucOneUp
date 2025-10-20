@@ -193,6 +193,8 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "allowed_repeats": {"type": "array", "items": {"type": "string"}},
                     "strict_mode": {"type": "boolean"},
+                    "type": {"type": "string"},
+                    "citation": {"type": "string"},
                     "changes": {
                         "type": "array",
                         "items": {
@@ -217,7 +219,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                     },
                 },
                 "required": ["allowed_repeats", "changes"],
-                "additionalProperties": False,
+                "additionalProperties": False,  # Strict validation - only allow defined fields
             },
         },
         "tools": {
@@ -263,6 +265,89 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "threads",
             ],
             "additionalProperties": False,
+        },
+        "snapshot_validation": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string"},
+                    "pcr": {
+                        "type": "object",
+                        "properties": {
+                            "forward_primer": {"type": "string"},
+                            "reverse_primer": {"type": "string"},
+                            "reverse_needs_rc": {"type": "boolean"},
+                            "max_products": {"type": "number"},
+                            "size_range": {
+                                "type": "object",
+                                "properties": {
+                                    "min": {"type": "number"},
+                                    "max": {"type": "number"},
+                                },
+                                "required": ["min", "max"],
+                                "additionalProperties": False,
+                            },
+                        },
+                        "required": [
+                            "forward_primer",
+                            "reverse_primer",
+                            "reverse_needs_rc",
+                            "max_products",
+                            "size_range",
+                        ],
+                        "additionalProperties": False,
+                    },
+                    "digest": {
+                        "type": "object",
+                        "properties": {
+                            "enzyme": {"type": "string"},
+                            "recognition_site": {"type": "string"},
+                            "expected_survivors": {"type": "string"},
+                        },
+                        "required": ["enzyme", "recognition_site"],
+                        "additionalProperties": False,
+                    },
+                    "snapshot": {
+                        "type": "object",
+                        "properties": {
+                            "primers": {
+                                "type": "object",
+                                "additionalProperties": {"type": "string"},
+                            },
+                            "fluorophore_map": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "object",
+                                    "properties": {
+                                        "color": {"type": "string"},
+                                        "dye": {"type": "string"},
+                                    },
+                                    "required": ["color", "dye"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                        },
+                        "required": ["primers", "fluorophore_map"],
+                        "additionalProperties": False,
+                    },
+                    "validation": {
+                        "type": "object",
+                        "properties": {
+                            "mutant_pattern": {"type": "string"},
+                            "normal_pattern": {"type": "string"},
+                            "expected_mutant_fluorescence": {"type": "string"},
+                        },
+                        "required": [
+                            "mutant_pattern",
+                            "normal_pattern",
+                        ],
+                        "additionalProperties": False,
+                    },
+                },
+                "required": ["pcr", "digest", "snapshot", "validation"],
+                "additionalProperties": False,
+            },
         },
     },
     "required": [

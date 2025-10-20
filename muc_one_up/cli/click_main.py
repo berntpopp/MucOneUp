@@ -1018,6 +1018,136 @@ def _make_args_namespace(config_path, kwargs):
     )
 
 
+@analyze.command()
+@click.argument("input_fasta", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--mutation",
+    required=True,
+    help="Mutation name to validate (e.g., 'dupC').",
+)
+@click.option(
+    "--output",
+    type=click.Path(),
+    help="Output JSON file for validation results (prints to stdout if not specified).",
+)
+@click.pass_context
+def snapshot_validate(ctx, input_fasta, mutation, output):
+    """Validate SNaPshot assay for MUC1 VNTR mutations.
+
+    Simulates complete SNaPshot workflow: PCR → MwoI digest → extension → detection.
+
+    \b
+    Examples:
+      # Validate dupC mutation in a sample
+      muconeup --config config.json analyze snapshot-validate sample.fa --mutation dupC
+
+      # Save results to JSON
+      muconeup --config config.json analyze snapshot-validate sample.fa --mutation dupC --output results.json
+    """
+    from Bio import SeqIO
+
+    from ..analysis.snapshot_validator import SnapshotValidator
+    from ..config import load_config
+
+    try:
+        # Load config
+        config_path = Path(ctx.obj["config_path"])
+        config = load_config(str(config_path))
+
+        # Check if mutation is configured
+        if "snapshot_validation" not in config:
+            logging.error("Config missing 'snapshot_validation' section")
+            ctx.exit(1)
+
+        if mutation not in config["snapshot_validation"]:
+            available = list(config["snapshot_validation"].keys())
+            logging.error(
+                "Mutation '%s' not found in config. Available: %s",
+                mutation,
+                available,
+            )
+            ctx.exit(1)
+
+        # Initialize validator
+        validator = SnapshotValidator(config, mutation)
+        logging.info("SNaPshot validator initialized for mutation: %s", mutation)
+
+        # Load input FASTA
+        records = list(SeqIO.parse(input_fasta, "fasta"))
+        if not records:
+            logging.error("No sequences found in %s", input_fasta)
+            ctx.exit(1)
+
+        logging.info("Loaded %d haplotype(s) from %s", len(records), input_fasta)
+
+        # Run validation on each haplotype
+        all_results = {}
+        for i, record in enumerate(records, 1):
+            haplotype_name = record.id or f"haplotype_{i}"
+            template = str(record.seq)
+
+            logging.info(
+                "Validating haplotype %d: %s (%d bp)",
+                i,
+                haplotype_name,
+                len(template),
+            )
+
+            result = validator.validate_complete_workflow(template)
+
+            all_results[haplotype_name] = {
+                "mutation_detected": result["mutation_detected"],
+                "pcr_products": result["pcr_results"]["product_count"],
+                "digest_survivors": result["digest_results"]["survivor_count"],
+                "expected_fluorescence": result.get("expected_fluorescence", ""),
+                "summary": result["summary"],
+            }
+
+            # Add SNaPshot details if mutation detected
+            if result["mutation_detected"] and result.get("snapshot_results"):
+                snapshot_info = []
+                for snap in result["snapshot_results"]:
+                    if snap["extension"].get("binds"):
+                        snapshot_info.append(
+                            {
+                                "fluorophore": snap["extension"].get("fluorophore"),
+                                "dye": snap["extension"].get("fluorophore_dye"),
+                                "next_base": snap["extension"].get("next_base"),
+                            }
+                        )
+                all_results[haplotype_name]["snapshot_details"] = snapshot_info
+
+            logging.info("  Result: %s", result["summary"])
+
+        # Output results
+        output_data = {
+            "mutation": mutation,
+            "input_file": str(input_fasta),
+            "haplotypes": all_results,
+            "overall_detection": any(r["mutation_detected"] for r in all_results.values()),
+        }
+
+        if output:
+            output_path = Path(output)
+            with output_path.open("w") as f:
+                json.dump(output_data, f, indent=2)
+            logging.info("Validation results written to %s", output)
+        else:
+            click.echo(json.dumps(output_data, indent=2))
+
+        # Exit code: 0 if mutation detected, 1 if not
+        if output_data["overall_detection"]:
+            logging.info("✓ Mutation %s DETECTED in sample", mutation.upper())
+            ctx.exit(0)
+        else:
+            logging.info("✗ Mutation %s NOT detected in sample", mutation.upper())
+            ctx.exit(1)
+
+    except Exception as e:
+        logging.error("SNaPshot validation failed: %s", e, exc_info=True)
+        ctx.exit(1)
+
+
 # ============================================================================
 # Entry Point
 # ============================================================================

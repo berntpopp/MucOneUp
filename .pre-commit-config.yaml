@@ -6,7 +6,7 @@
 repos:
   # Ruff - Python linter and formatter (replaces Black, isort, flake8, and more)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.14.1  # Keep in sync with pyproject.toml and GitHub Actions
     hooks:
       # Run the linter (with unsafe fixes to match CI)
       - id: ruff

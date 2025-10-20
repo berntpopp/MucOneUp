@@ -268,6 +268,62 @@
       "type": "real",
       "citation": "Olinger et al. 2020, PMID:32647000, 10.1016/j.kint.2020.04.038"
     },
+    "delGCCCA": {
+      "allowed_repeats": [
+        "5",
+        "5C",
+        "6",
+        "6p",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O",
+        "V",
+        "W",
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "delete",
+          "start": 1,
+          "end": 5
+        }
+      ],
+      "type": "real",
+      "citation": "Saei et al. 2023, PMID:37456840, 10.1016/j.isci.2023.107171"
+    },
+    "ins25bp": {
+      "allowed_repeats": [
+        "A",
+        "B",
+        "J",
+        "K",
+        "N",
+        "S",
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "insert",
+          "start": 31,
+          "end": 32,
+          "sequence": "CAGGCCGGCCCCGGGCTCCGGACAC"
+        }
+      ],
+      "type": "real",
+      "citation": "Saei et al. 2023, PMID:37456840, 10.1016/j.isci.2023.107171"
+    },
     "bigDel": {
       "allowed_repeats": [
         "X"
@@ -481,5 +537,54 @@
     "sample_target_bed": "data/bed/twist_v2_muc1_no_vntr_targets.bed",
     "vntr_region_hg19": "chr1:155160963-155162030",
     "vntr_region_hg38": "chr1:155188487-155192239"
+  },
+  "snapshot_validation": {
+    "dupC": {
+      "description": "8C mutation validation via MwoI digest selection",
+      "pcr": {
+        "forward_primer": "GGCCGGCCCCGGGCTCCACC",
+        "reverse_primer": "TGTCACCTCGGCCCCGGA",
+        "reverse_needs_rc": false,
+        "max_products": 100,
+        "size_range": {
+          "min": 50,
+          "max": 65
+        }
+      },
+      "digest": {
+        "enzyme": "MwoI",
+        "recognition_site": "GCNNNNNNNGC",
+        "expected_survivors": "mutant_only"
+      },
+      "snapshot": {
+        "primers": {
+          "primer_7c": "CGGGCTCCACCGCCCCCCC",
+          "primer_repeat_r": "TGTCACCTCGGCCCCGGA"
+        },
+        "fluorophore_map": {
+          "A": {
+            "color": "Green",
+            "dye": "dR6G"
+          },
+          "C": {
+            "color": "Black",
+            "dye": "dTAMRA"
+          },
+          "G": {
+            "color": "Blue",
+            "dye": "dR110"
+          },
+          "T": {
+            "color": "Red",
+            "dye": "dROX"
+          }
+        }
+      },
+      "validation": {
+        "mutant_pattern": "GCCCCCCCCAGC",
+        "normal_pattern": "GCCCCCCCAGC",
+        "expected_mutant_fluorescence": "Black"
+      }
+    }
   }
 }
