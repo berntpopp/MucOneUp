@@ -481,5 +481,54 @@
     "sample_target_bed": "data/bed/twist_v2_muc1_no_vntr_targets.bed",
     "vntr_region_hg19": "chr1:155160963-155162030",
     "vntr_region_hg38": "chr1:155188487-155192239"
+  },
+  "snapshot_validation": {
+    "dupC": {
+      "description": "8C mutation validation via MwoI digest selection",
+      "pcr": {
+        "forward_primer": "GGCCGGCCCCGGGCTCCACC",
+        "reverse_primer": "TGTCACCTCGGCCCCGGA",
+        "reverse_needs_rc": false,
+        "max_products": 100,
+        "size_range": {
+          "min": 50,
+          "max": 65
+        }
+      },
+      "digest": {
+        "enzyme": "MwoI",
+        "recognition_site": "GCNNNNNNNGC",
+        "expected_survivors": "mutant_only"
+      },
+      "snapshot": {
+        "primers": {
+          "primer_7c": "CGGGCTCCACCGCCCCCCC",
+          "primer_repeat_r": "TGTCACCTCGGCCCCGGA"
+        },
+        "fluorophore_map": {
+          "A": {
+            "color": "Green",
+            "dye": "dR6G"
+          },
+          "C": {
+            "color": "Black",
+            "dye": "dTAMRA"
+          },
+          "G": {
+            "color": "Blue",
+            "dye": "dR110"
+          },
+          "T": {
+            "color": "Red",
+            "dye": "dROX"
+          }
+        }
+      },
+      "validation": {
+        "mutant_pattern": "GCCCCCCCCAGC",
+        "normal_pattern": "GCCCCCCCAGC",
+        "expected_mutant_fluorescence": "Black"
+      }
+    }
   }
 }
