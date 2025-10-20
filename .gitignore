@@ -196,3 +196,6 @@ tmp/
 # claude files and folders
 .claude/
 CLAUDE.md
+
+# planning folder
+plan/
