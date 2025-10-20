@@ -46,6 +46,7 @@ docs = [
     "mkdocstrings[python]>=0.24.0",
     "mkdocs-click>=0.8.0",
     "pymdown-extensions>=10.7",
+    "biopython>=1.80",  # Required for CLI module imports during doc generation
 ]
 
 [project.scripts]
