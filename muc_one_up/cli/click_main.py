@@ -577,43 +577,38 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed):
 @click.option(
     "--coverage",
     type=int,
-    default=30,
-    show_default=True,
-    help="Target coverage.",
+    default=None,
+    help="Target coverage (overrides config if provided).",
 )
 @click.option(
     "--pass-num",
     type=int,
-    default=3,
-    show_default=True,
-    help="Number of passes per molecule for multi-pass CLR simulation (≥2).",
+    default=None,
+    help="Number of passes per molecule for multi-pass CLR simulation (≥2, overrides config if provided).",
 )
 @click.option(
     "--min-passes",
     type=int,
-    default=3,
-    show_default=True,
-    help="Minimum passes required for CCS HiFi consensus (≥1).",
+    default=None,
+    help="Minimum passes required for CCS HiFi consensus (≥1, overrides config if provided).",
 )
 @click.option(
     "--min-rq",
     type=float,
-    default=0.99,
-    show_default=True,
-    help="Minimum predicted accuracy for HiFi reads (0.0-1.0). 0.99 = Q20 (standard HiFi).",
+    default=None,
+    help="Minimum predicted accuracy for HiFi reads (0.0-1.0, overrides config if provided). 0.99 = Q20 (standard HiFi).",
 )
 @click.option(
     "--model-type",
     type=click.Choice(["qshmm", "errhmm"]),
-    default="qshmm",
-    show_default=True,
-    help="pbsim3 model type.",
+    default=None,
+    help="pbsim3 model type (overrides config if provided).",
 )
 @click.option(
     "--model-file",
     type=click.Path(exists=True, dir_okay=False),
-    required=True,
-    help="Path to pbsim3 model file (.model extension).",
+    default=None,
+    help="Path to pbsim3 model file (overrides config if provided).",
 )
 @click.option(
     "--threads",
@@ -703,22 +698,38 @@ def pacbio(
             config["read_simulation"] = {}
         config["read_simulation"]["simulator"] = "pacbio"
 
+        # Initialize pacbio_params if not in config (config-first principle)
         if "pacbio_params" not in config:
             config["pacbio_params"] = {}
 
-        # Set PacBio-specific parameters
-        config["pacbio_params"]["model_type"] = model_type
-        config["pacbio_params"]["model_file"] = model_file
-        config["pacbio_params"]["coverage"] = coverage
-        config["pacbio_params"]["pass_num"] = pass_num
-        config["pacbio_params"]["min_passes"] = min_passes
-        config["pacbio_params"]["min_rq"] = min_rq
-        config["pacbio_params"]["threads"] = threads
-
-        # Set seed if provided
+        # Override config with CLI params only if provided (CLI takes precedence)
+        # This follows the ONT pattern: defaults → config → CLI override hierarchy
+        if model_type is not None:
+            config["pacbio_params"]["model_type"] = model_type
+        if model_file is not None:
+            config["pacbio_params"]["model_file"] = model_file
+        if coverage is not None:
+            config["pacbio_params"]["coverage"] = coverage
+        if pass_num is not None:
+            config["pacbio_params"]["pass_num"] = pass_num
+        if min_passes is not None:
+            config["pacbio_params"]["min_passes"] = min_passes
+        if min_rq is not None:
+            config["pacbio_params"]["min_rq"] = min_rq
+        if threads != 4:  # threads has explicit default, so keep this check
+            config["pacbio_params"]["threads"] = threads
         if seed is not None:
             config["pacbio_params"]["seed"] = seed
             logging.info(f"Using random seed: {seed} (results will be reproducible)")
+
+        # Validate required config parameters exist
+        required_params = ["model_type", "model_file"]
+        missing_params = [p for p in required_params if p not in config["pacbio_params"]]
+        if missing_params:
+            raise click.ClickException(
+                f"Missing required PacBio parameters in config: {', '.join(missing_params)}. "
+                f"Either add them to config.json pacbio_params section or provide via CLI options."
+            )
 
         # Warn if --out-base provided for multiple files
         if len(input_fastas) > 1 and out_base:

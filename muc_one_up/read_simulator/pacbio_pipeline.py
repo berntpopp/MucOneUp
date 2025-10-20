@@ -23,10 +23,13 @@ Example:
 
         final_bam = simulate_pacbio_hifi_reads(
             config={
-                "tools": {"samtools": "samtools", "minimap2": "minimap2"},
+                "tools": {
+                    "pbsim3": "pbsim",
+                    "ccs": "ccs",
+                    "samtools": "samtools",
+                    "minimap2": "minimap2"
+                },
                 "pacbio_params": {
-                    "pbsim3_cmd": "pbsim",
-                    "ccs_cmd": "ccs",
                     "model_type": "qshmm",
                     "model_file": "/models/QSHMM-SEQUEL.model",
                     "coverage": 30,
@@ -80,10 +83,13 @@ def simulate_pacbio_hifi_reads(
 
     Args:
         config: Configuration dictionary containing:
-                - tools: {"samtools": path, "minimap2": path}
+                - tools: {
+                    "pbsim3": path to pbsim executable,
+                    "ccs": path to ccs executable,
+                    "samtools": path to samtools executable,
+                    "minimap2": path to minimap2 executable
+                  }
                 - pacbio_params: {
-                    "pbsim3_cmd": path to pbsim executable,
-                    "ccs_cmd": path to ccs executable,
                     "model_type": "qshmm" or "errhmm",
                     "model_file": path to .model file,
                     "coverage": target coverage (e.g., 30),
@@ -116,12 +122,12 @@ def simulate_pacbio_hifi_reads(
             final_bam = simulate_pacbio_hifi_reads(
                 config={
                     "tools": {
+                        "pbsim3": "pbsim",
+                        "ccs": "ccs",
                         "samtools": "samtools",
                         "minimap2": "minimap2"
                     },
                     "pacbio_params": {
-                        "pbsim3_cmd": "pbsim",
-                        "ccs_cmd": "ccs",
                         "model_type": "qshmm",
                         "model_file": "/models/QSHMM-SEQUEL.model",
                         "coverage": 30,
@@ -157,8 +163,8 @@ def simulate_pacbio_hifi_reads(
     tools = config.get("tools", {})
 
     # Extract tool commands
-    pbsim3_cmd = pacbio_params.get("pbsim3_cmd", "pbsim")
-    ccs_cmd = pacbio_params.get("ccs_cmd", "ccs")
+    pbsim3_cmd = tools.get("pbsim3", "pbsim")
+    ccs_cmd = tools.get("ccs", "ccs")
     samtools_cmd = tools.get("samtools", "samtools")
     minimap2_cmd = tools.get("minimap2", "minimap2")
 

@@ -31,10 +31,13 @@ class TestPacBioHiFiPipeline:
         human_ref.write_text(">chr1\nACGTACGTACGTACGTACGT\n")
 
         config = {
-            "tools": {"samtools": "samtools", "minimap2": "minimap2"},
+            "tools": {
+                "pbsim3": "pbsim",
+                "ccs": "ccs",
+                "samtools": "samtools",
+                "minimap2": "minimap2",
+            },
             "pacbio_params": {
-                "pbsim3_cmd": "pbsim",
-                "ccs_cmd": "ccs",
                 "model_type": "qshmm",
                 "model_file": str(tmp_path / "model.model"),
                 "coverage": 30,
@@ -146,10 +149,8 @@ class TestPacBioHiFiPipeline:
         input_fa.write_text(">chr1\nACGTACGTACGT\n")
 
         config = {
-            "tools": {"samtools": "samtools"},
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
             "pacbio_params": {
-                "pbsim3_cmd": "pbsim",
-                "ccs_cmd": "ccs",
                 "model_type": "qshmm",
                 "model_file": str(tmp_path / "model.model"),
                 "coverage": 30,
@@ -229,10 +230,8 @@ class TestPacBioHiFiPipeline:
 
         # Missing model_type
         config = {
-            "tools": {"samtools": "samtools"},
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
             "pacbio_params": {
-                "pbsim3_cmd": "pbsim",
-                "ccs_cmd": "ccs",
                 # Missing model_type!
                 "model_file": str(tmp_path / "model.model"),
                 "coverage": 30,
@@ -253,10 +252,8 @@ class TestPacBioHiFiPipeline:
         input_fa.write_text(">chr1\nACGTACGTACGT\n")
 
         config = {
-            "tools": {"samtools": "samtools"},
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
             "pacbio_params": {
-                "pbsim3_cmd": "pbsim",
-                "ccs_cmd": "ccs",
                 "model_type": "qshmm",
                 "model_file": str(tmp_path / "model.model"),
                 "coverage": 30,
@@ -280,10 +277,8 @@ class TestPacBioHiFiPipeline:
         input_fa.write_text(">chr1\nACGTACGTACGT\n")
 
         config = {
-            "tools": {"samtools": "samtools"},
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
             "pacbio_params": {
-                "pbsim3_cmd": "pbsim",
-                "ccs_cmd": "ccs",
                 "model_type": "qshmm",
                 "model_file": str(tmp_path / "model.model"),
                 "coverage": 30,
@@ -362,10 +357,8 @@ class TestPacBioHiFiPipeline:
         input_fa.write_text(">chr1\nACGTACGTACGT\n")
 
         config = {
-            "tools": {"samtools": "samtools"},
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
             "pacbio_params": {
-                "pbsim3_cmd": "pbsim",
-                "ccs_cmd": "ccs",
                 "model_type": "qshmm",
                 "model_file": str(tmp_path / "model.model"),
                 "coverage": 30,
