@@ -135,37 +135,58 @@ ls *.fa | parallel muconeup reads ont {} --coverage 50
     make check
     ```
 
-### Your First Simulation
+### Complete Workflow Example
 
-Generate diploid haplotypes with a known mutation:
+Real-world pipeline for benchmarking variant callers with dupC mutation:
 
 ```bash
-# Create output directory
-mkdir -p output
-
-# Generate normal + mutated pair
+# Step 1: Generate normal + mutated diploid pair with SNPs
 muconeup --config config.json simulate \
-  --mutation-name normal,dupC \
-  --mutation-targets 1,25 \
+  --out-base dupC \
+  --out-dir output \
   --output-structure \
-  --out-base output/example
+  --mutation-name normal,dupC \
+  --fixed-lengths 60 \
+  --random-snps \
+  --random-snp-density 0.5 \
+  --random-snp-output-file output/dupC.tsv
 
-# View results
-ls output/
-# example.001.normal.fa
-# example.001.normal.vntr_structure.txt
-# example.001.normal.simulation_stats.json
-# example.001.mut.fa
-# example.001.mut.vntr_structure.txt
-# example.001.mut.simulation_stats.json
+# Step 2: Simulate Illumina reads at 200x coverage
+muconeup --config config.json reads illumina \
+  output/dupC.*.simulated.fa \
+  --out-dir output \
+  --coverage 200
+
+# Step 3: Analyze ORFs and detect toxic proteins
+muconeup --config config.json analyze orfs \
+  output/dupC.*.simulated.fa \
+  --out-dir output \
+  --orf-aa-prefix MTSSV
+
 ```
 
-**What happened?**
+**Output files:**
 
-1. Generated two diploid references (normal and dupC mutated)
-2. Applied insertion mutation at haplotype 1, repeat position 25
-3. Created FASTA sequences, repeat structure files, and JSON statistics
-4. Provided ground truth for benchmarking downstream tools
+```
+output/
+├── dupC.001.normal.simulated.fa          # Normal diploid reference
+├── dupC.001.normal.vntr_structure.txt    # Repeat structure
+├── dupC.001.normal.simulation_stats.json # Ground truth metadata
+├── dupC.001.mut.simulated.fa             # dupC mutated reference
+├── dupC.001.mut.vntr_structure.txt       # Mutated structure
+├── dupC.001.mut.simulation_stats.json    # Mutation coordinates
+├── dupC.tsv                              # SNP positions (both haplotypes)
+├── dupC.*.illumina.bam                   # Aligned reads (200x coverage)
+└── dupC.*.pep.fa                         # Predicted ORFs with toxic detection
+```
+
+**What this demonstrates:**
+
+- Dual simulation (normal + mutated pair for controlled benchmarking)
+- Fixed VNTR length (60 repeats, eliminates length confounding)
+- SNP integration (0.5 per kb, realistic population variation)
+- Complete pipeline (haplotypes → reads → analysis)
+- Ground truth tracking (JSON files document exact mutation coordinates)
 
 See [Quick Start](getting-started/quickstart.md)
 
