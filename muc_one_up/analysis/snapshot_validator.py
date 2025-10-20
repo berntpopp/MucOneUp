@@ -263,7 +263,7 @@ class DigestSimulator:
                 )
 
         self.logger.info(
-            f"Digest ({self.enzyme_name}): {len(survivors)} survivors, " f"{len(digested)} digested"
+            f"Digest ({self.enzyme_name}): {len(survivors)} survivors, {len(digested)} digested"
         )
 
         return {
