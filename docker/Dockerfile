@@ -35,7 +35,7 @@ RUN pip3 install --no-cache-dir --break-system-packages . biopython && \
 
 # Install ALL conda environments
 USER $MAMBA_USER
-COPY conda/env_nanosim.yml conda/env_wessim.yaml conda/env_pacbio.yml /tmp/
+COPY --chown=$MAMBA_USER:$MAMBA_USER conda/env_nanosim.yml conda/env_wessim.yaml conda/env_pacbio.yml /tmp/
 
 RUN micromamba create -y -f /tmp/env_nanosim.yml && \
     micromamba create -y -f /tmp/env_wessim.yaml && \
