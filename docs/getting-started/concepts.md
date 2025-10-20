@@ -587,7 +587,7 @@ muconeup --config config.json reads illumina run2.001.simulated.fa --seed 42
 
 ```
 Methods:
-Synthetic MUC1 VNTR sequences generated with MucOneUp v0.16.0
+Synthetic MUC1 VNTR sequences generated with MucOneUp v0.19.0
 (seed=42, config.json provided in supplementary materials).
 Illumina reads simulated at 100× coverage (reseq v1.1, seed=42).
 ```

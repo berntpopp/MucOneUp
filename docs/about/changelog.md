@@ -9,23 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- MkDocs Material documentation system
-- Comprehensive user guides for core features
-- Toxic protein detection algorithm documentation
-- SNaPshot validation workflow documentation
-
 ---
 
-## [0.16.0] - 2025-10-20
+## [0.19.0] - 2025-10-20
 
 ### Added
-- PacBio HiFi read simulation support
-- Version management system
-
-### Changed
-- Cleaned up planning directories
-- Synchronized version to 0.16.0
+- MkDocs Material documentation system with GitHub Actions deployment
+- Comprehensive user guides (simulation, toxic protein detection, SNaPshot validation)
+- Auto-generated CLI documentation via mkdocs-click
+- Dark/light mode toggle, instant search, mobile responsive design
+- Professional documentation at https://berntpopp.github.io/MucOneUp/
 
 ---
 
@@ -60,8 +53,8 @@ See [GitHub Releases](https://github.com/berntpopp/MucOneUp/releases) for earlie
 
 ---
 
-[Unreleased]: https://github.com/berntpopp/MucOneUp/compare/v0.16.0...HEAD
-[0.16.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.16.0
+[Unreleased]: https://github.com/berntpopp/MucOneUp/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.19.0
 [0.15.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.15.0
 [0.14.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.14.0
 [0.13.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.13.0

@@ -36,8 +36,8 @@ Include the specific version used in your research:
   year = {2025},
   publisher = {GitHub},
   url = {https://github.com/berntpopp/MucOneUp},
-  version = {0.16.0},
-  note = {Version 0.16.0, https://github.com/berntpopp/MucOneUp/releases/tag/v0.16.0}
+  version = {0.19.0},
+  note = {Version 0.19.0, https://github.com/berntpopp/MucOneUp/releases/tag/v0.19.0}
 }
 ```
 
@@ -70,11 +70,11 @@ Use this template when describing MucOneUp in your methods:
 
 ### Synthetic Data Generation
 
-> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.16.0 (Popp, 2025; https://github.com/berntpopp/MucOneUp). Diploid haplotypes were simulated with \[specify: fixed/random\] VNTR repeat counts (\[specify range/distribution\]) using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). \[If applicable: Mutations were applied at positions \[specify\] using the \[mutation name\] mutation definition.\] \[If applicable: SNPs were integrated with a density of \[X\] per kb.\] Sequencing reads were simulated using \[Illumina/Oxford Nanopore/PacBio\] parameters with \[X\]× coverage. All simulations used seed \[number\] for reproducibility.
+> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.19.0 (Popp, 2025; https://github.com/berntpopp/MucOneUp). Diploid haplotypes were simulated with \[specify: fixed/random\] VNTR repeat counts (\[specify range/distribution\]) using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). \[If applicable: Mutations were applied at positions \[specify\] using the \[mutation name\] mutation definition.\] \[If applicable: SNPs were integrated with a density of \[X\] per kb.\] Sequencing reads were simulated using \[Illumina/Oxford Nanopore/PacBio\] parameters with \[X\]× coverage. All simulations used seed \[number\] for reproducibility.
 
 ### Example (Filled)
 
-> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.16.0 (Popp, 2025; https://github.com/berntpopp/MucOneUp). Diploid haplotypes were simulated with fixed VNTR repeat counts of 60 repeats per haplotype using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). The dupC mutation was applied at haplotype 1, position 25, to generate a mutated reference for variant caller benchmarking. Illumina paired-end reads (150 bp) were simulated with 100× coverage using the w-Wessim2 pipeline integrated in MucOneUp. All simulations used seed 42 for reproducibility.
+> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.19.0 (Popp, 2025; https://github.com/berntpopp/MucOneUp). Diploid haplotypes were simulated with fixed VNTR repeat counts of 60 repeats per haplotype using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). The dupC mutation was applied at haplotype 1, position 25, to generate a mutated reference for variant caller benchmarking. Illumina paired-end reads (150 bp) were simulated with 100× coverage using the w-Wessim2 pipeline integrated in MucOneUp. All simulations used seed 42 for reproducibility.
 
 ---
 
@@ -209,7 +209,7 @@ Document all parameters used:
 
 ```
 Simulation Parameters:
-- MucOneUp version: 0.16.0
+- MucOneUp version: 0.19.0
 - Seed: 42
 - VNTR length: Fixed at 60 repeats
 - Reference assembly: hg38
@@ -321,7 +321,7 @@ SOFTWARE.
 When citing MucOneUp, ensure you include:
 
 - [ ] Software citation (BibTeX or text format)
-- [ ] Specific version number used (e.g., v0.16.0)
+- [ ] Specific version number used (e.g., v0.19.0)
 - [ ] GitHub repository URL
 - [ ] Seed value used (for reproducibility)
 - [ ] Configuration file in supplementary materials
@@ -343,8 +343,8 @@ Include the version number in your citation:
 ```bibtex
 @software{muconeup2025,
   ...
-  version = {0.16.0},
-  note = {Version 0.16.0, https://github.com/berntpopp/MucOneUp/releases/tag/v0.16.0}
+  version = {0.19.0},
+  note = {Version 0.19.0, https://github.com/berntpopp/MucOneUp/releases/tag/v0.19.0}
 }
 ```
 
@@ -363,7 +363,7 @@ Include:
 - MucOneUp logo (if available in repository)
 - GitHub repository URL
 - Version number used
-- Brief description: "Synthetic MUC1 VNTR data generated with MucOneUp v0.16.0"
+- Brief description: "Synthetic MUC1 VNTR data generated with MucOneUp v0.19.0"
 
 ---
 
