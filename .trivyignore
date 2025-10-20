@@ -1,0 +1,16 @@
+# Trivy Ignore File
+# CVE IDs listed here (one per line) will be excluded from security scans
+#
+# Use this for:
+# - Known false positives
+# - Vulnerabilities accepted as acceptable risk
+# - Issues being tracked elsewhere
+#
+# NOTE: ignore-unfixed=true in workflow already filters unfixable vulnerabilities
+# Only add CVEs here if they require explicit exclusion
+#
+# Example format:
+# CVE-2024-12345
+# CVE-2024-67890
+
+# Add specific CVE exclusions below this line
