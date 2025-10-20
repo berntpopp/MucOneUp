@@ -268,6 +268,41 @@
       "type": "real",
       "citation": "Olinger et al. 2020, PMID:32647000, 10.1016/j.kint.2020.04.038"
     },
+    "delGCCCA": {
+      "allowed_repeats": [
+        "5",
+        "5C",
+        "6",
+        "6p",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O",
+        "V",
+        "W",
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "delete",
+          "start": 1,
+          "end": 5
+        }
+      ],
+      "type": "real",
+      "citation": "Saei et al. 2023, PMID:37456840, 10.1016/j.isci.2023.107171"
+    },
     "bigDel": {
       "allowed_repeats": [
         "X"
