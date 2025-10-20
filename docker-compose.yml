@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+  muconeup:
+    # Image: Pull from GHCR for production use
+    # Build: Allows local development/testing without publishing
+    # Use 'docker compose up' to build, or 'docker compose pull' for latest GHCR image
+    image: ghcr.io/berntpopp/muconeup/muconeup:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ./data:/data
+      - ./output:/output
+      - ./config.json:/app/config.json:ro
+    environment:
+      - MUCONEUP_LOG_LEVEL=${LOG_LEVEL:-INFO}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

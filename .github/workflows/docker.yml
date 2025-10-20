@@ -1,0 +1,84 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Extract version
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep '__version__' muc_one_up/version.py | cut -d'"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Version: $VERSION"
+
+      # Docker setup
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Metadata
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}/muconeup
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=edge,branch=main
+            type=ref,event=pr
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+
+      # Build
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Security scan
+      - uses: aquasecurity/trivy-action@0.30.0
+        if: github.event_name != 'pull_request'
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/muconeup:${{ steps.version.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: 1
+
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always() && github.event_name != 'pull_request'
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # Test
+      - name: Test image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker run --rm ghcr.io/${{ github.repository }}/muconeup:${{ steps.version.outputs.version }} --version

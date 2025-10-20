@@ -1,0 +1,52 @@
+# Git metadata
+.git
+.github
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+coverage.xml
+
+# Build artifacts
+build
+dist
+*.whl
+
+# Development files
+.venv
+.env
+*.log
+*.tmp
+manual_testing/
+output/
+plan/
+tests/
+
+# Documentation
+docs/
+CLAUDE.md
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Pre-commit
+.pre-commit-config.yaml
+
+# Reference data
+reference/
