@@ -48,6 +48,7 @@ repos:
       - id: end-of-file-fixer
         exclude: '\.txt$|\.tsv$|\.csv$'
       - id: check-yaml
+        args: [--unsafe]
       - id: check-json
         exclude: ^tests/fixtures/
       - id: check-toml
