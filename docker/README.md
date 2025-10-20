@@ -29,7 +29,7 @@ docker run --rm \
 
 ```bash
 # Use docker-compose.yml in repo root
-docker-compose run --rm muconeup --config /app/config.json simulate --help
+docker compose run --rm muconeup --config /app/config.json simulate --help
 ```
 
 ### Volume Mounts
@@ -62,7 +62,10 @@ docker build -t muconeup:latest -f docker/Dockerfile .
 
 **Permission errors:** Container runs as UID 1000
 ```bash
-chmod 777 output/  # Or: chown -R 1000:1000 output/
+# Fix permissions for output directory (choose one):
+chown -R 1000:1000 output/
+# Or, if you are in the appropriate group:
+chmod -R g+rwX output/
 ```
 
 **Memory:** Large simulations need more RAM

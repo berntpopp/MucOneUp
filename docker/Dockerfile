@@ -40,7 +40,8 @@ COPY conda/env_nanosim.yml conda/env_wessim.yaml conda/env_pacbio.yml /tmp/
 RUN micromamba create -y -f /tmp/env_nanosim.yml && \
     micromamba create -y -f /tmp/env_wessim.yaml && \
     micromamba create -y -f /tmp/env_pacbio.yml && \
-    micromamba clean --all --yes
+    micromamba clean --all --yes && \
+    rm -f /tmp/*.yml /tmp/*.yaml
 
 # Add all conda env bins to PATH
 ENV PATH="/opt/conda/envs/env_nanosim/bin:/opt/conda/envs/env_wessim/bin:/opt/conda/envs/env_pacbio/bin:${PATH}"

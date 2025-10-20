@@ -90,7 +90,7 @@ docker run --rm \
 
 ```bash
 # Create docker-compose.yml (or use the one in repo)
-docker-compose run --rm muconeup --config /app/config.json simulate --help
+docker compose run --rm muconeup --config /app/config.json simulate --help
 ```
 
 ### Build from Source

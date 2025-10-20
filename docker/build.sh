@@ -17,6 +17,7 @@ echo ""
 # Build image
 echo -e "${YELLOW}Building image...${NC}"
 docker build \
+    --pull \
     --tag "muconeup:latest" \
     --tag "muconeup:${VERSION}" \
     --file docker/Dockerfile \
