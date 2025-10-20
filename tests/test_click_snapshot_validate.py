@@ -246,7 +246,7 @@ class TestSnapshotValidateCommand:
             assert "overall_detection" in output_data
 
             # Haplotype structure
-            for hap_name, hap_data in output_data["haplotypes"].items():
+            for _hap_name, hap_data in output_data["haplotypes"].items():
                 assert "mutation_detected" in hap_data
                 assert "pcr_products" in hap_data
                 assert "digest_survivors" in hap_data
