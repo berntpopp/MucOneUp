@@ -98,6 +98,11 @@ PCR_TAG = "GCCCCCCCAGCCCACGG"          # 17bp (contains 8C: GCCCCCCCCAGC)
 **Protocol Statement**:
 > "The primers MUC1-Repeat F and R are located in 2 contiguous repeats flanking the 7C/8C and are tagged with a 21 bp sequence."
 
+**Clarification**:
+- "Tagged with 21bp" means the primers ARE 21bp long (not primers + additional tags)
+- Both forward and reverse primers are 21bp sequences
+- They bind within X repeats flanking the 7C/8C position
+
 **Problem Identified**:
 - Both primers found in X repeat (60bp)
 - Primer 1 at position 31: `GGCCGGCCCCGGGCTCCACC`
@@ -232,7 +237,7 @@ All in `/tests/`:
 
 ### Finding #1: Repeat-Based Primers Are Not Specific
 
-**Without tags**, primers from X repeat bind to ALL ~27 X repeats:
+Primers from X repeat bind to ALL ~27 X repeats:
 
 ```
 VNTR: X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X-X
@@ -244,10 +249,9 @@ Result: 49 forward × 54 reverse = 2,646 possible products!
 
 **pydna correctly rejects this** as non-specific.
 
-**Solution**: Tags must provide specificity
-- Bind to constant regions OR
-- Bind to specific repeat junctions OR
-- Create unique combined sequence
+**Note**: The 21bp primer length mentioned in the protocol refers to the actual primers being 21bp long,
+not additional tag sequences. The current test primers (20bp and 18bp) are shorter than the protocol's
+21bp primers, which may explain some specificity differences.
 
 ### Finding #2: dupC Is Frameshift, Not Site-Disrupting
 
@@ -306,41 +310,34 @@ User provided:
 
 ### Possible Solutions
 
-**Option A**: Primers need tags
+**Option A**: Primers are 21bp (as protocol states)
 ```
-Full_Forward = [Tag_A] + GGCCGGCCCCGGGCTCCACC
-Full_Reverse = [Tag_B] + TGTCACCTCGGCCCCGGA
+Current test primers:
+- Primer 1: 20bp (GGCCGGCCCCGGGCTCCACC)
+- Primer 2: 18bp (TGTCACCTCGGCCCCGGA)
 
-Where: Tag_A binds upstream constant region
-       Tag_B binds downstream constant region
+Protocol states: "tagged with 21bp sequence" = primers ARE 21bp
+Need complete 21bp primer sequences
 ```
 
-**Option B**: One primer should be RC
+**Option B**: One primer should be RC ✅ **CONFIRMED**
 ```
 Use: GGCCGGCCCCGGGCTCCACC (forward)
 And: TCCGGGGCCGAGGTGACA (RC of primer 2)
 ```
 
-**Option C**: These are binding regions only
-```
-Actual primers have additional sequence
-Need complete lab primer sequences
-```
-
-**Option D**: Different genomic locations
+**Option C**: Different genomic locations
 ```
 Maybe not both from X repeat?
 One from constant region?
 ```
 
-### What We Need
+### What We Learned
 
-**Please clarify ONE of these**:
-
-1. ✅ Complete primer sequences including tags
-2. ✅ Which strand each primer binds to
-3. ✅ Genomic positions where primers bind
-4. ✅ Expected PCR product size
+1. ✅ Second primer needs reverse complement
+2. ✅ Both primers bind within X repeats (non-specific)
+3. ✅ Digest selection mechanism is the key (not PCR specificity)
+4. ✅ Multiple PCR products are expected and correct
 
 ---
 
@@ -500,12 +497,12 @@ output/dupC/dupC.001.normal.simulated.fa (13,600 bp) - Normal with 7C
 
 ## Next Steps
 
-### Immediate (User Action Required)
+### Immediate (User Action Required) - ✅ **RESOLVED**
 
-**Clarify primer sequences**:
-1. Provide complete primer sequences with tags, OR
-2. Specify which primer should be reverse complement, OR
-3. Provide genomic binding positions for each primer
+**Primer orientation clarified**:
+1. ✅ Second primer uses reverse complement
+2. ✅ Multiple PCR products expected (primers in X repeats)
+3. ✅ Digest selection is the key mechanism
 
 ### After Unblock (Implementation)
 

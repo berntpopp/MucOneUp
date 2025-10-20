@@ -26,33 +26,28 @@ Primers bind to multiple X repeats because:
 - Reverse: `TCCGGGGCCGAGGTGACA` (RC) appears in every X repeat (54 sites)
 - Result: 49 × 54 = **2,646 possible PCR products**
 
-**This is why the protocol uses 21bp tags!**
+**This is expected because primers bind within repetitive X repeats!**
 
 ---
 
-## The Tags: What They Must Do
+## The Primers: 21bp Sequences
 
 Protocol says:
 > "The primers MUC1-Repeat F and R are located in 2 contiguous repeats flanking the 7C/8C and are **tagged with a 21 bp sequence**."
 
-**Tags must**:
-- Bind to **constant (non-repetitive) regions**
-- Provide **specificity** to amplify ONE location
-- Likely from left/right constant flanking sequences
+**Clarification**:
+- The primers ARE 21bp long (not primers + additional tags)
+- "Tagged with 21bp" means the primers themselves are 21bp sequences
+- Both forward and reverse primers are 21bp in length
+- They bind to sequences within the X repeats flanking the 7C/8C position
 
-**Complete primer structure** (hypothesis):
+**Example**:
 ```
-Forward_Full = [21bp from left constant] + GGCCGGCCCCGGGCTCCACC
-Reverse_Full = [21bp from right constant] + TCCGGGGCCGAGGTGACA (RC)
+Forward primer: 21bp sequence binding in X repeat before 7C/8C
+Reverse primer: 21bp sequence binding in X repeat after 7C/8C
 ```
 
-This would bind:
-```
-[LEFT_CONSTANT]─[VNTR: X-X-X-X-...-X]─[RIGHT_CONSTANT]
-↑                                      ↑
-Tag binds here                         Tag binds here
-(unique site)                          (unique site)
-```
+The 21bp length provides sufficient specificity while binding within the repeat structure.
 
 ---
 
