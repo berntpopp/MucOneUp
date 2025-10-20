@@ -30,24 +30,25 @@ Primers bind to multiple X repeats because:
 
 ---
 
-## The Primers: 21bp Sequences
+## The Amplicon Structure: Primer - 21bp - Primer
 
 Protocol says:
 > "The primers MUC1-Repeat F and R are located in 2 contiguous repeats flanking the 7C/8C and are **tagged with a 21 bp sequence**."
 
-**Clarification**:
-- The primers ARE 21bp long (not primers + additional tags)
-- "Tagged with 21bp" means the primers themselves are 21bp sequences
-- Both forward and reverse primers are 21bp in length
-- They bind to sequences within the X repeats flanking the 7C/8C position
+**Correct Understanding**:
+- "Tagged with 21bp" describes the **amplicon structure**, not primer length
+- Structure: `[Primer F] - [21bp of repeat] - [Primer R]`
+- The 21bp segment between the primers contains/flanks the 7C/8C region
+- Primers themselves can be any length (user provided 20bp and 18bp primers)
 
-**Example**:
+**Amplicon Structure**:
 ```
-Forward primer: 21bp sequence binding in X repeat before 7C/8C
-Reverse primer: 21bp sequence binding in X repeat after 7C/8C
+[Primer F] ----→ [21bp repeat segment with 7C/8C] ←---- [Primer R (RC)]
+                  ↑
+                  This 21bp section is what gets "tagged"
 ```
 
-The 21bp length provides sufficient specificity while binding within the repeat structure.
+The primers amplify a region that includes a 21bp section of the repeat containing the mutation site.
 
 ---
 

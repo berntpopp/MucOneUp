@@ -98,10 +98,11 @@ PCR_TAG = "GCCCCCCCAGCCCACGG"          # 17bp (contains 8C: GCCCCCCCCAGC)
 **Protocol Statement**:
 > "The primers MUC1-Repeat F and R are located in 2 contiguous repeats flanking the 7C/8C and are tagged with a 21 bp sequence."
 
-**Clarification**:
-- "Tagged with 21bp" means the primers ARE 21bp long (not primers + additional tags)
-- Both forward and reverse primers are 21bp sequences
-- They bind within X repeats flanking the 7C/8C position
+**Correct Understanding**:
+- "Tagged with 21bp" describes the **amplicon structure**: `[Primer] - [21bp] - [Primer]`
+- The 21bp refers to the repeat segment BETWEEN the primers (containing 7C/8C)
+- Primers themselves are any length (20bp and 18bp in current tests)
+- Amplicon structure: primers flank a 21bp section of repeat containing the mutation
 
 **Problem Identified**:
 - Both primers found in X repeat (60bp)
@@ -249,9 +250,9 @@ Result: 49 forward × 54 reverse = 2,646 possible products!
 
 **pydna correctly rejects this** as non-specific.
 
-**Note**: The 21bp primer length mentioned in the protocol refers to the actual primers being 21bp long,
-not additional tag sequences. The current test primers (20bp and 18bp) are shorter than the protocol's
-21bp primers, which may explain some specificity differences.
+**Note**: The 21bp mentioned in the protocol refers to the repeat segment BETWEEN the primers
+(amplicon structure: `[Primer] - [21bp] - [Primer]`), not the primer length itself.
+This 21bp section contains the 7C/8C mutation site.
 
 ### Finding #2: dupC Is Frameshift, Not Site-Disrupting
 
@@ -308,36 +309,25 @@ User provided:
 
 **But**: Both primers in same orientation!
 
-### Possible Solutions
+### Understanding Confirmed
 
-**Option A**: Primers are 21bp (as protocol states)
+**Amplicon Structure**: `[Primer F] - [21bp of repeat with 7C/8C] - [Primer R]`
 ```
 Current test primers:
-- Primer 1: 20bp (GGCCGGCCCCGGGCTCCACC)
-- Primer 2: 18bp (TGTCACCTCGGCCCCGGA)
+- Primer 1: 20bp (GGCCGGCCCCGGGCTCCACC) - forward
+- Primer 2: 18bp (TGTCACCTCGGCCCCGGA) - needs RC
 
-Protocol states: "tagged with 21bp sequence" = primers ARE 21bp
-Need complete 21bp primer sequences
+Protocol "tagged with 21bp" = the 21bp segment BETWEEN primers
+Not the primer length itself
 ```
 
-**Option B**: One primer should be RC ✅ **CONFIRMED**
-```
-Use: GGCCGGCCCCGGGCTCCACC (forward)
-And: TCCGGGGCCGAGGTGACA (RC of primer 2)
-```
+**Confirmed Solutions**:
 
-**Option C**: Different genomic locations
-```
-Maybe not both from X repeat?
-One from constant region?
-```
-
-### What We Learned
-
-1. ✅ Second primer needs reverse complement
-2. ✅ Both primers bind within X repeats (non-specific)
-3. ✅ Digest selection mechanism is the key (not PCR specificity)
-4. ✅ Multiple PCR products are expected and correct
+1. ✅ Second primer uses reverse complement: `TCCGGGGCCGAGGTGACA`
+2. ✅ Both primers bind within X repeats (non-specific - expected!)
+3. ✅ Amplicon contains 21bp section with mutation site
+4. ✅ Digest selection mechanism is the key (not PCR specificity)
+5. ✅ Multiple PCR products are expected and correct
 
 ---
 
