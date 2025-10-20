@@ -26,19 +26,19 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --dev
+          uv pip install --system -e ".[dev]"
 
       - name: Run ruff linter
         run: |
-          uv run ruff check muc_one_up/ tests/
+          ruff check muc_one_up/ tests/
 
       - name: Run ruff formatter check
         run: |
-          uv run ruff format --check muc_one_up/ tests/
+          ruff format --check muc_one_up/ tests/
 
       - name: Check types with mypy
         run: |
-          uv run mypy muc_one_up/
+          mypy muc_one_up/
         continue-on-error: true  # Don't fail build on type errors yet
 
   test:
@@ -65,11 +65,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --dev
+          uv pip install --system -e ".[dev]"
 
       - name: Run tests with coverage
         run: |
-          uv run pytest --cov=muc_one_up --cov-report=xml --cov-report=term-missing
+          pytest --cov=muc_one_up --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
