@@ -59,11 +59,29 @@ def run_orf_prediction(
             left_const_val = config.get("constants", {}).get("left")
             right_const_val = config.get("constants", {}).get("right")
 
+            # Extract toxic protein detection parameters from config (with defaults)
+            toxic_config = config.get("toxic_protein_detection", {})
+            detection_kwargs = {
+                "consensus": toxic_config.get("consensus_motif", "RCHLGPGHQAGPGLHR"),
+                "identity_threshold": toxic_config.get("identity_threshold", 0.8),
+                "key_residues": toxic_config.get("key_residues", ["R", "C", "H"]),
+                "expected_repeat_count": toxic_config.get("expected_repeat_count", 10),
+                "w_repeat": toxic_config.get("weights", {}).get("repeat", 0.6),
+                "w_composition": toxic_config.get("weights", {}).get("composition", 0.4),
+                "toxic_detection_cutoff": toxic_config.get("toxic_cutoff", 0.5),
+            }
+
             normal_stats = scan_orf_fasta(
-                normal_orf_out, left_const=left_const_val, right_const=right_const_val
+                normal_orf_out,
+                left_const=left_const_val,
+                right_const=right_const_val,
+                **detection_kwargs,
             )
             mut_stats = scan_orf_fasta(
-                mut_orf_out, left_const=left_const_val, right_const=right_const_val
+                mut_orf_out,
+                left_const=left_const_val,
+                right_const=right_const_val,
+                **detection_kwargs,
             )
 
             stats_file_normal = numbered_filename(
@@ -106,7 +124,24 @@ def run_orf_prediction(
             left_const_val = config.get("constants", {}).get("left")
             right_const_val = config.get("constants", {}).get("right")
 
-            stats = scan_orf_fasta(orf_out, left_const=left_const_val, right_const=right_const_val)
+            # Extract toxic protein detection parameters from config (with defaults)
+            toxic_config = config.get("toxic_protein_detection", {})
+            detection_kwargs = {
+                "consensus": toxic_config.get("consensus_motif", "RCHLGPGHQAGPGLHR"),
+                "identity_threshold": toxic_config.get("identity_threshold", 0.8),
+                "key_residues": toxic_config.get("key_residues", ["R", "C", "H"]),
+                "expected_repeat_count": toxic_config.get("expected_repeat_count", 10),
+                "w_repeat": toxic_config.get("weights", {}).get("repeat", 0.6),
+                "w_composition": toxic_config.get("weights", {}).get("composition", 0.4),
+                "toxic_detection_cutoff": toxic_config.get("toxic_cutoff", 0.5),
+            }
+
+            stats = scan_orf_fasta(
+                orf_out,
+                left_const=left_const_val,
+                right_const=right_const_val,
+                **detection_kwargs,
+            )
             stats_file = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt")
 
             with Path(stats_file).open("w") as sf:

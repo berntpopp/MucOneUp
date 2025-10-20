@@ -392,6 +392,34 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "additionalProperties": False,
             },
         },
+        "toxic_protein_detection": {
+            "type": "object",
+            "properties": {
+                "consensus_motif": {"type": "string"},
+                "identity_threshold": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                "expected_repeat_count": {"type": "number", "minimum": 1},
+                "key_residues": {"type": "array", "items": {"type": "string"}},
+                "weights": {
+                    "type": "object",
+                    "properties": {
+                        "repeat": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                        "composition": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                    },
+                    "required": ["repeat", "composition"],
+                    "additionalProperties": False,
+                },
+                "toxic_cutoff": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            },
+            "required": [
+                "consensus_motif",
+                "identity_threshold",
+                "expected_repeat_count",
+                "key_residues",
+                "weights",
+                "toxic_cutoff",
+            ],
+            "additionalProperties": False,
+        },
     },
     "required": [
         "repeats",

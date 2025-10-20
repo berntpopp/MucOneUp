@@ -597,5 +597,16 @@
         "expected_mutant_fluorescence": "Black"
       }
     }
+  },
+  "toxic_protein_detection": {
+    "consensus_motif": "RCHLGPGHQAGPGLHR",
+    "identity_threshold": 0.8,
+    "expected_repeat_count": 10,
+    "key_residues": ["R", "C", "H"],
+    "weights": {
+      "repeat": 0.6,
+      "composition": 0.4
+    },
+    "toxic_cutoff": 0.5
   }
 }
