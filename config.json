@@ -303,6 +303,27 @@
       "type": "real",
       "citation": "Saei et al. 2023, PMID:37456840, 10.1016/j.isci.2023.107171"
     },
+    "ins25bp": {
+      "allowed_repeats": [
+        "A",
+        "B",
+        "J",
+        "K",
+        "N",
+        "S",
+        "X"
+      ],
+      "changes": [
+        {
+          "type": "insert",
+          "start": 31,
+          "end": 32,
+          "sequence": "CAGGCCGGCCCCGGGCTCCGGACAC"
+        }
+      ],
+      "type": "real",
+      "citation": "Saei et al. 2023, PMID:37456840, 10.1016/j.isci.2023.107171"
+    },
     "bigDel": {
       "allowed_repeats": [
         "X"
