@@ -37,12 +37,12 @@ Protocol says:
 
 **CORRECT Amplicon Structure** (from user):
 ```
-[GGCCGGCCCCGGGCTCCACCG] - [GCCCCCCCAGCCCACGG] - [TGTCACCTCGGCCCCGGA (RC)]
-      21bp Primer F             17bp flanked             18bp Primer R
+[GGCCGGCCCCGGGCTCCACC] - [GCCCCCCCAGCCCACGG] - [TGTCACCTCGGCCCCGGA (RC)]
+      20bp Primer F            17bp flanked             18bp Primer R
 ```
 
 **Key Details**:
-- **Primer F**: `GGCCGGCCCCGGGCTCCACCG` (21bp - note the G at end!)
+- **Primer F**: `GGCCGGCCCCGGGCTCCACC` (20bp)
 - **Flanked sequence**: `GCCCCCCCAGCCCACGG` (17bp - contains 8C mutation!)
 - **Primer R**: `TGTCACCTCGGCCCCGGA` (18bp - needs reverse complement)
 - **Primer R (RC)**: `TCCGGGGCCGAGGTGACA`
@@ -61,7 +61,7 @@ The 17bp flanked sequence between the primers contains the 7C/8C mutation site.
 
 ```python
 # FIRST PCR - CORRECT sequences
-PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACCG"      # 21bp (forward) - NOTE: extra G at end!
+PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACC"       # 20bp (forward)
 PCR_PRIMER_R = "TCCGGGGCCGAGGTGACA"         # 18bp (RC of TGTCACCTCGGCCCCGGA)
 PCR_FLANKED_SEQ = "GCCCCCCCAGCCCACGG"       # 17bp (flanked sequence with 8C)
 
@@ -69,9 +69,6 @@ PCR_FLANKED_SEQ = "GCCCCCCCAGCCCACGG"       # 17bp (flanked sequence with 8C)
 SNAPSHOT_PRIMER_7C = "CGGGCTCCACCGCCCCCCC"  # 19bp (forward)
 SNAPSHOT_PRIMER_REPEAT_R = "TCCGGGGCCGAGGTGACA"  # 18bp (RC)
 ```
-
-**Important**: Previous tests used 20bp primer (`GGCCGGCCCCGGGCTCCACC`) - INCORRECT!
-Correct primer is 21bp: `GGCCGGCCCCGGGCTCCACCG` (with G at end)
 
 ### Test Data
 
@@ -118,7 +115,7 @@ Use the correct primers and rely on digest selection mechanism:
 
 ```python
 # Use CORRECT primer sequences
-PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACCG"  # 21bp
+PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACC"   # 20bp
 PCR_PRIMER_R = "TCCGGGGCCGAGGTGACA"     # 18bp (RC)
 
 # PCR will create multiple products (expected from repetitive X repeats)
@@ -353,7 +350,7 @@ muconeup analyze snapshot-validate \
 ### Complete Understanding ✅
 
 **Workflow mechanism confirmed**:
-- Primers: 21bp F + 18bp R (RC) flanking 17bp sequence with mutation
+- Primers: 20bp F + 18bp R (RC) flanking 17bp sequence with mutation
 - PCR creates multiple products (expected from X repeat binding)
 - MwoI digest provides selection (not PCR specificity)
 - 7C products: digested (destroyed)
@@ -371,7 +368,7 @@ muconeup analyze snapshot-validate \
 - Comprehensive tests
 
 **All components understood**:
-- Correct primer sequences (21bp F, 18bp R-RC)
+- Correct primer sequences (20bp F, 18bp R-RC)
 - Flanked sequence structure (17bp with 8C)
 - Digest selection mechanism
 - No missing information or limitations

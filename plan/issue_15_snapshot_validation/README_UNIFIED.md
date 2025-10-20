@@ -90,30 +90,26 @@ Day 9: GenMapper analysis
 
 **First PCR Amplicon Structure**:
 ```
-[GGCCGGCCCCGGGCTCCACCG] - [GCCCCCCCAGCCCACGG] - [TGTCACCTCGGCCCCGGA (RC)]
-      21bp Primer F             17bp flanked             18bp Primer R
+[GGCCGGCCCCGGGCTCCACC] - [GCCCCCCCAGCCCACGG] - [TGTCACCTCGGCCCCGGA (RC)]
+      20bp Primer F           17bp flanked             18bp Primer R
 ```
 
 ```python
 # CORRECT sequences (confirmed by user)
-PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACCG"  # 21bp (note G at end!)
+PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACC"       # 20bp
 PCR_PRIMER_R_ORIGINAL = "TGTCACCTCGGCCCCGGA"  # 18bp (needs RC)
-PCR_PRIMER_R = "TCCGGGGCCGAGGTGACA"     # 18bp (reverse complement)
-PCR_FLANKED_SEQ = "GCCCCCCCAGCCCACGG"   # 17bp (contains 8C: GCCCCCCCCAGC)
+PCR_PRIMER_R = "TCCGGGGCCGAGGTGACA"          # 18bp (reverse complement)
+PCR_FLANKED_SEQ = "GCCCCCCCAGCCCACGG"        # 17bp (contains 8C: GCCCCCCCCAGC)
 ```
 
 **Protocol Statement**:
 > "The primers MUC1-Repeat F and R are located in 2 contiguous repeats flanking the 7C/8C and are tagged with a 21 bp sequence."
 
 **Correct Understanding**:
-- **Amplicon structure**: `[21bp Primer F] - [17bp flanked] - [18bp Primer R]`
+- **Amplicon structure**: `[20bp Primer F] - [17bp flanked] - [18bp Primer R]`
 - The flanked sequence is **17bp** and contains the 7C/8C mutation
-- Primer F is **21bp**: `GGCCGGCCCCGGGCTCCACCG`
+- Primer F is **20bp**: `GGCCGGCCCCGGGCTCCACC`
 - Primer R is **18bp**: `TGTCACCTCGGCCCCGGA` (needs reverse complement)
-
-**Important Note**:
-- Previous tests used **20bp** primer: `GGCCGGCCCCGGGCTCCACC` ❌ WRONG!
-- Correct primer is **21bp**: `GGCCGGCCCCGGGCTCCACCG` ✅ (extra G at end)
 - Second primer MUST be reverse complemented for PCR
 
 ### SNaPshot Extension Primers
@@ -315,21 +311,19 @@ User provided:
 
 ### Understanding Confirmed
 
-**Amplicon Structure**: `[Primer F] - [21bp of repeat with 7C/8C] - [Primer R]`
+**Amplicon Structure**: `[20bp Primer F] - [17bp flanked] - [18bp Primer R]`
 ```
-Current test primers:
-- Primer 1: 20bp (GGCCGGCCCCGGGCTCCACC) - forward
-- Primer 2: 18bp (TGTCACCTCGGCCCCGGA) - needs RC
-
-Protocol "tagged with 21bp" = the 21bp segment BETWEEN primers
-Not the primer length itself
+Primers:
+- Primer F: 20bp (GGCCGGCCCCGGGCTCCACC) - forward
+- Primer R: 18bp (TGTCACCTCGGCCCCGGA) - needs RC
+- Flanked: 17bp (GCCCCCCCAGCCCACGG) - contains 8C mutation
 ```
 
 **Confirmed Solutions**:
 
 1. ✅ Second primer uses reverse complement: `TCCGGGGCCGAGGTGACA`
 2. ✅ Both primers bind within X repeats (non-specific - expected!)
-3. ✅ Amplicon contains 21bp section with mutation site
+3. ✅ Amplicon contains 17bp flanked sequence with mutation
 4. ✅ Digest selection mechanism is the key (not PCR specificity)
 5. ✅ Multiple PCR products are expected and correct
 
