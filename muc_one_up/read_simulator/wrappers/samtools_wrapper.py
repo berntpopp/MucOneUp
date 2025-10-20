@@ -7,6 +7,9 @@ This module provides wrapper functions for samtools operations:
 - calculate_vntr_coverage: Calculate coverage over VNTR regions
 - calculate_target_coverage: Calculate coverage over target regions
 - downsample_bam: Downsample BAM files to target coverage
+- convert_sam_to_bam: Convert SAM format to BAM format
+- convert_bam_to_fastq: Convert BAM format to FASTQ format
+- sort_and_index_bam: Sort and index BAM files
 """
 
 import logging
@@ -471,3 +474,159 @@ def sort_and_index_bam(
         run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     return output_bam
+
+
+def convert_sam_to_bam(
+    samtools_cmd: str,
+    input_sam: str,
+    output_bam: str,
+    threads: int = 4,
+    timeout: int = 1800,
+) -> str:
+    """
+    Convert SAM file to BAM format using samtools view.
+
+    This function provides a reusable SAM→BAM conversion for read simulation
+    pipelines (PacBio, ONT, Illumina). Used when tools output SAM format but
+    downstream processing requires BAM.
+
+    Args:
+        samtools_cmd: Path to the samtools executable.
+        input_sam: Input SAM file path.
+        output_bam: Output BAM file path.
+        threads: Number of threads to use (default: 4).
+        timeout: Timeout in seconds (default: 1800).
+
+    Returns:
+        Path to the output BAM file.
+
+    Raises:
+        ExternalToolError: If samtools view command fails (propagated from run_command).
+        FileOperationError: If input SAM doesn't exist or output BAM creation fails.
+
+    Example:
+        Convert pbsim3 SAM output to BAM::
+
+            from muc_one_up.read_simulator.wrappers.samtools_wrapper import convert_sam_to_bam
+
+            bam_file = convert_sam_to_bam(
+                samtools_cmd="samtools",
+                input_sam="simulation.sam",
+                output_bam="simulation.bam",
+                threads=8
+            )
+
+    Notes:
+        - Validates input SAM exists before conversion
+        - Validates output BAM is non-empty after conversion
+        - Uses build_tool_command for safe command construction
+        - Lets ExternalToolError propagate (no catching/re-raising)
+    """
+    # Validate input SAM exists
+    input_sam_path = Path(input_sam)
+    if not input_sam_path.exists():
+        raise FileOperationError(f"Input SAM file not found: {input_sam}")
+
+    # Convert SAM to BAM using samtools view
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
+        samtools_cmd,
+        "view",
+        "-b",  # Output BAM format
+        "-@",
+        threads,  # Threads (build_tool_command handles conversion)
+        "-o",
+        output_bam,
+        input_sam,
+    )
+
+    logging.info(f"Converting SAM to BAM: {input_sam} → {output_bam}")
+    run_command(cmd, timeout=timeout, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
+
+    # Validate output BAM exists and is non-empty
+    output_bam_path = Path(output_bam)
+    if not output_bam_path.exists() or output_bam_path.stat().st_size == 0:
+        raise FileOperationError(
+            f"Failed to convert SAM to BAM: Output BAM {output_bam} missing or empty"
+        )
+
+    logging.info(f"SAM→BAM conversion complete: {output_bam}")
+    return output_bam
+
+
+def convert_bam_to_fastq(
+    samtools_cmd: str,
+    input_bam: str,
+    output_fastq: str,
+    threads: int = 4,
+    timeout: int = 1800,
+) -> str:
+    """
+    Convert BAM file to FASTQ format using samtools fastq.
+
+    This function provides a reusable BAM→FASTQ conversion for read simulation
+    pipelines (PacBio, ONT, Illumina). Used when downstream tools require FASTQ
+    format for alignment.
+
+    Args:
+        samtools_cmd: Path to the samtools executable.
+        input_bam: Input BAM file path.
+        output_fastq: Output FASTQ file path.
+        threads: Number of threads to use (default: 4).
+        timeout: Timeout in seconds (default: 1800).
+
+    Returns:
+        Path to the output FASTQ file.
+
+    Raises:
+        ExternalToolError: If samtools fastq command fails (propagated from run_command).
+        FileOperationError: If input BAM doesn't exist or output FASTQ creation fails.
+
+    Example:
+        Convert CCS HiFi BAM to FASTQ for alignment::
+
+            from muc_one_up.read_simulator.wrappers.samtools_wrapper import convert_bam_to_fastq
+
+            fastq_file = convert_bam_to_fastq(
+                samtools_cmd="samtools",
+                input_bam="hifi_reads.bam",
+                output_fastq="hifi_reads.fastq",
+                threads=8
+            )
+
+    Notes:
+        - Validates input BAM exists before conversion
+        - Validates output FASTQ is non-empty after conversion
+        - Uses build_tool_command for safe command construction
+        - Lets ExternalToolError propagate (no catching/re-raising)
+        - Output is uncompressed FASTQ (compress with gzip if needed)
+    """
+    # Validate input BAM exists
+    input_bam_path = Path(input_bam)
+    if not input_bam_path.exists():
+        raise FileOperationError(f"Input BAM file not found: {input_bam}")
+
+    # Convert BAM to FASTQ using samtools fastq
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
+        samtools_cmd,
+        "fastq",
+        "-@",
+        threads,  # Threads (build_tool_command handles conversion)
+        "-0",
+        output_fastq,  # Output file for reads without pairing information
+        input_bam,
+    )
+
+    logging.info(f"Converting BAM to FASTQ: {input_bam} → {output_fastq}")
+    run_command(cmd, timeout=timeout, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
+
+    # Validate output FASTQ exists and is non-empty
+    output_fastq_path = Path(output_fastq)
+    if not output_fastq_path.exists() or output_fastq_path.stat().st_size == 0:
+        raise FileOperationError(
+            f"Failed to convert BAM to FASTQ: Output FASTQ {output_fastq} missing or empty"
+        )
+
+    logging.info(f"BAM→FASTQ conversion complete: {output_fastq}")
+    return output_fastq

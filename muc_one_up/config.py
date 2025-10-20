@@ -21,6 +21,7 @@ Configuration Sections:
     - tools: Command paths for external tools (reseq, bwa, samtools...)
     - read_simulation: Parameters for Illumina pipeline (coverage, threads...)
     - nanosim_params: Parameters for ONT pipeline (model path, read lengths, split-simulation...)
+    - pacbio_params: Parameters for PacBio HiFi pipeline (model type/file, coverage, pass numbers...)
 
 Example:
     Load and access configuration::
@@ -92,6 +93,15 @@ from jsonschema import ValidationError, validate
 #:                   enable_split_simulation (default: True),
 #:                   enable_coverage_correction (default: True)
 #:
+#:     pacbio_params: Parameters for PacBio HiFi simulation (optional)
+#:         Required: model_type, model_file, coverage, pass_num, min_passes, min_rq
+#:         Optional: pbsim3_cmd, ccs_cmd, threads, seed,
+#:                   accuracy_mean, accuracy_sd, accuracy_min,
+#:                   length_mean, length_sd, length_min, length_max
+#:         Enums: model_type must be "qshmm" or "errhmm"
+#:         Ranges: coverage (0.1-10000), pass_num (2-50), min_passes (1-50),
+#:                min_rq (0.0-1.0), accuracy_* (0.0-1.0)
+#:
 #: Example:
 #:     Accessing schema in code::
 #:
@@ -141,6 +151,37 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "enable_coverage_correction": {"type": ["boolean", "null"]},
             },
             "required": ["training_data_path", "coverage"],
+            "additionalProperties": False,
+        },
+        "pacbio_params": {
+            "type": "object",
+            "properties": {
+                "pbsim3_cmd": {"type": "string"},
+                "ccs_cmd": {"type": "string"},
+                "model_type": {"type": "string", "enum": ["qshmm", "errhmm"]},
+                "model_file": {"type": "string"},
+                "coverage": {"type": "number", "minimum": 0.1, "maximum": 10000},
+                "pass_num": {"type": "number", "minimum": 2, "maximum": 50},
+                "min_passes": {"type": "number", "minimum": 1, "maximum": 50},
+                "min_rq": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                "threads": {"type": "number", "minimum": 1},
+                "seed": {"type": ["number", "null"]},
+                "accuracy_mean": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
+                "accuracy_sd": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
+                "accuracy_min": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
+                "length_mean": {"type": ["number", "null"], "minimum": 1},
+                "length_sd": {"type": ["number", "null"], "minimum": 0},
+                "length_min": {"type": ["number", "null"], "minimum": 1},
+                "length_max": {"type": ["number", "null"], "minimum": 1},
+            },
+            "required": [
+                "model_type",
+                "model_file",
+                "coverage",
+                "pass_num",
+                "min_passes",
+                "min_rq",
+            ],
             "additionalProperties": False,
         },
         "constants": {
