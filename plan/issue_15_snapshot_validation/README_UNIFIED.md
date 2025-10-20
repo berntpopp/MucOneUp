@@ -86,37 +86,41 @@ Day 9: GenMapper analysis
 
 ## Primer Sequences (from User)
 
-### PCR Primers
+### PCR Primers - CORRECT Sequences
+
+**First PCR Amplicon Structure**:
+```
+[GGCCGGCCCCGGGCTCCACCG] - [GCCCCCCCAGCCCACGG] - [TGTCACCTCGGCCCCGGA (RC)]
+      21bp Primer F             17bp flanked             18bp Primer R
+```
 
 ```python
-# User-provided sequences
-PCR_PRIMER_1 = "GGCCGGCCCCGGGCTCCACC"  # 20bp
-PCR_PRIMER_2 = "TGTCACCTCGGCCCCGGA"    # 18bp
-PCR_TAG = "GCCCCCCCAGCCCACGG"          # 17bp (contains 8C: GCCCCCCCCAGC)
+# CORRECT sequences (confirmed by user)
+PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACCG"  # 21bp (note G at end!)
+PCR_PRIMER_R_ORIGINAL = "TGTCACCTCGGCCCCGGA"  # 18bp (needs RC)
+PCR_PRIMER_R = "TCCGGGGCCGAGGTGACA"     # 18bp (reverse complement)
+PCR_FLANKED_SEQ = "GCCCCCCCAGCCCACGG"   # 17bp (contains 8C: GCCCCCCCCAGC)
 ```
 
 **Protocol Statement**:
 > "The primers MUC1-Repeat F and R are located in 2 contiguous repeats flanking the 7C/8C and are tagged with a 21 bp sequence."
 
 **Correct Understanding**:
-- "Tagged with 21bp" describes the **amplicon structure**: `[Primer] - [21bp] - [Primer]`
-- The 21bp refers to the repeat segment BETWEEN the primers (containing 7C/8C)
-- Primers themselves are any length (20bp and 18bp in current tests)
-- Amplicon structure: primers flank a 21bp section of repeat containing the mutation
+- **Amplicon structure**: `[21bp Primer F] - [17bp flanked] - [18bp Primer R]`
+- The flanked sequence is **17bp** and contains the 7C/8C mutation
+- Primer F is **21bp**: `GGCCGGCCCCGGGCTCCACCG`
+- Primer R is **18bp**: `TGTCACCTCGGCCCCGGA` (needs reverse complement)
 
-**Problem Identified**:
-- Both primers found in X repeat (60bp)
-- Primer 1 at position 31: `GGCCGGCCCCGGGCTCCACC`
-- Primer 2 at position 8: `TGTCACCTCGGCCCCGGA`
-- **Both in FORWARD orientation on same strand** ←←
-- Cannot create PCR product (need forward → and reverse ←)
+**Important Note**:
+- Previous tests used **20bp** primer: `GGCCGGCCCCGGGCTCCACC` ❌ WRONG!
+- Correct primer is **21bp**: `GGCCGGCCCCGGGCTCCACCG` ✅ (extra G at end)
+- Second primer MUST be reverse complemented for PCR
 
 ### SNaPshot Extension Primers
 
 ```python
 SNAPSHOT_PRIMER_7C = "CGGGCTCCACCGCCCCCCC"     # 19bp
-SNAPSHOT_PRIMER_REPEAT_R = "TGTCACCTCGGCCCCGGA"  # 18bp (same as PCR_PRIMER_2)
-SNAPSHOT_TAG = "GCCCCACGG"                       # 9bp
+SNAPSHOT_PRIMER_REPEAT_R = "TGTCACCTCGGCCCCGGA"  # 18bp (same as PCR_PRIMER_R_ORIGINAL)
 ```
 
 **Expected Results (from Protocol)**:

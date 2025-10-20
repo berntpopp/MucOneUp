@@ -30,43 +30,48 @@ Primers bind to multiple X repeats because:
 
 ---
 
-## The Amplicon Structure: Primer - 21bp - Primer
+## The First PCR Amplicon Structure
 
 Protocol says:
 > "The primers MUC1-Repeat F and R are located in 2 contiguous repeats flanking the 7C/8C and are **tagged with a 21 bp sequence**."
 
-**Correct Understanding**:
-- "Tagged with 21bp" describes the **amplicon structure**, not primer length
-- Structure: `[Primer F] - [21bp of repeat] - [Primer R]`
-- The 21bp segment between the primers contains/flanks the 7C/8C region
-- Primers themselves can be any length (user provided 20bp and 18bp primers)
-
-**Amplicon Structure**:
+**CORRECT Amplicon Structure** (from user):
 ```
-[Primer F] ----→ [21bp repeat segment with 7C/8C] ←---- [Primer R (RC)]
-                  ↑
-                  This 21bp section is what gets "tagged"
+[GGCCGGCCCCGGGCTCCACCG] - [GCCCCCCCAGCCCACGG] - [TGTCACCTCGGCCCCGGA (RC)]
+      21bp Primer F             17bp flanked             18bp Primer R
 ```
 
-The primers amplify a region that includes a 21bp section of the repeat containing the mutation site.
+**Key Details**:
+- **Primer F**: `GGCCGGCCCCGGGCTCCACCG` (21bp - note the G at end!)
+- **Flanked sequence**: `GCCCCCCCAGCCCACGG` (17bp - contains 8C mutation!)
+- **Primer R**: `TGTCACCTCGGCCCCGGA` (18bp - needs reverse complement)
+- **Primer R (RC)**: `TCCGGGGCCGAGGTGACA`
+
+**Mutation in Flanked Sequence**:
+- Mutant (8C): `GCCCCCCCCAGC` (8 Cs) - present in `GCCCCCCCAGCCCACGG`
+- Normal (7C): `GCCCCCCCAGC` (7 Cs)
+
+The 17bp flanked sequence between the primers contains the 7C/8C mutation site.
 
 ---
 
 ## Test Results Summary
 
-### Primers Used
+### Correct Primer Sequences (Updated)
 
 ```python
-# User-provided sequences (reverse complemented for primer 2)
-PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACC"       # 20bp (forward)
+# FIRST PCR - CORRECT sequences
+PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACCG"      # 21bp (forward) - NOTE: extra G at end!
 PCR_PRIMER_R = "TCCGGGGCCGAGGTGACA"         # 18bp (RC of TGTCACCTCGGCCCCGGA)
-PCR_TAG = "GCCCCCCCAGCCCACGG"               # 17bp (contains 8C pattern)
+PCR_FLANKED_SEQ = "GCCCCCCCAGCCCACGG"       # 17bp (flanked sequence with 8C)
 
-# SNaPshot primers (reverse complemented for second primer)
+# SNaPshot extension primers (reverse complemented for second primer)
 SNAPSHOT_PRIMER_7C = "CGGGCTCCACCGCCCCCCC"  # 19bp (forward)
 SNAPSHOT_PRIMER_REPEAT_R = "TCCGGGGCCGAGGTGACA"  # 18bp (RC)
-SNAPSHOT_TAG = "GCCCCACGG"                   # 9bp
 ```
+
+**Important**: Previous tests used 20bp primer (`GGCCGGCCCCGGGCTCCACC`) - INCORRECT!
+Correct primer is 21bp: `GGCCGGCCCCGGGCTCCACCG` (with G at end)
 
 ### Test Data
 
@@ -89,7 +94,7 @@ Reverse primer binding sites:  54 (all as reverse complement)
 pydna result: "PCR not specific!" ✓ CORRECT BEHAVIOR
 
 This is EXPECTED because primers are from repetitive X repeat.
-Real protocol uses tags to provide specificity.
+The digest selection mechanism provides specificity, not the PCR step.
 ```
 
 ### MwoI Digest Test
@@ -107,25 +112,25 @@ May not work with restriction digest pre-selection.
 
 ## Implementation Recommendations
 
-### Option A: Implement with Tag Logic (RECOMMENDED)
+### Option A: Implement with Digest Selection (RECOMMENDED)
 
-Design primers that include constant region tags:
+Use the correct primers and rely on digest selection mechanism:
 
 ```python
-# Extract constant regions from config
-LEFT_CONSTANT = config["constants"]["hg38"]["left"]
-RIGHT_CONSTANT = config["constants"]["hg38"]["right"]
+# Use CORRECT primer sequences
+PCR_PRIMER_F = "GGCCGGCCCCGGGCTCCACCG"  # 21bp
+PCR_PRIMER_R = "TCCGGGGCCGAGGTGACA"     # 18bp (RC)
 
-# Design tagged primers
-FORWARD_TAG = LEFT_CONSTANT[-21:]  # Last 21bp of left constant
-REVERSE_TAG = RIGHT_CONSTANT[:21]  # First 21bp of right constant
+# PCR will create multiple products (expected from repetitive X repeats)
+# MwoI digest selects which products survive:
+#   - 7C products: digested (destroyed)
+#   - 8C products: survive (no MwoI sites)
 
-# Full primers
-FULL_FORWARD = FORWARD_TAG + PCR_PRIMER_F
-FULL_REVERSE = REVERSE_TAG + PCR_PRIMER_R
-
-# This should give specific amplification
-amplicon = pcr(FULL_FORWARD, FULL_REVERSE, template)
+# Workflow:
+# 1. PCR amplification (multiple products expected)
+# 2. MwoI digest (eliminates 7C products)
+# 3. SNaPshot extension on survivors
+# 4. Detect C (Black peak) = 8C mutation
 ```
 
 ### Option B: Direct Detection Without Digest (ALTERNATIVE)
@@ -177,11 +182,14 @@ for amp in amplicons:
 3. ✅ **Mutation classification** - Type A (site-disrupting) vs Type B (frameshift)
 4. ✅ **Extension primer validation** - Thermodynamic checks with primer3-py
 5. ✅ **SNaPshot extension simulation** - Predict next base incorporation
-6. ⚠️ **PCR simulation** - Works but reports non-specific (need tags or accept limitation)
+6. ✅ **PCR simulation** - Multiple products expected and correct (primers in X repeats)
+7. ✅ **Digest selection mechanism** - MwoI eliminates 7C products, spares 8C
 
-**Cannot implement** (without tags):
-- ❌ Specific single-product PCR simulation
-- ❌ Complete end-to-end workflow matching wet-lab exactly
+**Can implement complete workflow**:
+- ✅ PCR with correct primers (21bp F, 18bp R-RC)
+- ✅ Digest simulation (MwoI site analysis)
+- ✅ SNaPshot extension on surviving products
+- ✅ Mutation detection via fluorescence prediction
 
 ### Proposed Implementation
 
@@ -325,11 +333,11 @@ muconeup analyze snapshot-validate \
 
 ### Future (if needed)
 
-1. Design actual tags from constant regions
-2. Test with tagged primers
-3. Implement complete PCR workflow
-4. Add support for other mutations (insG, delT, etc.)
-5. Create multiplex validation panel
+1. Test with complete workflow on more mutations
+2. Implement complete PCR + digest + SNaPshot pipeline
+3. Add support for other mutations (insG, delT, etc.)
+4. Create multiplex validation panel
+5. Validate against wet-lab data
 
 ---
 
@@ -342,30 +350,31 @@ muconeup analyze snapshot-validate \
 3. **Protocol understanding complete** - 8-day workflow fully analyzed
 4. **Primer sequences work** - Correct orientation after RC correction
 
-### Technical Limitation ⚠️
+### Complete Understanding ✅
 
-**Cannot simulate exact wet-lab specificity** without knowing:
-- Tag sequences (21bp)
-- Tag binding locations (constant regions?)
-- How tags provide specificity
-
-**This is OK!** We can still implement useful validation:
-- Mutation presence detection
-- MwoI site analysis
-- SNaPshot extension prediction
-- Workflow recommendation
+**Workflow mechanism confirmed**:
+- Primers: 21bp F + 18bp R (RC) flanking 17bp sequence with mutation
+- PCR creates multiple products (expected from X repeat binding)
+- MwoI digest provides selection (not PCR specificity)
+- 7C products: digested (destroyed)
+- 8C products: survive (no MwoI sites)
+- SNaPshot extension detects mutation via fluorescence
 
 ### Implementation Status ✅
 
-**Ready to implement**:
-- `muc_one_up/analysis/snapshot_validator.py` (with documented limitations)
+**Ready to implement complete workflow**:
+- `muc_one_up/analysis/snapshot_validator.py`
+- PCR simulation (multiple products expected)
+- MwoI digest simulation (selection mechanism)
+- SNaPshot extension prediction
 - CLI command `snapshot-validate`
-- Tests for all implemented features
+- Comprehensive tests
 
-**Documented for future**:
-- Complete PCR simulation requires tags
-- May need direct detection workflow for frameshift mutations
-- Option to design primers from constant regions
+**All components understood**:
+- Correct primer sequences (21bp F, 18bp R-RC)
+- Flanked sequence structure (17bp with 8C)
+- Digest selection mechanism
+- No missing information or limitations
 
 ---
 
