@@ -1,0 +1,194 @@
+# MucOneUp Documentation Configuration
+# https://squidfunk.github.io/mkdocs-material/
+
+site_name: MucOneUp
+site_description: MUC1 VNTR simulation and analysis toolkit for genomics research
+site_author: Bernt Popp
+site_url: https://berntpopp.github.io/MucOneUp/
+
+repo_name: berntpopp/MucOneUp
+repo_url: https://github.com/berntpopp/MucOneUp
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2025 Bernt Popp
+
+theme:
+  name: material
+  language: en
+
+  # Color scheme
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+
+  # Features
+  features:
+    # Navigation
+    - navigation.instant      # Instant loading (SPA-like)
+    - navigation.tracking     # Anchor tracking in URL
+    - navigation.tabs         # Top-level sections as tabs
+    - navigation.tabs.sticky  # Sticky navigation tabs
+    - navigation.sections     # Expand sections in sidebar
+    - navigation.indexes      # Section index pages
+    - navigation.top          # "Back to top" button
+
+    # Search
+    - search.suggest          # Search suggestions
+    - search.highlight        # Highlight search terms
+    - search.share            # Share search results
+
+    # Content
+    - content.code.copy       # Copy button on code blocks
+    - content.code.annotate   # Code annotations
+    - content.tabs.link       # Link tabbed content
+
+    # Table of contents
+    - toc.follow              # TOC follows scroll
+    - toc.integrate           # Integrate TOC in sidebar
+
+  # Icon
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/dna
+
+  # favicon: assets/favicon.png  # Add custom favicon later
+
+  # Custom CSS
+  extra_css:
+    - stylesheets/extra.css
+
+# Plugins
+plugins:
+  - search:
+      lang: en
+      separator: '[\s\-\.]+'
+
+  - mkdocstrings:
+      enabled: true
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_object_full_path: false
+            show_category_heading: true
+            show_if_no_docstring: false
+            show_signature: true
+            show_signature_annotations: true
+            separate_signature: true
+            line_length: 80
+            merge_init_into_class: true
+            docstring_style: google
+            docstring_section_style: table
+            members_order: source
+            group_by_category: true
+            show_labels: true
+
+# Markdown extensions
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      permalink_title: Link to this section
+      toc_depth: 3
+
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/abbreviations.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - mkdocs_click
+
+# Navigation structure
+nav:
+  - Home: index.md
+
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Core Concepts: getting-started/concepts.md
+
+  - Guides:
+    - Simulation: guides/simulation.md
+    - Toxic Protein Detection: guides/toxic-protein-detection.md
+    - SNaPshot Validation: guides/snapshot-validation.md
+
+  - Reference:
+    - CLI Commands: reference/cli.md
+    - Configuration: reference/configuration.md
+
+  - About:
+    - Citation: about/citation.md
+    - License: about/license.md
+    - Changelog: about/changelog.md
+
+# Extra configuration
+extra:
+  version:
+    provider: mike
+
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/berntpopp/MucOneUp
+      name: MucOneUp on GitHub
+
+    - icon: fontawesome/brands/docker
+      link: https://github.com/berntpopp/MucOneUp/pkgs/container/muconeup%2Fmuconeup
+      name: MucOneUp on Docker
+
+  generator: false  # Remove "Made with Material for MkDocs"
+
+# Watch for changes (development mode)
+watch:
+  - muc_one_up/
+  - docs/includes/
