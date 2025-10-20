@@ -349,18 +349,11 @@ output/
 -  **[User Guides](guides/simulation.md)**
   Detailed documentation for simulation, mutations, SNPs, and analysis
 
--  **[Workflows](workflows/)**
-  Real-world research applications with complete examples
-
 -  **[CLI Reference](reference/cli.md)**
   Complete command-line interface documentation
 
 -  **API Reference (coming soon)**
   Python API documentation auto-generated from source
-
-  Analysis of real-world VNTR databases
-
-  Development setup, architecture, testing, and code style
 
 -  **[About](about/citation.md)**
   Citation guide, license, and changelog

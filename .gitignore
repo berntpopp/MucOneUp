@@ -172,8 +172,9 @@ cython_debug/
 /test.*.fa
 /test.*.orfs.fa
 
-# reference folder
-reference/
+# reference folder (root-level only, not docs/reference/)
+/reference/
+manual_testing/reference/
 
 # outout and test folder
 output/

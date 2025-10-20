@@ -85,6 +85,28 @@ ci-check:  ## Run EXACT same checks as GitHub Actions CI (run before committing!
 
 check: lint format-check type-check test  ## Run all quality checks
 
+# ==================== DOCUMENTATION ====================
+
+docs-install:  ## Install documentation dependencies
+	uv sync --extra docs
+
+docs-build:  ## Build documentation locally (non-strict)
+	uv run mkdocs build
+
+docs-serve:  ## Serve documentation locally with live reload
+	uv run mkdocs serve
+
+docs-ci:  ## Run EXACT same docs build as GitHub Actions CI
+	@echo "=== Simulating GitHub Actions Documentation Build ==="
+	@echo ""
+	@echo "Step 1: Sync docs dependencies..."
+	uv sync --extra docs
+	@echo ""
+	@echo "Step 2: Build documentation (strict mode)..."
+	uv run mkdocs build --strict --verbose
+	@echo ""
+	@echo "✅ Documentation build succeeded (same as GitHub Actions)"
+
 # ==================== CLEANUP ====================
 
 clean:  ## Remove build artifacts and caches

@@ -55,7 +55,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          uv run mkdocs build --strict --verbose
+          uv run mkdocs build --strict --verbose 2>&1 | tee build.log || (cat build.log && exit 1)
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
