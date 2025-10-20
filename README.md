@@ -2,6 +2,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/berntpopp/MucOneUp/workflows/Test%20%26%20Quality/badge.svg)](https://github.com/berntpopp/MucOneUp/actions)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue.svg)](https://github.com/berntpopp/MucOneUp/pkgs/container/muconeup%2Fmuconeup)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **MUC1 VNTR simulation and analysis toolkit for genomics research**
@@ -63,6 +64,46 @@ make check   # Verify installation
 - 🧪 **Read Simulation** - Conda/Mamba environments - See `conda/env_wessim.yaml` and `conda/env_nanosim.yml`
 
 **System Requirements:** Python 3.10+, 4GB RAM minimum, 50GB disk for reference files
+
+---
+
+## 🐳 Docker Installation
+
+**Simplest option** - No Python environment needed, all tools included:
+
+```bash
+# Pull image from GitHub Container Registry
+docker pull ghcr.io/berntpopp/muconeup/muconeup:latest
+
+# Run
+docker run --rm \
+  -v $(pwd)/data:/data \
+  -v $(pwd)/config.json:/app/config.json:ro \
+  ghcr.io/berntpopp/muconeup/muconeup:latest \
+  --config /app/config.json \
+  simulate --out-base /data/sample
+```
+
+**What's included:** MucOneUp core + Illumina (w-Wessim2) + ONT (NanoSim) + PacBio (pbsim3/CCS) - all in one image.
+
+### Docker Compose
+
+```bash
+# Create docker-compose.yml (or use the one in repo)
+docker-compose run --rm muconeup --config /app/config.json simulate --help
+```
+
+### Build from Source
+
+```bash
+./docker/build.sh
+```
+
+**Advantages:**
+- ✅ No conda/Python setup required
+- ✅ All simulators pre-installed
+- ✅ Reproducible environment
+- ✅ Easy deployment on HPC/cloud
 
 ---
 
