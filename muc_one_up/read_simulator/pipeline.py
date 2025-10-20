@@ -25,8 +25,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+# Import bioinformatics modules (Issue #28)
+from ..bioinformatics.reference_validation import (
+    get_reference_path_for_assembly,
+    validate_reference_for_assembly,
+)
+
 # Import exceptions
-from ..exceptions import ConfigurationError
+from ..exceptions import ConfigurationError, FileOperationError, ValidationError
 
 # Import fragment simulation
 from .fragment_simulation import simulate_fragments
@@ -234,13 +240,39 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     split_reads(reads_fq, reads_fq1, reads_fq2)
 
     # Stage 9: Align reads
-    human_reference = rs_config.get("human_reference")
+    # Try to get reference from reference_genomes section (Issue #28)
+    human_reference = None
+    try:
+        # Get assembly from config (default: hg38)
+        assembly = config.get("reference_assembly", "hg38")
+
+        # Get reference path for assembly using new helper function
+        ref_path = get_reference_path_for_assembly(config, assembly)
+        human_reference = str(ref_path)
+
+        # Validate reference and indices for BWA (logs warnings automatically)
+        warnings = validate_reference_for_assembly(config, assembly, aligner="bwa")
+
+        logging.info("Using reference from config: %s (%s)", human_reference, assembly)
+
+        # Log index warnings if any
+        if warnings:
+            for warning in warnings:
+                logging.warning("%s", warning)
+    except (ValidationError, FileOperationError) as e:
+        # Fall back to old human_reference config setting
+        logging.debug("Could not load reference from reference_genomes: %s", e)
+        human_reference = rs_config.get("human_reference")
+
+    # Final validation
     if not human_reference:
         logging.error("Error: human_reference not specified in config.")
         raise ConfigurationError(
-            "human_reference not specified in config 'read_simulation' section"
+            "human_reference not specified. Add 'reference_genomes' section or "
+            "'human_reference' to config 'read_simulation' section"
         )
-    logging.info("9. Aligning reads to reference")
+
+    logging.info("9. Aligning reads to reference: %s", human_reference)
     align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads)
 
     # Stage 10: Optionally downsample
