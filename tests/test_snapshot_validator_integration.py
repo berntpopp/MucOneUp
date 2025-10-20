@@ -87,9 +87,9 @@ class TestIntegrationWithRealData:
         assert result["pcr_results"]["product_count"] > 0, "Should have PCR products"
 
         # Should have survivors (8C amplicons lack MwoI site)
-        assert (
-            result["digest_results"]["survivor_count"] >= 1
-        ), "Should have digest survivors (8C amplicons)"
+        assert result["digest_results"]["survivor_count"] >= 1, (
+            "Should have digest survivors (8C amplicons)"
+        )
 
         # Mutation should be detected
         assert result["mutation_detected"] is True, "dupC mutation should be detected"
@@ -134,14 +134,14 @@ class TestIntegrationWithRealData:
         # Normal sample: all 7C amplicons should be digested
         # May have 0 survivors (all digested) or very few
         # Mutation should NOT be detected
-        assert (
-            result["mutation_detected"] is False
-        ), "dupC mutation should NOT be detected in normal sample"
+        assert result["mutation_detected"] is False, (
+            "dupC mutation should NOT be detected in normal sample"
+        )
 
         # Check summary indicates no mutation
-        assert (
-            "No dupC" in result["summary"] or "normal" in result["summary"].lower()
-        ), "Summary should indicate no mutation"
+        assert "No dupC" in result["summary"] or "normal" in result["summary"].lower(), (
+            "Summary should indicate no mutation"
+        )
 
         print("\n✓ Normal Sample Results:")
         print(f"  PCR products: {result['pcr_results']['product_count']}")
@@ -195,12 +195,12 @@ class TestIntegrationWithRealData:
             if validation["mutation_present"]:
                 mutant_amplicons += 1
                 # Mutant amplicons should survive digest
-                assert (
-                    validation["survives_digest"] is True
-                ), "Mutant amplicon should survive digest"
-                assert (
-                    validation["has_restriction_site"] is False
-                ), "Mutant amplicon should not have MwoI site"
+                assert validation["survives_digest"] is True, (
+                    "Mutant amplicon should survive digest"
+                )
+                assert validation["has_restriction_site"] is False, (
+                    "Mutant amplicon should not have MwoI site"
+                )
                 assert validation["detectable"] is True, "Mutant amplicon should be detectable"
 
         print(f"\n✓ Amplicon Validation: {mutant_amplicons} mutant amplicons found")

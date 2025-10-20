@@ -1138,8 +1138,10 @@ def snapshot_validate(ctx, input_fasta, mutation, output):
         # Exit code: 0 if mutation detected, 1 if not
         if output_data["overall_detection"]:
             logging.info("✓ Mutation %s DETECTED in sample", mutation.upper())
+            ctx.exit(0)
         else:
             logging.info("✗ Mutation %s NOT detected in sample", mutation.upper())
+            ctx.exit(1)
 
     except Exception as e:
         logging.error("SNaPshot validation failed: %s", e, exc_info=True)
