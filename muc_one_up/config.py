@@ -219,7 +219,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                     },
                 },
                 "required": ["allowed_repeats", "changes"],
-                "additionalProperties": True,
+                "additionalProperties": False,  # Strict validation - only allow defined fields
             },
         },
         "tools": {

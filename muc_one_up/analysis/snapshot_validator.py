@@ -347,12 +347,12 @@ class SnapshotExtensionSimulator:
         next_base = template[extension_pos]
         fluor_info = self.fluorophore_map.get(next_base, {})
 
-        # Interpretation based on base
+        # Interpretation based on base (mutation-agnostic - specific interpretation in validator)
         interpretations = {
-            "C": "8C mutation detected (Black peak)",
-            "A": "Incomplete extension or alternate mutation",
-            "G": "Unexpected - check amplicon sequence",
-            "T": "Unexpected - check amplicon sequence",
+            "C": "Mutant pattern detected (C signal)",
+            "A": "Incomplete extension or alternate mutation (A signal)",
+            "G": "Unexpected signal - verify amplicon sequence (G signal)",
+            "T": "Unexpected signal - verify amplicon sequence (T signal)",
         }
 
         result = {

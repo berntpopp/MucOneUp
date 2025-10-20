@@ -22,7 +22,7 @@ def pcr_config():
         "pcr": {
             "forward_primer": "GGCCGGCCCCGGGCTCCACC",
             "reverse_primer": "TCCGGGGCCGAGGTGACA",  # Already RC'd for testing
-            "reverse_needs_rc": False,  # False since we're providing it already RC'd
+            "reverse_needs_rc": False,  # Do NOT apply RC again; False means the primer is already in reverse complement form
             "max_products": 100,
             "size_range": {"min": 50, "max": 65},
         }
@@ -297,7 +297,9 @@ class TestSnapshotExtensionSimulator:
         assert result["fluorophore_dye"] == "dTAMRA"
         assert result["ddNTP"] == "ddCTP"
         assert result["peak_size"] == 20  # 19bp primer + 1
-        assert "8C mutation detected" in result["interpretation"]
+        assert (
+            "Mutant pattern detected" in result["interpretation"]
+        )  # Generic mutation-agnostic text
 
     def test_extend_7c_green_peak(self, snapshot_config):
         """Test that 7C produces Green (dR6G) fluorescence."""
