@@ -83,7 +83,7 @@ def run_pbsim3_simulation(
     length_max: int = DEFAULT_PBSIM3_LENGTH_MAX,
     seed: int | None = None,
     timeout: int = DEFAULT_PBSIM3_TIMEOUT,
-) -> str:
+) -> list[str]:
     """
     Simulate multi-pass PacBio CLR reads using pbsim3 model-based approach.
 
@@ -110,7 +110,9 @@ def run_pbsim3_simulation(
         timeout: Timeout in seconds (default: 7200 = 2 hours).
 
     Returns:
-        Path to the output BAM file containing multi-pass CLR reads.
+        List of paths to output BAM files containing multi-pass CLR reads.
+        For diploid references, returns multiple BAMs (one per haplotype).
+        For haploid references, returns a single-element list.
 
     Raises:
         FileOperationError: If model file or reference doesn't exist, or if
@@ -185,6 +187,8 @@ def run_pbsim3_simulation(
 
     # Build pbsim3 command with all parameters
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    # Note: ERRHMM only supports --accuracy-mean and --length-* parameters
+    # QSHMM supports additional --accuracy-sd/--accuracy-min parameters
     cmd_args = [
         "--strategy",
         "wgs",  # Whole-genome shotgun strategy
@@ -192,16 +196,14 @@ def run_pbsim3_simulation(
         model_type,  # qshmm or errhmm
         "--qshmm" if model_type == "qshmm" else "--errhmm",
         model_file,  # Model file path
+        "--genome",
+        reference,  # Reference FASTA (--genome required for wgs strategy)
         "--depth",
         coverage,  # Target coverage (build_tool_command handles conversion)
         "--pass-num",
         pass_num,  # Number of passes per molecule
         "--accuracy-mean",
         accuracy_mean,  # Mean accuracy
-        "--accuracy-sd",
-        accuracy_sd,  # Accuracy standard deviation
-        "--accuracy-min",
-        accuracy_min,  # Minimum accuracy
         "--length-mean",
         length_mean,  # Mean read length
         "--length-sd",
@@ -212,7 +214,6 @@ def run_pbsim3_simulation(
         length_max,  # Maximum read length
         "--prefix",
         output_prefix,  # Output file prefix
-        reference,  # Reference FASTA
     ]
 
     # Add seed if specified (for reproducible simulations)
@@ -237,51 +238,92 @@ def run_pbsim3_simulation(
     # Let ExternalToolError propagate from run_command (don't catch/re-raise)
     run_command(cmd, timeout=timeout, stderr_prefix="[pbsim3] ", stderr_log_level=logging.INFO)
 
-    # Determine output file format (pbsim3 may output .sam or .bam)
-    output_bam = f"{output_prefix}.bam"
-    output_sam = f"{output_prefix}.sam"
+    # Determine output file format and handle multiple BAM files (diploid simulations)
+    # pbsim3 can produce:
+    # 1. Single file: {prefix}.bam or {prefix}.sam (haploid reference)
+    # 2. Multiple files: {prefix}_0001.bam, {prefix}_0002.bam, ... (diploid reference)
 
-    output_bam_path = Path(output_bam)
-    output_sam_path = Path(output_sam)
+    # Check for multiple BAM files (diploid simulation)
+    # Pattern: {output_prefix}_*.bam (e.g., sim_0001.bam, sim_0002.bam)
+    output_prefix_path = Path(output_prefix)
+    multi_bam_pattern = f"{output_prefix_path.name}_*.bam"
+    multi_bam_files = sorted(str(p) for p in output_prefix_path.parent.glob(multi_bam_pattern))
 
-    # Check if pbsim3 produced SAM output (needs conversion)
-    if output_sam_path.exists() and not output_bam_path.exists():
-        logging.info(f"pbsim3 produced SAM output, converting to BAM: {output_sam} → {output_bam}")
+    output_bams = []
 
-        # Convert SAM to BAM using reusable samtools wrapper
-        convert_sam_to_bam(
-            samtools_cmd=samtools_cmd,
-            input_sam=output_sam,
-            output_bam=output_bam,
-            threads=4,  # Use moderate threads for conversion
-            timeout=timeout,
-        )
+    if multi_bam_files:
+        # Multiple BAM files detected (diploid/polyploid reference)
+        logging.info(f"pbsim3 produced {len(multi_bam_files)} BAM files (diploid simulation)")
 
-        # Clean up intermediate SAM file
-        try:
-            if output_sam_path.exists():
-                output_sam_path.unlink()
-                logging.debug(f"Removed intermediate SAM file: {output_sam}")
-        except Exception as e:
-            logging.warning(f"Could not remove intermediate SAM file {output_sam}: {e}")
+        # Validate each BAM file exists and is non-empty
+        for i, bam_file in enumerate(multi_bam_files, 1):
+            bam_path = Path(bam_file)
+            if not bam_path.exists():
+                raise FileOperationError(f"pbsim3 output BAM {bam_file} not found after simulation")
+            if bam_path.stat().st_size == 0:
+                raise FileOperationError(f"pbsim3 produced empty BAM file: {bam_file}")
 
-    # Validate output BAM exists and is non-empty
-    if not output_bam_path.exists():
-        raise FileOperationError(
-            f"pbsim3 simulation failed: Expected output BAM {output_bam} not found. "
-            f"Check pbsim3 logs for errors."
-        )
+            logging.info(
+                f"  Haplotype {i} CLR BAM: {bam_file} ({bam_path.stat().st_size / (1024 * 1024):.2f} MB)"
+            )
+            output_bams.append(bam_file)
 
-    if output_bam_path.stat().st_size == 0:
-        raise FileOperationError(
-            f"pbsim3 simulation produced empty BAM file: {output_bam}. "
-            f"This may indicate insufficient reference length or coverage settings."
-        )
+    else:
+        # Single haploid reference - check for .bam or .sam output
+        output_bam = f"{output_prefix}.bam"
+        output_sam = f"{output_prefix}.sam"
 
-    logging.info(f"pbsim3 simulation complete: {output_bam}")
-    logging.info(f"  Output size: {output_bam_path.stat().st_size / (1024 * 1024):.2f} MB")
+        output_bam_path = Path(output_bam)
+        output_sam_path = Path(output_sam)
 
-    return output_bam
+        if output_sam_path.exists() and not output_bam_path.exists():
+            # Single SAM file detected (needs conversion)
+            logging.info(
+                f"pbsim3 produced SAM output, converting to BAM: {output_sam} → {output_bam}"
+            )
+
+            # Convert SAM to BAM using reusable samtools wrapper
+            convert_sam_to_bam(
+                samtools_cmd=samtools_cmd,
+                input_sam=output_sam,
+                output_bam=output_bam,
+                threads=4,  # Use moderate threads for conversion
+                timeout=timeout,
+            )
+
+            # Clean up intermediate SAM file
+            try:
+                if output_sam_path.exists():
+                    output_sam_path.unlink()
+                    logging.debug(f"Removed intermediate SAM file: {output_sam}")
+            except Exception as e:
+                logging.warning(f"Could not remove intermediate SAM file {output_sam}: {e}")
+
+        # Validate single BAM exists
+        if not output_bam_path.exists():
+            raise FileOperationError(
+                f"pbsim3 simulation failed: Expected output BAM {output_bam} not found. "
+                f"Also checked for diploid BAMs matching pattern: {multi_bam_pattern}. "
+                f"Check pbsim3 logs for errors."
+            )
+
+        if output_bam_path.stat().st_size == 0:
+            raise FileOperationError(
+                f"pbsim3 simulation produced empty BAM file: {output_bam}. "
+                f"This may indicate insufficient reference length or coverage settings."
+            )
+
+        logging.info(f"pbsim3 simulation complete: {output_bam}")
+        logging.info(f"  Output size: {output_bam_path.stat().st_size / (1024 * 1024):.2f} MB")
+
+        output_bams.append(output_bam)
+
+    # Log total output statistics
+    total_size = sum(Path(bam).stat().st_size for bam in output_bams)
+    logging.info(f"pbsim3 simulation complete: {len(output_bams)} CLR BAM file(s)")
+    logging.info(f"  Total size: {total_size / (1024 * 1024):.2f} MB")
+
+    return output_bams
 
 
 def validate_pbsim3_parameters(

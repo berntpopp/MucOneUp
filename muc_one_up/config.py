@@ -80,7 +80,7 @@ from jsonschema import ValidationError, validate
 #:
 #:     tools: Command paths for external executables
 #:         Required: samtools
-#:         Optional: reseq, faToTwoBit, pblat, bwa, nanosim, minimap2
+#:         Optional: reseq, faToTwoBit, pblat, bwa, nanosim, minimap2, pbsim3, ccs
 #:
 #:     read_simulation: Parameters for Illumina read simulation
 #:         Required: human_reference, threads
@@ -273,6 +273,8 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "bwa": {"type": "string"},
                 "nanosim": {"type": "string"},
                 "minimap2": {"type": "string"},
+                "pbsim3": {"type": "string"},
+                "ccs": {"type": "string"},
             },
             "required": ["samtools"],
             "additionalProperties": False,

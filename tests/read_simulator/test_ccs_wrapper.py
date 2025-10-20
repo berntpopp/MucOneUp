@@ -67,8 +67,8 @@ class TestRunCcsConsensus:
         assert "0.99" in cmd
         assert "--num-threads" in cmd
         assert "8" in cmd
-        assert "--seed" in cmd
-        assert "42" in cmd
+        # Note: CCS does not support --seed parameter
+        assert "--seed" not in cmd
 
         # Verify output path returned
         assert result == str(output_bam)

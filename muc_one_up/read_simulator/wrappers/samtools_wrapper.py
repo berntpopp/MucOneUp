@@ -9,6 +9,7 @@ This module provides wrapper functions for samtools operations:
 - downsample_bam: Downsample BAM files to target coverage
 - convert_sam_to_bam: Convert SAM format to BAM format
 - convert_bam_to_fastq: Convert BAM format to FASTQ format
+- merge_bam_files: Merge multiple BAM files into a single BAM
 - sort_and_index_bam: Sort and index BAM files
 """
 
@@ -630,3 +631,92 @@ def convert_bam_to_fastq(
 
     logging.info(f"BAM→FASTQ conversion complete: {output_fastq}")
     return output_fastq
+
+
+def merge_bam_files(
+    samtools_cmd: str,
+    input_bams: list[str],
+    output_bam: str,
+    threads: int = 4,
+    timeout: int = 1800,
+) -> str:
+    """
+    Merge multiple BAM files into a single BAM file.
+
+    This function is used for combining haplotype-specific BAM files from
+    diploid simulations (e.g., pbsim3 creates separate BAMs for each haplotype).
+
+    Args:
+        samtools_cmd: Path to the samtools executable.
+        input_bams: List of input BAM file paths to merge.
+        output_bam: Output merged BAM file path.
+        threads: Number of threads to use (default: 4).
+        timeout: Timeout in seconds (default: 1800).
+
+    Returns:
+        Path to the output merged BAM file.
+
+    Raises:
+        ExternalToolError: If samtools merge command fails (propagated from run_command).
+        FileOperationError: If input BAMs don't exist or output BAM creation fails.
+
+    Example:
+        Merge diploid CLR BAMs from pbsim3::
+
+            from muc_one_up.read_simulator.wrappers.samtools_wrapper import merge_bam_files
+
+            merged_bam = merge_bam_files(
+                samtools_cmd="samtools",
+                input_bams=["sim_0001.bam", "sim_0002.bam"],
+                output_bam="sim_merged.bam",
+                threads=8
+            )
+
+    Notes:
+        - Validates all input BAMs exist before merging
+        - Validates output BAM is non-empty after merging
+        - Uses build_tool_command for safe command construction
+        - Lets ExternalToolError propagate (no catching/re-raising)
+        - Requires at least 2 input BAMs (raises error for single BAM)
+    """
+    # Validate we have at least 2 BAMs to merge
+    if len(input_bams) < 2:
+        raise FileOperationError(
+            f"merge_bam_files requires at least 2 input BAMs, got {len(input_bams)}"
+        )
+
+    # Validate all input BAMs exist
+    for input_bam in input_bams:
+        input_bam_path = Path(input_bam)
+        if not input_bam_path.exists():
+            raise FileOperationError(f"Input BAM file not found: {input_bam}")
+
+    # Merge BAMs using samtools merge
+    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    cmd = build_tool_command(
+        samtools_cmd,
+        "merge",
+        "-f",  # Force overwrite if output exists
+        "-@",
+        threads,  # Threads (build_tool_command handles conversion)
+        output_bam,
+        *input_bams,  # Unpack list of input BAMs
+    )
+
+    logging.info(f"Merging {len(input_bams)} BAM files into: {output_bam}")
+    for i, bam in enumerate(input_bams, 1):
+        logging.info(f"  Input {i}: {bam}")
+
+    run_command(cmd, timeout=timeout, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
+
+    # Validate output BAM exists and is non-empty
+    output_bam_path = Path(output_bam)
+    if not output_bam_path.exists() or output_bam_path.stat().st_size == 0:
+        raise FileOperationError(
+            f"Failed to merge BAM files: Output BAM {output_bam} missing or empty"
+        )
+
+    logging.info(f"BAM merge complete: {output_bam}")
+    logging.info(f"  Output size: {output_bam_path.stat().st_size / (1024 * 1024):.2f} MB")
+
+    return output_bam

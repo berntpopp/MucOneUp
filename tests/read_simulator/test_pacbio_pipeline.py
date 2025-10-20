@@ -62,11 +62,11 @@ class TestPacBioHiFiPipeline:
         mock_pbsim3 = mocker.patch(
             "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation"
         )
-        mock_pbsim3.return_value = str(clr_bam)
+        mock_pbsim3.return_value = [str(clr_bam)]
 
         def create_clr_bam(*args, **kwargs):
             clr_bam.write_bytes(b"CLR BAM data" * 100)
-            return str(clr_bam)
+            return [str(clr_bam)]
 
         mock_pbsim3.side_effect = create_clr_bam
 
@@ -175,7 +175,7 @@ class TestPacBioHiFiPipeline:
 
         def create_clr_bam(*args, **kwargs):
             clr_bam.write_bytes(b"CLR BAM data" * 100)
-            return str(clr_bam)
+            return [str(clr_bam)]
 
         mock_pbsim3.side_effect = create_clr_bam
 
@@ -303,7 +303,7 @@ class TestPacBioHiFiPipeline:
 
         def create_clr_bam(*args, **kwargs):
             clr_bam.write_bytes(b"CLR BAM data" * 100)
-            return str(clr_bam)
+            return [str(clr_bam)]
 
         mock_pbsim3.side_effect = create_clr_bam
 
@@ -384,7 +384,7 @@ class TestPacBioHiFiPipeline:
         def create_clr_bam(*args, **kwargs):
             clr_bam = tmp_path / "sample.001.simulated_clr.bam"
             clr_bam.write_bytes(b"CLR BAM data" * 100)
-            return str(clr_bam)
+            return [str(clr_bam)]
 
         mock_pbsim3.side_effect = create_clr_bam
 

@@ -85,7 +85,9 @@ def run_ccs_consensus(
                0.99 = Q20 (99% accuracy, standard HiFi threshold)
                0.999 = Q30 (99.9% accuracy, ultra-high accuracy)
         threads: Number of threads to use (default: 4).
-        seed: Random seed for reproducibility (default: None = random).
+        seed: Random seed (accepted for API compatibility but NOT used by CCS).
+             CCS does not support --seed parameter. Reproducibility is achieved
+             through consistent input BAM ordering from pbsim3 seed.
         timeout: Timeout in seconds (default: 7200 = 2 hours).
 
     Returns:
@@ -154,9 +156,9 @@ def run_ccs_consensus(
         threads,  # Number of threads (build_tool_command handles conversion)
     ]
 
-    # Add seed if specified (for reproducible consensus generation)
-    if seed is not None:
-        cmd_args.extend(["--seed", seed])
+    # NOTE: CCS does not support --seed parameter for reproducibility
+    # The seed parameter is accepted for API compatibility but is not used
+    # Reproducibility in CCS is achieved through consistent input BAM ordering
 
     cmd = build_tool_command(ccs_cmd, *cmd_args)
 
@@ -168,7 +170,7 @@ def run_ccs_consensus(
     logging.info(f"  Min accuracy (RQ): {min_rq} (Q{int(-10 * math.log10(1 - min_rq))})")
     logging.info(f"  Threads: {threads}")
     if seed is not None:
-        logging.info(f"  Seed: {seed}")
+        logging.info(f"  Note: Seed {seed} provided but CCS does not support --seed parameter")
 
     # Run CCS consensus generation
     # Let ExternalToolError propagate from run_command (don't catch/re-raise)

@@ -82,8 +82,10 @@ class TestRunPbsim3Simulation:
         assert str(output_prefix) in cmd
         assert str(ref_fa) in cmd
 
-        # Verify output path returned
-        assert result == str(output_bam)
+        # Verify output path returned (now returns list)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0] == str(output_bam)
 
     def test_validates_model_type(self, tmp_path):
         """Test that invalid model types are rejected."""
@@ -215,9 +217,11 @@ class TestRunPbsim3Simulation:
 
         convert_sam_to_bam.assert_called_once()
 
-        # Verify BAM was created
-        assert Path(result).exists()
-        assert result == str(output_bam)
+        # Verify BAM was created (result is now a list)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert Path(result[0]).exists()
+        assert result[0] == str(output_bam)
 
     def test_validates_empty_output(self, mocker, tmp_path):
         """Test that empty output BAM is detected."""

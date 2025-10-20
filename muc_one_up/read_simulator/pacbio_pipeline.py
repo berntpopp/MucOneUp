@@ -67,7 +67,7 @@ from .utils import cleanup_files
 from .wrappers.ccs_wrapper import run_ccs_consensus, validate_ccs_parameters
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 from .wrappers.pbsim3_wrapper import run_pbsim3_simulation, validate_pbsim3_parameters
-from .wrappers.samtools_wrapper import convert_bam_to_fastq
+from .wrappers.samtools_wrapper import convert_bam_to_fastq, merge_bam_files
 
 
 def simulate_pacbio_hifi_reads(
@@ -260,7 +260,7 @@ def simulate_pacbio_hifi_reads(
         logging.info("STAGE 1: Multi-pass CLR simulation with pbsim3")
         logging.info("=" * 80)
 
-        clr_bam = run_pbsim3_simulation(
+        clr_bams = run_pbsim3_simulation(
             pbsim3_cmd=pbsim3_cmd,
             samtools_cmd=samtools_cmd,
             reference=input_fa,
@@ -279,9 +279,15 @@ def simulate_pacbio_hifi_reads(
             seed=seed,
         )
 
-        intermediate_files.append(clr_bam)
-        intermediate_files.append(f"{clr_prefix}.maf")  # pbsim3 alignment file
-        intermediate_files.append(f"{clr_prefix}.ref")  # pbsim3 reference file
+        # Add CLR BAMs and related files to intermediate cleanup list
+        intermediate_files.extend(clr_bams)
+        # Note: pbsim3 may create .maf.gz and .ref files per haplotype
+        # Pattern: {prefix}_0001.maf.gz, {prefix}_0001.ref, etc.
+        for clr_bam in clr_bams:
+            base = clr_bam.replace(".bam", "")
+            intermediate_files.append(f"{base}.maf")
+            intermediate_files.append(f"{base}.maf.gz")
+            intermediate_files.append(f"{base}.ref")
 
         # ==========================================================================
         # STAGE 2: HiFi Consensus Generation (CCS)
@@ -290,15 +296,47 @@ def simulate_pacbio_hifi_reads(
         logging.info("STAGE 2: HiFi consensus generation with CCS")
         logging.info("=" * 80)
 
-        hifi_bam = run_ccs_consensus(
-            ccs_cmd=ccs_cmd,
-            input_bam=clr_bam,
-            output_bam=hifi_bam,
-            min_passes=min_passes,
-            min_rq=min_rq,
-            threads=threads,
-            seed=seed + 1 if seed is not None else None,  # Offset seed for CCS
-        )
+        # Run CCS on each CLR BAM independently to preserve ZMW grouping
+        # CCS requires ZMW (Zero-Mode Waveguide) groups to be intact, which are
+        # broken when merging CLR BAMs from diploid simulations
+        hifi_bams = []
+        for i, clr_bam in enumerate(clr_bams, 1):
+            # Generate unique output path for each haplotype's HiFi BAM
+            if len(clr_bams) > 1:
+                hifi_bam_individual = str(output_dir_path / f"{output_base}_hifi_{i:04d}.bam")
+                logging.info(f"Processing haplotype {i}/{len(clr_bams)}: {clr_bam}")
+            else:
+                # Single haploid reference - use standard naming
+                hifi_bam_individual = hifi_bam
+
+            hifi_bam_result = run_ccs_consensus(
+                ccs_cmd=ccs_cmd,
+                input_bam=clr_bam,
+                output_bam=hifi_bam_individual,
+                min_passes=min_passes,
+                min_rq=min_rq,
+                threads=threads,
+                seed=seed + i if seed is not None else None,  # Unique seed per haplotype
+            )
+
+            hifi_bams.append(hifi_bam_result)
+            logging.info(f"Haplotype {i} CCS complete: {hifi_bam_result}")
+
+        # Merge HiFi BAMs if multiple haplotypes (diploid/polyploid)
+        if len(hifi_bams) > 1:
+            logging.info(f"Merging {len(hifi_bams)} HiFi BAMs into: {hifi_bam}")
+            hifi_bam = merge_bam_files(
+                samtools_cmd=samtools_cmd,
+                input_bams=hifi_bams,
+                output_bam=hifi_bam,
+                threads=threads,
+            )
+
+            # Add individual HiFi BAMs to intermediate files (will be cleaned up)
+            intermediate_files.extend(hifi_bams)
+        else:
+            # Single haplotype - hifi_bam already set correctly
+            hifi_bam = hifi_bams[0]
 
         intermediate_files.append(hifi_bam)
 

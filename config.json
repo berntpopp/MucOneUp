@@ -525,7 +525,7 @@
     "model_type": "errhmm",
     "model_file": "reference/pbsim3/ERRHMM-SEQUEL.model",
     "coverage": 30,
-    "pass_num": 3,
+    "pass_num": 10,
     "min_passes": 3,
     "min_rq": 0.99,
     "threads": 8
