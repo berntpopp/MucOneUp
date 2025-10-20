@@ -35,7 +35,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
     "pytest-mock>=3.14.0",  # Required for mocker fixture in tests
-    "ruff>=0.8.0",
+    "ruff==0.14.1",  # Pinned version - keep in sync with .pre-commit-config.yaml
     "mypy>=1.8.0",
     "types-jsonschema>=4.0.0",
     "biopython>=1.80",  # Required for test_orf_prefix_filtering.py
