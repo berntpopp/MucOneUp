@@ -254,22 +254,40 @@ Result: 49 forward × 54 reverse = 2,646 possible products!
 (amplicon structure: `[Primer] - [21bp] - [Primer]`), not the primer length itself.
 This 21bp section contains the 7C/8C mutation site.
 
-### Finding #2: dupC Is Frameshift, Not Site-Disrupting
+### Finding #2: dupC DOES Disrupt MwoI Site - MECHANISM VALIDATED! ✓✓
 
-**Two mutation types**:
+**CRITICAL CORRECTION**: Initial analysis tested whole genome (wrong!).
+**Must test PCR AMPLICON specifically!**
 
-**Type A (Site-Disrupting)**:
-- Mutation creates/destroys restriction site
-- Example: Point mutation in GCNNNNNNNGC
-- Protocol works: Digest → PCR → SNaPshot
+**MwoI Recognition Site**: `GCNNNNNNNGC` (GC...exactly 7 bases...GC)
 
-**Type B (Frameshift - like dupC)**:
-- Inserts/deletes bases, shifts reading frame
-- May not change MwoI site count globally
-- Protocol may not work as expected
-- Need direct detection without digest pre-selection
+**Testing PCR Amplicons** (20bp F + 17-18bp flanked + 18bp R):
 
-**dupC appears to be Type B**
+**7C NORMAL Amplicon** (55bp total):
+```
+Flanked sequence: GCCCCCCCAGCCCACGG (17bp, 7 Cs)
+MwoI pattern:     GC[CCCCCCC]AGC
+                     ↑ 7 bases ↑
+Result: 1 MwoI site at position 28
+→ Amplicon gets DIGESTED into 2 fragments (27bp + 28bp)
+→ DESTROYED ✓
+```
+
+**8C MUTANT Amplicon** (56bp total):
+```
+Flanked sequence: GCCCCCCCCAGCCCACGG (18bp, 8 Cs - add one C!)
+MwoI pattern:     GC[CCCCCCCC]AGC
+                     ↑ 8 bases ↑  (too many!)
+Result: 0 MwoI sites
+→ Amplicon SURVIVES digest intact
+→ Goes to SNaPshot ✓
+```
+
+**✓✓ MECHANISM CONFIRMED!**
+- The extra C in dupC mutation **DISRUPTS** the MwoI site
+- 7C amplicons: digested and destroyed
+- 8C amplicons: survive for SNaPshot detection
+- Digest selection **WORKS** for dupC!
 
 ### Finding #3: Primer Orientation Problem
 
