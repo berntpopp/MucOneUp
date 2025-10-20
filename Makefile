@@ -119,6 +119,59 @@ update:  ## Update all dependencies
 	uv lock --upgrade
 	uv sync
 
+# ==================== VERSION MANAGEMENT ====================
+
+bump-patch:  ## Bump patch version (0.15.0 -> 0.15.1)
+	@python3 -c "import sys; \
+	from pathlib import Path; \
+	version_file = Path('muc_one_up/version.py'); \
+	content = version_file.read_text(); \
+	current = content.split('\"')[1]; \
+	major, minor, patch = current.split('.'); \
+	new_version = f'{major}.{minor}.{int(patch)+1}'; \
+	version_file.write_text(f'# muc_one_up/version.py\n\n__version__ = \"{new_version}\"\n'); \
+	pyproject = Path('pyproject.toml'); \
+	pyproject_content = pyproject.read_text(); \
+	pyproject.write_text(pyproject_content.replace(f'version = \"{current}\"', f'version = \"{new_version}\"')); \
+	print(f'✓ Bumped version: {current} → {new_version}'); \
+	print(f'  - muc_one_up/version.py'); \
+	print(f'  - pyproject.toml')"
+
+bump-minor:  ## Bump minor version (0.15.0 -> 0.16.0)
+	@python3 -c "import sys; \
+	from pathlib import Path; \
+	version_file = Path('muc_one_up/version.py'); \
+	content = version_file.read_text(); \
+	current = content.split('\"')[1]; \
+	major, minor, patch = current.split('.'); \
+	new_version = f'{major}.{int(minor)+1}.0'; \
+	version_file.write_text(f'# muc_one_up/version.py\n\n__version__ = \"{new_version}\"\n'); \
+	pyproject = Path('pyproject.toml'); \
+	pyproject_content = pyproject.read_text(); \
+	pyproject.write_text(pyproject_content.replace(f'version = \"{current}\"', f'version = \"{new_version}\"')); \
+	print(f'✓ Bumped version: {current} → {new_version}'); \
+	print(f'  - muc_one_up/version.py'); \
+	print(f'  - pyproject.toml')"
+
+bump-major:  ## Bump major version (0.15.0 -> 1.0.0)
+	@python3 -c "import sys; \
+	from pathlib import Path; \
+	version_file = Path('muc_one_up/version.py'); \
+	content = version_file.read_text(); \
+	current = content.split('\"')[1]; \
+	major, minor, patch = current.split('.'); \
+	new_version = f'{int(major)+1}.0.0'; \
+	version_file.write_text(f'# muc_one_up/version.py\n\n__version__ = \"{new_version}\"\n'); \
+	pyproject = Path('pyproject.toml'); \
+	pyproject_content = pyproject.read_text(); \
+	pyproject.write_text(pyproject_content.replace(f'version = \"{current}\"', f'version = \"{new_version}\"')); \
+	print(f'✓ Bumped version: {current} → {new_version}'); \
+	print(f'  - muc_one_up/version.py'); \
+	print(f'  - pyproject.toml')"
+
+show-version:  ## Show current version
+	@python3 -c "from muc_one_up.version import __version__; print(f'Current version: {__version__}')"
+
 all: clean init conda-setup check  ## Full setup from scratch
 
 .DEFAULT_GOAL := help

@@ -165,7 +165,7 @@ try:
             print("  ✓ SUCCESS")
             print(f"  Products found: {len(products)}")
             for i, product in enumerate(products[:3]):  # Show first 3
-                print(f"    Product {i+1}: {len(product)} bp")
+                print(f"    Product {i + 1}: {len(product)} bp")
             print(f"  Time: {elapsed:.3f} seconds")
         else:
             print("  ✗ FAILED - No products")
@@ -387,22 +387,22 @@ def custom_pcr_simulation(template, fwd, rev, mismatch_tolerance=0):
     rev_pos = template.find(rev_rc)
 
     if (fwd_pos == -1 or rev_pos == -1) and mismatch_tolerance > 0:
-            # Simple fuzzy matching (not optimal, just for comparison)
-            for i in range(len(template) - len(fwd)):
-                mismatches = sum(
-                    1 for a, b in zip(template[i : i + len(fwd)], fwd, strict=False) if a != b
-                )
-                if mismatches <= mismatch_tolerance:
-                    fwd_pos = i
-                    break
+        # Simple fuzzy matching (not optimal, just for comparison)
+        for i in range(len(template) - len(fwd)):
+            mismatches = sum(
+                1 for a, b in zip(template[i : i + len(fwd)], fwd, strict=False) if a != b
+            )
+            if mismatches <= mismatch_tolerance:
+                fwd_pos = i
+                break
 
-            for i in range(len(template) - len(rev_rc)):
-                mismatches = sum(
-                    1 for a, b in zip(template[i : i + len(rev_rc)], rev_rc, strict=False) if a != b
-                )
-                if mismatches <= mismatch_tolerance:
-                    rev_pos = i
-                    break
+        for i in range(len(template) - len(rev_rc)):
+            mismatches = sum(
+                1 for a, b in zip(template[i : i + len(rev_rc)], rev_rc, strict=False) if a != b
+            )
+            if mismatches <= mismatch_tolerance:
+                rev_pos = i
+                break
 
     if fwd_pos == -1 or rev_pos == -1 or fwd_pos >= rev_pos:
         return None

@@ -124,7 +124,7 @@ print("\nForward primer candidates (early in X repeat):")
 for start in range(0, 20, 5):
     fwd = X_REPEAT[start : start + 22]  # 22bp primer
     gc = (fwd.count("G") + fwd.count("C")) / len(fwd) * 100
-    print(f"  Pos {start:2d}-{start+22:2d}: {fwd} (GC: {gc:.1f}%)")
+    print(f"  Pos {start:2d}-{start + 22:2d}: {fwd} (GC: {gc:.1f}%)")
 
 # Select forward primer (avoid 7C region which is around pos 40-55)
 FORWARD_PRIMER = X_REPEAT[0:22]  # Position 0-22
@@ -136,7 +136,7 @@ for start in range(35, 45, 2):
     rev_rc = X_REPEAT[start : start + 22]  # Take sequence
     rev = str(Seq(rev_rc).reverse_complement())  # Reverse complement
     gc = (rev.count("G") + fwd.count("C")) / len(rev) * 100
-    print(f"  Pos {start:2d}-{start+22:2d} (RC): {rev[:30]}... (GC: {gc:.1f}%)")
+    print(f"  Pos {start:2d}-{start + 22:2d} (RC): {rev[:30]}... (GC: {gc:.1f}%)")
 
 # Select reverse primer (should cover region after 7C)
 REVERSE_PRIMER_RC = X_REPEAT[38:60]  # Position 38-60 (end of repeat)

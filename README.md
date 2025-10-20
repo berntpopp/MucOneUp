@@ -160,7 +160,7 @@ If you use MucOneUp in your research, please cite:
   author = {Popp, Bernt},
   title = {MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit},
   year = {2025},
-  version = {0.13.0},
+  note = {Software version number available at: https://github.com/berntpopp/MucOneUp/releases},
   url = {https://github.com/berntpopp/MucOneUp}
 }
 ```
@@ -181,4 +181,4 @@ This project is licensed under the **MIT License** - see [LICENSE](LICENSE) file
 
 ---
 
-**Version:** 0.13.0 | **Status:** Active Development | **Maintained By:** [Bernt Popp](https://github.com/berntpopp)
+**Status:** Active Development | **Maintained By:** [Bernt Popp](https://github.com/berntpopp)

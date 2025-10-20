@@ -63,7 +63,7 @@ print("\n  ⚠ PCR Tag contains: GCCCCCCCCAGC (8C pattern for mutant detection)"
 # Load Test Data
 # =============================================================================
 
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("STEP 0: Load dupC Test Data")
 print("=" * 80)
 
@@ -91,8 +91,8 @@ count_8c_mut = mutant_seq.count(pattern_8c)
 count_8c_norm = normal_seq.count(pattern_8c)
 
 print("\nMutation verification:")
-print(f"  Mutant has {count_8c_mut} x 8C pattern (expected: 1)")  # noqa: RUF001
-print(f"  Normal has {count_8c_norm} x 8C pattern (expected: 0)")  # noqa: RUF001
+print(f"  Mutant has {count_8c_mut} x 8C pattern (expected: 1)")
+print(f"  Normal has {count_8c_norm} x 8C pattern (expected: 0)")
 
 if count_8c_mut > 0 and count_8c_norm == 0:
     print("  ✓ dupC mutation confirmed")
@@ -103,7 +103,7 @@ else:
 # STEP 1: Genomic DNA Digestion with MwoI (3 rounds)
 # =============================================================================
 
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("STEP 1: Genomic DNA Digestion with MwoI")
 print("=" * 80)
 
@@ -162,7 +162,7 @@ print("   The 8C pattern itself may not create/destroy MwoI sites globally")
 # STEP 2: PCR Amplification with MUC1-Repeat F/R
 # =============================================================================
 
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("STEP 2: PCR Amplification")
 print("=" * 80)
 
@@ -268,7 +268,7 @@ except ValueError as e:
 # STEP 3: PCR Product Digestion
 # =============================================================================
 
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("STEP 3: PCR Product Digestion with MwoI")
 print("=" * 80)
 
@@ -302,7 +302,7 @@ else:
 # STEP 4-5: Purification and ExoSAP (Simulation)
 # =============================================================================
 
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("STEP 4-5: Purification and ExoSAP (Simulated)")
 print("=" * 80)
 print("✓ AMPure purification (simulated)")
@@ -312,7 +312,7 @@ print("✓ ExoSAP digestion (simulated)")
 # STEP 6: SNaPshot Extension
 # =============================================================================
 
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("STEP 6: SNaPshot Extension")
 print("=" * 80)
 
@@ -411,7 +411,7 @@ else:
 # SUMMARY
 # =============================================================================
 
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("WORKFLOW SUMMARY")
 print("=" * 80)
 
@@ -447,7 +447,7 @@ if amplicon_mut and result_7c.get("binds"):
 else:
     print("  Primer 7C: N/A")
 
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("Critical Findings:")
 print("  1. Primers without tags bind to multiple sites")
 print("  2. Need to implement tagged primer logic")

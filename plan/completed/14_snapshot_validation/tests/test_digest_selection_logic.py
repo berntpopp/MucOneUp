@@ -114,7 +114,7 @@ for i, pos in enumerate(x_positions[:10]):
 
     pcr_products.append(
         {
-            "id": f"Product_{i+1}",
+            "id": f"Product_{i + 1}",
             "position": pos,
             "sequence": product,
             "size": len(product),
@@ -123,7 +123,7 @@ for i, pos in enumerate(x_positions[:10]):
         }
     )
 
-    print(f"  Product {i+1} at position {pos}:")
+    print(f"  Product {i + 1} at position {pos}:")
     print(f"    Size: {len(product)} bp")
     print(f"    Contains 7C: {pattern_7c in product}")
     print(f"    Contains 8C: {pattern_8c in product}")
@@ -160,7 +160,7 @@ for product in pcr_products:
         print("  ✓ Product SURVIVES")
         surviving_products.append(product)
 
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("Digest Results:")
 print(f"  Total products: {len(pcr_products)}")
 print(f"  Survived: {len(surviving_products)}")
