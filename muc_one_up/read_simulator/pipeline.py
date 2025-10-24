@@ -38,7 +38,7 @@ from ..exceptions import ConfigurationError, FileOperationError, ValidationError
 from .fragment_simulation import simulate_fragments
 
 # Import utilities
-from .utils import check_external_tools, cleanup_files
+from .utils import check_external_tools, cleanup_files, write_metadata_file
 from .wrappers.bwa_wrapper import align_reads
 
 # Import wrapper modules
@@ -363,7 +363,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     else:
         logging.info("10. Skipping downsampling (no target coverage specified)")
 
-    # Clean up intermediate files
+    # Capture end time for metadata
     end_time = datetime.now()
     duration = end_time - start_time
     logging.info(
@@ -374,6 +374,17 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     logging.info("Final outputs:")
     logging.info("  Aligned and indexed BAM: %s", output_bam)
     logging.info("  Paired FASTQ files (gzipped): %s and %s", reads_fq1, reads_fq2)
+
+    # Write metadata file with tool versions and provenance
+    metadata_file = write_metadata_file(
+        output_dir=output_dir,
+        output_base=output_base,
+        config=config,
+        start_time=start_time,
+        end_time=end_time,
+        platform="Illumina",
+    )
+    logging.info("  Metadata file: %s", metadata_file)
 
     # Clean up intermediate files
     intermediates = [
