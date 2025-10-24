@@ -76,7 +76,7 @@ def write_metadata_file(
         Parameter               Value
         Tool                    MucOneUp
         Version                 0.15.0
-        Platform                Illumina
+        Sequencing_platform     Illumina
         Run_start_time          2025-10-24T12:00:00
         Run_end_time            2025-10-24T13:10:15
         Run_duration_seconds    4215.0
@@ -110,7 +110,7 @@ def write_metadata_file(
         # Core metadata
         f.write("Tool\tMucOneUp\n")
         f.write(f"Version\t{__version__}\n")
-        f.write(f"Platform\t{platform}\n")
+        f.write(f"Sequencing_platform\t{platform}\n")
         f.write(f"Run_start_time\t{start_time.isoformat()}\n")
         f.write(f"Run_end_time\t{end_time.isoformat()}\n")
         f.write(f"Run_duration_seconds\t{duration:.1f}\n")

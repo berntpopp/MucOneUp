@@ -101,7 +101,7 @@ class TestCoreMetadata:
         # Check core fields
         assert "Tool\tMucOneUp" in content
         assert "Version\t0.15.0" in content
-        assert "Platform\tIllumina" in content
+        assert "Sequencing_platform\tIllumina" in content
         assert "Run_start_time\t2025-10-24T12:30:45" in content
         assert "Run_end_time\t2025-10-24T13:40:55" in content
         assert "Run_duration_seconds\t4210.0" in content  # 70 minutes 10 seconds
