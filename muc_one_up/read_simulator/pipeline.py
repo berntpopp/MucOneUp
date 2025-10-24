@@ -276,8 +276,8 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads)
 
     # Stage 10: Optionally downsample
-    downsample_target = rs_config.get("downsample_target")
-    if downsample_target:
+    target_coverage = rs_config.get("coverage")
+    if target_coverage:
         logging.info("10. Downsampling to target coverage")
         mode = rs_config.get("downsample_mode", "vntr").strip().lower()
         if mode == "vntr":
@@ -322,13 +322,13 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
             raise ConfigurationError(
                 f"Invalid downsample_mode '{mode}' in config; use 'vntr' or 'non_vntr'"
             )
-        if current_cov > downsample_target:
-            fraction = downsample_target / current_cov
+        if current_cov > target_coverage:
+            fraction = target_coverage / current_cov
             fraction = min(max(fraction, 0.0), 1.0)
             logging.info(
-                "Downsampling BAM from %.2fx to target %dx (fraction: %.4f) based on %s",
+                "Downsampling BAM from %.2fx to %.2fx (fraction: %.4f) based on %s",
                 current_cov,
-                downsample_target,
+                target_coverage,
                 fraction,
                 region_info,
             )

@@ -293,7 +293,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "fragment_sd": {"type": "number"},
                 "min_fragment": {"type": "number"},
                 "threads": {"type": "number"},
-                "downsample_coverage": {"type": "number"},
+                "coverage": {"type": "number"},
                 "downsample_seed": {"type": "number"},
                 "downsample_mode": {"type": "string"},
                 "sample_target_bed": {"type": "string"},

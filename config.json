@@ -542,7 +542,7 @@
     "fragment_sd": 35,
     "min_fragment": 20,
     "threads": 8,
-    "downsample_coverage": 150,
+    "coverage": 150,
     "downsample_seed": 42,
     "downsample_mode": "non_vntr",
     "sample_target_bed": "data/bed/twist_v2_muc1_no_vntr_targets.bed",
