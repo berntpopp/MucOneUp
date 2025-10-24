@@ -116,10 +116,18 @@ def get_tool_version(tool_cmd: str, tool_name: str) -> str:
         return "N/A"
 
     def parse_reseq(stdout: str, stderr: str) -> str:
-        """Parse: ReSeq version 1.1"""
-        for line in stdout.splitlines():
+        """Parse: ReSeq version 1.1
+
+        Note: Version appears in stderr, not stdout
+        """
+        # Check stderr first (that's where version actually appears)
+        for line in stderr.splitlines():
             if "reseq" in line.lower() and "version" in line.lower():
                 return line.strip()  # Returns "ReSeq version 1.1"
+        # Fallback to stdout
+        for line in stdout.splitlines():
+            if "reseq" in line.lower() and "version" in line.lower():
+                return line.strip()
         return "N/A"
 
     def parse_fatotwobit(stdout: str, stderr: str) -> str:
@@ -175,6 +183,7 @@ def get_tool_version(tool_cmd: str, tool_name: str) -> str:
             cmd,
             capture_output=True,
             text=True,
+            errors="replace",  # Handle UTF-8 decode errors gracefully
             check=False,  # CRITICAL: Don't raise on non-zero exit (bwa, pbsim, faToTwoBit)
             timeout=5,
         )

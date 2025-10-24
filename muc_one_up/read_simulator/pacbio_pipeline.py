@@ -417,6 +417,7 @@ def simulate_pacbio_hifi_reads(
             start_time=start_time,
             end_time=end_time,
             platform="PacBio",
+            tools_used=["pbsim3", "ccs", "minimap2", "samtools"],
         )
         logging.info(f"Metadata file: {metadata_file}")
         logging.info("=" * 80)

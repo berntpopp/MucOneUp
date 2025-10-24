@@ -165,7 +165,7 @@ class TestPlatformSpecificMetadata:
             content = f.read()
 
         assert "Coverage\t30" in content
-        assert "Fragment_size\t350" in content
+        # Fragment_size intentionally not included (not in real config)
 
     @patch("muc_one_up.read_simulator.utils.metadata_writer.capture_tool_versions")
     @patch("muc_one_up.read_simulator.utils.metadata_writer.log_tool_versions")
@@ -385,6 +385,6 @@ class TestEdgeCases:
         with open(result_path) as f:
             content = f.read()
 
-        # Should use "N/A" for missing values
-        assert "Coverage\tN/A" in content
-        assert "Fragment_size\tN/A" in content
+        # Missing platform parameters should NOT be written to file (skip N/A values)
+        assert "Coverage" not in content
+        assert "Fragment_size" not in content

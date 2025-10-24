@@ -325,6 +325,7 @@ def simulate_ont_reads_pipeline(
         start_time=start_time,
         end_time=end_time,
         platform="ONT",
+        tools_used=["nanosim", "minimap2", "samtools"],
     )
     logging.info("  Metadata file: %s", metadata_file)
 

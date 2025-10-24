@@ -383,6 +383,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
         start_time=start_time,
         end_time=end_time,
         platform="Illumina",
+        tools_used=["reseq", "faToTwoBit", "pblat", "bwa", "samtools"],
     )
     logging.info("  Metadata file: %s", metadata_file)
 

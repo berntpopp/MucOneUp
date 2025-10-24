@@ -22,6 +22,7 @@ Output Example:
 """
 
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -38,6 +39,7 @@ def write_metadata_file(
     start_time: datetime,
     end_time: datetime,
     platform: str,
+    tools_used: list[str] | None = None,
 ) -> str:
     """
     Write TSV metadata file with provenance information.
@@ -96,12 +98,20 @@ def write_metadata_file(
     metadata_path = Path(output_dir) / f"{output_base}_metadata.tsv"
     logger.info(f"Writing metadata: {metadata_path}")
 
-    # Capture tool versions
-    tool_versions = capture_tool_versions(config.get("tools", {}))
+    # Capture tool versions (ONLY for tools actually used in this pipeline)
+    if tools_used is None:
+        tools_used = list(config.get("tools", {}).keys())
+
+    # Filter config to only include tools actually used
+    tools_to_capture = {k: v for k, v in config.get("tools", {}).items() if k in tools_used}
+    tool_versions = capture_tool_versions(tools_to_capture)
     log_tool_versions(tool_versions)
 
     # Calculate duration
     duration = (end_time - start_time).total_seconds()
+
+    # Capture command line
+    command_line = " ".join(sys.argv)
 
     # Write TSV
     with open(metadata_path, "w", encoding="utf-8") as f:
@@ -111,6 +121,7 @@ def write_metadata_file(
         f.write("Tool\tMucOneUp\n")
         f.write(f"Version\t{__version__}\n")
         f.write(f"Read_simulation_technology\t{platform}\n")
+        f.write(f"Command\t{command_line}\n")
         f.write(f"Run_start_time\t{start_time.isoformat()}\n")
         f.write(f"Run_end_time\t{end_time.isoformat()}\n")
         f.write(f"Run_duration_seconds\t{duration:.1f}\n")
@@ -122,24 +133,36 @@ def write_metadata_file(
         if "seed" in config:
             f.write(f"Seed\t{config['seed']}\n")
 
-        # Platform-specific parameters
+        # Platform-specific parameters (skip if N/A)
         if platform == "Illumina":
             read_cfg = config.get("read_simulation", {})
-            f.write(f"Coverage\t{read_cfg.get('coverage', 'N/A')}\n")
-            f.write(f"Fragment_size\t{read_cfg.get('fragment_size_mean', 'N/A')}\n")
+            coverage = read_cfg.get("coverage")
+            if coverage is not None:
+                f.write(f"Coverage\t{coverage}\n")
         elif platform == "ONT":
             ont_cfg = config.get("nanosim_params", {})
-            f.write(f"Coverage\t{ont_cfg.get('coverage', 'N/A')}\n")
-            f.write(f"Min_read_length\t{ont_cfg.get('min_read_length', 'N/A')}\n")
-            f.write(f"Max_read_length\t{ont_cfg.get('max_read_length', 'N/A')}\n")
+            coverage = ont_cfg.get("coverage")
+            min_len = ont_cfg.get("min_read_length")
+            max_len = ont_cfg.get("max_read_length")
+            if coverage is not None:
+                f.write(f"Coverage\t{coverage}\n")
+            if min_len is not None:
+                f.write(f"Min_read_length\t{min_len}\n")
+            if max_len is not None:
+                f.write(f"Max_read_length\t{max_len}\n")
         elif platform == "PacBio":
             pb_cfg = config.get("pacbio_params", {})
-            f.write(f"Coverage\t{pb_cfg.get('coverage', 'N/A')}\n")
-            f.write(f"Pass_num\t{pb_cfg.get('pass_num', 'N/A')}\n")
+            coverage = pb_cfg.get("coverage")
+            pass_num = pb_cfg.get("pass_num")
+            if coverage is not None:
+                f.write(f"Coverage\t{coverage}\n")
+            if pass_num is not None:
+                f.write(f"Pass_num\t{pass_num}\n")
 
-        # Tool versions (namespaced with "tool." prefix, sorted alphabetically)
+        # Tool versions (namespaced with "tool." prefix, sorted alphabetically, skip N/A)
         for tool_name, version in sorted(tool_versions.items()):
-            f.write(f"tool.{tool_name}_version\t{version}\n")
+            if version != "N/A":  # Only write if version was successfully captured
+                f.write(f"tool.{tool_name}_version\t{version}\n")
 
     logger.info(f"Metadata written: {metadata_path}")
     return str(metadata_path)
