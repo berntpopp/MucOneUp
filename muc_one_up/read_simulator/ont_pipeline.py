@@ -25,7 +25,7 @@ from ..bioinformatics.reference_validation import (
     validate_reference_for_assembly,
 )
 from ..exceptions import FileOperationError, ValidationError
-from .utils import is_diploid_reference, run_split_simulation
+from .utils import is_diploid_reference, run_split_simulation, write_metadata_file
 from .wrappers.nanosim_wrapper import (
     align_ont_reads_with_minimap2,
     run_nanosim_simulation,
@@ -316,5 +316,17 @@ def simulate_ont_reads_pipeline(
     logging.info("Final outputs:")
     logging.info("  Aligned and indexed BAM: %s", output_bam)
     logging.info("  Reads FASTQ: %s", fastq_file)
+
+    # Write metadata file with tool versions and provenance
+    metadata_file = write_metadata_file(
+        output_dir=output_dir,
+        output_base=f"{input_basename}_ont",
+        config=config,
+        start_time=start_time,
+        end_time=end_time,
+        platform="ONT",
+        tools_used=["nanosim", "minimap2", "samtools"],
+    )
+    logging.info("  Metadata file: %s", metadata_file)
 
     return output_bam

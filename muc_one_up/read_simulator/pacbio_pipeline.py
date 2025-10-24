@@ -58,12 +58,13 @@ References:
 """
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from ..exceptions import ExternalToolError, FileOperationError
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
-from .utils import cleanup_files
+from .utils import cleanup_files, write_metadata_file
 from .wrappers.ccs_wrapper import run_ccs_consensus, validate_ccs_parameters
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 from .wrappers.pbsim3_wrapper import run_pbsim3_simulation, validate_pbsim3_parameters
@@ -252,6 +253,9 @@ def simulate_pacbio_hifi_reads(
     # Track intermediate files for cleanup
     intermediate_files = []
 
+    # Start time for metadata
+    start_time = datetime.now()
+
     try:
         # ==========================================================================
         # STAGE 1: Multi-pass CLR Simulation (pbsim3)
@@ -394,9 +398,28 @@ def simulate_pacbio_hifi_reads(
 
         cleanup_files(intermediate_files)
 
+        # Calculate elapsed time and write metadata
+        end_time = datetime.now()
+        duration = end_time - start_time
+
         logging.info("=" * 80)
-        logging.info("PacBio HiFi simulation pipeline complete!")
+        logging.info(
+            "PacBio HiFi simulation pipeline complete! (duration: %s)",
+            str(duration).split(".")[0],  # Remove microseconds
+        )
         logging.info(f"Final output: {aligned_bam}")
+
+        # Write metadata file with tool versions and provenance
+        metadata_file = write_metadata_file(
+            output_dir=str(output_dir_path),
+            output_base=output_base,
+            config=config,
+            start_time=start_time,
+            end_time=end_time,
+            platform="PacBio",
+            tools_used=["pbsim3", "ccs", "minimap2", "samtools"],
+        )
+        logging.info(f"Metadata file: {metadata_file}")
         logging.info("=" * 80)
 
         return aligned_bam

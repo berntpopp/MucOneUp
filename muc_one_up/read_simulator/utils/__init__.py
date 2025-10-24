@@ -24,6 +24,9 @@ from .fastq_utils import (
     validate_fastq,
 )
 
+# Import metadata and tool version tracking
+from .metadata_writer import write_metadata_file
+
 # Import from new specialized modules
 from .reference_utils import (
     extract_haplotypes,
@@ -31,25 +34,30 @@ from .reference_utils import (
     is_diploid_reference,
     validate_reference_compatibility,
 )
+from .tool_version import (
+    capture_tool_versions,
+    get_tool_version,
+    log_tool_versions,
+)
 
 __all__ = [
-    # Diploid handler
     "DiploidSimulationResult",
     "calculate_corrected_coverage",
-    # Common utilities (backward compatibility)
+    "capture_tool_versions",
     "check_external_tools",
     "cleanup_files",
-    # FASTQ utilities
     "count_fastq_reads",
-    # Reference utilities
     "extract_haplotypes",
     "fix_field",
     "get_reference_info",
+    "get_tool_version",
     "is_diploid_reference",
+    "log_tool_versions",
     "merge_fastq_files",
     "prepare_diploid_simulation",
     "run_command",
     "run_split_simulation",
     "validate_fastq",
     "validate_reference_compatibility",
+    "write_metadata_file",
 ]
