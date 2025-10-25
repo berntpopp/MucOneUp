@@ -349,8 +349,6 @@ output/
 -  **[User Guides](guides/simulation.md)**
   Detailed documentation for simulation, mutations, SNPs, and analysis
 
--  **[CLI Reference](reference/cli.md)**
-  Complete command-line interface documentation
 
 -  **API Reference (coming soon)**
   Python API documentation auto-generated from source

@@ -743,6 +743,5 @@ Logging:
 
 ## See Also
 
-- **[CLI Reference](../reference/cli.md)** - Complete command documentation
 - **API reference (coming soon)** - Python API for programmatic use
 - **[Core Concepts](../getting-started/concepts.md)** - Understanding VNTR simulation
