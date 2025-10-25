@@ -221,41 +221,23 @@ Uses `samtools view -s SEED.FRACTION` for reproducible, pair-preserving downsamp
 
 ## Use Cases
 
-### 1. Realistic Benchmarking
-Test variant callers with biologically accurate coverage distributions:
+**Benchmark variant callers** with realistic coverage:
 ```bash
-# Generate realistic test data
 muconeup --config config.json simulate --out-base benchmark --fixed-lengths 40
 muconeup --config config.json reads illumina benchmark.001.simulated.fa --seed 42
-
-# VNTR efficiency automatically applied
 # Coverage ratio will match real Twist v2 data (~3.5x)
 ```
 
-### 2. Pipeline Validation
-Validate clinical pipelines before deployment:
+**Compare with/without bias** for coverage analysis:
 ```bash
-# Simulate patient-like data with known mutations
-muconeup --config config.json simulate --mutation-name dupC --out-base patient_sim
-muconeup --config config.json reads illumina patient_sim.001.simulated.fa
+# Enabled (default) - realistic bias applied
+muconeup --config config.json reads illumina sample.fa
 
-# Test your pipeline on realistic coverage
-# Expect ~3x reduced VNTR depth
+# Disabled - no bias (unrealistic ~9x ratio)
+# Set "enabled": false in config vntr_capture_efficiency section
 ```
 
-### 3. Coverage Analysis
-Study impact of capture bias on downstream analysis:
-```bash
-# Compare with/without bias
-muconeup --config config_bias_on.json reads illumina sample.fa
-muconeup --config config_bias_off.json reads illumina sample.fa
-
-# Analyze coverage differences
-samtools depth sample_vntr_biased.bam
-```
-
-### 4. Custom VNTR Regions
-Apply to other VNTR loci:
+**Custom VNTR regions** - apply to other loci:
 ```json
 "vntr_capture_efficiency": {
   "enabled": true,
@@ -330,15 +312,3 @@ Apply to other VNTR loci:
 - **Effect size:** Cohen's d = 6.89 (very large effect)
 - **Confidence interval:** Bootstrap method (1000 iterations)
 - **Validation:** Cross-validated on independent test set
-
-### Archive
-Complete analysis archived at: `docs/archive/penalty_factor_calibration_2025-10-25.zip`
-
----
-
-## Questions?
-
-For issues or questions about VNTR capture efficiency modeling:
-- **GitHub Issues:** [github.com/berntpopp/MucOneUp/issues](https://github.com/berntpopp/MucOneUp/issues)
-- **Documentation:** [muconeup.readthedocs.io](https://muconeup.readthedocs.io)
-- **Email:** bernt.popp@gmail.com
