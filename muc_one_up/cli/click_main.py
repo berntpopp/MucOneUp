@@ -440,9 +440,8 @@ def reads():
 @click.option(
     "--coverage",
     type=int,
-    default=30,
-    show_default=True,
-    help="Target sequencing coverage.",
+    default=None,
+    help="Target sequencing coverage (overrides config if provided, defaults to config value or 30x).",
 )
 @click.option(
     "--threads",
@@ -498,7 +497,13 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed):
         if "read_simulation" not in config:
             config["read_simulation"] = {}
         config["read_simulation"]["simulator"] = "illumina"
-        config["read_simulation"]["coverage"] = coverage
+
+        # Only override coverage if explicitly provided, otherwise use config or default
+        if coverage is not None:
+            config["read_simulation"]["coverage"] = coverage
+        elif "coverage" not in config.get("read_simulation", {}):
+            config["read_simulation"]["coverage"] = 30  # Default fallback
+
         config["read_simulation"]["threads"] = threads
 
         # Set seed if provided
@@ -566,9 +571,8 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed):
 @click.option(
     "--coverage",
     type=int,
-    default=30,
-    show_default=True,
-    help="Target coverage.",
+    default=None,
+    help="Target coverage (overrides config if provided, defaults to config value or 30x).",
 )
 @click.option(
     "--min-read-length",
@@ -621,7 +625,13 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed):
         if "read_simulation" not in config:
             config["read_simulation"] = {}
         config["read_simulation"]["simulator"] = "ont"
-        config["read_simulation"]["coverage"] = coverage
+
+        # Only override coverage if explicitly provided, otherwise use config or default
+        if coverage is not None:
+            config["read_simulation"]["coverage"] = coverage
+        elif "coverage" not in config.get("read_simulation", {}):
+            config["read_simulation"]["coverage"] = 30  # Default fallback
+
         if "nanosim_params" not in config:
             config["nanosim_params"] = {}
         config["nanosim_params"]["min_len"] = min_read_length
