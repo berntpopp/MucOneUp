@@ -30,6 +30,14 @@ from .config import (
 from .orchestration import run_single_simulation_iteration
 
 # ============================================================================
+# CLI Context Settings
+# ============================================================================
+
+# Context settings for custom help flags (-h in addition to --help)
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
+
+
+# ============================================================================
 # Logging Configuration
 # ============================================================================
 
@@ -52,15 +60,92 @@ def configure_logging(level_str: str) -> None:
 
 
 # ============================================================================
+# Configuration Validation
+# ============================================================================
+
+
+def validate_config_callback(
+    ctx: click.Context, param: click.Parameter, value: str | None
+) -> str | None:
+    """Smart validation for --config option.
+
+    Allows --help and --version to work without config,
+    but ensures config is provided when actually executing commands.
+
+    Args:
+        ctx: Click context
+        param: Click parameter
+        value: Config file path (or None)
+
+    Returns:
+        Config file path (or None during resilient parsing)
+    """
+    # Skip validation during resilient parsing (--help, --version)
+    if ctx.resilient_parsing:
+        return value
+
+    # Config validation will be enforced per-command using require_config()
+    # This allows subcommand help to work: muconeup analyze --help
+    return value
+
+
+def require_config(ctx: click.Context) -> None:
+    """Ensure config is provided before executing a command.
+
+    Call this at the start of each command that needs config.
+    Provides clear error message if config is missing.
+
+    Args:
+        ctx: Click context
+
+    Raises:
+        click.UsageError: If config is not provided
+    """
+    if not ctx.obj.get("config_path"):
+        raise click.UsageError(
+            "Missing required option '--config'.\n"
+            "Usage: muconeup --config FILE COMMAND [OPTIONS]\n"
+            "Try 'muconeup --help' for more information."
+        )
+
+
+def print_version_callback(ctx: click.Context, param: click.Parameter, value: bool) -> None:
+    """Print version and exit when --version or -V is used.
+
+    This callback is marked as eager to ensure it runs before
+    required options are validated, allowing --version to work
+    without providing --config.
+
+    Args:
+        ctx: Click context
+        param: Click parameter
+        value: Whether the flag was set
+    """
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo(f"MucOneUp, version {__version__}")
+    ctx.exit()
+
+
+# ============================================================================
 # Root CLI Group
 # ============================================================================
 
 
-@click.group()
-@click.version_option(version=__version__, prog_name="MucOneUp")
+@click.group(context_settings=CONTEXT_SETTINGS)
+@click.option(
+    "--version",
+    "-V",
+    is_flag=True,
+    callback=print_version_callback,
+    expose_value=False,
+    is_eager=True,
+    help="Show the version and exit.",
+)
 @click.option(
     "--config",
-    required=True,
+    callback=validate_config_callback,
+    is_eager=True,
     type=click.Path(exists=True, dir_okay=False),
     help="Path to JSON configuration file.",
 )
@@ -107,9 +192,12 @@ def cli(ctx, config, log_level, verbose):
         log_level = "DEBUG"
 
     ctx.ensure_object(dict)
-    ctx.obj["config_path"] = config
+    ctx.obj["config_path"] = config  # May be None during help/version
     ctx.obj["log_level"] = log_level
-    configure_logging(log_level)
+
+    # Only configure logging if not in resilient parsing mode
+    if not ctx.resilient_parsing:
+        configure_logging(log_level)
 
 
 # ============================================================================
@@ -234,6 +322,9 @@ def simulate(ctx, **kwargs):
     Example:
       muconeup --config config.json simulate --out-base output
     """
+    # Validate config is provided
+    require_config(ctx)
+
     try:
         # Convert Click kwargs to argparse-style namespace (DRY - reuse backend)
         args = _make_args_namespace(ctx.obj["config_path"], kwargs)
@@ -375,6 +466,9 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed):
       # Compose with shell (Unix philosophy)
       for f in *.fa; do muconeup --config X reads illumina "$f"; done
     """
+    # Validate config is provided
+    require_config(ctx)
+
     try:
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
 
@@ -495,6 +589,9 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed):
       # Glob pattern (shell expands)
       muconeup --config X reads ont sample.*.simulated.fa
     """
+    # Validate config is provided
+    require_config(ctx)
+
     try:
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
 
@@ -685,6 +782,9 @@ def pacbio(
       - min_rq=0.99 is Q20 (standard HiFi threshold)
       - min_rq=0.999 is Q30 (ultra-high accuracy)
     """
+    # Validate config is provided
+    require_config(ctx)
+
     try:
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
 
@@ -838,6 +938,9 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
       # Glob pattern (shell expands)
       muconeup --config X analyze orfs sample.*.simulated.fa
     """
+    # Validate config is provided
+    require_config(ctx)
+
     try:
         # Load config once for toxic protein detection (DRY principle)
         config_path = Path(ctx.obj["config_path"])
@@ -1126,6 +1229,9 @@ def vntr_stats(ctx, input_file, structure_column, delimiter, header, output):
       - Probabilities: State transition matrix (including END state)
       - Repeats: Known repeat dictionary from config
     """
+    # Validate config is provided
+    require_config(ctx)
+
     try:
         # Load config for known repeats (DRY principle - reuse existing pattern)
         config_path = Path(ctx.obj["config_path"])
@@ -1258,6 +1364,9 @@ def snapshot_validate(ctx, input_fasta, mutation, output):
       # Save results to JSON
       muconeup --config config.json analyze snapshot-validate sample.fa --mutation dupC --output results.json
     """
+    # Validate config is provided
+    require_config(ctx)
+
     from Bio import SeqIO
 
     from ..analysis.snapshot_validator import SnapshotValidator
