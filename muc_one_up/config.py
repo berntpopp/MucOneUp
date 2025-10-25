@@ -302,6 +302,44 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "vntr_region_hg38": {"type": "string"},
                 "aligner": {"type": "string", "enum": ["bwa", "minimap2"]},
                 "seed": {"type": ["number", "null"]},
+                "vntr_capture_efficiency": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean", "default": True},
+                        "penalty_factor": {
+                            "type": "number",
+                            "minimum": 0.1,
+                            "maximum": 1.0,
+                            "default": 0.375,
+                        },
+                        "seed": {"type": "integer", "minimum": 0, "default": 42},
+                        "vntr_region": {
+                            "type": "object",
+                            "properties": {
+                                "chr": {"type": "string"},
+                                "start": {"type": "integer", "minimum": 0},
+                                "end": {"type": "integer", "minimum": 1},
+                                "name": {"type": "string"},
+                            },
+                            "required": ["chr", "start", "end", "name"],
+                        },
+                        "capture_bed": {"type": "string"},
+                        "flanking_size": {
+                            "type": "integer",
+                            "minimum": 1000,
+                            "maximum": 50000,
+                            "default": 10000,
+                        },
+                        "validation": {
+                            "type": "object",
+                            "properties": {
+                                "check_duplicates": {"type": "boolean", "default": False},
+                                "report_statistics": {"type": "boolean", "default": True},
+                            },
+                        },
+                    },
+                    "additionalProperties": False,
+                },
             },
             "required": [
                 "human_reference",

@@ -2,8 +2,12 @@
 Utility modules for read simulation.
 
 This package contains specialized utility modules for handling
-reference files, FASTQ operations, and diploid-specific simulation logic.
+reference files, FASTQ operations, diploid-specific simulation logic,
+and genomic region operations.
 """
+
+# Import BED file utilities
+from . import bed, samtools
 
 # Import from common_utils for backward compatibility
 from .common_utils import (
