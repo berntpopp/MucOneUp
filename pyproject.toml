@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "muc_one_up"
-version = "0.22.0"
+version = "0.23.0"
 description = "MucOneUp: a tool to simulate MUC1 VNTR diploid references"
 readme = "README.md"
 requires-python = ">=3.10"
