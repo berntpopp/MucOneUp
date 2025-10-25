@@ -5,6 +5,7 @@ flags are accessible without providing the --config option, while
 still enforcing config requirement for actual command execution.
 """
 
+import pytest
 from click.testing import CliRunner
 
 from muc_one_up.cli.click_main import cli
@@ -155,72 +156,75 @@ class TestConfigRequirementEnforcement:
         assert "Missing required option '--config'" in result.output
         assert "muconeup --config FILE COMMAND" in result.output
 
-    def test_reads_illumina_requires_config(self, tmp_path):
-        """muconeup reads illumina should fail without config."""
-        # Create a dummy FASTA file
-        test_fasta = tmp_path / "test.fa"
-        test_fasta.write_text(">test\nATGC\n")
+    @pytest.mark.parametrize(
+        "command_args,file_ext,file_content,test_description",
+        [
+            (
+                ["reads", "illumina"],
+                "fa",
+                ">test\nATGC\n",
+                "reads illumina",
+            ),
+            (
+                ["reads", "ont"],
+                "fa",
+                ">test\nATGC\n",
+                "reads ont",
+            ),
+            (
+                ["reads", "pacbio"],
+                "fa",
+                ">test\nATGC\n",
+                "reads pacbio",
+            ),
+            (
+                ["analyze", "orfs"],
+                "fa",
+                ">test\nATGC\n",
+                "analyze orfs",
+            ),
+            (
+                ["analyze", "vntr-stats"],
+                "tsv",
+                "vntr\n123\n",
+                "analyze vntr-stats",
+            ),
+            (
+                ["analyze", "snapshot-validate", "--mutation", "dupC"],
+                "fa",
+                ">test\nATGC\n",
+                "analyze snapshot-validate",
+            ),
+        ],
+        ids=lambda x: x if isinstance(x, str) and " " in x else None,
+    )
+    def test_commands_requiring_input_files_need_config(
+        self, tmp_path, command_args, file_ext, file_content, test_description
+    ):
+        """Test that various commands requiring input files also require --config.
+
+        This parametrized test reduces code duplication while maintaining clarity
+        about which commands are being tested. Each test case is clearly identified
+        in test output via the test_description parameter.
+        """
+        # Create dummy input file with appropriate content and extension
+        test_file = tmp_path / f"test.{file_ext}"
+        test_file.write_text(file_content)
+
+        # Build command args with file path in correct position
+        # For snapshot-validate: command file --mutation dupC
+        # For others: command file
+        if "snapshot-validate" in command_args:
+            # File path goes after 'analyze snapshot-validate' but before '--mutation'
+            mutation_idx = command_args.index("--mutation")
+            args = [*command_args[:mutation_idx], str(test_file), *command_args[mutation_idx:]]
+        else:
+            args = [*command_args, str(test_file)]
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["reads", "illumina", str(test_fasta)])
-        assert result.exit_code != 0
-        assert "Missing required option '--config'" in result.output
+        result = runner.invoke(cli, args)
 
-    def test_reads_ont_requires_config(self, tmp_path):
-        """muconeup reads ont should fail without config."""
-        # Create a dummy FASTA file
-        test_fasta = tmp_path / "test.fa"
-        test_fasta.write_text(">test\nATGC\n")
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["reads", "ont", str(test_fasta)])
-        assert result.exit_code != 0
-        assert "Missing required option '--config'" in result.output
-
-    def test_reads_pacbio_requires_config(self, tmp_path):
-        """muconeup reads pacbio should fail without config."""
-        # Create a dummy FASTA file
-        test_fasta = tmp_path / "test.fa"
-        test_fasta.write_text(">test\nATGC\n")
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["reads", "pacbio", str(test_fasta)])
-        assert result.exit_code != 0
-        assert "Missing required option '--config'" in result.output
-
-    def test_analyze_orfs_requires_config(self, tmp_path):
-        """muconeup analyze orfs should fail without config."""
-        # Create a dummy FASTA file
-        test_fasta = tmp_path / "test.fa"
-        test_fasta.write_text(">test\nATGC\n")
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["analyze", "orfs", str(test_fasta)])
-        assert result.exit_code != 0
-        assert "Missing required option '--config'" in result.output
-
-    def test_analyze_vntr_stats_requires_config(self, tmp_path):
-        """muconeup analyze vntr-stats should fail without config."""
-        # Create a dummy TSV file
-        test_tsv = tmp_path / "test.tsv"
-        test_tsv.write_text("vntr\n123\n")
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["analyze", "vntr-stats", str(test_tsv)])
-        assert result.exit_code != 0
-        assert "Missing required option '--config'" in result.output
-
-    def test_analyze_snapshot_validate_requires_config(self, tmp_path):
-        """muconeup analyze snapshot-validate should fail without config."""
-        # Create a dummy FASTA file
-        test_fasta = tmp_path / "test.fa"
-        test_fasta.write_text(">test\nATGC\n")
-
-        runner = CliRunner()
-        result = runner.invoke(
-            cli, ["analyze", "snapshot-validate", str(test_fasta), "--mutation", "dupC"]
-        )
-        assert result.exit_code != 0
+        assert result.exit_code != 0, f"{test_description} should fail without --config"
         assert "Missing required option '--config'" in result.output
 
 
