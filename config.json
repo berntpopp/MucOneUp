@@ -547,7 +547,23 @@
     "downsample_mode": "non_vntr",
     "sample_target_bed": "data/bed/twist_v2_muc1_no_vntr_targets.bed",
     "vntr_region_hg19": "chr1:155160963-155162030",
-    "vntr_region_hg38": "chr1:155188487-155192239"
+    "vntr_region_hg38": "chr1:155188487-155192239",
+    "vntr_capture_efficiency": {
+      "enabled": true,
+      "penalty_factor": 0.375,
+      "seed": 42,
+      "vntr_region": {
+        "chr": "chr1",
+        "start": 155188487,
+        "end": 155192239,
+        "name": "MUC1_VNTR"
+      },
+      "flanking_size": 10000,
+      "validation": {
+        "check_duplicates": false,
+        "report_statistics": true
+      }
+    }
   },
   "snapshot_validation": {
     "dupC": {

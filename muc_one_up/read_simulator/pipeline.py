@@ -20,7 +20,9 @@ Implementation details:
 For usage information, see the main read_simulation.py module.
 """
 
+import json
 import logging
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -72,8 +74,9 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     7. Create reads from fragments using reseq seqToIllumina
     8. Split the interleaved FASTQ into paired FASTQ files
     9. Align the reads to a human reference using BWA MEM
-    10. Optionally downsample to a target coverage
-    11. Clean up intermediate files
+    10. Apply VNTR capture efficiency bias (new in v0.22.0)
+    11. Optionally downsample to a target coverage
+    12. Clean up intermediate files
 
     Args:
         config: Dictionary containing "tools" and "read_simulation" sections.
@@ -275,10 +278,71 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     logging.info("9. Aligning reads to reference: %s", human_reference)
     align_reads(reads_fq1, reads_fq2, human_reference, output_bam, tools, threads)
 
-    # Stage 10: Optionally downsample
+    # Stage 10: Apply VNTR capture efficiency bias (new in v0.22.0)
+    vntr_config = rs_config.get("vntr_capture_efficiency", {})
+    vntr_enabled = vntr_config.get("enabled", True)  # Enabled by default
+
+    if vntr_enabled:
+        logging.info("10. Applying VNTR capture efficiency bias")
+        try:
+            from .vntr_efficiency import VNTREfficiencyModel
+
+            # Initialize model
+            penalty_factor = vntr_config.get("penalty_factor", 0.375)
+            vntr_seed = vntr_config.get("seed", rs_config.get("seed", 42))
+            vntr_region = vntr_config.get("vntr_region")
+            capture_bed = vntr_config.get("capture_bed")
+            flanking_size = vntr_config.get("flanking_size", 10000)
+
+            vntr_model = VNTREfficiencyModel(
+                penalty_factor=penalty_factor,
+                seed=vntr_seed,
+                threads=threads,
+                vntr_region=vntr_region,
+                capture_bed=Path(capture_bed) if capture_bed else None,
+                flanking_size=flanking_size,
+            )
+
+            # Apply efficiency bias
+            vntr_biased_bam = str(
+                Path(output_bam).parent / Path(output_bam).name.replace(".bam", "_vntr_biased.bam")
+            )
+            temp_dir = Path(output_bam).parent / "_vntr_efficiency_temp"
+
+            vntr_stats = vntr_model.apply_efficiency_bias(
+                input_bam=Path(output_bam), output_bam=Path(vntr_biased_bam), temp_dir=temp_dir
+            )
+
+            # Save statistics if requested
+            if vntr_config.get("validation", {}).get("report_statistics", True):
+                stats_file = str(
+                    Path(output_bam).parent
+                    / Path(output_bam).name.replace(".bam", "_vntr_efficiency_stats.json")
+                )
+                with open(stats_file, "w") as f:
+                    json.dump(vntr_stats, f, indent=2)
+                logging.info("  VNTR efficiency statistics saved to %s", stats_file)
+
+            # Use VNTR-biased BAM for downstream processing
+            output_bam = vntr_biased_bam
+            logging.info("  VNTR efficiency bias applied successfully")
+
+            # Clean up temp files
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+
+        except Exception as e:
+            logging.error("VNTR efficiency modeling failed: %s", e)
+            logging.warning("Continuing with original BAM file (no bias applied)")
+            # Continue with aligned_bam (no efficiency bias)
+
+    else:
+        logging.info("10. Skipping VNTR capture efficiency (disabled in config)")
+
+    # Stage 11: Optionally downsample
     target_coverage = rs_config.get("coverage")
     if target_coverage:
-        logging.info("10. Downsampling to target coverage")
+        logging.info("11. Downsampling to target coverage")
         mode = rs_config.get("downsample_mode", "vntr").strip().lower()
         if mode == "vntr":
             reference_assembly = rs_config.get("reference_assembly", "hg38")
@@ -361,7 +425,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                 current_cov,
             )
     else:
-        logging.info("10. Skipping downsampling (no target coverage specified)")
+        logging.info("11. Skipping downsampling (no target coverage specified)")
 
     # Capture end time for metadata
     end_time = datetime.now()

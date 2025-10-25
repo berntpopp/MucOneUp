@@ -147,7 +147,6 @@ markdown_extensions:
   - pymdownx.tasklist:
       custom_checkbox: true
   - pymdownx.tilde
-  - mkdocs_click
 
 # Navigation structure
 nav:
@@ -160,11 +159,12 @@ nav:
 
   - Guides:
     - Simulation: guides/simulation.md
+    - VNTR Capture Efficiency: guides/vntr-capture-efficiency.md
     - Toxic Protein Detection: guides/toxic-protein-detection.md
     - SNaPshot Validation: guides/snapshot-validation.md
 
   - Reference:
-    - CLI Commands: reference/cli.md
+    # - CLI Commands: reference/cli.md  # Disabled: requires mkdocs-click setup
     - Configuration: reference/configuration.md
 
   - About:

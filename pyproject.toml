@@ -39,6 +39,10 @@ dev = [
     "mypy>=1.8.0",
     "types-jsonschema>=4.0.0",
     "biopython>=1.80",  # Required for test_orf_prefix_filtering.py
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+    "mkdocs-click>=0.8.0",
+    "pymdown-extensions>=10.7",
 ]
 
 docs = [
