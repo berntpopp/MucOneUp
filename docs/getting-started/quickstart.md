@@ -11,6 +11,18 @@ Get started with MucOneUp in under 5 minutes. This tutorial walks through a comp
 
 ---
 
+## Getting Help
+
+View help and version information without providing a config file:
+
+```bash
+muconeup -h        # Show help
+muconeup -V        # Show version
+muconeup simulate --help  # Show command-specific help
+```
+
+---
+
 ## Your First Simulation
 
 Generate a diploid haplotype with fixed VNTR length:

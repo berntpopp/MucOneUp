@@ -28,6 +28,10 @@ MucOneUp generates realistic **MUC1 Variable Number Tandem Repeat (VNTR) sequenc
 ## Quick Start
 
 ```bash
+# View help and version (no --config required)
+muconeup -h        # Show help
+muconeup -V        # Show version
+
 # Generate diploid haplotypes with mutation
 muconeup --config config.json simulate \
   --out-base sample \
