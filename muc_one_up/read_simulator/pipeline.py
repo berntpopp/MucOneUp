@@ -145,8 +145,12 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     output_bam = rs_config.get("output_bam", str(Path(output_dir) / f"{output_base}.bam"))
 
     # Track intermediate files for cleanup
-    intermediate_files: list[str] = []  # Non-BAM intermediates (FASTA, FQ, depth files, etc.)
-    intermediate_bams: list[str] = []  # BAM files that get replaced during processing
+    # Note: We use two separate lists to maintain clarity of intent:
+    # - intermediate_files: Temporary non-BAM files (FASTA, FQ, depth files, etc.)
+    # - intermediate_bams: BAM files that get replaced during processing (e.g., before VNTR/downsampling)
+    # This separation makes the BAM progression tracking explicit and aids debugging/auditing.
+    intermediate_files: list[str] = []  # Non-BAM intermediates
+    intermediate_bams: list[str] = []  # BAM progression tracking
 
     # Log the output filenames for clarity
     logging.info("Output filenames:")
@@ -331,7 +335,9 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                 flanking_size=flanking_size,
             )
 
-            # Track current BAM as intermediate BEFORE creating new one
+            # Track current BAM as intermediate before it gets replaced by vntr_biased_bam.
+            # This ensures we keep a reference to the original BAM for cleanup,
+            # since output_bam will be updated to point to the new VNTR-biased BAM below (line 358).
             intermediate_bams.append(output_bam)
 
             # Apply efficiency bias
@@ -429,7 +435,9 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                 fraction,
                 region_info,
             )
-            # Track current BAM as intermediate BEFORE creating new one
+            # Track current BAM as intermediate before it gets replaced by downsampled_bam.
+            # This ensures we keep a reference to the current BAM for cleanup,
+            # since output_bam will be updated to point to the downsampled BAM below (line 459).
             intermediate_bams.append(output_bam)
 
             downsampled_bam = str(
@@ -502,11 +510,9 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
             if Path(bam_index).exists():
                 all_intermediates.append(bam_index)
 
-        # Safety check: ensure final output_bam is NEVER in cleanup list
-        all_intermediates = [f for f in all_intermediates if f != output_bam]
+        # Safety check: ensure final output_bam and its index are NEVER in cleanup list
         final_bam_index = f"{output_bam}.bai"
-        if final_bam_index in all_intermediates:
-            all_intermediates.remove(final_bam_index)
+        all_intermediates = [f for f in all_intermediates if f not in (output_bam, final_bam_index)]
 
         # Enhanced logging for cleanup
         logging.info("=" * 60)
