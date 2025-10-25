@@ -133,7 +133,10 @@ class TestCoverageDownsamplingIntegration:
             patch("muc_one_up.read_simulator.pipeline.align_reads"),
             patch(
                 "muc_one_up.read_simulator.pipeline.calculate_target_coverage",
-                return_value=30.0,  # Current: 30x < Target: 100x
+                return_value=(
+                    30.0,
+                    str(tmp_path / "fake_depth.txt"),
+                ),  # Current: 30x < Target: 100x
             ),
             patch("muc_one_up.read_simulator.pipeline.downsample_entire_bam") as mock_downsample,
         ):

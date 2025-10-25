@@ -161,12 +161,15 @@ class TestCalculateVNTRCoverage:
         mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
 
         # Act
-        result = calculate_vntr_coverage(
+        coverage, depth_file = calculate_vntr_coverage(
             "samtools", str(bam), "chr1:100-200", 4, str(tmp_path), "test"
         )
 
         # Assert: Mean of 10, 20, 30 = 20.0
-        assert result == 20.0
+        assert coverage == 20.0
+        # Verify depth file was created
+        assert Path(depth_file).exists()
+        assert Path(depth_file).stat().st_size > 0
 
 
 class TestCalculateTargetCoverage:
