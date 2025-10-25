@@ -532,6 +532,7 @@
   },
   "read_simulation": {
     "simulator": "illumina",
+    "keep_intermediate_files": false,
     "reference_assembly": "hg38",
     "reseq_model": "reference/Hs-Nova-TruSeq.reseq",
     "sample_bam_hg38": "data/twist_v2_hg38.bam",

@@ -94,7 +94,7 @@ def calculate_vntr_coverage(
     threads: int,
     output_dir: str,
     output_name: str,
-) -> float:
+) -> tuple[float, str]:
     """
     Calculate mean coverage over the VNTR region using samtools depth.
 
@@ -107,7 +107,7 @@ def calculate_vntr_coverage(
         output_name: Base name for the coverage output file.
 
     Returns:
-        Mean coverage (float).
+        Tuple of (mean_coverage: float, depth_file: str).
 
     Raises:
         SystemExit: If the samtools command fails.
@@ -169,12 +169,12 @@ def calculate_vntr_coverage(
     # Calculate mean coverage (handle empty file case)
     if num_positions == 0:
         logging.warning("No positions found in VNTR region for coverage calculation")
-        return 0.0
+        return 0.0, depth_file
 
     mean_coverage = total_depth / num_positions
     logging.info(f"Mean coverage in VNTR region: {mean_coverage:.2f}x")
 
-    return mean_coverage
+    return mean_coverage, depth_file
 
 
 def calculate_target_coverage(
@@ -184,7 +184,7 @@ def calculate_target_coverage(
     threads: int,
     output_dir: str,
     output_name: str,
-) -> float:
+) -> tuple[float, str]:
     """
     Calculate mean coverage over the target (non-VNTR) regions using samtools depth and a BED file.
 
@@ -197,7 +197,7 @@ def calculate_target_coverage(
         output_name: Base name for the coverage output file.
 
     Returns:
-        Mean coverage (float).
+        Tuple of (mean_coverage: float, depth_file: str).
 
     Raises:
         SystemExit: If the samtools command fails or bed file is invalid.
@@ -263,12 +263,12 @@ def calculate_target_coverage(
     # Calculate mean coverage (handle empty file case)
     if num_positions == 0:
         logging.warning("No positions found in target regions for coverage calculation")
-        return 0.0
+        return 0.0, depth_file
 
     mean_coverage = total_depth / num_positions
     logging.info(f"Mean coverage in target regions: {mean_coverage:.2f}x")
 
-    return mean_coverage
+    return mean_coverage, depth_file
 
 
 def downsample_bam(

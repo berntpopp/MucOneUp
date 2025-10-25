@@ -40,7 +40,13 @@ from ..exceptions import ConfigurationError, FileOperationError, ValidationError
 from .fragment_simulation import simulate_fragments
 
 # Import utilities
-from .utils import check_external_tools, cleanup_files, write_metadata_file
+from .utils import (
+    capture_tool_versions,
+    check_external_tools,
+    cleanup_files,
+    log_tool_versions,
+    write_metadata_file,
+)
 from .wrappers.bwa_wrapper import align_reads
 
 # Import wrapper modules
@@ -115,6 +121,16 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     # Validate external tools
     check_external_tools(tools)
 
+    # Capture and log tool versions at pipeline start
+    logging.info("=" * 60)
+    logging.info("Tool Version Information")
+    logging.info("=" * 60)
+    tools_to_check = ["reseq", "faToTwoBit", "samtools", "pblat", "bwa"]
+    tools_subset = {k: v for k, v in tools.items() if k in tools_to_check}
+    tool_versions = capture_tool_versions(tools_subset)
+    log_tool_versions(tool_versions)
+    logging.info("=" * 60)
+
     # Create output directory if it doesn't exist
     input_path = Path(input_fa)
     output_dir = rs_config.get("output_dir", str(input_path.parent))
@@ -128,6 +144,14 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     reads_fq2 = rs_config.get("output_fastq2", str(Path(output_dir) / f"{output_base}_R2.fastq.gz"))
     output_bam = rs_config.get("output_bam", str(Path(output_dir) / f"{output_base}.bam"))
 
+    # Track intermediate files for cleanup
+    # Note: We use two separate lists to maintain clarity of intent:
+    # - intermediate_files: Temporary non-BAM files (FASTA, FQ, depth files, etc.)
+    # - intermediate_bams: BAM files that get replaced during processing (e.g., before VNTR/downsampling)
+    # This separation makes the BAM progression tracking explicit and aids debugging/auditing.
+    intermediate_files: list[str] = []  # Non-BAM intermediates
+    intermediate_bams: list[str] = []  # BAM progression tracking
+
     # Log the output filenames for clarity
     logging.info("Output filenames:")
     logging.info("  BAM: %s", output_bam)
@@ -139,6 +163,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     no_ns_fa = str(Path(output_dir) / f"_{output_base}_noNs.fa")
     logging.info("1. Replacing Ns in FASTA")
     replace_Ns(input_fa, no_ns_fa, tools)
+    intermediate_files.append(no_ns_fa)
 
     # Stage 2: Generate systematic errors
     reseq_model = rs_config.get("reseq_model")
@@ -148,11 +173,13 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     syser_fq = str(Path(output_dir) / f"_{output_base}_syser.fq")
     logging.info("2. Generating systematic errors")
     generate_systematic_errors(no_ns_fa, reseq_model, syser_fq, tools)
+    intermediate_files.append(syser_fq)
 
     # Stage 3: Convert FASTA to 2bit
     twobit_file = str(Path(output_dir) / f"_{output_base}_noNs.2bit")
     logging.info("3. Converting FASTA to 2bit format")
     fa_to_twobit(no_ns_fa, twobit_file, tools)
+    intermediate_files.append(twobit_file)
 
     # Stage 4: Extract subset reference from BAM
     # Get the reference assembly setting from the config
@@ -185,6 +212,8 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     subset_ref = str(Path(output_dir) / f"_{output_base}_subset_ref.fa")
     logging.info("4. Extracting subset reference from BAM")
     collated_bam = extract_subset_reference(sample_bam, subset_ref, tools)
+    intermediate_files.append(subset_ref)
+    intermediate_files.append(collated_bam)
 
     # Stage 5: Run pblat alignment
     psl_file = str(Path(output_dir) / f"_{output_base}_alignment.psl")
@@ -222,6 +251,8 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
         fragments_fa,
         seed=seed,
     )
+    intermediate_files.append(psl_file)
+    intermediate_files.append(fragments_fa)
 
     # Stage 7: Create reads from fragments
     reads_fq = str(Path(output_dir) / f"_{output_base}_reads.fq")
@@ -241,6 +272,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     # Stage 8: Split reads into paired FASTQ files
     logging.info("8. Splitting reads into paired FASTQ files")
     split_reads(reads_fq, reads_fq1, reads_fq2)
+    intermediate_files.append(reads_fq)
 
     # Stage 9: Align reads
     # Try to get reference from reference_genomes section (Issue #28)
@@ -303,6 +335,11 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                 flanking_size=flanking_size,
             )
 
+            # Track current BAM as intermediate before it gets replaced by vntr_biased_bam.
+            # This ensures we keep a reference to the original BAM for cleanup,
+            # since output_bam will be updated to point to the new VNTR-biased BAM below (line 358).
+            intermediate_bams.append(output_bam)
+
             # Apply efficiency bias
             vntr_biased_bam = str(
                 Path(output_bam).parent / Path(output_bam).name.replace(".bam", "_vntr_biased.bam")
@@ -354,7 +391,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                     f"VNTR region not specified in config for {reference_assembly}. "
                     f"Add '{vntr_region_key}' to config"
                 )
-            current_cov = calculate_vntr_coverage(
+            current_cov, depth_file = calculate_vntr_coverage(
                 tools["samtools"],
                 output_bam,
                 vntr_region,
@@ -362,6 +399,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                 str(Path(output_bam).parent),
                 Path(output_bam).name.replace(".bam", ""),
             )
+            intermediate_files.append(depth_file)
             region_info = vntr_region
         elif mode == "non_vntr":
             bed_file = rs_config.get("sample_target_bed")
@@ -372,7 +410,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                 raise ConfigurationError(
                     "For non-VNTR downsampling, 'sample_target_bed' must be provided in config"
                 )
-            current_cov = calculate_target_coverage(
+            current_cov, depth_file = calculate_target_coverage(
                 tools["samtools"],
                 output_bam,
                 bed_file,
@@ -380,6 +418,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                 str(Path(output_bam).parent),
                 Path(output_bam).name.replace(".bam", ""),
             )
+            intermediate_files.append(depth_file)
             region_info = f"BED file: {bed_file}"
         else:
             logging.error("Invalid downsample_mode in config; use 'vntr' or 'non_vntr'.")
@@ -396,6 +435,11 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
                 fraction,
                 region_info,
             )
+            # Track current BAM as intermediate before it gets replaced by downsampled_bam.
+            # This ensures we keep a reference to the current BAM for cleanup,
+            # since output_bam will be updated to point to the downsampled BAM below (line 459).
+            intermediate_bams.append(output_bam)
+
             downsampled_bam = str(
                 Path(output_bam).parent / Path(output_bam).name.replace(".bam", "_downsampled.bam")
             )
@@ -451,24 +495,39 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     )
     logging.info("  Metadata file: %s", metadata_file)
 
-    # Clean up intermediate files
-    intermediates = [
-        no_ns_fa,
-        syser_fq,
-        twobit_file,
-        subset_ref,
-        psl_file,
-        fragments_fa,
-        reads_fq,
-        collated_bam,
-    ]
+    # Clean up intermediate files (configurable)
+    keep_intermediates = rs_config.get("keep_intermediate_files", False)
 
-    # Double-check to make sure output files are not in the intermediate list
-    if output_bam in intermediates:
-        logging.warning("Prevented deletion of output BAM file: %s", output_bam)
-        intermediates.remove(output_bam)
+    if not keep_intermediates:
+        # Collect all intermediate files for cleanup
+        all_intermediates = intermediate_files.copy()  # Non-BAM intermediates
 
-    cleanup_files(intermediates)
+        # Add intermediate BAMs with their indices
+        for bam in intermediate_bams:
+            all_intermediates.append(bam)
+            # Also check for index file
+            bam_index = f"{bam}.bai"
+            if Path(bam_index).exists():
+                all_intermediates.append(bam_index)
+
+        # Safety check: ensure final output_bam and its index are NEVER in cleanup list
+        final_bam_index = f"{output_bam}.bai"
+        all_intermediates = [f for f in all_intermediates if f not in (output_bam, final_bam_index)]
+
+        # Enhanced logging for cleanup
+        logging.info("=" * 60)
+        logging.info("Intermediate File Cleanup")
+        logging.info("=" * 60)
+        logging.info(f"Total files to remove: {len(all_intermediates)}")
+        logging.info(f"Preserving final output: {Path(output_bam).name}")
+        logging.info(f"Preserving final index: {Path(output_bam).name}.bai")
+        cleanup_files(all_intermediates)
+        logging.info("Cleanup completed successfully")
+        logging.info("=" * 60)
+    else:
+        logging.info("=" * 60)
+        logging.info("Keeping intermediate files (keep_intermediate_files=true)")
+        logging.info("=" * 60)
 
     return output_bam  # type: ignore[no-any-return]
 
