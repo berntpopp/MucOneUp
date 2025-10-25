@@ -20,7 +20,9 @@ Implementation details:
 For usage information, see the main read_simulation.py module.
 """
 
+import json
 import logging
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -307,8 +309,6 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
             )
             temp_dir = Path(output_bam).parent / "_vntr_efficiency_temp"
 
-            import json
-
             vntr_stats = vntr_model.apply_efficiency_bias(
                 input_bam=Path(output_bam), output_bam=Path(vntr_biased_bam), temp_dir=temp_dir
             )
@@ -328,8 +328,6 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
             logging.info("  VNTR efficiency bias applied successfully")
 
             # Clean up temp files
-            import shutil
-
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
 
