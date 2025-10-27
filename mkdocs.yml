@@ -166,6 +166,7 @@ nav:
   - Reference:
     # - CLI Commands: reference/cli.md  # Disabled: requires mkdocs-click setup
     - Configuration: reference/configuration.md
+    - Test Datasets: reference/test-datasets.md
 
   - About:
     - Citation: about/citation.md

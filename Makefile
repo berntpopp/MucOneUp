@@ -1,4 +1,4 @@
-.PHONY: help init install-uv install dev conda-setup test test-fast test-cov lint lint-fix format format-check type-check check clean clean-conda lock sync update all
+.PHONY: help init install-uv install dev conda-setup test test-fast test-cov lint lint-fix format format-check type-check check clean clean-conda lock sync update generate-testdata generate-testdata-illumina generate-testdata-ont generate-testdata-pacbio generate-testdata-debug all
 
 help:  ## Show this help message
 	@echo "Usage: make [target]"
@@ -193,6 +193,50 @@ bump-major:  ## Bump major version (0.15.0 -> 1.0.0)
 
 show-version:  ## Show current version
 	@python3 -c "from muc_one_up.version import __version__; print(f'Current version: {__version__}')"
+
+# ==================== TEST DATA GENERATION ====================
+
+generate-testdata:  ## Generate comprehensive test dataset (Illumina + ONT + PacBio)
+	@echo "Generating test dataset for current version..."
+	@python3 -c "from muc_one_up.version import __version__; print(f'Version: {__version__}')"
+	uv run python scripts/generate_test_data.py \
+		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--config config.json \
+		--threads 4
+
+generate-testdata-illumina:  ## Generate test dataset (Illumina only)
+	@echo "Generating Illumina test dataset..."
+	uv run python scripts/generate_test_data.py \
+		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--config config.json \
+		--platforms illumina \
+		--threads 4
+
+generate-testdata-ont:  ## Generate test dataset (ONT only)
+	@echo "Generating ONT test dataset..."
+	uv run python scripts/generate_test_data.py \
+		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--config config.json \
+		--platforms ont \
+		--threads 4
+
+generate-testdata-pacbio:  ## Generate test dataset (PacBio only)
+	@echo "Generating PacBio test dataset..."
+	uv run python scripts/generate_test_data.py \
+		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--config config.json \
+		--platforms pacbio \
+		--threads 4
+
+generate-testdata-debug:  ## Generate test dataset with verbose logging (no tarball)
+	@echo "Generating test dataset (debug mode)..."
+	uv run python scripts/generate_test_data.py \
+		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--config config.json \
+		--threads 4 \
+		--verbose \
+		--no-cleanup \
+		--no-tarball
 
 all: clean init conda-setup check  ## Full setup from scratch
 

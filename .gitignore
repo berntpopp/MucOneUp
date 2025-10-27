@@ -183,6 +183,9 @@ manual_testing/reference/
 output/
 test/
 
+# temporary test data generation
+helpers/test_data/
+
 # bed files
 data/bed/_muc1_regions/
 data/bed/_original_files/
