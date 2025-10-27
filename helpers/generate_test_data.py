@@ -198,8 +198,8 @@ def capture_tool_versions(output_dir: Path):
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
                 output = (result.stdout or result.stderr).strip().split("\n")[0]
                 f.write(f"  {output}\n")
-            except Exception:
-                f.write("  unknown\n")
+            except Exception as e:
+                f.write(f"  [error: {type(e).__name__}: {e}]\n")
             f.write("\n")
 
     logger.info(f"✓ Tool versions captured: {version_file}")
@@ -911,9 +911,7 @@ def main():
             logger.info("")
             logger.info("Cleaning up temporary files (use --no-cleanup to keep them)")
             if tarball_path:
-                import shutil as sh
-
-                sh.rmtree(dataset_dir)
+                shutil.rmtree(dataset_dir)
                 logger.info(f"✓ Removed temporary directory: {dataset_dir}")
 
         # Final summary
