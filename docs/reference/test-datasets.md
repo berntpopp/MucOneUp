@@ -26,10 +26,14 @@ Check version: `cat VERSION.json` (included in `_latest/` directory)
 ```
 testdata_40-70_{version}/
 ├── references/
-│   ├── testdata_40-70.001.simulated.fa           # Normal diploid reference
-│   ├── testdata_40-70.002.simulated.fa           # dupC mutated reference
-│   ├── *_orf_analysis.json                       # ORF toxicity analysis
-│   └── *_snapshot_validation.json                # SNaPshot validation (mutated only)
+│   ├── normal/
+│   │   ├── testdata_40-70.001.normal.simulated.fa
+│   │   ├── testdata_40-70.001.normal.simulated.structure.tsv
+│   │   └── testdata_40-70.001.normal.simulated_toxic.orf_stats.json
+│   └── dupC/
+│       ├── testdata_40-70.001.mut.simulated.fa
+│       ├── testdata_40-70.001.mut.simulated.structure.tsv
+│       └── testdata_40-70.001.mut.simulated_toxic.orf_stats.json
 ├── illumina/
 │   ├── normal/
 │   │   ├── reads_R1.fastq.gz

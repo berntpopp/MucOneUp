@@ -325,7 +325,7 @@ def simulate_platform_reads(
     """Simulate reads for a platform across all variants."""
     logger = logging.getLogger(__name__)
     logger.info(
-        f"Simulating {platform_name.upper()} reads (coverage={platform_config['coverage']}×)"
+        f"Simulating {platform_name.upper()} reads (coverage={platform_config['coverage']}x)"
     )
 
     platform_dir = dataset_dir / platform_config["output_subdir"]
@@ -582,7 +582,7 @@ def generate_readme(dataset_dir: Path, version: str) -> Path:
 Comprehensive test dataset with **asymmetric VNTR ({h1}/{h2} repeats)** across three sequencing platforms.
 
 **Generated with**: MucOneUp {version}
-**Platforms**: Illumina (50×), ONT (30×), PacBio (30×)
+**Platforms**: Illumina (50x), ONT (30x), PacBio (30x)
 **Sample**: Asymmetric diploid (h1={h1}, h2={h2} repeats)
 **Variants**: Normal baseline + dupC mutation
 
@@ -593,13 +593,13 @@ testdata_40-70_{version}/
 ├── references/          # Shared diploid references
 │   ├── normal/          # Normal baseline
 │   └── dupC/            # dupC mutation (h1:r20)
-├── illumina/            # Illumina paired-end (50×)
+├── illumina/            # Illumina paired-end (50x)
 │   ├── normal/
 │   └── dupC/
-├── ont/                 # Oxford Nanopore (30×)
+├── ont/                 # Oxford Nanopore (30x)
 │   ├── normal/
 │   └── dupC/
-└── pacbio/              # PacBio HiFi (30×)
+└── pacbio/              # PacBio HiFi (30x)
     ├── normal/
     └── dupC/
 ```
@@ -617,20 +617,20 @@ cat references/dupC/testdata_40-70.001.dupC.simulated.structure.tsv
 # View Illumina reads
 zcat illumina/normal/reads_R1.fastq.gz | head -4
 
-# View ONT reads
-zcat ont/normal/reads.fastq.gz | head -4
+# View ONT reads (uncompressed)
+cat ont/normal/reads.fastq | head -4
 
 # View PacBio reads
-zcat pacbio/normal/reads.fastq.gz | head -4
+zcat pacbio/normal/hifi_0001.fastq.gz | head -4
 ```
 
 ## Platform Comparison
 
 | Platform | Coverage | Read Type | VNTR-Biased |
 |----------|----------|-----------|-------------|
-| Illumina | 50× | Paired-end (2×150bp) | ✅ Yes |
-| ONT | 30× | Long reads (~3kb) | ✅ Yes |
-| PacBio | 30× | HiFi reads (~15kb) | ✅ Yes |
+| Illumina | 50x | Paired-end (2x150bp) | ✅ Yes |
+| ONT | 30x | Long reads (~3kb) | ✅ Yes |
+| PacBio | 30x | HiFi reads (~15kb) | ✅ Yes |
 
 ## Reproducibility
 
