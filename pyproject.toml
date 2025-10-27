@@ -115,6 +115,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "tests/*" = ["S101", "ARG", "PLR2004"]  # Allow asserts, unused args, magic values
 "__init__.py" = ["F401"]  # Allow unused imports in __init__
 "helpers/*" = ["N817"]  # Allow common acronyms like ET for ElementTree
+"scripts/*" = ["RUF001"]  # Allow multiplication sign × in documentation strings
 
 [tool.ruff.lint.isort]
 known-first-party = ["muc_one_up"]
