@@ -8,13 +8,15 @@ This module provides wrapper functions for samtools operations:
 - calculate_target_coverage: Calculate coverage over target regions
 - downsample_bam: Downsample BAM files to target coverage
 - convert_sam_to_bam: Convert SAM format to BAM format
-- convert_bam_to_fastq: Convert BAM format to FASTQ format
+- convert_bam_to_fastq: Convert BAM to FASTQ format (single-end)
+- convert_bam_to_paired_fastq: Convert BAM to paired FASTQ with validation
 - merge_bam_files: Merge multiple BAM files into a single BAM
 - sort_and_index_bam: Sort and index BAM files
 """
 
 import logging
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 from ...exceptions import ExternalToolError, FileOperationError
@@ -631,6 +633,221 @@ def convert_bam_to_fastq(
 
     logging.info(f"BAM→FASTQ conversion complete: {output_fastq}")
     return output_fastq
+
+
+@dataclass
+class FastqConversionOptions:
+    """Optional parameters for BAM to FASTQ conversion.
+
+    Attributes:
+        output_singleton: Optional path for singleton reads (one mate unmapped).
+                         If None, singletons are discarded. (default: None)
+        preserve_read_names: If True, preserve original read names without /1 /2 suffixes.
+                            If False, add /1 /2 suffixes for legacy tools. (default: True)
+        validate_pairs: If True, verify R1 and R2 have same read count.
+                       Prevents silent data corruption. (default: True)
+        threads: Number of threads for samtools operations (default: 4)
+        timeout: Timeout in seconds for samtools command (default: 1800)
+    """
+
+    output_singleton: Path | None = None
+    preserve_read_names: bool = True
+    validate_pairs: bool = True
+    threads: int = 4
+    timeout: int = 1800
+
+
+def convert_bam_to_paired_fastq(
+    samtools_cmd: str,
+    input_bam: str | Path,
+    output_fq1: str | Path,
+    output_fq2: str | Path,
+    options: FastqConversionOptions | None = None,
+) -> tuple[str, str]:
+    """Convert paired-end BAM to FASTQ format with integrity validation.
+
+    Extracts paired-end reads from a BAM file to separate R1/R2 FASTQ files.
+    Filters secondary/supplementary alignments and validates read pair integrity.
+
+    Args:
+        samtools_cmd: Path to samtools executable (e.g., "samtools")
+        input_bam: Input BAM file path (must exist)
+        output_fq1: Output R1 FASTQ path (.gz extension enables auto-compression)
+        output_fq2: Output R2 FASTQ path (.gz extension enables auto-compression)
+        options: Optional conversion parameters (default: FastqConversionOptions())
+
+    Returns:
+        Tuple of (output_fq1, output_fq2) paths as strings
+
+    Raises:
+        FileOperationError: Input missing, outputs invalid, or read count mismatch
+        ExternalToolError: samtools command failed (propagated from run_command)
+
+    Example:
+        Basic usage (most common)::
+
+            fq1, fq2 = convert_bam_to_paired_fastq(
+                "samtools",
+                "sample.bam",
+                "sample_R1.fastq.gz",
+                "sample_R2.fastq.gz"
+            )
+
+        With custom options::
+
+            opts = FastqConversionOptions(threads=8, validate_pairs=True)
+            fq1, fq2 = convert_bam_to_paired_fastq(
+                "samtools", "sample.bam", "R1.fq.gz", "R2.fq.gz", opts
+            )
+
+    Notes:
+        - Output files auto-compress if filenames end with .gz (handled by samtools)
+        - Read pair integrity validated by default (R1/R2 must have same read count)
+        - Singletons (one mate unmapped) discarded by default
+        - Only primary alignments extracted (secondary/supplementary filtered: -F 0x900)
+
+    References:
+        samtools fastq: http://www.htslib.org/doc/samtools-fastq.html
+    """
+    opts = options or FastqConversionOptions()
+
+    # ========== VALIDATION: Input BAM ==========
+    input_bam_path = Path(input_bam)
+
+    if not input_bam_path.exists():
+        raise FileOperationError(f"Input BAM file not found: {input_bam}")
+
+    if input_bam_path.stat().st_size == 0:
+        raise FileOperationError(f"Input BAM file is empty: {input_bam}")
+
+    # ========== PATH PREPARATION ==========
+    output_fq1_path = Path(output_fq1)
+    output_fq2_path = Path(output_fq2)
+
+    # Ensure parent directories exist
+    output_fq1_path.parent.mkdir(parents=True, exist_ok=True)
+    output_fq2_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # ========== COMMAND CONSTRUCTION ==========
+    # Build samtools fastq command
+    # Note: samtools auto-compresses if output filename ends with .gz
+    cmd_args = [
+        "fastq",
+        "-1",
+        str(output_fq1),  # READ1 output
+        "-2",
+        str(output_fq2),  # READ2 output
+    ]
+
+    # Handle singleton reads
+    if opts.output_singleton:
+        cmd_args.extend(["-s", str(opts.output_singleton)])
+    else:
+        # Discard singletons (standard for paired-end workflows)
+        cmd_args.extend(["-0", "/dev/null"])
+
+    # Read name formatting
+    if opts.preserve_read_names:
+        cmd_args.append("-n")  # Preserve original names
+    else:
+        cmd_args.append("-N")  # Force /1 /2 suffixes
+
+    # Threading
+    cmd_args.extend(["-@", str(opts.threads)])
+
+    # Input BAM (must be last)
+    cmd_args.append(str(input_bam))
+
+    # Build full command using utility function
+    cmd = build_tool_command(samtools_cmd, *cmd_args)
+
+    # ========== EXECUTION ==========
+    logging.info(
+        f"Converting paired-end BAM to FASTQ: {input_bam_path.name} → "
+        f"{output_fq1_path.name}, {output_fq2_path.name}"
+    )
+    logging.debug(f"  Command: {' '.join(cmd)}")
+
+    # Execute with timeout and error handling
+    run_command(
+        cmd, timeout=opts.timeout, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
+    )
+
+    # ========== VALIDATION: Output Files ==========
+    # Check R1 output exists and non-empty
+    if not output_fq1_path.exists():
+        raise FileOperationError(
+            f"Failed to convert BAM to FASTQ: R1 output {output_fq1} not created"
+        )
+
+    if output_fq1_path.stat().st_size == 0:
+        raise FileOperationError(f"Failed to convert BAM to FASTQ: R1 output {output_fq1} is empty")
+
+    # Check R2 output exists and non-empty
+    if not output_fq2_path.exists():
+        raise FileOperationError(
+            f"Failed to convert BAM to FASTQ: R2 output {output_fq2} not created"
+        )
+
+    if output_fq2_path.stat().st_size == 0:
+        raise FileOperationError(f"Failed to convert BAM to FASTQ: R2 output {output_fq2} is empty")
+
+    # ========== VALIDATION: Read Pair Integrity ==========
+    if opts.validate_pairs:
+        logging.info("  Validating read pair integrity...")
+
+        r1_reads = _count_fastq_reads(output_fq1_path)
+        r2_reads = _count_fastq_reads(output_fq2_path)
+
+        if r1_reads != r2_reads:
+            raise FileOperationError(
+                f"Read pair count mismatch: R1 has {r1_reads} reads, "
+                f"R2 has {r2_reads} reads. This indicates incomplete conversion "
+                f"or corrupted output."
+            )
+
+        logging.info(f"  Validated {r1_reads} read pairs")
+
+    # ========== SUCCESS ==========
+    fq1_size_mb = output_fq1_path.stat().st_size / (1024 * 1024)
+    fq2_size_mb = output_fq2_path.stat().st_size / (1024 * 1024)
+
+    logging.info(
+        f"Paired-end FASTQ conversion complete: R1={fq1_size_mb:.2f} MB, R2={fq2_size_mb:.2f} MB"
+    )
+
+    return str(output_fq1), str(output_fq2)
+
+
+def _count_fastq_reads(fastq_path: Path) -> int:
+    """Count reads in FASTQ file (handles gzip compression).
+
+    Args:
+        fastq_path: Path to FASTQ file (.fq, .fastq, .fq.gz, .fastq.gz)
+
+    Returns:
+        Number of reads in file
+
+    Raises:
+        FileOperationError: If file cannot be read or is invalid
+
+    Notes:
+        - Automatically detects gzip compression based on file extension
+        - Assumes standard FASTQ format (4 lines per read)
+        - Fast implementation using line counting
+    """
+    import gzip
+
+    # Determine opener based on file extension
+    opener = gzip.open if str(fastq_path).endswith(".gz") else open
+
+    try:
+        with opener(fastq_path, "rt") as f:
+            # Count lines and divide by 4 (FASTQ format: header, seq, +, qual)
+            line_count = sum(1 for _ in f)
+            return line_count // 4
+    except Exception as e:
+        raise FileOperationError(f"Failed to count reads in {fastq_path}: {e}") from e
 
 
 def merge_bam_files(

@@ -364,6 +364,53 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
             output_bam = vntr_biased_bam
             logging.info("  VNTR efficiency bias applied successfully")
 
+            # ========== Generate FASTQ from VNTR-biased BAM ==========
+            vntr_fastq_config = vntr_config.get("output_fastq", {})
+            vntr_fastq_enabled = vntr_fastq_config.get("enabled", True)  # Default: enabled
+
+            if vntr_fastq_enabled:
+                logging.info("  Generating FASTQ files from VNTR-biased BAM")
+
+                try:
+                    from .wrappers.samtools_wrapper import (
+                        FastqConversionOptions,
+                        convert_bam_to_paired_fastq,
+                    )
+
+                    # Determine output FASTQ names (preserve naming convention)
+                    vntr_base = Path(vntr_biased_bam).name.replace(".bam", "")
+                    vntr_fq1 = str(Path(vntr_biased_bam).parent / f"{vntr_base}_R1.fastq.gz")
+                    vntr_fq2 = str(Path(vntr_biased_bam).parent / f"{vntr_base}_R2.fastq.gz")
+
+                    # Configure conversion options
+                    opts = FastqConversionOptions(
+                        output_singleton=vntr_fastq_config.get("singleton_file"),  # default: None
+                        preserve_read_names=vntr_fastq_config.get("preserve_read_names", True),
+                        validate_pairs=True,  # Always validate for data integrity
+                        threads=threads,
+                        timeout=1800,
+                    )
+
+                    # Convert BAM to FASTQ with validation
+                    fq1_out, fq2_out = convert_bam_to_paired_fastq(
+                        samtools_cmd=tools["samtools"],
+                        input_bam=vntr_biased_bam,
+                        output_fq1=vntr_fq1,
+                        output_fq2=vntr_fq2,
+                        options=opts,
+                    )
+
+                    logging.info(f"  VNTR-biased FASTQ R1: {Path(fq1_out).name}")
+                    logging.info(f"  VNTR-biased FASTQ R2: {Path(fq2_out).name}")
+
+                except Exception as e:
+                    # Non-fatal: Log warning and continue without FASTQ output
+                    logging.warning(f"  Failed to generate VNTR-biased FASTQ files: {e}")
+                    logging.warning("  Continuing with BAM output only")
+                    logging.debug(f"  Exception details: {e}", exc_info=True)
+            else:
+                logging.info("  Skipping VNTR-biased FASTQ generation (disabled in config)")
+
             # Clean up temp files
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
