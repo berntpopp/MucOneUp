@@ -640,7 +640,7 @@ class FastqConversionOptions:
     """Optional parameters for BAM to FASTQ conversion.
 
     Attributes:
-        output_singleton: Optional path for singleton reads (one mate unmapped).
+        output_singleton: Optional path (str or Path) for singleton reads (one mate unmapped).
                          If None, singletons are discarded. (default: None)
         preserve_read_names: If True, preserve original read names without /1 /2 suffixes.
                             If False, add /1 /2 suffixes for legacy tools. (default: True)
@@ -650,7 +650,7 @@ class FastqConversionOptions:
         timeout: Timeout in seconds for samtools command (default: 1800)
     """
 
-    output_singleton: Path | None = None
+    output_singleton: str | Path | None = None
     preserve_read_names: bool = True
     validate_pairs: bool = True
     threads: int = 4
