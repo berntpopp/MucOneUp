@@ -646,6 +646,10 @@ class FastqConversionOptions:
                             If False, add /1 /2 suffixes for legacy tools. (default: True)
         validate_pairs: If True, verify R1 and R2 have same read count.
                        Prevents silent data corruption. (default: True)
+        collate_before_conversion: If True, collate BAM by read name before conversion.
+                                  Required for proper paired-end handling. (default: True)
+        discard_singletons: If True, discard singleton reads (one mate unmapped).
+                           Ensures only proper pairs in output. (default: True)
         threads: Number of threads for samtools operations (default: 4)
         timeout: Timeout in seconds for samtools command (default: 1800)
     """
@@ -653,6 +657,8 @@ class FastqConversionOptions:
     output_singleton: str | Path | None = None
     preserve_read_names: bool = True
     validate_pairs: bool = True
+    collate_before_conversion: bool = True
+    discard_singletons: bool = True
     threads: int = 4
     timeout: int = 1800
 
@@ -667,7 +673,7 @@ def convert_bam_to_paired_fastq(
     """Convert paired-end BAM to FASTQ format with integrity validation.
 
     Extracts paired-end reads from a BAM file to separate R1/R2 FASTQ files.
-    Filters secondary/supplementary alignments and validates read pair integrity.
+    Uses two-step pipeline (collate → fastq) to ensure proper pairing.
 
     Args:
         samtools_cmd: Path to samtools executable (e.g., "samtools")
@@ -701,14 +707,18 @@ def convert_bam_to_paired_fastq(
             )
 
     Notes:
-        - Output files auto-compress if filenames end with .gz (handled by samtools)
+        - Uses samtools collate to sort by read name before conversion (default)
+        - Singletons (unpaired reads) discarded by default via -s /dev/null
+        - Output files auto-compress if filenames end with .gz
         - Read pair integrity validated by default (R1/R2 must have same read count)
-        - Singletons (one mate unmapped) discarded by default
         - Only primary alignments extracted (secondary/supplementary filtered: -F 0x900)
 
     References:
+        samtools collate: http://www.htslib.org/doc/samtools-collate.html
         samtools fastq: http://www.htslib.org/doc/samtools-fastq.html
     """
+    import subprocess
+
     opts = options or FastqConversionOptions()
 
     # ========== VALIDATION: Input BAM ==========
@@ -729,49 +739,159 @@ def convert_bam_to_paired_fastq(
     output_fq2_path.parent.mkdir(parents=True, exist_ok=True)
 
     # ========== COMMAND CONSTRUCTION ==========
-    # Build samtools fastq command
-    # Note: samtools auto-compresses if output filename ends with .gz
-    cmd_args = [
+    # Step 1: Build collate command (if enabled)
+    collate_cmd = None
+    if opts.collate_before_conversion:
+        collate_cmd = [
+            samtools_cmd,
+            "collate",
+            "-u",  # Uncompressed output for faster piping
+            "-O",  # Output to stdout
+            "-@",
+            str(opts.threads),
+            str(input_bam),
+        ]
+
+    # Step 2: Build fastq conversion command
+    fastq_cmd = [
+        samtools_cmd,
         "fastq",
         "-1",
         str(output_fq1),  # READ1 output
         "-2",
         str(output_fq2),  # READ2 output
+        "-F",
+        "0x900",  # Filter secondary and supplementary
     ]
 
-    # Handle singleton reads
-    if opts.output_singleton:
-        cmd_args.extend(["-s", str(opts.output_singleton)])
-    else:
-        # Discard singletons (standard for paired-end workflows)
-        cmd_args.extend(["-0", "/dev/null"])
+    # Handle singletons (critical for paired-end integrity)
+    if opts.discard_singletons:
+        if opts.output_singleton:
+            # User wants to keep singletons in separate file
+            fastq_cmd.extend(["-s", str(opts.output_singleton)])
+        else:
+            # Discard singletons (default for paired-end)
+            fastq_cmd.extend(["-s", "/dev/null"])
+    elif opts.output_singleton:
+        # Keep singletons even if discard_singletons=False
+        fastq_cmd.extend(["-s", str(opts.output_singleton)])
+
+    # Discard ambiguous reads (neither/both READ1 and READ2 flags set)
+    fastq_cmd.extend(["-0", "/dev/null"])
 
     # Read name formatting
     if opts.preserve_read_names:
-        cmd_args.append("-n")  # Preserve original names
+        fastq_cmd.append("-n")  # Preserve original names
     else:
-        cmd_args.append("-N")  # Force /1 /2 suffixes
+        fastq_cmd.append("-N")  # Force /1 /2 suffixes
 
     # Threading
-    cmd_args.extend(["-@", str(opts.threads)])
+    fastq_cmd.extend(["-@", str(opts.threads)])
 
-    # Input BAM (must be last)
-    cmd_args.append(str(input_bam))
-
-    # Build full command using utility function
-    cmd = build_tool_command(samtools_cmd, *cmd_args)
+    # Input (stdin if collating, otherwise input_bam)
+    if collate_cmd:
+        fastq_cmd.append("-")  # Read from stdin
+    else:
+        fastq_cmd.append(str(input_bam))
 
     # ========== EXECUTION ==========
-    logging.info(
-        f"Converting paired-end BAM to FASTQ: {input_bam_path.name} → "
-        f"{output_fq1_path.name}, {output_fq2_path.name}"
-    )
-    logging.debug(f"  Command: {' '.join(cmd)}")
+    if collate_cmd:
+        # Two-step pipeline: collate | fastq
+        logging.info(
+            f"Converting paired-end BAM to FASTQ (with collation): "
+            f"{input_bam_path.name} → {output_fq1_path.name}, {output_fq2_path.name}"
+        )
+        logging.debug(f"  Collate command: {' '.join(collate_cmd)}")
+        logging.debug(f"  Fastq command: {' '.join(fastq_cmd)}")
 
-    # Execute with timeout and error handling
-    run_command(
-        cmd, timeout=opts.timeout, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO
-    )
+        try:
+            # Start collate process
+            collate_proc = subprocess.Popen(
+                collate_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            # Start fastq process reading from collate stdout
+            fastq_proc = subprocess.Popen(
+                fastq_cmd,
+                stdin=collate_proc.stdout,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            # Close collate stdout in parent to allow SIGPIPE
+            if collate_proc.stdout:
+                collate_proc.stdout.close()
+
+            # Wait for both processes with timeout
+            timeout = opts.timeout
+            try:
+                _fastq_stdout, fastq_stderr = fastq_proc.communicate(timeout=timeout)
+                collate_returncode = collate_proc.wait(timeout=5)
+                fastq_returncode = fastq_proc.returncode
+
+                # Check return codes
+                if collate_returncode != 0:
+                    collate_stderr = collate_proc.stderr.read() if collate_proc.stderr else b""
+                    stderr_text = collate_stderr.decode("utf-8", errors="ignore").strip()
+                    raise ExternalToolError(
+                        tool="samtools collate",
+                        exit_code=collate_returncode,
+                        stderr=stderr_text,
+                        cmd=" ".join(collate_cmd),
+                    )
+                if fastq_returncode != 0:
+                    stderr_text = fastq_stderr.decode("utf-8", errors="ignore").strip()
+                    raise ExternalToolError(
+                        tool="samtools fastq",
+                        exit_code=fastq_returncode,
+                        stderr=stderr_text,
+                        cmd=" ".join(fastq_cmd),
+                    )
+
+                # Log any warnings from samtools
+                if fastq_stderr:
+                    stderr_text = fastq_stderr.decode("utf-8", errors="ignore").strip()
+                    if stderr_text:
+                        logging.debug(f"  Samtools stderr: {stderr_text}")
+
+            except subprocess.TimeoutExpired:
+                collate_proc.kill()
+                fastq_proc.kill()
+                raise ExternalToolError(
+                    tool="samtools collate|fastq",
+                    exit_code=-1,
+                    stderr=f"Command timed out after {timeout}s",
+                    cmd=" ".join(collate_cmd) + " | " + " ".join(fastq_cmd),
+                ) from None
+
+        except Exception as e:
+            if isinstance(e, ExternalToolError):
+                raise
+            raise ExternalToolError(
+                tool="samtools",
+                exit_code=-1,
+                stderr=str(e),
+                cmd=" ".join(collate_cmd) + " | " + " ".join(fastq_cmd)
+                if collate_cmd
+                else " ".join(fastq_cmd),
+            ) from e
+
+    else:
+        # Single-step: direct fastq conversion (no collation)
+        logging.info(
+            f"Converting paired-end BAM to FASTQ (no collation): "
+            f"{input_bam_path.name} → {output_fq1_path.name}, {output_fq2_path.name}"
+        )
+        logging.debug(f"  Fastq command: {' '.join(fastq_cmd)}")
+
+        run_command(
+            fastq_cmd,
+            timeout=opts.timeout,
+            stderr_prefix="[samtools] ",
+            stderr_log_level=logging.INFO,
+        )
 
     # ========== VALIDATION: Output Files ==========
     # Check R1 output exists and non-empty
@@ -802,8 +922,8 @@ def convert_bam_to_paired_fastq(
         if r1_reads != r2_reads:
             raise FileOperationError(
                 f"Read pair count mismatch: R1 has {r1_reads} reads, "
-                f"R2 has {r2_reads} reads. This indicates incomplete conversion "
-                f"or corrupted output."
+                f"R2 has {r2_reads} reads. This indicates unpaired reads in the BAM file. "
+                f"Enable collate_before_conversion=True and discard_singletons=True to fix."
             )
 
         logging.info(f"  Validated {r1_reads} read pairs")
