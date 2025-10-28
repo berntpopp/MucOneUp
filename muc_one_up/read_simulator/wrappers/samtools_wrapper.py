@@ -717,6 +717,7 @@ def convert_bam_to_paired_fastq(
         samtools collate: http://www.htslib.org/doc/samtools-collate.html
         samtools fastq: http://www.htslib.org/doc/samtools-fastq.html
     """
+    import shlex
     import subprocess
 
     opts = options or FastqConversionOptions()
@@ -739,144 +740,195 @@ def convert_bam_to_paired_fastq(
     output_fq2_path.parent.mkdir(parents=True, exist_ok=True)
 
     # ========== COMMAND CONSTRUCTION ==========
-    # Step 1: Build collate command (if enabled)
-    collate_cmd = None
-    if opts.collate_before_conversion:
-        collate_cmd = [
-            samtools_cmd,
-            "collate",
-            "-u",  # Uncompressed output for faster piping
-            "-O",  # Output to stdout
-            "-@",
-            str(opts.threads),
-            str(input_bam),
-        ]
+    # Detect if samtools_cmd uses conda/mamba wrapping
+    use_conda_wrapper = "mamba run" in samtools_cmd or "conda run" in samtools_cmd
 
-    # Step 2: Build fastq conversion command
-    fastq_cmd = [
-        samtools_cmd,
-        "fastq",
-        "-1",
-        str(output_fq1),  # READ1 output
-        "-2",
-        str(output_fq2),  # READ2 output
-        "-F",
-        "0x900",  # Filter secondary and supplementary
-    ]
-
-    # Handle singletons (critical for paired-end integrity)
+    # Build singleton handling option
+    singleton_opt = ""
     if opts.discard_singletons:
         if opts.output_singleton:
-            # User wants to keep singletons in separate file
-            fastq_cmd.extend(["-s", str(opts.output_singleton)])
+            singleton_opt = f"-s {shlex.quote(str(opts.output_singleton))}"
         else:
-            # Discard singletons (default for paired-end)
-            fastq_cmd.extend(["-s", "/dev/null"])
+            singleton_opt = "-s /dev/null"
     elif opts.output_singleton:
-        # Keep singletons even if discard_singletons=False
-        fastq_cmd.extend(["-s", str(opts.output_singleton)])
+        singleton_opt = f"-s {shlex.quote(str(opts.output_singleton))}"
 
-    # Discard ambiguous reads (neither/both READ1 and READ2 flags set)
-    fastq_cmd.extend(["-0", "/dev/null"])
-
-    # Read name formatting
-    if opts.preserve_read_names:
-        fastq_cmd.append("-n")  # Preserve original names
-    else:
-        fastq_cmd.append("-N")  # Force /1 /2 suffixes
-
-    # Threading
-    fastq_cmd.extend(["-@", str(opts.threads)])
-
-    # Input (stdin if collating, otherwise input_bam)
-    if collate_cmd:
-        fastq_cmd.append("-")  # Read from stdin
-    else:
-        fastq_cmd.append(str(input_bam))
+    # Build read name formatting option
+    read_name_opt = "-n" if opts.preserve_read_names else "-N"
 
     # ========== EXECUTION ==========
-    if collate_cmd:
+    if opts.collate_before_conversion:
         # Two-step pipeline: collate | fastq
         logging.info(
             f"Converting paired-end BAM to FASTQ (with collation): "
             f"{input_bam_path.name} → {output_fq1_path.name}, {output_fq2_path.name}"
         )
-        logging.debug(f"  Collate command: {' '.join(collate_cmd)}")
-        logging.debug(f"  Fastq command: {' '.join(fastq_cmd)}")
 
-        try:
-            # Start collate process
-            collate_proc = subprocess.Popen(
-                collate_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+        if use_conda_wrapper:
+            # Use shell=True with single conda/mamba environment for piping
+            # This is required because two separate conda/mamba processes
+            # cannot communicate via pipe
+            pipe_cmd = (
+                f"samtools collate -u -O -@ {opts.threads} {shlex.quote(str(input_bam))} | "
+                f"samtools fastq "
+                f"-1 {shlex.quote(str(output_fq1))} "
+                f"-2 {shlex.quote(str(output_fq2))} "
+                f"-F 0x900 "
+                f"{singleton_opt} "
+                f"-0 /dev/null "
+                f"{read_name_opt} "
+                f"-@ {opts.threads} -"
             )
 
-            # Start fastq process reading from collate stdout
-            fastq_proc = subprocess.Popen(
-                fastq_cmd,
-                stdin=collate_proc.stdout,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
+            # Extract the mamba/conda wrapper prefix (e.g., "mamba run -n env_wessim")
+            # and use bash to run the piped command inside the environment
+            wrapper_prefix = samtools_cmd.rsplit("samtools", 1)[0].strip()
+            shell_cmd = f"{wrapper_prefix} bash -c {shlex.quote(pipe_cmd)}"
 
-            # Close collate stdout in parent to allow SIGPIPE
-            if collate_proc.stdout:
-                collate_proc.stdout.close()
+            logging.debug(f"  Shell command: {shell_cmd}")
 
-            # Wait for both processes with timeout
-            timeout = opts.timeout
             try:
-                _fastq_stdout, fastq_stderr = fastq_proc.communicate(timeout=timeout)
-                collate_returncode = collate_proc.wait(timeout=5)
-                fastq_returncode = fastq_proc.returncode
-
-                # Check return codes
-                if collate_returncode != 0:
-                    collate_stderr = collate_proc.stderr.read() if collate_proc.stderr else b""
-                    stderr_text = collate_stderr.decode("utf-8", errors="ignore").strip()
-                    raise ExternalToolError(
-                        tool="samtools collate",
-                        exit_code=collate_returncode,
-                        stderr=stderr_text,
-                        cmd=" ".join(collate_cmd),
-                    )
-                if fastq_returncode != 0:
-                    stderr_text = fastq_stderr.decode("utf-8", errors="ignore").strip()
-                    raise ExternalToolError(
-                        tool="samtools fastq",
-                        exit_code=fastq_returncode,
-                        stderr=stderr_text,
-                        cmd=" ".join(fastq_cmd),
-                    )
+                # shell=True is required for piping within conda/mamba environment.
+                # All user inputs are properly quoted with shlex.quote() for safety.
+                result = subprocess.run(  # nosec B602
+                    shell_cmd,
+                    shell=True,
+                    check=True,
+                    timeout=opts.timeout,
+                    capture_output=True,
+                    text=True,
+                )
 
                 # Log any warnings from samtools
-                if fastq_stderr:
-                    stderr_text = fastq_stderr.decode("utf-8", errors="ignore").strip()
+                if result.stderr:
+                    stderr_text = result.stderr.strip()
                     if stderr_text:
                         logging.debug(f"  Samtools stderr: {stderr_text}")
 
-            except subprocess.TimeoutExpired:
-                collate_proc.kill()
-                fastq_proc.kill()
+            except subprocess.TimeoutExpired as e:
                 raise ExternalToolError(
                     tool="samtools collate|fastq",
                     exit_code=-1,
-                    stderr=f"Command timed out after {timeout}s",
-                    cmd=" ".join(collate_cmd) + " | " + " ".join(fastq_cmd),
-                ) from None
+                    stderr=f"Command timed out after {opts.timeout}s",
+                    cmd=shell_cmd,
+                ) from e
+            except subprocess.CalledProcessError as e:
+                raise ExternalToolError(
+                    tool="samtools collate|fastq",
+                    exit_code=e.returncode,
+                    stderr=e.stderr if e.stderr else str(e),
+                    cmd=shell_cmd,
+                ) from e
 
-        except Exception as e:
-            if isinstance(e, ExternalToolError):
-                raise
-            raise ExternalToolError(
-                tool="samtools",
-                exit_code=-1,
-                stderr=str(e),
-                cmd=" ".join(collate_cmd) + " | " + " ".join(fastq_cmd)
-                if collate_cmd
-                else " ".join(fastq_cmd),
-            ) from e
+        else:
+            # Use subprocess.Popen piping for non-wrapped commands
+            # Split samtools_cmd if it's a string
+            if isinstance(samtools_cmd, str):
+                samtools_cmd_list = shlex.split(samtools_cmd)
+            else:
+                samtools_cmd_list = samtools_cmd
+
+            collate_cmd = [
+                *samtools_cmd_list,
+                "collate",
+                "-u",  # Uncompressed output for faster piping
+                "-O",  # Output to stdout
+                "-@",
+                str(opts.threads),
+                str(input_bam),
+            ]
+
+            fastq_cmd = [
+                *samtools_cmd_list,
+                "fastq",
+                "-1",
+                str(output_fq1),
+                "-2",
+                str(output_fq2),
+                "-F",
+                "0x900",
+            ]
+
+            # Add singleton handling
+            if singleton_opt:
+                fastq_cmd.extend(singleton_opt.split())
+
+            # Add other options
+            fastq_cmd.extend(["-0", "/dev/null", read_name_opt, "-@", str(opts.threads), "-"])
+
+            logging.debug(f"  Collate command: {' '.join(collate_cmd)}")
+            logging.debug(f"  Fastq command: {' '.join(fastq_cmd)}")
+
+            try:
+                # Start collate process
+                collate_proc = subprocess.Popen(
+                    collate_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+
+                # Start fastq process reading from collate stdout
+                fastq_proc = subprocess.Popen(
+                    fastq_cmd,
+                    stdin=collate_proc.stdout,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+
+                # Close collate stdout in parent to allow SIGPIPE
+                if collate_proc.stdout:
+                    collate_proc.stdout.close()
+
+                # Wait for both processes with timeout
+                try:
+                    _fastq_stdout, fastq_stderr = fastq_proc.communicate(timeout=opts.timeout)
+                    collate_returncode = collate_proc.wait(timeout=5)
+                    fastq_returncode = fastq_proc.returncode
+
+                    # Check return codes
+                    if collate_returncode != 0:
+                        collate_stderr = collate_proc.stderr.read() if collate_proc.stderr else b""
+                        stderr_text = collate_stderr.decode("utf-8", errors="ignore").strip()
+                        raise ExternalToolError(
+                            tool="samtools collate",
+                            exit_code=collate_returncode,
+                            stderr=stderr_text,
+                            cmd=" ".join(collate_cmd),
+                        )
+                    if fastq_returncode != 0:
+                        stderr_text = fastq_stderr.decode("utf-8", errors="ignore").strip()
+                        raise ExternalToolError(
+                            tool="samtools fastq",
+                            exit_code=fastq_returncode,
+                            stderr=stderr_text,
+                            cmd=" ".join(fastq_cmd),
+                        )
+
+                    # Log any warnings from samtools
+                    if fastq_stderr:
+                        stderr_text = fastq_stderr.decode("utf-8", errors="ignore").strip()
+                        if stderr_text:
+                            logging.debug(f"  Samtools stderr: {stderr_text}")
+
+                except subprocess.TimeoutExpired:
+                    collate_proc.kill()
+                    fastq_proc.kill()
+                    raise ExternalToolError(
+                        tool="samtools collate|fastq",
+                        exit_code=-1,
+                        stderr=f"Command timed out after {opts.timeout}s",
+                        cmd=" ".join(collate_cmd) + " | " + " ".join(fastq_cmd),
+                    ) from None
+
+            except Exception as e:
+                if isinstance(e, ExternalToolError):
+                    raise
+                raise ExternalToolError(
+                    tool="samtools",
+                    exit_code=-1,
+                    stderr=str(e),
+                    cmd=" ".join(collate_cmd) + " | " + " ".join(fastq_cmd),
+                ) from e
 
     else:
         # Single-step: direct fastq conversion (no collation)
@@ -884,6 +936,34 @@ def convert_bam_to_paired_fastq(
             f"Converting paired-end BAM to FASTQ (no collation): "
             f"{input_bam_path.name} → {output_fq1_path.name}, {output_fq2_path.name}"
         )
+
+        # Build fastq command for non-collation path
+        if isinstance(samtools_cmd, str):
+            samtools_cmd_list = shlex.split(samtools_cmd)
+        else:
+            samtools_cmd_list = samtools_cmd
+
+        fastq_cmd = [
+            *samtools_cmd_list,
+            "fastq",
+            "-1",
+            str(output_fq1),
+            "-2",
+            str(output_fq2),
+            "-F",
+            "0x900",
+        ]
+
+        # Add singleton handling
+        if singleton_opt:
+            fastq_cmd.extend(singleton_opt.split())
+
+        # Add other options
+        fastq_cmd.extend(["-0", "/dev/null", read_name_opt, "-@", str(opts.threads)])
+
+        # Input BAM (direct input, no stdin)
+        fastq_cmd.append(str(input_bam))
+
         logging.debug(f"  Fastq command: {' '.join(fastq_cmd)}")
 
         run_command(
