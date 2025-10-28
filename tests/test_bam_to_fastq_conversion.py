@@ -46,25 +46,24 @@ def samtools_cmd():
 
 
 @pytest.fixture
-def test_bam_with_unpaired_reads(tmp_path):
+def test_bam_with_unpaired_reads():
     """
-    Create a minimal test BAM file with unpaired reads.
+    Fixture providing test BAM file with unpaired reads.
 
-    This simulates the exact scenario from VNTR downsampling where
-    some reads lose their mates.
+    This BAM file contains reads from VNTR downsampling where some reads
+    have lost their mates, simulating the exact scenario we need to handle.
+
+    The file is copied from experiment data to tests/data/ for reproducibility.
 
     Returns:
-        Path to test BAM file
+        Path to test BAM file in tests/data/
     """
-    # Check if we have a real BAM file from experiments to use
-    real_bam = Path(
-        "/mnt/c/development/MucOneUp/output/experminents/experiment_1/pair_001/sample.001.normal.simulated_vntr_biased.bam"
-    )
+    test_bam = Path(__file__).parent / "data" / "sample.001.normal.simulated_vntr_biased.bam"
 
-    if real_bam.exists():
-        return real_bam
-    else:
-        pytest.skip("Real test BAM file not available - run experiments first")
+    if not test_bam.exists():
+        pytest.skip(f"Test BAM file not found: {test_bam}")
+
+    return test_bam
 
 
 @pytest.fixture
