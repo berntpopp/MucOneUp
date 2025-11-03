@@ -242,7 +242,8 @@ def write_simulation_statistics(
     vntr_coverage_stats: dict[str, Any] = {}
 
     # Collect provenance metadata for reproducibility
-    # This wraps all metadata collection in error handling
+    # Defense-in-depth: collect_provenance_metadata() handles errors internally,
+    # but we add outer protection in case of unexpected issues
     try:
         provenance_info = collect_provenance_metadata(
             config=config,
@@ -251,7 +252,7 @@ def write_simulation_statistics(
         )
     except Exception as e:
         # Graceful degradation: simulation continues even if provenance fails
-        logging.error(f"Failed to collect provenance metadata: {e}")
+        logging.error(f"Unexpected error collecting provenance metadata: {e}", exc_info=True)
         provenance_info = None
 
     if dual_mutation_mode:

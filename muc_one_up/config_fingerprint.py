@@ -70,7 +70,7 @@ def _filter_paths_recursive(value: Any, depth: int = 0) -> Any:
         Filtered value with paths removed
 
     Raises:
-        RecursionError: If depth exceeds 50 levels (circular reference)
+        RecursionError: If depth exceeds 50 levels (possible circular reference)
     """
     # Safety: prevent infinite recursion
     if depth > 50:
