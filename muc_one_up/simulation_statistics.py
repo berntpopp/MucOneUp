@@ -227,6 +227,7 @@ def generate_simulation_statistics(
     mutation_info: dict[str, Any] | None = None,
     vntr_coverage: dict[str, Any] | None = None,
     applied_snp_info: dict[int, list[dict[str, Any]]] | None = None,
+    provenance_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Generate a comprehensive simulation statistics report.
@@ -238,6 +239,7 @@ def generate_simulation_statistics(
       - Overall aggregated statistics.
       - Mutation information (if any).
       - VNTR coverage statistics (if available).
+      - Provenance metadata (software version, config fingerprint, seed, timestamps).
 
     Args:
         start_time (float): Simulation start time (timestamp).
@@ -250,11 +252,24 @@ def generate_simulation_statistics(
             Defaults to None.
         applied_snp_info (Optional[Dict[int, List[Dict[str, Any]]]]): Dictionary mapping haplotype
             index (0-based) to list of successfully applied SNPs. Defaults to None.
+        provenance_info (Optional[Dict[str, Any]]): Provenance metadata (version, fingerprint,
+            seed, timestamps). Defaults to None. (New in v0.28.0)
 
     Returns:
         Dict[str, Any]: Comprehensive simulation statistics.
+
+    Note:
+        The 'runtime_seconds' field is computed from provenance.duration_seconds
+        if provenance is provided (single source of truth). For backward compatibility,
+        it falls back to end_time - start_time if provenance is missing.
     """
-    runtime = end_time - start_time
+    # Compute runtime from provenance if available (single source of truth)
+    # Otherwise fall back to direct calculation (backward compatibility)
+    if provenance_info and "duration_seconds" in provenance_info:
+        runtime = provenance_info["duration_seconds"]
+    else:
+        runtime = end_time - start_time
+
     haplotype_stats = generate_haplotype_stats(simulation_results, config)
     overall_stats = generate_overall_stats(haplotype_stats)
 
@@ -293,6 +308,7 @@ def generate_simulation_statistics(
         "mutation_info": mutation_info if mutation_info is not None else {},
         "vntr_coverage": vntr_coverage if vntr_coverage is not None else {},
         "snp_info": snp_info_1indexed if applied_snp_info else {},
+        "provenance": provenance_info if provenance_info is not None else {},
     }
     return report
 

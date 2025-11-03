@@ -530,6 +530,40 @@ diff run1.001.simulated.fa run2.001.simulated.fa
 
 ---
 
+### Provenance Metadata
+
+When using `--output-stats`, MucOneUp automatically records provenance metadata in `*.simulation_stats.json`:
+
+```json
+{
+  "provenance": {
+    "software_version": "0.27.0",
+    "config_fingerprint": "sha256:aed09353ff7...",
+    "seed": 42,
+    "start_time": "2025-11-03T11:48:44.249499+00:00",
+    "end_time": "2025-11-03T11:48:44.256557+00:00",
+    "duration_seconds": 0.007058,
+    "command_line": "muconeup --config config.json simulate --seed 42"
+  }
+}
+```
+
+**Config Fingerprints:**
+
+Configuration fingerprints use RFC 8785 JSON canonicalization—identical configs produce identical SHA-256 hashes across platforms. System paths (`human_reference`, tool paths) are excluded to ensure portability.
+
+**Command-Line Sanitization:**
+
+Secret patterns (`--api-key`, `--password`, `--token`, etc.) are automatically redacted as `***REDACTED***` to prevent credential leakage in published datasets.
+
+**Disable Provenance:**
+
+```bash
+export MUCONEUP_ENABLE_PROVENANCE=false
+```
+
+---
+
 ## Advanced Options
 
 ### Custom Configuration File

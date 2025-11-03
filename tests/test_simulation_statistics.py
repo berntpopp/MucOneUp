@@ -461,3 +461,151 @@ class TestStatisticsBioinformatics:
         assert stats[0]["repeat_count"] == 50
         assert stats[0]["vntr_length"] > 0
         assert len(stats[0]["repeat_type_counts"]) > 1
+
+
+@pytest.mark.unit
+class TestProvenanceIntegration:
+    """Tests for provenance metadata integration in simulation statistics."""
+
+    def test_provenance_in_report(self, minimal_config: dict):
+        """Test provenance section is included when provided."""
+        results = [("ACGTACGT", ["X", "A"])]
+        start = 1730649330.0
+        end = 1730649331.0
+
+        provenance_info = {
+            "software_version": "0.27.0",
+            "config_fingerprint": "sha256:abc123...",
+            "seed": 42,
+            "start_time": "2025-11-03T10:00:00.000000+00:00",
+            "end_time": "2025-11-03T10:00:01.000000+00:00",
+            "duration_seconds": 1.0,
+            "command_line": "muconeup --config config.json simulate",
+        }
+
+        report = generate_simulation_statistics(
+            start_time=start,
+            end_time=end,
+            simulation_results=results,
+            config=minimal_config,
+            provenance_info=provenance_info,
+        )
+
+        assert "provenance" in report
+        assert report["provenance"] == provenance_info
+
+    def test_provenance_optional_backward_compatible(self, minimal_config: dict):
+        """Test backward compatibility when provenance not provided."""
+        results = [("ACGTACGT", ["X", "A"])]
+        start = 1730000000.0
+        end = start + 1.0
+
+        # OLD CALL: no provenance_info parameter
+        report = generate_simulation_statistics(
+            start_time=start,
+            end_time=end,
+            simulation_results=results,
+            config=minimal_config,
+        )
+
+        assert "provenance" in report
+        assert report["provenance"] == {}  # Empty dict (graceful degradation)
+
+    def test_runtime_computed_from_provenance(self, minimal_config: dict):
+        """Test runtime_seconds uses provenance.duration_seconds if available."""
+        results = [("ACGTACGT", ["X", "A"])]
+        start = 1000.0
+        end = 1001.5
+
+        provenance_info = {
+            "duration_seconds": 1.5,
+            "software_version": "0.27.0",
+        }
+
+        report = generate_simulation_statistics(
+            start_time=start,
+            end_time=end,
+            simulation_results=results,
+            config=minimal_config,
+            provenance_info=provenance_info,
+        )
+
+        # runtime_seconds should match provenance (single source of truth)
+        assert report["runtime_seconds"] == 1.5
+        assert report["runtime_seconds"] == provenance_info["duration_seconds"]
+
+    def test_runtime_falls_back_to_calculation(self, minimal_config: dict):
+        """Test runtime_seconds falls back to calculation if provenance missing."""
+        results = [("ACGTACGT", ["X", "A"])]
+        start = 1000.0
+        end = 1002.5
+
+        # No provenance provided
+        report = generate_simulation_statistics(
+            start_time=start,
+            end_time=end,
+            simulation_results=results,
+            config=minimal_config,
+        )
+
+        # Should fall back to direct calculation
+        assert report["runtime_seconds"] == 2.5
+
+    def test_provenance_with_all_fields(self, minimal_config: dict):
+        """Test report with complete provenance metadata."""
+        results = [("ACGTACGT", ["X", "A"])]
+        start = 1730649330.0
+        end = 1730649331.5
+
+        provenance_info = {
+            "software_version": "0.28.0",
+            "config_fingerprint": "sha256:8f3e9a7b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f",
+            "seed": 42,
+            "start_time": "2024-11-03T10:15:30.000000+00:00",
+            "end_time": "2024-11-03T10:15:31.500000+00:00",
+            "duration_seconds": 1.5,
+            "command_line": "muconeup --config config.json simulate --seed 42",
+        }
+
+        report = generate_simulation_statistics(
+            start_time=start,
+            end_time=end,
+            simulation_results=results,
+            config=minimal_config,
+            provenance_info=provenance_info,
+        )
+
+        assert report["provenance"]["software_version"] == "0.28.0"
+        assert report["provenance"]["config_fingerprint"].startswith("sha256:")
+        assert report["provenance"]["seed"] == 42
+        assert "T" in report["provenance"]["start_time"]  # ISO 8601
+        assert "T" in report["provenance"]["end_time"]  # ISO 8601
+
+    def test_provenance_with_error_sentinels(self, minimal_config: dict):
+        """Test report handles provenance with error sentinels."""
+        results = [("ACGTACGT", ["X", "A"])]
+        start = 1000.0
+        end = 1001.0
+
+        provenance_info = {
+            "software_version": "0.28.0",
+            "config_fingerprint": "error:fingerprint_failed:TypeError",
+            "seed": None,
+            "start_time": "error:timestamp_failed",
+            "end_time": "error:timestamp_failed",
+            "duration_seconds": 1.0,
+            "command_line": "error:cmdline_failed",
+        }
+
+        report = generate_simulation_statistics(
+            start_time=start,
+            end_time=end,
+            simulation_results=results,
+            config=minimal_config,
+            provenance_info=provenance_info,
+        )
+
+        # Should not crash, includes error sentinels
+        assert report["provenance"]["config_fingerprint"].startswith("error:")
+        assert report["provenance"]["seed"] is None
+        assert report["runtime_seconds"] == 1.0  # Duration still works
