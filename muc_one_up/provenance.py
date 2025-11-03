@@ -151,9 +151,9 @@ def format_timestamp_iso8601(timestamp: float) -> str:
 
     Example:
         >>> import time
-        >>> ts = 1730649330.123456  # 2024-11-03 10:15:30.123456 UTC
+        >>> ts = 1730628930.123456  # Unix timestamp
         >>> iso = format_timestamp_iso8601(ts)
-        >>> iso
+        >>> iso  # ISO 8601 format with timezone
         '2024-11-03T10:15:30.123456+00:00'
 
     Notes:
