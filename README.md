@@ -53,30 +53,6 @@ muconeup --config config.json reads illumina \
 
 ---
 
-## Reproducibility
-
-Every simulation automatically generates `*.simulation_stats.json` with **provenance metadata**:
-
-```json
-{
-  "provenance": {
-    "software_version": "0.27.0",
-    "config_fingerprint": "sha256:aed09353ff7...",
-    "seed": 42,
-    "start_time": "2025-11-03T11:48:44.249499+00:00",
-    "end_time": "2025-11-03T11:48:44.256557+00:00",
-    "duration_seconds": 0.007058,
-    "command_line": "muconeup --config config.json simulate --seed 42"
-  }
-}
-```
-
-**Config fingerprints** use RFC 8785 JSON canonicalization—identical configs produce identical SHA-256 hashes across platforms. **Command-line sanitization** redacts secrets (`--api-key`, `--password`) to prevent credential leakage in published datasets.
-
-**Disable:** `export MUCONEUP_ENABLE_PROVENANCE=false`
-
----
-
 ## Installation
 
 ### Option 1: pip (Recommended for Users)
