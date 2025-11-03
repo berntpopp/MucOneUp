@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 
 from ..exceptions import FileOperationError, ReadSimulationError
+from ..provenance import collect_provenance_metadata
 from ..read_simulation import simulate_reads as simulate_reads_pipeline
 from ..simulation_statistics import (
     generate_simulation_statistics,
@@ -235,10 +236,23 @@ def write_simulation_statistics(
     applied_snp_info_normal,
     applied_snp_info_mut,
 ):
-    """Generate and write simulation statistics."""
+    """Generate and write simulation statistics with provenance metadata."""
     from typing import Any
 
     vntr_coverage_stats: dict[str, Any] = {}
+
+    # Collect provenance metadata for reproducibility
+    # This wraps all metadata collection in error handling
+    try:
+        provenance_info = collect_provenance_metadata(
+            config=config,
+            start_time=iteration_start,
+            end_time=iteration_end,
+        )
+    except Exception as e:
+        # Graceful degradation: simulation continues even if provenance fails
+        logging.error(f"Failed to collect provenance metadata: {e}")
+        provenance_info = None
 
     if dual_mutation_mode:
         normal_stats_report = generate_simulation_statistics(
@@ -249,6 +263,7 @@ def write_simulation_statistics(
             mutation_info={"mutation_name": "normal"},
             vntr_coverage=vntr_coverage_stats,
             applied_snp_info=applied_snp_info_normal,
+            provenance_info=provenance_info,
         )
         mutated_stats_report = generate_simulation_statistics(
             start_time=iteration_start,
@@ -258,6 +273,7 @@ def write_simulation_statistics(
             mutation_info={"mutation_name": mutation_pair[1]},
             vntr_coverage=vntr_coverage_stats,
             applied_snp_info=applied_snp_info_mut,
+            provenance_info=provenance_info,
         )
 
         stats_file_normal = numbered_filename(
@@ -285,6 +301,7 @@ def write_simulation_statistics(
             mutation_info=mutation_info,
             vntr_coverage=vntr_coverage_stats,
             applied_snp_info=applied_snp_info_normal,
+            provenance_info=provenance_info,
         )
 
         stats_output_file = numbered_filename(out_dir, out_base, sim_index, "simulation_stats.json")
