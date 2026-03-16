@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "muc_one_up"
-version = "0.28.0"
+version = "0.28.1"
 description = "MucOneUp: a tool to simulate MUC1 VNTR diploid references"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -29,6 +29,7 @@ dependencies = [
     "orfipy>=0.0.3,<1.0",
     "jsonschema>=3.2.0,<5.0",
     "rfc8785>=0.1.2",  # RFC 8785 JSON Canonicalization Scheme for config fingerprinting
+    "biopython>=1.80",  # Required for FASTA I/O in read simulation and CLI
 ]
 
 [project.optional-dependencies]
@@ -39,7 +40,6 @@ dev = [
     "ruff==0.14.1",  # Pinned version - keep in sync with .pre-commit-config.yaml
     "mypy>=1.8.0",
     "types-jsonschema>=4.0.0",
-    "biopython>=1.80",  # Required for test_orf_prefix_filtering.py
     "mkdocs-material>=9.5.0",
     "mkdocstrings[python]>=0.24.0",
     "mkdocs-click>=0.8.0",
@@ -51,7 +51,6 @@ docs = [
     "mkdocstrings[python]>=0.24.0",
     "mkdocs-click>=0.8.0",
     "pymdown-extensions>=10.7",
-    "biopython>=1.80",  # Required for CLI module imports during doc generation
 ]
 
 [project.scripts]
