@@ -83,10 +83,11 @@ jobs:
       # Vulnerabilities are visible in GitHub Security tab
       # Note: ignore-unfixed=true excludes unfixable base image vulnerabilities
       - name: Run Trivy security scan
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@v0.35.0
         if: github.event_name != 'pull_request'
         with:
           image-ref: ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup:${{ steps.version.outputs.version }}
+          version: "v0.69.3"
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
