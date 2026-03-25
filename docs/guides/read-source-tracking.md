@@ -47,7 +47,7 @@ When `--track-read-source` is enabled, two additional files are produced:
 | `overlaps_vntr` | bool | Read overlaps the VNTR region |
 | `repeat_units` | str | Comma-separated repeat indices (e.g. `3,4,5`) or `.` |
 | `overlaps_mutation` | bool | Read overlaps a mutated repeat |
-| `mutation_name` | str | Mutation name (e.g. `dupC`) or empty |
+| `mutation_name` | str | Mutation name (e.g. `dupC`) or `.` |
 | `overlaps_snp` | bool | Read overlaps an applied SNP |
 
 Booleans are serialized as lowercase `true`/`false`.

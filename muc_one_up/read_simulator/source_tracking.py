@@ -175,7 +175,13 @@ def build_coordinate_map(
 
         # Strip 'm' suffix for sequence lookup
         lookup_key = symbol.rstrip("m")
-        seq = repeats_dict.get(lookup_key, "")
+        if lookup_key not in repeats_dict:
+            raise ValueError(
+                f"Unknown repeat symbol '{lookup_key}' (from '{symbol}') for haplotype "
+                f"{haplotype} at index {repeat_index} in build_coordinate_map. "
+                f"Available symbols: {sorted(repeats_dict.keys())}"
+            )
+        seq = repeats_dict[lookup_key]
         region_len = len(seq)
 
         is_mutated = repeat_index in mutated_indices or symbol.endswith("m")

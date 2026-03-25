@@ -165,6 +165,19 @@ class TestBuildCoordinateMap:
         assert coord_map.vntr_start == 0
         assert coord_map.vntr_end == 18
 
+    def test_unknown_repeat_symbol_raises(self, repeats_dict):
+        chain = ["1", "Z"]  # Z is not in repeats_dict
+        with pytest.raises(ValueError, match="Unknown repeat symbol 'Z'"):
+            build_coordinate_map(
+                haplotype=1,
+                chain=chain,
+                repeats_dict=repeats_dict,
+                left_const_len=50,
+                mutation_positions=[],
+                mutation_name=None,
+                snp_info=[],
+            )
+
 
 class TestReadSourceTracker:
     """Tests for ReadSourceTracker annotation and manifest writing."""

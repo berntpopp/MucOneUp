@@ -566,18 +566,32 @@ def simulate_reads_pipeline(
 
         # Filter origins to only include reads surviving in the final BAM
         # (VNTR efficiency bias and downsampling may have removed reads)
+        def _normalize_read_id(read_id: str | None) -> str:
+            """Strip trailing /1 or /2 mate suffix for consistent matching.
+
+            Illumina FASTQ headers may include /1 or /2 mate indicators,
+            while BAM query_name typically omits them.
+            """
+            if not read_id:
+                return ""
+            if read_id.endswith("/1") or read_id.endswith("/2"):
+                return read_id[:-2]
+            return read_id
+
         surviving_read_ids: set[str] | None = None
         try:
             import pysam
 
             with pysam.AlignmentFile(output_bam, "rb") as bam:
-                surviving_read_ids = {read.query_name for read in bam if read.query_name}
+                surviving_read_ids = {
+                    _normalize_read_id(read.query_name) for read in bam if read.query_name
+                }
         except (ImportError, OSError):
             logging.debug("Could not read final BAM for read filtering; including all origins")
 
         if surviving_read_ids is not None:
             pre_filter_count = len(origins)
-            origins = [o for o in origins if o.read_id in surviving_read_ids]
+            origins = [o for o in origins if _normalize_read_id(o.read_id) in surviving_read_ids]
             if pre_filter_count != len(origins):
                 logging.info(
                     "Filtered manifest origins: %d -> %d (matched to final BAM)",

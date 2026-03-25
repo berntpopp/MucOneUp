@@ -35,18 +35,21 @@ def parse_pacbio_reads(
     """
     origins: list[ReadOrigin] = []
 
-    # Deduplicate: prefer .maf over .maf.gz when both exist
-    seen_bases: set[str] = set()
-    deduplicated: list[str] = []
+    # Deduplicate: prefer .maf over .maf.gz when both exist for the same base name
+    dedup_map: dict[str, str] = {}
     for maf_path in maf_paths:
         p = Path(maf_path)
         if not p.exists():
             continue
         # Normalize to base (strip .gz if present)
         base = str(p).removesuffix(".gz")
-        if base not in seen_bases:
-            seen_bases.add(base)
-            deduplicated.append(maf_path)
+        existing = dedup_map.get(base)
+        if existing is None:
+            dedup_map[base] = maf_path
+        elif existing.endswith(".gz") and not maf_path.endswith(".gz"):
+            # Prefer uncompressed over gzipped regardless of input order
+            dedup_map[base] = maf_path
+    deduplicated = list(dedup_map.values())
 
     for maf_path in deduplicated:
         origins.extend(_parse_single_maf(maf_path, haplotype_index))
@@ -106,14 +109,16 @@ def _parse_maf_block(ref_line: str, read_line: str, haplotype_index: int) -> Rea
     try:
         ref_start = int(ref_parts[2])
         ref_size = int(ref_parts[3])
-        ref_strand = ref_parts[4]
 
         read_name = read_parts[1]
+        # In MAF, reference strand is typically always '+'.
+        # The read s-line strand carries the actual read orientation.
+        read_strand = read_parts[4]
     except (ValueError, IndexError):
         return None
 
     ref_end = ref_start + ref_size
-    strand = "+" if ref_strand == "+" else "-"
+    strand = "+" if read_strand == "+" else "-"
 
     return ReadOrigin(
         read_id=read_name,

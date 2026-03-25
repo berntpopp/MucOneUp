@@ -73,6 +73,10 @@ class TestONTParser:
         origins = parse_nanosim_reads(str(fastq), haplotype_map=None)
         assert len(origins) == 0
 
+    def test_missing_fastq(self, tmp_path):
+        origins = parse_nanosim_reads(str(tmp_path / "nonexistent.fastq"))
+        assert origins == []
+
 
 class TestPacBioParser:
     """Tests for pbsim3 MAF parser."""
@@ -169,6 +173,34 @@ class TestPacBioParser:
             haplotype_index=1,
         )
         assert len(origins) == 1
+
+    def test_deduplicate_prefers_maf_over_gz_regardless_of_order(self, tmp_path):
+        """Dedup prefers .maf over .maf.gz even when .gz is listed first."""
+        maf_content = (
+            "a\ns ref 50 20 + 200 " + "A" * 20 + "\ns read_0 0 20 + 20 " + "A" * 20 + "\n\n"
+        )
+        maf_path = tmp_path / "sd_0001.maf"
+        maf_path.write_text(maf_content)
+        maf_gz_path = tmp_path / "sd_0001.maf.gz"
+        with gzip.open(maf_gz_path, "wt") as f:
+            f.write(maf_content)
+        # Pass gz FIRST — should still only get 1 read
+        origins = parse_pacbio_reads(
+            maf_paths=[str(maf_gz_path), str(maf_path)],
+            haplotype_index=1,
+        )
+        assert len(origins) == 1
+
+    def test_strand_from_read_not_reference(self, tmp_path):
+        """Strand should come from read s-line, not reference (always '+')."""
+        maf_content = (
+            "a\ns ref 100 50 + 5000 " + "A" * 50 + "\ns read_0 0 50 - 50 " + "A" * 50 + "\n\n"
+        )
+        maf_path = tmp_path / "strand_test.maf"
+        maf_path.write_text(maf_content)
+        origins = parse_pacbio_reads(maf_paths=[str(maf_path)], haplotype_index=1)
+        assert len(origins) == 1
+        assert origins[0].strand == "-"  # from read s-line, not ref
 
 
 class TestIlluminaParser:

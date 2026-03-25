@@ -723,9 +723,15 @@ def convert_bam_to_paired_fastq(
 
     opts = options or FastqConversionOptions()
 
-    # Normalize samtools_cmd to a string for shell commands
-    if not isinstance(samtools_cmd, str):
-        samtools_cmd = " ".join(samtools_cmd)
+    # Normalize samtools_cmd into both string and list forms:
+    # - String form: used for conda wrapper detection and shell commands
+    # - List form: used for subprocess.Popen (preserves token boundaries)
+    if isinstance(samtools_cmd, str):
+        samtools_cmd_str = samtools_cmd
+        samtools_cmd_list = shlex.split(samtools_cmd)
+    else:
+        samtools_cmd_list = list(samtools_cmd)
+        samtools_cmd_str = shlex.join(samtools_cmd_list)
 
     # ========== VALIDATION: Input BAM ==========
     input_bam_path = Path(input_bam)
@@ -746,7 +752,7 @@ def convert_bam_to_paired_fastq(
 
     # ========== COMMAND CONSTRUCTION ==========
     # Detect if samtools_cmd uses conda/mamba wrapping
-    use_conda_wrapper = "mamba run" in samtools_cmd or "conda run" in samtools_cmd
+    use_conda_wrapper = "mamba run" in samtools_cmd_str or "conda run" in samtools_cmd_str
 
     # Build singleton handling option
     singleton_opt = ""
@@ -787,7 +793,7 @@ def convert_bam_to_paired_fastq(
 
             # Extract the mamba/conda wrapper prefix (e.g., "mamba run -n env_wessim")
             # and use bash to run the piped command inside the environment
-            wrapper_prefix = samtools_cmd.rsplit("samtools", 1)[0].strip()
+            wrapper_prefix = samtools_cmd_str.rsplit("samtools", 1)[0].strip()
             shell_cmd = f"{wrapper_prefix} bash -c {shlex.quote(pipe_cmd)}"
 
             logging.debug(f"  Shell command: {shell_cmd}")
@@ -827,7 +833,6 @@ def convert_bam_to_paired_fastq(
 
         else:
             # Use subprocess.Popen piping for non-wrapped commands
-            samtools_cmd_list = shlex.split(samtools_cmd)
 
             collate_cmd = [
                 *samtools_cmd_list,
@@ -939,10 +944,6 @@ def convert_bam_to_paired_fastq(
         )
 
         # Build fastq command for non-collation path
-        if isinstance(samtools_cmd, str):
-            samtools_cmd_list = shlex.split(samtools_cmd)
-        else:
-            samtools_cmd_list = list(samtools_cmd)  # type: ignore[unreachable]
 
         fastq_cmd = [
             *samtools_cmd_list,

@@ -65,21 +65,24 @@ def parse_nanosim_reads(
     """
     origins: list[ReadOrigin] = []
 
-    with open(fastq_path) as f:
-        while True:
-            header = f.readline().strip()
-            if not header:
-                break
-            seq = f.readline().strip()
-            f.readline()  # +
-            f.readline()  # quality
+    try:
+        with open(fastq_path) as f:
+            while True:
+                header = f.readline().strip()
+                if not header:
+                    break
+                seq = f.readline().strip()
+                f.readline()  # +
+                f.readline()  # quality
 
-            if not header.startswith("@"):
-                continue
+                if not header.startswith("@"):
+                    continue
 
-            read_id = header.lstrip("@")
-            origin = _parse_single_read(read_id, len(seq), haplotype_map)
-            if origin is not None:
-                origins.append(origin)
+                read_id = header.lstrip("@")
+                origin = _parse_single_read(read_id, len(seq), haplotype_map)
+                if origin is not None:
+                    origins.append(origin)
+    except FileNotFoundError:
+        logger.warning("NanoSim FASTQ not found: %s", fastq_path)
 
     return origins
