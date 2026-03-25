@@ -75,6 +75,7 @@ def simulate_pacbio_hifi_reads(
     config: dict[str, Any],
     input_fa: str,
     human_reference: str | None = None,
+    source_tracker: Any | None = None,
 ) -> str:
     """
     Complete PacBio HiFi read simulation pipeline.

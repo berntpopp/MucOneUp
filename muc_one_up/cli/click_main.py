@@ -320,6 +320,12 @@ def cli(ctx, config, log_level, verbose):
     show_default=True,
     help="Haplotypes for random SNPs.",
 )
+@click.option(
+    "--track-read-source",
+    is_flag=True,
+    default=False,
+    help="Generate read source tracking manifest and coordinate map alongside simulated reads.",
+)
 @click.pass_context
 def simulate(ctx, **kwargs):
     """Generate MUC1 VNTR diploid haplotypes.
@@ -456,8 +462,14 @@ def reads():
     default=None,
     help="Random seed for reproducibility (same seed = identical reads).",
 )
+@click.option(
+    "--track-read-source",
+    is_flag=True,
+    default=False,
+    help="Generate read source tracking manifest and coordinate map alongside simulated reads.",
+)
 @click.pass_context
-def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed):
+def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, track_read_source):
     """Simulate Illumina short reads from one or more FASTA files.
 
     Supports batch processing following Unix philosophy:
@@ -541,8 +553,18 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed):
                 actual_out_base,
             )
 
+            # Build source tracker from companion files if requested
+            source_tracker = None
+            if track_read_source:
+                from ..read_simulator.source_tracking import ReadSourceTracker
+
+                stats_path = str(Path(input_fasta).with_suffix(".simulation_stats.json"))
+                source_tracker = ReadSourceTracker.from_companion_files(stats_path)
+                if source_tracker is None:
+                    logging.warning("Could not reconstruct read source tracker from %s", stats_path)
+
             # Run simulation for this file
-            simulate_reads_pipeline(config, input_fasta)
+            simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
 
         logging.info("Illumina read simulation completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
@@ -587,8 +609,14 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed):
     default=None,
     help="Random seed for reproducibility (same seed = identical reads).",
 )
+@click.option(
+    "--track-read-source",
+    is_flag=True,
+    default=False,
+    help="Generate read source tracking manifest and coordinate map alongside simulated reads.",
+)
 @click.pass_context
-def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed):
+def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, track_read_source):
     """Simulate Oxford Nanopore long reads from one or more FASTA files.
 
     Supports batch processing following Unix philosophy:
@@ -671,8 +699,18 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed):
                 actual_out_base,
             )
 
+            # Build source tracker from companion files if requested
+            source_tracker = None
+            if track_read_source:
+                from ..read_simulator.source_tracking import ReadSourceTracker
+
+                stats_path = str(Path(input_fasta).with_suffix(".simulation_stats.json"))
+                source_tracker = ReadSourceTracker.from_companion_files(stats_path)
+                if source_tracker is None:
+                    logging.warning("Could not reconstruct read source tracker from %s", stats_path)
+
             # Run simulation for this file
-            simulate_reads_pipeline(config, input_fasta)
+            simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
 
         logging.info("ONT read simulation completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
@@ -747,6 +785,12 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed):
     default=None,
     help="Random seed for reproducibility (same seed = identical reads).",
 )
+@click.option(
+    "--track-read-source",
+    is_flag=True,
+    default=False,
+    help="Generate read source tracking manifest and coordinate map alongside simulated reads.",
+)
 @click.pass_context
 def pacbio(
     ctx,
@@ -761,6 +805,7 @@ def pacbio(
     model_file,
     threads,
     seed,
+    track_read_source,
 ):
     """Simulate PacBio HiFi reads from one or more FASTA files.
 
@@ -888,8 +933,18 @@ def pacbio(
                 actual_out_base,
             )
 
+            # Build source tracker from companion files if requested
+            source_tracker = None
+            if track_read_source:
+                from ..read_simulator.source_tracking import ReadSourceTracker
+
+                stats_path = str(Path(input_fasta).with_suffix(".simulation_stats.json"))
+                source_tracker = ReadSourceTracker.from_companion_files(stats_path)
+                if source_tracker is None:
+                    logging.warning("Could not reconstruct read source tracker from %s", stats_path)
+
             # Run simulation for this file
-            simulate_reads_pipeline(config, input_fasta)
+            simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
 
         logging.info("PacBio HiFi read simulation completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
@@ -1362,6 +1417,7 @@ def _make_args_namespace(config_path, kwargs):
         output_orfs=False,
         orf_min_aa=100,
         orf_aa_prefix=None,
+        track_read_source=kwargs.get("track_read_source", False),
     )
 
 

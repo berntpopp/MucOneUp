@@ -85,14 +85,14 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %
 # Example:
 #     SIMULATOR_MAP["promethion"] = simulate_promethion_reads_pipeline
 #
-SIMULATOR_MAP: dict[str, Callable[[dict[str, Any], str, str | None], str]] = {
-    "illumina": lambda config, input_fa, _: simulate_illumina_reads(config, input_fa),
+SIMULATOR_MAP: dict[str, Callable[..., str]] = {
+    "illumina": lambda config, input_fa, _, **kw: simulate_illumina_reads(config, input_fa, **kw),
     "ont": simulate_ont_reads_pipeline,
     "pacbio": simulate_pacbio_hifi_reads,
 }
 
 
-def simulate_reads(config: dict[str, Any], input_fa: str) -> str:
+def simulate_reads(config: dict[str, Any], input_fa: str, source_tracker: Any | None = None) -> str:
     """
     Run the complete read simulation pipeline using Strategy Pattern.
 
@@ -182,7 +182,7 @@ def simulate_reads(config: dict[str, Any], input_fa: str) -> str:
 
     # Dispatch to appropriate pipeline using Strategy Pattern
     simulator_func = SIMULATOR_MAP[simulator]
-    return simulator_func(config, input_fa, human_reference)
+    return simulator_func(config, input_fa, human_reference, source_tracker=source_tracker)
 
 
 if __name__ == "__main__":  # OK: top-level entry point

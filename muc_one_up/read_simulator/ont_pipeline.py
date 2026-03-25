@@ -33,7 +33,10 @@ from .wrappers.nanosim_wrapper import (
 
 
 def simulate_ont_reads_pipeline(
-    config: dict[str, Any], input_fa: str, human_reference: str | None = None
+    config: dict[str, Any],
+    input_fa: str,
+    human_reference: str | None = None,
+    source_tracker: Any | None = None,
 ) -> str:
     """
     Run the complete Oxford Nanopore read simulation pipeline.

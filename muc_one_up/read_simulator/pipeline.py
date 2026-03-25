@@ -66,7 +66,9 @@ from .wrappers.samtools_wrapper import (
 from .wrappers.ucsc_tools_wrapper import fa_to_twobit, run_pblat
 
 
-def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
+def simulate_reads_pipeline(
+    config: dict[str, Any], input_fa: str, source_tracker: Any | None = None
+) -> str:
     """
     Run the complete read simulation pipeline.
 
