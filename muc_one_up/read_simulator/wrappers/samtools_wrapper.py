@@ -826,7 +826,7 @@ def convert_bam_to_paired_fastq(
             if isinstance(samtools_cmd, str):
                 samtools_cmd_list = shlex.split(samtools_cmd)
             else:
-                samtools_cmd_list = samtools_cmd
+                samtools_cmd_list = list(samtools_cmd)  # type: ignore[unreachable]
 
             collate_cmd = [
                 *samtools_cmd_list,
@@ -941,7 +941,7 @@ def convert_bam_to_paired_fastq(
         if isinstance(samtools_cmd, str):
             samtools_cmd_list = shlex.split(samtools_cmd)
         else:
-            samtools_cmd_list = samtools_cmd
+            samtools_cmd_list = list(samtools_cmd)  # type: ignore[unreachable]
 
         fastq_cmd = [
             *samtools_cmd_list,
