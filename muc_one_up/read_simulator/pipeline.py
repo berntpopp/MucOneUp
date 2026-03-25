@@ -20,6 +20,7 @@ Implementation details:
 For usage information, see the main read_simulation.py module.
 """
 
+import contextlib
 import json
 import logging
 import shutil
@@ -241,6 +242,11 @@ def simulate_reads_pipeline(
     bind = rs_config.get("binding_min", 0.5)
     seed = rs_config.get("seed")
     logging.info("6. Simulating fragments (w-Wessim2)")
+    fragment_origins_path = (
+        str(Path(output_dir) / f"{output_base}_fragment_origins.tsv")
+        if source_tracker is not None
+        else None
+    )
     simulate_fragments(
         no_ns_fa,
         syser_fq,
@@ -252,6 +258,7 @@ def simulate_reads_pipeline(
         bind,
         fragments_fa,
         seed=seed,
+        fragment_origins_path=fragment_origins_path,
     )
     intermediate_files.append(psl_file)
     intermediate_files.append(fragments_fa)
@@ -531,6 +538,39 @@ def simulate_reads_pipeline(
     logging.info("Final outputs:")
     logging.info("  Aligned and indexed BAM: %s", output_bam)
     logging.info("  Paired FASTQ files (gzipped): %s and %s", reads_fq1, reads_fq2)
+
+    # Generate read source tracking manifest if tracker provided
+    if source_tracker is not None and fragment_origins_path is not None:
+        from .parsers.illumina_parser import parse_illumina_reads
+
+        logging.info("Generating read source tracking manifest...")
+
+        # Build sequence name to haplotype mapping from input FASTA
+        seq_name_to_haplotype: dict[str, int] = {}
+        try:
+            with open(input_fa) as fa:
+                hap_idx = 0
+                for line in fa:
+                    if line.startswith(">"):
+                        hap_idx += 1
+                        seq_name = line.strip().lstrip(">").split()[0]
+                        seq_name_to_haplotype[seq_name] = hap_idx
+        except OSError:
+            logging.warning("Could not read input FASTA for haplotype mapping")
+
+        origins = parse_illumina_reads(
+            sidecar_path=fragment_origins_path,
+            fastq_r1_path=reads_fq1,
+            seq_name_to_haplotype=seq_name_to_haplotype,
+        )
+        annotated = list(source_tracker.annotate_reads(origins))
+        manifest_path = str(Path(output_dir) / f"{output_base}_read_manifest.tsv.gz")
+        source_tracker.write_manifest(annotated, manifest_path)
+        logging.info("Read source manifest written: %s (%d reads)", manifest_path, len(annotated))
+
+        # Clean up sidecar after successful manifest generation
+        with contextlib.suppress(OSError):
+            Path(fragment_origins_path).unlink(missing_ok=True)
 
     # Write metadata file with tool versions and provenance
     metadata_file = write_metadata_file(

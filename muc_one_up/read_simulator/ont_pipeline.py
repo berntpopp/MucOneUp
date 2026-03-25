@@ -320,6 +320,25 @@ def simulate_ont_reads_pipeline(
     logging.info("  Aligned and indexed BAM: %s", output_bam)
     logging.info("  Reads FASTQ: %s", fastq_file)
 
+    # Generate read source tracking manifest if tracker provided
+    if source_tracker is not None:
+        from .parsers.ont_parser import parse_nanosim_reads
+
+        logging.info("Generating read source tracking manifest...")
+
+        if use_split_simulation:
+            # Parse each haplotype's reads separately using split-sim result
+            origins_hap1 = parse_nanosim_reads(result.hap1_fastq, haplotype_map=1)
+            origins_hap2 = parse_nanosim_reads(result.hap2_fastq, haplotype_map=2)
+            all_origins = origins_hap1 + origins_hap2
+        else:
+            all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
+
+        annotated = list(source_tracker.annotate_reads(all_origins))
+        manifest_path = f"{output_prefix}_read_manifest.tsv.gz"
+        source_tracker.write_manifest(annotated, manifest_path)
+        logging.info("Read source manifest written: %s (%d reads)", manifest_path, len(annotated))
+
     # Write metadata file with tool versions and provenance
     metadata_file = write_metadata_file(
         output_dir=output_dir,
