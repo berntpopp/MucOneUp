@@ -16,6 +16,7 @@ This module provides wrapper functions for samtools operations:
 
 import logging
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -664,7 +665,7 @@ class FastqConversionOptions:
 
 
 def convert_bam_to_paired_fastq(
-    samtools_cmd: str,
+    samtools_cmd: str | Sequence[str],
     input_bam: str | Path,
     output_fq1: str | Path,
     output_fq2: str | Path,
@@ -721,6 +722,10 @@ def convert_bam_to_paired_fastq(
     import subprocess
 
     opts = options or FastqConversionOptions()
+
+    # Normalize samtools_cmd to a string for shell commands
+    if not isinstance(samtools_cmd, str):
+        samtools_cmd = " ".join(samtools_cmd)
 
     # ========== VALIDATION: Input BAM ==========
     input_bam_path = Path(input_bam)
@@ -822,11 +827,7 @@ def convert_bam_to_paired_fastq(
 
         else:
             # Use subprocess.Popen piping for non-wrapped commands
-            # Split samtools_cmd if it's a string
-            if isinstance(samtools_cmd, str):
-                samtools_cmd_list = shlex.split(samtools_cmd)
-            else:
-                samtools_cmd_list = list(samtools_cmd)  # type: ignore[unreachable]
+            samtools_cmd_list = shlex.split(samtools_cmd)
 
             collate_cmd = [
                 *samtools_cmd_list,

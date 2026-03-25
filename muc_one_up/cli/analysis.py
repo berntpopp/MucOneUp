@@ -154,7 +154,14 @@ def run_orf_prediction(
 
 
 def run_read_simulation(
-    args, config, out_dir, out_base, sim_index, dual_mutation_mode, source_tracker=None
+    args,
+    config,
+    out_dir,
+    out_base,
+    sim_index,
+    dual_mutation_mode,
+    source_tracker=None,
+    source_tracker_mut=None,
 ):
     """Run read simulation pipeline if requested."""
     if not args.simulate_reads:
@@ -196,7 +203,9 @@ def run_read_simulation(
                 simulator_name,
                 sim_index,
             )
-            simulate_reads_pipeline(config, mut_fa, source_tracker=source_tracker)
+            simulate_reads_pipeline(
+                config, mut_fa, source_tracker=source_tracker_mut or source_tracker
+            )
             logging.info(
                 "%s read simulation pipeline completed for iteration %d (mutated variant).",
                 simulator_name,

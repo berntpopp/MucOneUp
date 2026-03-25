@@ -117,9 +117,8 @@ def _extract_read_names(fastq_path: str | None) -> list[str]:
                 line_num += 1
                 if line_num % 4 == 1:  # Header lines
                     name = line.strip().lstrip("@")
-                    # Remove /1 suffix if present
-                    if name.endswith("/1"):
-                        name = name[:-2]
+                    # Split on whitespace to get the read ID (drop comment fields)
+                    name = name.split()[0] if name else name
                     read_names.append(name)
     except (FileNotFoundError, OSError) as e:
         logger.warning("Could not read FASTQ for read names: %s", e)

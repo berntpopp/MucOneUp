@@ -378,7 +378,7 @@ class ReadSourceTracker:
                     f"{str(read.overlaps_vntr).lower()}\t"
                     f"{repeat_units}\t"
                     f"{str(read.overlaps_mutation).lower()}\t"
-                    f"{read.mutation_name}\t"
+                    f"{read.mutation_name if read.mutation_name else '.'}\t"
                     f"{str(read.overlaps_snp).lower()}\n"
                 )
 

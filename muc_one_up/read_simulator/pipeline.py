@@ -563,6 +563,28 @@ def simulate_reads_pipeline(
             fastq_r1_path=reads_fq1,
             seq_name_to_haplotype=seq_name_to_haplotype,
         )
+
+        # Filter origins to only include reads surviving in the final BAM
+        # (VNTR efficiency bias and downsampling may have removed reads)
+        surviving_read_ids: set[str] | None = None
+        try:
+            import pysam
+
+            with pysam.AlignmentFile(output_bam, "rb") as bam:
+                surviving_read_ids = {read.query_name for read in bam if read.query_name}
+        except (ImportError, OSError):
+            logging.debug("Could not read final BAM for read filtering; including all origins")
+
+        if surviving_read_ids is not None:
+            pre_filter_count = len(origins)
+            origins = [o for o in origins if o.read_id in surviving_read_ids]
+            if pre_filter_count != len(origins):
+                logging.info(
+                    "Filtered manifest origins: %d -> %d (matched to final BAM)",
+                    pre_filter_count,
+                    len(origins),
+                )
+
         annotated = list(source_tracker.annotate_reads(origins))
         manifest_path = str(Path(output_dir) / f"{output_base}_read_manifest.tsv.gz")
         source_tracker.write_manifest(annotated, manifest_path)

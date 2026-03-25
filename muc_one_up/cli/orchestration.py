@@ -122,9 +122,12 @@ def run_single_simulation_iteration(
         args, config, out_dir, out_base, sim_index, results, mutated_results, dual_mutation_mode
     )
 
-    # Build read source tracker if requested
+    # Build read source tracker(s) if requested
     source_tracker = None
+    source_tracker_mut = None
     if getattr(args, "track_read_source", False) and getattr(args, "simulate_reads", None):
+        from pathlib import Path
+
         from ..read_simulator.source_tracking import ReadSourceTracker
 
         # Build repeat chains dict (1-based haplotype keys)
@@ -151,7 +154,6 @@ def run_single_simulation_iteration(
         if mutation_positions:
             mut_positions = mutation_positions
             if mutation_name_str and mutation_name_str != "normal":
-                # Handle dual mode - extract the non-normal name
                 parts = mutation_name_str.split(",")
                 for p in parts:
                     if p != "normal":
@@ -165,21 +167,67 @@ def run_single_simulation_iteration(
                 if snp_list:
                     snp_info_dict[i] = snp_list
 
-        source_tracker = ReadSourceTracker(
-            repeat_chains=repeat_chains,
-            repeats_dict=repeats_dict,
-            left_const_len=left_const_len,
-            mutation_positions=mut_positions,
-            mutation_name=mut_name,
-            snp_info=snp_info_dict if snp_info_dict else None,
-        )
+        if dual_mutation_mode:
+            # Build separate trackers: normal (no mutation) and mutated (with mutation)
+            source_tracker = ReadSourceTracker(
+                repeat_chains=repeat_chains,
+                repeats_dict=repeats_dict,
+                left_const_len=left_const_len,
+                mutation_positions=[],
+                mutation_name=None,
+                snp_info=snp_info_dict if snp_info_dict else None,
+            )
 
-        # Write coordinate map
-        from pathlib import Path
+            # Build mutated chains from mutated_results
+            mut_chains = {}
+            if mutated_results:
+                for i, result in enumerate(mutated_results):
+                    _sequence, chain = result
+                    mut_chains[i + 1] = chain
 
-        coord_map_path = str(Path(out_dir) / f"{out_base}.{sim_index:03d}.repeat_coordinates.tsv")
-        source_tracker.write_coordinate_map(coord_map_path)
-        logging.info("Repeat coordinate map written: %s", coord_map_path)
+            # Get mutated SNP info
+            mut_snp_info_dict: dict[int, list[dict[str, object]]] = {}
+            if applied_snp_info_mut:
+                for i, snp_list in enumerate(applied_snp_info_mut):
+                    if snp_list:
+                        mut_snp_info_dict[i] = snp_list
+
+            source_tracker_mut = ReadSourceTracker(
+                repeat_chains=mut_chains if mut_chains else repeat_chains,
+                repeats_dict=repeats_dict,
+                left_const_len=left_const_len,
+                mutation_positions=mut_positions,
+                mutation_name=mut_name,
+                snp_info=mut_snp_info_dict if mut_snp_info_dict else None,
+            )
+
+            # Write coordinate maps for both variants
+            normal_coord_path = str(
+                Path(out_dir) / f"{out_base}.{sim_index:03d}.normal.repeat_coordinates.tsv"
+            )
+            source_tracker.write_coordinate_map(normal_coord_path)
+            logging.info("Normal repeat coordinate map written: %s", normal_coord_path)
+
+            mut_coord_path = str(
+                Path(out_dir) / f"{out_base}.{sim_index:03d}.mut.repeat_coordinates.tsv"
+            )
+            source_tracker_mut.write_coordinate_map(mut_coord_path)
+            logging.info("Mutated repeat coordinate map written: %s", mut_coord_path)
+        else:
+            source_tracker = ReadSourceTracker(
+                repeat_chains=repeat_chains,
+                repeats_dict=repeats_dict,
+                left_const_len=left_const_len,
+                mutation_positions=mut_positions,
+                mutation_name=mut_name,
+                snp_info=snp_info_dict if snp_info_dict else None,
+            )
+
+            coord_map_path = str(
+                Path(out_dir) / f"{out_base}.{sim_index:03d}.repeat_coordinates.tsv"
+            )
+            source_tracker.write_coordinate_map(coord_map_path)
+            logging.info("Repeat coordinate map written: %s", coord_map_path)
 
     # Read simulation
     run_read_simulation(
@@ -190,6 +238,7 @@ def run_single_simulation_iteration(
         sim_index,
         dual_mutation_mode,
         source_tracker=source_tracker,
+        source_tracker_mut=source_tracker_mut,
     )
 
     # Statistics

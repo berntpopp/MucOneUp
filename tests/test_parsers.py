@@ -139,6 +139,37 @@ class TestPacBioParser:
         )
         assert len(origins) == 0
 
+    def test_parse_gzipped_maf(self, tmp_path):
+        maf_content = (
+            "a\ns haplotype_1 100 60 + 5000 " + "A" * 60 + "\ns S0_0 0 60 + 60 " + "A" * 60 + "\n\n"
+        )
+        maf_gz_path = tmp_path / "test.maf.gz"
+        with gzip.open(maf_gz_path, "wt") as f:
+            f.write(maf_content)
+        origins = parse_pacbio_reads(
+            maf_paths=[str(maf_gz_path)],
+            haplotype_index=1,
+        )
+        assert len(origins) == 1
+        assert origins[0].ref_start == 100
+
+    def test_deduplicate_maf_and_maf_gz(self, tmp_path):
+        """When both .maf and .maf.gz exist, only parse once."""
+        maf_content = (
+            "a\ns ref 50 20 + 200 " + "A" * 20 + "\ns read_0 0 20 + 20 " + "A" * 20 + "\n\n"
+        )
+        maf_path = tmp_path / "sd_0001.maf"
+        maf_path.write_text(maf_content)
+        maf_gz_path = tmp_path / "sd_0001.maf.gz"
+        with gzip.open(maf_gz_path, "wt") as f:
+            f.write(maf_content)
+        # Pass both — should only get 1 read, not 2
+        origins = parse_pacbio_reads(
+            maf_paths=[str(maf_path), str(maf_gz_path)],
+            haplotype_index=1,
+        )
+        assert len(origins) == 1
+
 
 class TestIlluminaParser:
     """Tests for Illumina fragment sidecar and read parser."""
@@ -188,7 +219,7 @@ class TestIlluminaParser:
         assert origins[0].haplotype == 1
         assert origins[0].ref_start == 100
         assert origins[0].ref_end == 250
-        assert origins[0].read_id == "read_0001"
+        assert origins[0].read_id == "read_0001/1"
         assert origins[1].haplotype == 2
         assert origins[1].ref_start == 300
 

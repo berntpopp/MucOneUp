@@ -399,6 +399,26 @@ class TestReadSourceTracker:
             row = next(reader)
         assert row["repeat_units"] == "."
 
+    def test_manifest_empty_mutation_name_as_dot(self, tracker, tmp_path):
+        # Read outside mutation region on haplotype 2 (no mutation)
+        origins = [
+            ReadOrigin(
+                read_id="r1",
+                haplotype=2,
+                ref_start=70,
+                ref_end=80,
+                strand="+",
+            ),
+        ]
+        annotated = list(tracker.annotate_reads(origins))
+        path = str(tmp_path / "mut_dot_test.tsv.gz")
+        tracker.write_manifest(annotated, path)
+
+        with gzip.open(path, "rt") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            row = next(reader)
+        assert row["mutation_name"] == "."
+
 
 class TestTrackerFromCompanionFiles:
     """Tests for ReadSourceTracker.from_companion_files()."""

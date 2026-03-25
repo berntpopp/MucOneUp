@@ -562,6 +562,12 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
                 source_tracker = ReadSourceTracker.from_companion_files(stats_path)
                 if source_tracker is None:
                     logging.warning("Could not reconstruct read source tracker from %s", stats_path)
+                else:
+                    coord_map_path = str(
+                        Path(out_dir) / f"{actual_out_base}_repeat_coordinates.tsv"
+                    )
+                    source_tracker.write_coordinate_map(coord_map_path)
+                    logging.info("Repeat coordinate map written: %s", coord_map_path)
 
             # Run simulation for this file
             simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
@@ -708,6 +714,12 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
                 source_tracker = ReadSourceTracker.from_companion_files(stats_path)
                 if source_tracker is None:
                     logging.warning("Could not reconstruct read source tracker from %s", stats_path)
+                else:
+                    coord_map_path = str(
+                        Path(out_dir) / f"{actual_out_base}_repeat_coordinates.tsv"
+                    )
+                    source_tracker.write_coordinate_map(coord_map_path)
+                    logging.info("Repeat coordinate map written: %s", coord_map_path)
 
             # Run simulation for this file
             simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
@@ -942,6 +954,12 @@ def pacbio(
                 source_tracker = ReadSourceTracker.from_companion_files(stats_path)
                 if source_tracker is None:
                     logging.warning("Could not reconstruct read source tracker from %s", stats_path)
+                else:
+                    coord_map_path = str(
+                        Path(out_dir) / f"{actual_out_base}_repeat_coordinates.tsv"
+                    )
+                    source_tracker.write_coordinate_map(coord_map_path)
+                    logging.info("Repeat coordinate map written: %s", coord_map_path)
 
             # Run simulation for this file
             simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)

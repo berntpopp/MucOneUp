@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import gzip
 import logging
+from pathlib import Path
 
 from muc_one_up.read_simulator.source_tracking import ReadOrigin
 
@@ -16,9 +18,13 @@ def parse_pacbio_reads(
 ) -> list[ReadOrigin]:
     """Parse pbsim3 MAF files to extract read origins.
 
+    Automatically handles both plain (.maf) and gzip-compressed (.maf.gz)
+    files. When both exist for the same base name, only the uncompressed
+    file is parsed to avoid double-counting.
+
     Args:
         maf_paths: List of MAF file paths (one per haplotype sequence
-            from pbsim3).
+            from pbsim3). May include both .maf and .maf.gz variants.
         haplotype_index: 1-based haplotype number for all reads from
             these MAF files.
         aligned_bam: Optional aligned BAM path for fallback position
@@ -29,44 +35,59 @@ def parse_pacbio_reads(
     """
     origins: list[ReadOrigin] = []
 
+    # Deduplicate: prefer .maf over .maf.gz when both exist
+    seen_bases: set[str] = set()
+    deduplicated: list[str] = []
     for maf_path in maf_paths:
+        p = Path(maf_path)
+        if not p.exists():
+            continue
+        # Normalize to base (strip .gz if present)
+        base = str(p).removesuffix(".gz")
+        if base not in seen_bases:
+            seen_bases.add(base)
+            deduplicated.append(maf_path)
+
+    for maf_path in deduplicated:
         origins.extend(_parse_single_maf(maf_path, haplotype_index))
 
     return origins
 
 
 def _parse_single_maf(maf_path: str, haplotype_index: int) -> list[ReadOrigin]:
-    """Parse a single MAF file."""
+    """Parse a single MAF file (plain or gzip-compressed), streaming line-by-line."""
     origins: list[ReadOrigin] = []
 
+    opener = gzip.open if maf_path.endswith(".gz") else open
     try:
-        with open(maf_path) as f:
-            lines = f.readlines()
+        with opener(maf_path, "rt") as f:
+            s_lines: list[str] = []
+            in_block = False
+
+            for line in f:
+                line = line.strip()
+                if line.startswith("a"):
+                    # Start of a new alignment block
+                    in_block = True
+                    s_lines = []
+                elif in_block and line.startswith("s"):
+                    s_lines.append(line)
+                    if len(s_lines) == 2:
+                        origin = _parse_maf_block(s_lines[0], s_lines[1], haplotype_index)
+                        if origin:
+                            origins.append(origin)
+                        in_block = False
+                elif line == "" or line.startswith("#"):
+                    if in_block and len(s_lines) < 2:
+                        in_block = False
+                else:
+                    # Non-s line inside block resets
+                    if in_block and not line.startswith("s"):
+                        in_block = False
     except FileNotFoundError:
         logger.warning("MAF file not found: %s", maf_path)
-        return origins
-
-    # Parse MAF blocks: each block starts with 'a' line, followed by
-    # 's' lines. First 's' line is reference, second is read.
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        if line.startswith("a"):
-            s_lines: list[str] = []
-            i += 1
-            while i < len(lines) and len(s_lines) < 2:
-                sline = lines[i].strip()
-                if sline.startswith("s"):
-                    s_lines.append(sline)
-                elif sline == "" or sline.startswith("a"):
-                    break
-                i += 1
-
-            if len(s_lines) == 2:
-                origin = _parse_maf_block(s_lines[0], s_lines[1], haplotype_index)
-                if origin:
-                    origins.append(origin)
-        i += 1
+    except (OSError, gzip.BadGzipFile) as exc:
+        logger.warning("Could not read MAF file %s: %s", maf_path, exc)
 
     return origins
 
