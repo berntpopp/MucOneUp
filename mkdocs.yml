@@ -161,6 +161,7 @@ nav:
     - Simulation: guides/simulation.md
     - VNTR Capture Efficiency: guides/vntr-capture-efficiency.md
     - Toxic Protein Detection: guides/toxic-protein-detection.md
+    - Read Source Tracking: guides/read-source-tracking.md
     - SNaPshot Validation: guides/snapshot-validation.md
 
   - Reference:

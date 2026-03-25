@@ -75,6 +75,7 @@ def simulate_pacbio_hifi_reads(
     config: dict[str, Any],
     input_fa: str,
     human_reference: str | None = None,
+    source_tracker: Any | None = None,
 ) -> str:
     """
     Complete PacBio HiFi read simulation pipeline.
@@ -287,10 +288,17 @@ def simulate_pacbio_hifi_reads(
         intermediate_files.extend(clr_bams)
         # Note: pbsim3 may create .maf.gz and .ref files per haplotype
         # Pattern: {prefix}_0001.maf.gz, {prefix}_0001.ref, etc.
-        for clr_bam in clr_bams:
+        maf_files_by_haplotype: dict[int, list[str]] = {}
+        for hap_idx, clr_bam in enumerate(clr_bams, 1):
             base = clr_bam.replace(".bam", "")
-            intermediate_files.append(f"{base}.maf")
-            intermediate_files.append(f"{base}.maf.gz")
+            maf_path = f"{base}.maf"
+            maf_gz_path = f"{base}.maf.gz"
+            # Preserve MAF files for source tracking; clean up later
+            if source_tracker is None:
+                intermediate_files.append(maf_path)
+                intermediate_files.append(maf_gz_path)
+            else:
+                maf_files_by_haplotype[hap_idx] = [maf_path, maf_gz_path]
             intermediate_files.append(f"{base}.ref")
 
         # ==========================================================================
@@ -408,6 +416,32 @@ def simulate_pacbio_hifi_reads(
             str(duration).split(".")[0],  # Remove microseconds
         )
         logging.info(f"Final output: {aligned_bam}")
+
+        # Generate read source tracking manifest if tracker provided
+        if source_tracker is not None:
+            from .parsers.pacbio_parser import parse_pacbio_reads
+
+            logging.info("Generating read source tracking manifest...")
+            all_origins = []
+            for hap_idx, maf_paths in maf_files_by_haplotype.items():
+                existing_mafs = [p for p in maf_paths if Path(p).exists()]
+                if existing_mafs:
+                    origins = parse_pacbio_reads(
+                        maf_paths=existing_mafs,
+                        haplotype_index=hap_idx,
+                    )
+                    all_origins.extend(origins)
+
+            annotated = list(source_tracker.annotate_reads(all_origins))
+            manifest_path = f"{output_dir_path / output_base!s}_read_manifest.tsv.gz"
+            source_tracker.write_manifest(annotated, manifest_path)
+            logging.info(
+                "Read source manifest written: %s (%d reads)", manifest_path, len(annotated)
+            )
+
+            # Now clean up MAF files
+            for maf_paths in maf_files_by_haplotype.values():
+                cleanup_files(maf_paths)
 
         # Write metadata file with tool versions and provenance
         metadata_file = write_metadata_file(

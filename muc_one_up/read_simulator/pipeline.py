@@ -20,6 +20,7 @@ Implementation details:
 For usage information, see the main read_simulation.py module.
 """
 
+import contextlib
 import json
 import logging
 import shutil
@@ -66,7 +67,9 @@ from .wrappers.samtools_wrapper import (
 from .wrappers.ucsc_tools_wrapper import fa_to_twobit, run_pblat
 
 
-def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
+def simulate_reads_pipeline(
+    config: dict[str, Any], input_fa: str, source_tracker: Any | None = None
+) -> str:
     """
     Run the complete read simulation pipeline.
 
@@ -239,6 +242,11 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     bind = rs_config.get("binding_min", 0.5)
     seed = rs_config.get("seed")
     logging.info("6. Simulating fragments (w-Wessim2)")
+    fragment_origins_path = (
+        str(Path(output_dir) / f"{output_base}_fragment_origins.tsv")
+        if source_tracker is not None
+        else None
+    )
     simulate_fragments(
         no_ns_fa,
         syser_fq,
@@ -250,6 +258,7 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
         bind,
         fragments_fa,
         seed=seed,
+        fragment_origins_path=fragment_origins_path,
     )
     intermediate_files.append(psl_file)
     intermediate_files.append(fragments_fa)
@@ -529,6 +538,75 @@ def simulate_reads_pipeline(config: dict[str, Any], input_fa: str) -> str:
     logging.info("Final outputs:")
     logging.info("  Aligned and indexed BAM: %s", output_bam)
     logging.info("  Paired FASTQ files (gzipped): %s and %s", reads_fq1, reads_fq2)
+
+    # Generate read source tracking manifest if tracker provided
+    if source_tracker is not None and fragment_origins_path is not None:
+        from .parsers.illumina_parser import parse_illumina_reads
+
+        logging.info("Generating read source tracking manifest...")
+
+        # Build sequence name to haplotype mapping from input FASTA
+        seq_name_to_haplotype: dict[str, int] = {}
+        try:
+            with open(input_fa) as fa:
+                hap_idx = 0
+                for line in fa:
+                    if line.startswith(">"):
+                        hap_idx += 1
+                        seq_name = line.strip().lstrip(">").split()[0]
+                        seq_name_to_haplotype[seq_name] = hap_idx
+        except OSError:
+            logging.warning("Could not read input FASTA for haplotype mapping")
+
+        origins = parse_illumina_reads(
+            sidecar_path=fragment_origins_path,
+            fastq_r1_path=reads_fq1,
+            seq_name_to_haplotype=seq_name_to_haplotype,
+        )
+
+        # Filter origins to only include reads surviving in the final BAM
+        # (VNTR efficiency bias and downsampling may have removed reads)
+        def _normalize_read_id(read_id: str | None) -> str:
+            """Strip trailing /1 or /2 mate suffix for consistent matching.
+
+            Illumina FASTQ headers may include /1 or /2 mate indicators,
+            while BAM query_name typically omits them.
+            """
+            if not read_id:
+                return ""
+            if read_id.endswith("/1") or read_id.endswith("/2"):
+                return read_id[:-2]
+            return read_id
+
+        surviving_read_ids: set[str] | None = None
+        try:
+            import pysam
+
+            with pysam.AlignmentFile(output_bam, "rb") as bam:
+                surviving_read_ids = {
+                    _normalize_read_id(read.query_name) for read in bam if read.query_name
+                }
+        except (ImportError, OSError):
+            logging.debug("Could not read final BAM for read filtering; including all origins")
+
+        if surviving_read_ids is not None:
+            pre_filter_count = len(origins)
+            origins = [o for o in origins if _normalize_read_id(o.read_id) in surviving_read_ids]
+            if pre_filter_count != len(origins):
+                logging.info(
+                    "Filtered manifest origins: %d -> %d (matched to final BAM)",
+                    pre_filter_count,
+                    len(origins),
+                )
+
+        annotated = list(source_tracker.annotate_reads(origins))
+        manifest_path = str(Path(output_dir) / f"{output_base}_read_manifest.tsv.gz")
+        source_tracker.write_manifest(annotated, manifest_path)
+        logging.info("Read source manifest written: %s (%d reads)", manifest_path, len(annotated))
+
+        # Clean up sidecar after successful manifest generation
+        with contextlib.suppress(OSError):
+            Path(fragment_origins_path).unlink(missing_ok=True)
 
     # Write metadata file with tool versions and provenance
     metadata_file = write_metadata_file(

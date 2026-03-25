@@ -16,6 +16,7 @@ This module provides wrapper functions for samtools operations:
 
 import logging
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -664,7 +665,7 @@ class FastqConversionOptions:
 
 
 def convert_bam_to_paired_fastq(
-    samtools_cmd: str,
+    samtools_cmd: str | Sequence[str],
     input_bam: str | Path,
     output_fq1: str | Path,
     output_fq2: str | Path,
@@ -722,6 +723,16 @@ def convert_bam_to_paired_fastq(
 
     opts = options or FastqConversionOptions()
 
+    # Normalize samtools_cmd into both string and list forms:
+    # - String form: used for conda wrapper detection and shell commands
+    # - List form: used for subprocess.Popen (preserves token boundaries)
+    if isinstance(samtools_cmd, str):
+        samtools_cmd_str = samtools_cmd
+        samtools_cmd_list = shlex.split(samtools_cmd)
+    else:
+        samtools_cmd_list = list(samtools_cmd)
+        samtools_cmd_str = shlex.join(samtools_cmd_list)
+
     # ========== VALIDATION: Input BAM ==========
     input_bam_path = Path(input_bam)
 
@@ -741,7 +752,7 @@ def convert_bam_to_paired_fastq(
 
     # ========== COMMAND CONSTRUCTION ==========
     # Detect if samtools_cmd uses conda/mamba wrapping
-    use_conda_wrapper = "mamba run" in samtools_cmd or "conda run" in samtools_cmd
+    use_conda_wrapper = "mamba run" in samtools_cmd_str or "conda run" in samtools_cmd_str
 
     # Build singleton handling option
     singleton_opt = ""
@@ -782,7 +793,7 @@ def convert_bam_to_paired_fastq(
 
             # Extract the mamba/conda wrapper prefix (e.g., "mamba run -n env_wessim")
             # and use bash to run the piped command inside the environment
-            wrapper_prefix = samtools_cmd.rsplit("samtools", 1)[0].strip()
+            wrapper_prefix = samtools_cmd_str.rsplit("samtools", 1)[0].strip()
             shell_cmd = f"{wrapper_prefix} bash -c {shlex.quote(pipe_cmd)}"
 
             logging.debug(f"  Shell command: {shell_cmd}")
@@ -822,11 +833,6 @@ def convert_bam_to_paired_fastq(
 
         else:
             # Use subprocess.Popen piping for non-wrapped commands
-            # Split samtools_cmd if it's a string
-            if isinstance(samtools_cmd, str):
-                samtools_cmd_list = shlex.split(samtools_cmd)
-            else:
-                samtools_cmd_list = samtools_cmd
 
             collate_cmd = [
                 *samtools_cmd_list,
@@ -938,10 +944,6 @@ def convert_bam_to_paired_fastq(
         )
 
         # Build fastq command for non-collation path
-        if isinstance(samtools_cmd, str):
-            samtools_cmd_list = shlex.split(samtools_cmd)
-        else:
-            samtools_cmd_list = samtools_cmd
 
         fastq_cmd = [
             *samtools_cmd_list,

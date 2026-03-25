@@ -153,7 +153,16 @@ def run_orf_prediction(
             raise FileOperationError(f"Failed to import toxic_protein_detector module: {e}") from e
 
 
-def run_read_simulation(args, config, out_dir, out_base, sim_index, dual_mutation_mode):
+def run_read_simulation(
+    args,
+    config,
+    out_dir,
+    out_base,
+    sim_index,
+    dual_mutation_mode,
+    source_tracker=None,
+    source_tracker_mut=None,
+):
     """Run read simulation pipeline if requested."""
     if not args.simulate_reads:
         return
@@ -177,7 +186,7 @@ def run_read_simulation(args, config, out_dir, out_base, sim_index, dual_mutatio
                 simulator_name,
                 sim_index,
             )
-            simulate_reads_pipeline(config, normal_fa)
+            simulate_reads_pipeline(config, normal_fa, source_tracker=source_tracker)
             logging.info(
                 "%s read simulation pipeline completed for iteration %d (normal variant).",
                 simulator_name,
@@ -194,7 +203,9 @@ def run_read_simulation(args, config, out_dir, out_base, sim_index, dual_mutatio
                 simulator_name,
                 sim_index,
             )
-            simulate_reads_pipeline(config, mut_fa)
+            simulate_reads_pipeline(
+                config, mut_fa, source_tracker=source_tracker_mut or source_tracker
+            )
             logging.info(
                 "%s read simulation pipeline completed for iteration %d (mutated variant).",
                 simulator_name,
@@ -211,7 +222,7 @@ def run_read_simulation(args, config, out_dir, out_base, sim_index, dual_mutatio
             logging.info(
                 "Starting %s read simulation pipeline for iteration %d.", simulator_name, sim_index
             )
-            simulate_reads_pipeline(config, sim_fa)
+            simulate_reads_pipeline(config, sim_fa, source_tracker=source_tracker)
             logging.info(
                 "%s read simulation pipeline completed for iteration %d.", simulator_name, sim_index
             )

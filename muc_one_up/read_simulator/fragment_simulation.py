@@ -305,6 +305,7 @@ def simulate_fragments(
     bind: float,
     output_fragments: str,
     seed: int | None = None,
+    fragment_origins_path: str | None = None,
 ) -> None:
     """
     Simulate fragments (port of w-Wessim2) and write paired fragment sequences to a FASTA file.
@@ -367,6 +368,9 @@ def simulate_fragments(
         raise FileOperationError(
             f"No matches found in PSL file {psl_file}. Cannot simulate fragments."
         )
+
+    # Collect fragment origins for source tracking sidecar
+    fragment_origins: list[dict] = []
 
     # Simulate fragments and write to FASTA file
     try:
@@ -438,11 +442,31 @@ def simulate_fragments(
                     fout.write(f">{i + 1} 2;{frag_len};{tendenseq_f_fixed};{ratesseq_f_fixed}\n")
                     fout.write(f"{frag_seq}\n")
 
+                # Track fragment origin for source tracking sidecar
+                if fragment_origins_path is not None:
+                    fragment_origins.append(
+                        {
+                            "fragment_index": i + 1,
+                            "chrom": chrom,
+                            "fstart": fstart,
+                            "fend": fend,
+                            "strand": strand,
+                        }
+                    )
+
                 # Progress logging
                 if (i + 1) % 10000 == 0:
                     logging.info(f"Generated {i + 1}/{read_number} fragment pairs")
 
         logging.info(f"Fragment simulation completed. Output: {output_fragments}")
+
+        # Write fragment origins sidecar if requested
+        if fragment_origins_path is not None and fragment_origins:
+            from .parsers.illumina_parser import write_fragment_origins
+
+            write_fragment_origins(fragment_origins, fragment_origins_path)
+            logging.info("Fragment origins sidecar written: %s", fragment_origins_path)
+
     except Exception as e:
         logging.error(f"Error simulating fragments: {e!s}")
         raise FileOperationError(f"Error writing fragments to {output_fragments}: {e!s}") from e

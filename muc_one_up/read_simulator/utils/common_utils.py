@@ -56,7 +56,7 @@ def run_command(
             stderr=subprocess.PIPE,
             # Use binary mode and handle encoding manually to avoid decode errors
             universal_newlines=False,
-            preexec_fn=os.setsid,
+            preexec_fn=os.setsid,  # Unix only
         )
     except Exception as e:
         raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
@@ -97,7 +97,7 @@ def run_command(
     except subprocess.TimeoutExpired:
         logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
         try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)  # Unix only
         except Exception:
             logging.exception("Error killing process group")
         proc.wait()
