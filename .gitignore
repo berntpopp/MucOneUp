@@ -205,3 +205,6 @@ plan/
 
 # docs archive folder (dated backups)
 docs/archive/
+
+# codex
+.codex
