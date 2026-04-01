@@ -1101,7 +1101,7 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
                 idx,
                 total_files,
                 input_fasta,
-                actual_out_base,
+                Path(out_dir) / f"{actual_out_base}.orfs.fa",
             )
 
             run_orf_analysis_standalone(

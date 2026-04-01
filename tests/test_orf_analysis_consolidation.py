@@ -3,13 +3,16 @@
 import inspect
 
 
-def test_no_subprocess_orfipy_in_click_main():
-    """click_main.py should not call orfipy directly via subprocess."""
+def test_click_main_delegates_orf_analysis():
+    """click_main.py should delegate ORF analysis, not shell out directly."""
     import muc_one_up.cli.click_main as cli_mod
 
     source = inspect.getsource(cli_mod)
-    assert "orfipy" not in source, (
-        "click_main.py should not reference orfipy. Use analysis.run_orf_analysis_standalone()."
+    assert "subprocess" not in source, (
+        "click_main.py should not use subprocess to run ORF analysis."
+    )
+    assert "run_orf_analysis_standalone" in source, (
+        "click_main.py should delegate ORF analysis to analysis.run_orf_analysis_standalone()."
     )
 
 

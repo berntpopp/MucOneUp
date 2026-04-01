@@ -111,9 +111,14 @@ def simulate_reads_pipeline(
               - fragment_sd: Fragment size standard deviation (default: 50)
               - min_fragment: Minimum fragment size (default: 200)
         input_fa: Input simulated FASTA file (e.g., muc1_simulated.fa).
+        source_tracker: Optional read source tracker for provenance.
+        output_config: Optional OutputConfig controlling output directory and
+              base name. When provided, takes precedence over config-derived
+              paths and input-file-derived naming. When None, output is placed
+              alongside the input file using the input stem as base name.
 
     Returns:
-        Path to the final output BAM file ({input_basename}.bam).
+        Path to the final output BAM file.
 
     Raises:
         SystemExit: If any step in the pipeline fails.
@@ -149,14 +154,24 @@ def simulate_reads_pipeline(
         output_base = output_config.out_base
     else:
         output_dir = rs_config.get("output_dir", str(input_path.parent))
-        output_base = input_path.name.replace(".fa", "").replace(".fasta", "")
+        output_base = input_path.stem
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    # Use consistent naming for all output files based on the output_base
-    reads_fq1 = rs_config.get("output_fastq1", str(Path(output_dir) / f"{output_base}_R1.fastq.gz"))
-    reads_fq2 = rs_config.get("output_fastq2", str(Path(output_dir) / f"{output_base}_R2.fastq.gz"))
-    output_bam = rs_config.get("output_bam", str(Path(output_dir) / f"{output_base}.bam"))
+    # Use consistent naming for all output files based on the output_base.
+    # When output_config is provided, it takes full precedence over config overrides.
+    if output_config is not None:
+        reads_fq1 = str(Path(output_dir) / f"{output_base}_R1.fastq.gz")
+        reads_fq2 = str(Path(output_dir) / f"{output_base}_R2.fastq.gz")
+        output_bam = str(Path(output_dir) / f"{output_base}.bam")
+    else:
+        reads_fq1 = rs_config.get(
+            "output_fastq1", str(Path(output_dir) / f"{output_base}_R1.fastq.gz")
+        )
+        reads_fq2 = rs_config.get(
+            "output_fastq2", str(Path(output_dir) / f"{output_base}_R2.fastq.gz")
+        )
+        output_bam = rs_config.get("output_bam", str(Path(output_dir) / f"{output_base}.bam"))
 
     # Track intermediate files for cleanup
     # Note: We use two separate lists to maintain clarity of intent:
@@ -665,7 +680,7 @@ def simulate_reads_pipeline(
         logging.info("Keeping intermediate files (keep_intermediate_files=true)")
         logging.info("=" * 60)
 
-    return output_bam  # type: ignore[no-any-return]
+    return output_bam
 
 
 # For direct command-line use (backward compatibility)

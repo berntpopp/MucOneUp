@@ -126,6 +126,10 @@ def simulate_reads(
                - 'pacbio_params': Required for PacBio simulation
                See the respective pipeline documentation for detailed parameter information.
         input_fa: Input simulated FASTA file (e.g., muc1_simulated.fa).
+        source_tracker: Optional read source tracker for provenance.
+        output_config: Optional OutputConfig controlling output directory and
+               base name. When provided, overrides default output placement
+               (which derives paths from the input file).
 
     Returns:
         Path to the final output BAM file (or FASTQ if alignment skipped).

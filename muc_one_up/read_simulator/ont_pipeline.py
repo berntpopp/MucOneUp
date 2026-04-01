@@ -150,7 +150,10 @@ def simulate_ont_reads_pipeline(
     enable_split_simulation = ns_params.get("enable_split_simulation", True)
     enable_coverage_correction = ns_params.get("enable_coverage_correction", True)
 
-    # Setup output paths
+    # Setup output paths.
+    # When output_config is provided, both output_dir and output_prefix are
+    # derived from that configuration (e.g., user-specified --out-base).
+    # Otherwise, outputs default to "{input_basename}_ont.*" in the input directory.
     input_path = Path(input_fa)
     if output_config is not None:
         output_dir = str(output_config.out_dir)
