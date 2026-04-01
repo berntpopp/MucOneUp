@@ -34,8 +34,6 @@ import hashlib
 import logging
 from typing import Any
 
-import rfc8785
-
 logger = logging.getLogger(__name__)
 
 # System-specific path keys to exclude from fingerprinting
@@ -198,6 +196,14 @@ def compute_config_fingerprint(config: dict[str, Any]) -> str:
         - Large config (1MB): ~50ms
         - Very large config (10MB): ~500ms
     """
+    try:
+        import rfc8785
+    except ImportError:
+        logger.warning(
+            "rfc8785 package not available; config fingerprinting disabled"
+        )
+        return "error:fingerprint_failed:ImportError"
+
     try:
         # Step 1: Canonicalize config (filter sensitive fields)
         canonical_config = canonicalize_config(config)
