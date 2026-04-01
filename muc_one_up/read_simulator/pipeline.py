@@ -68,7 +68,10 @@ from .wrappers.ucsc_tools_wrapper import fa_to_twobit, run_pblat
 
 
 def simulate_reads_pipeline(
-    config: dict[str, Any], input_fa: str, source_tracker: Any | None = None
+    config: dict[str, Any],
+    input_fa: str,
+    source_tracker: Any | None = None,
+    output_config: Any | None = None,
 ) -> str:
     """
     Run the complete read simulation pipeline.
@@ -134,13 +137,16 @@ def simulate_reads_pipeline(
     log_tool_versions(tool_versions)
     logging.info("=" * 60)
 
-    # Create output directory if it doesn't exist
+    # Determine output directory and base name
     input_path = Path(input_fa)
-    output_dir = rs_config.get("output_dir", str(input_path.parent))
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    if output_config is not None:
+        output_dir = str(output_config.out_dir)
+        output_base = output_config.out_base
+    else:
+        output_dir = rs_config.get("output_dir", str(input_path.parent))
+        output_base = input_path.name.replace(".fa", "").replace(".fasta", "")
 
-    # Define the common base name for all output files
-    output_base = input_path.name.replace(".fa", "").replace(".fasta", "")
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # Use consistent naming for all output files based on the output_base
     reads_fq1 = rs_config.get("output_fastq1", str(Path(output_dir) / f"{output_base}_R1.fastq.gz"))
