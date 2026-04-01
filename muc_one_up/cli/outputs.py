@@ -13,6 +13,19 @@ from .config import numbered_filename
 from .snps import integrate_snps_unified
 
 
+def generate_output_base(input_path: Path, suffix: str) -> str:
+    """Generate output base name from input file path.
+
+    Args:
+        input_path: Path to input FASTA file.
+        suffix: Suffix to append (e.g., '_reads', '_orfs').
+
+    Returns:
+        Output base name (e.g., 'sample.001.simulated_reads').
+    """
+    return input_path.stem + suffix
+
+
 def write_fasta_outputs(
     args,
     config,

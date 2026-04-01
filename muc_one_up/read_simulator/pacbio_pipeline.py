@@ -57,10 +57,15 @@ References:
     - minimap2: https://github.com/lh3/minimap2
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .output_config import OutputConfig
 
 from ..exceptions import ExternalToolError, FileOperationError
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
@@ -76,6 +81,7 @@ def simulate_pacbio_hifi_reads(
     input_fa: str,
     human_reference: str | None = None,
     source_tracker: Any | None = None,
+    output_config: OutputConfig | None = None,
 ) -> str:
     """
     Complete PacBio HiFi read simulation pipeline.
@@ -235,10 +241,14 @@ def simulate_pacbio_hifi_reads(
     except ValueError as e:
         raise RuntimeError(f"Invalid PacBio parameters: {e}") from e
 
-    # Derive output directory and base name from input file path
+    # Derive output directory and base name
     input_path = Path(input_fa)
-    output_dir_path = input_path.parent
-    output_base = input_path.stem  # e.g., "sample.001.simulated" from "sample.001.simulated.fa"
+    if output_config is not None:
+        output_dir_path = output_config.out_dir
+        output_base = output_config.out_base
+    else:
+        output_dir_path = input_path.parent
+        output_base = input_path.stem
 
     # Create output directory (in case it doesn't exist)
     output_dir_path.mkdir(parents=True, exist_ok=True)

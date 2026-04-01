@@ -13,7 +13,6 @@ Follows SOLID principles: Single Responsibility, Dependency Inversion.
 
 import json
 import logging
-import subprocess
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
@@ -28,6 +27,7 @@ from .config import (
     setup_configuration,
 )
 from .orchestration import run_single_simulation_iteration
+from .outputs import generate_output_base
 
 # ============================================================================
 # CLI Context Settings
@@ -500,6 +500,7 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
     try:
         from ..config import load_config_raw
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
+        from ..read_simulator.output_config import OutputConfig
 
         # Load config once (DRY principle)
         config = load_config_raw(str(ctx.obj["config_path"]))
@@ -538,18 +539,23 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
         for idx, input_fasta in enumerate(input_fastas, start=1):
             # Determine output base name
             if out_base:
-                # User provided: use as-is (or append index for multiple files)
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
-                # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_reads")
+                actual_out_base = None
+
+            output_config = OutputConfig.from_input_fasta(
+                input_fa=input_fasta,
+                out_dir=out_dir,
+                out_base=actual_out_base,
+                suffix="_reads",
+            )
 
             logging.info(
                 "[%d/%d] Simulating Illumina reads: %s -> %s",
                 idx,
                 total_files,
                 input_fasta,
-                actual_out_base,
+                output_config.out_base,
             )
 
             # Build source tracker from companion files if requested
@@ -562,14 +568,17 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
                 if source_tracker is None:
                     logging.warning("Could not reconstruct read source tracker from %s", stats_path)
                 else:
-                    coord_map_path = str(
-                        Path(out_dir) / f"{actual_out_base}_repeat_coordinates.tsv"
-                    )
+                    coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
                     source_tracker.write_coordinate_map(coord_map_path)
                     logging.info("Repeat coordinate map written: %s", coord_map_path)
 
             # Run simulation for this file
-            simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
+            simulate_reads_pipeline(
+                config,
+                input_fasta,
+                source_tracker=source_tracker,
+                output_config=output_config,
+            )
 
         logging.info("Illumina read simulation completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
@@ -649,6 +658,7 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     try:
         from ..config import load_config_raw
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
+        from ..read_simulator.output_config import OutputConfig
 
         # Load config once (DRY principle)
         config = load_config_raw(str(ctx.obj["config_path"]))
@@ -689,18 +699,23 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
         for idx, input_fasta in enumerate(input_fastas, start=1):
             # Determine output base name
             if out_base:
-                # User provided: use as-is (or append index for multiple files)
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
-                # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_ont_reads")
+                actual_out_base = None
+
+            output_config = OutputConfig.from_input_fasta(
+                input_fa=input_fasta,
+                out_dir=out_dir,
+                out_base=actual_out_base,
+                suffix="_ont_reads",
+            )
 
             logging.info(
                 "[%d/%d] Simulating ONT reads: %s -> %s",
                 idx,
                 total_files,
                 input_fasta,
-                actual_out_base,
+                output_config.out_base,
             )
 
             # Build source tracker from companion files if requested
@@ -713,14 +728,17 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
                 if source_tracker is None:
                     logging.warning("Could not reconstruct read source tracker from %s", stats_path)
                 else:
-                    coord_map_path = str(
-                        Path(out_dir) / f"{actual_out_base}_repeat_coordinates.tsv"
-                    )
+                    coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
                     source_tracker.write_coordinate_map(coord_map_path)
                     logging.info("Repeat coordinate map written: %s", coord_map_path)
 
             # Run simulation for this file
-            simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
+            simulate_reads_pipeline(
+                config,
+                input_fasta,
+                source_tracker=source_tracker,
+                output_config=output_config,
+            )
 
         logging.info("ONT read simulation completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
@@ -870,6 +888,7 @@ def pacbio(
     try:
         from ..config import load_config_raw
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
+        from ..read_simulator.output_config import OutputConfig
 
         # Load config once (DRY principle)
         config = load_config_raw(str(ctx.obj["config_path"]))
@@ -928,18 +947,23 @@ def pacbio(
         for idx, input_fasta in enumerate(input_fastas, start=1):
             # Determine output base name
             if out_base:
-                # User provided: use as-is (or append index for multiple files)
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
-                # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_pacbio_hifi")
+                actual_out_base = None
+
+            output_config = OutputConfig.from_input_fasta(
+                input_fa=input_fasta,
+                out_dir=out_dir,
+                out_base=actual_out_base,
+                suffix="_pacbio_hifi",
+            )
 
             logging.info(
                 "[%d/%d] Simulating PacBio HiFi reads: %s -> %s",
                 idx,
                 total_files,
                 input_fasta,
-                actual_out_base,
+                output_config.out_base,
             )
 
             # Build source tracker from companion files if requested
@@ -952,14 +976,17 @@ def pacbio(
                 if source_tracker is None:
                     logging.warning("Could not reconstruct read source tracker from %s", stats_path)
                 else:
-                    coord_map_path = str(
-                        Path(out_dir) / f"{actual_out_base}_repeat_coordinates.tsv"
-                    )
+                    coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
                     source_tracker.write_coordinate_map(coord_map_path)
                     logging.info("Repeat coordinate map written: %s", coord_map_path)
 
             # Run simulation for this file
-            simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
+            simulate_reads_pipeline(
+                config,
+                input_fasta,
+                source_tracker=source_tracker,
+                output_config=output_config,
+            )
 
         logging.info("PacBio HiFi read simulation completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
@@ -1062,87 +1089,30 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
         logging.info("Processing %d FASTA file(s) for ORF prediction", total_files)
 
         for idx, input_fasta in enumerate(input_fastas, start=1):
-            # Determine output base name
+            from .analysis import run_orf_analysis_standalone
+
             if out_base:
-                # User provided: use as-is (or append index for multiple files)
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
-                # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_orfs")
+                actual_out_base = generate_output_base(Path(input_fasta), "_orfs")
 
-            orf_output = Path(out_dir) / f"{actual_out_base}.orfs.fa"
             logging.info(
                 "[%d/%d] Running ORF prediction: %s -> %s",
                 idx,
                 total_files,
                 input_fasta,
-                orf_output,
+                Path(out_dir) / f"{actual_out_base}.orfs.fa",
             )
 
-            # Run orfipy command-line tool
-            # Note: orfipy creates its own output directory, so we must:
-            # 1. Use --outdir to specify the output directory
-            # 2. Use just the filename (not full path) for --pep
-            orf_filename = f"{actual_out_base}.orfs.fa"
-            cmd = [
-                "orfipy",
-                input_fasta,
-                "--outdir",
-                str(out_dir),
-                "--pep",
-                orf_filename,
-                "--min",
-                str(orf_min_aa * 3),  # Convert AA to nucleotides
-                "--start",
-                "ATG",
-            ]
-
-            # Note: Amino acid prefix filtering is done in translate.py after orfipy runs,
-            # not via orfipy flags (which don't support this feature)
-
-            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-
-            if result.returncode != 0:
-                logging.error("orfipy failed for %s: %s", input_fasta, result.stderr)
-                continue  # Continue with next file instead of exiting
-
-            logging.info("ORF prediction completed: %s", orf_output)
-
-            # Filter by amino acid prefix if specified
-            if orf_aa_prefix and orf_output.exists():
-                from Bio import SeqIO
-
-                filtered_orfs = []
-                total_orfs = 0
-
-                for record in SeqIO.parse(str(orf_output), "fasta"):
-                    total_orfs += 1
-                    # Check if protein sequence starts with required prefix
-                    if str(record.seq).startswith(orf_aa_prefix):
-                        filtered_orfs.append(record)
-
-                # Write filtered ORFs back to file
-                SeqIO.write(filtered_orfs, str(orf_output), "fasta")
-                logging.info(
-                    "Filtered ORFs by prefix '%s': %d/%d ORFs retained",
-                    orf_aa_prefix,
-                    len(filtered_orfs),
-                    total_orfs,
-                )
-
-            # Toxic protein detection
-            if orf_output.exists():
-                from ..toxic_protein_detector import scan_orf_fasta
-
-                stats = scan_orf_fasta(
-                    str(orf_output), left_const=left_const, right_const=right_const
-                )
-
-                stats_file = Path(out_dir) / f"{actual_out_base}.orf_stats.json"
-                with stats_file.open("w") as f:
-                    json.dump(stats, f, indent=4)
-
-                logging.info("Toxic protein stats written: %s", stats_file)
+            run_orf_analysis_standalone(
+                input_fasta=input_fasta,
+                out_dir=str(out_dir),
+                out_base=actual_out_base,
+                orf_min_aa=orf_min_aa,
+                orf_aa_prefix=orf_aa_prefix,
+                left_const=left_const,
+                right_const=right_const,
+            )
 
         logging.info("ORF prediction completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
@@ -1212,7 +1182,7 @@ def stats(ctx, input_fastas, out_dir, out_base):
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
                 # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_stats")
+                actual_out_base = generate_output_base(Path(input_fasta), "_stats")
 
             logging.info("[%d/%d] Generating statistics: %s", idx, total_files, input_fasta)
 
@@ -1385,25 +1355,6 @@ def vntr_stats(ctx, input_file, structure_column, delimiter, header, output):
 # ============================================================================
 # Helper Functions
 # ============================================================================
-
-
-def _generate_output_base(input_path: Path, suffix: str) -> str:
-    """Generate output base name from input file path.
-
-    Args:
-        input_path: Path to input FASTA file
-        suffix: Suffix to append (e.g., '_reads', '_orfs')
-
-    Returns:
-        Output base name (e.g., 'sample.001.simulated_reads')
-
-    Examples:
-        >>> _generate_output_base(Path('sample.001.simulated.fa'), '_reads')
-        'sample.001.simulated_reads'
-        >>> _generate_output_base(Path('/path/sample.fa'), '_orfs')
-        'sample_orfs'
-    """
-    return input_path.stem + suffix
 
 
 def _make_args_namespace(config_path, kwargs):
