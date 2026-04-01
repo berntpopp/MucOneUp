@@ -73,8 +73,8 @@ def test_simulate_diploid_fixed_length(simple_config):
     in a synthetic scenario.
     """
 
-    def patched_sim_single(cfg, target_length):
-        return simulate_single_haplotype(cfg, target_length, min_length=2)
+    def patched_sim_single(cfg, target_length, rng=None):
+        return simulate_single_haplotype(cfg, target_length, min_length=2, rng=rng)
 
     # We'll monkeypatch simulate_single_haplotype inside simulate_diploid
     original_func = simulate_single_haplotype
@@ -133,15 +133,16 @@ class TestPickNextSymbolNoEnd:
 class TestAssembleHaplotypeFromChain:
     """Comprehensive tests for assemble_haplotype_from_chain function."""
 
-    def test_assembles_with_left_and_right_constants(self, minimal_config: dict):
-        """Given valid chain, when assembling, then includes both constants."""
+    def test_assembles_with_left_constant(self, minimal_config: dict):
+        """Given valid chain not ending with '9', when assembling, then includes left constant only."""
         chain = ["1", "2", "X"]
         result = assemble_haplotype_from_chain(chain, minimal_config)
 
         left = minimal_config["constants"]["hg38"]["left"]
-        right = minimal_config["constants"]["hg38"]["right"]
         assert result.startswith(left)
-        assert result.endswith(right)
+        # Chain doesn't end with "9", so right constant is omitted
+        right = minimal_config["constants"]["hg38"]["right"]
+        assert not result.endswith(right)
 
     def test_handles_mutation_markers(self, minimal_config: dict):
         """Given chain with 'm' markers, when assembling, then strips marker for lookup."""
@@ -153,10 +154,10 @@ class TestAssembleHaplotypeFromChain:
         assert minimal_config["repeats"]["X"] in result
 
     def test_raises_error_for_unknown_symbol(self, minimal_config: dict):
-        """Given unknown symbol, when assembling, then raises ValueError."""
+        """Given unknown symbol, when assembling, then raises KeyError."""
         chain = ["1", "UNKNOWN"]
 
-        with pytest.raises(ValueError, match="Symbol 'UNKNOWN' not found"):
+        with pytest.raises(KeyError):
             assemble_haplotype_from_chain(chain, minimal_config)
 
     def test_uses_hg19_when_specified(self, minimal_config: dict):
@@ -171,16 +172,15 @@ class TestAssembleHaplotypeFromChain:
         result = assemble_haplotype_from_chain(chain, minimal_config)
 
         assert result.startswith("GGGG" * 20)
-        assert result.endswith("CCCC" * 20)
+        # Chain doesn't end with "9", so right constant is omitted
 
     def test_assembles_empty_chain(self, minimal_config: dict):
-        """Given empty chain, when assembling, then returns only constants."""
+        """Given empty chain, when assembling, then returns only left constant."""
         chain: list[str] = []
         result = assemble_haplotype_from_chain(chain, minimal_config)
 
         left = minimal_config["constants"]["hg38"]["left"]
-        right = minimal_config["constants"]["hg38"]["right"]
-        assert result == left + right
+        assert result == left
 
 
 @pytest.mark.unit

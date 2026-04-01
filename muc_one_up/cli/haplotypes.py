@@ -4,6 +4,8 @@ Haplotype generation functions for MucOneUp CLI.
 Single Responsibility: Generate diploid haplotypes from configuration.
 """
 
+import random
+
 from ..exceptions import SimulationError
 from ..simulate import simulate_diploid, simulate_from_chains
 
@@ -26,6 +28,9 @@ def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[tup
     Raises:
         SimulationError: If simulation fails
     """
+    # Create explicit RNG from seed
+    rng = random.Random(args.seed) if args.seed is not None else None
+
     try:
         if fixed_conf == "from_structure":
             results = simulate_from_chains(predefined_chains=predefined_chains, config=config)
@@ -34,7 +39,8 @@ def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[tup
                 config=config,
                 num_haplotypes=args.num_haplotypes,
                 fixed_lengths=fixed_conf,
-                seed=args.seed,
+                rng=rng,
+                seed=args.seed if rng is None else None,
             )
         return results
     except Exception as e:

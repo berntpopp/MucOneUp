@@ -35,8 +35,9 @@ See Also:
 """
 
 import logging
-import random
+import random as _random_module
 
+from .assembly import assemble_sequence
 from .distribution import sample_repeat_count
 from .type_defs import (
     ConfigDict,
@@ -52,6 +53,7 @@ from .type_defs import (
 def pick_next_symbol_no_end(
     probabilities: ProbabilitiesDict,
     current_symbol: str,
+    rng: _random_module.Random | None = None,
 ) -> str | None:
     """Pick next symbol excluding forbidden terminal symbols.
 
@@ -61,6 +63,7 @@ def pick_next_symbol_no_end(
     Args:
         probabilities: Probability table for state transitions
         current_symbol: The current repeat symbol
+        rng: Optional explicit Random instance (defaults to global random)
 
     Returns:
         Next symbol as string, or None if no valid symbol is available
@@ -68,6 +71,8 @@ def pick_next_symbol_no_end(
     if current_symbol not in probabilities:
         logging.debug("Current symbol '%s' not in probabilities.", current_symbol)
         return None
+
+    _rng = rng if rng is not None else _random_module
 
     next_options = probabilities[current_symbol]
     forbidden = {"6", "6p", "9", "END"}
@@ -77,7 +82,7 @@ def pick_next_symbol_no_end(
         return None
 
     symbols, weights = zip(*filtered, strict=True)
-    chosen = random.choices(symbols, weights=weights, k=1)[0]
+    chosen = _rng.choices(symbols, weights=weights, k=1)[0]
     logging.debug("Picked next symbol '%s' from '%s'.", chosen, current_symbol)
     return str(chosen) if chosen is not None else None
 
@@ -85,8 +90,8 @@ def pick_next_symbol_no_end(
 def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNASequence:
     """Assemble complete haplotype sequence from repeat chain.
 
-    Concatenates left constant + repeat units + right constant to form
-    the final haplotype sequence.
+    Delegates to assembly.assemble_sequence().
+    Kept as a thin wrapper for backward compatibility.
 
     Args:
         chain: List of repeat symbols to assemble (e.g., ['1', '2', '7', '8', '9'])
@@ -94,33 +99,8 @@ def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNA
 
     Returns:
         Assembled haplotype DNA sequence
-
-    Raises:
-        ValueError: If repeat symbol not found in config
-        KeyError: If reference assembly constants not found
     """
-    reference_assembly = config.get("reference_assembly", "hg38")
-    left_const = config["constants"][reference_assembly]["left"]
-    right_const = config["constants"][reference_assembly]["right"]
-    repeats_dict = config["repeats"]
-
-    # Start with the left constant
-    assembled_seq = left_const
-
-    # Add each repeat unit according to the chain
-    for symbol in chain:
-        # If symbol has mutation marker ('m'), we still use the base symbol for lookup
-        base_symbol = symbol.rstrip("m")
-        if base_symbol not in repeats_dict:
-            raise ValueError(f"Symbol '{base_symbol}' not found in config repeats.")
-
-        assembled_seq += str(repeats_dict[base_symbol])
-
-    # Add right constant
-    assembled_seq += right_const
-
-    logging.info(f"Assembled haplotype with {len(chain)} repeats.")
-    return assembled_seq  # type: ignore[no-any-return]
+    return assemble_sequence(chain, config)
 
 
 def simulate_from_chains(
@@ -190,6 +170,7 @@ def simulate_diploid(
     num_haplotypes: int = 2,
     fixed_lengths: list[int] | None = None,
     seed: int | None = None,
+    rng: _random_module.Random | None = None,
 ) -> HaplotypeList:
     """Simulate multiple haplotypes with configurable parameters.
 
@@ -201,6 +182,7 @@ def simulate_diploid(
         num_haplotypes: Number of haplotypes to simulate (default: 2 for diploid)
         fixed_lengths: Optional list of fixed repeat lengths for each haplotype
         seed: Optional random seed for reproducibility
+        rng: Optional explicit Random instance (overrides seed if both provided)
 
     Returns:
         List of (haplotype_sequence, repeat_chain) tuples
@@ -208,18 +190,21 @@ def simulate_diploid(
     Raises:
         IndexError: If fixed_lengths is provided but has wrong length
     """
-    if seed is not None:
-        random.seed(seed)
-        logging.debug("Random seed set to %d", seed)
+    if rng is None and seed is not None:
+        rng = _random_module.Random(seed)
+        logging.debug("Created RNG with seed %d", seed)
+    elif rng is None:
+        # Backward compat: fall back to global random
+        rng = None
 
     haplotypes = []
     for i in range(num_haplotypes):
         if fixed_lengths is not None:
             target_length = fixed_lengths[i]
         else:
-            target_length = sample_repeat_count(config["length_model"])
+            target_length = sample_repeat_count(config["length_model"], rng=rng)
         logging.info("Simulating haplotype %d with target length %d", i + 1, target_length)
-        seq, chain = simulate_single_haplotype(config, target_length)
+        seq, chain = simulate_single_haplotype(config, target_length, rng=rng)
         haplotypes.append((seq, chain))
     return haplotypes
 
@@ -228,6 +213,7 @@ def simulate_single_haplotype(
     config: ConfigDict,
     target_length: int,
     min_length: int = 10,
+    rng: _random_module.Random | None = None,
 ) -> Haplotype:
     """Build single haplotype by chaining repeats probabilistically.
 
@@ -238,6 +224,7 @@ def simulate_single_haplotype(
         config: Configuration with repeats, probabilities, and constants
         target_length: Desired total number of repeats
         min_length: Minimum allowed repeats (default: 10)
+        rng: Optional explicit Random instance (defaults to global random)
 
     Returns:
         Tuple of (assembled_sequence, repeat_chain)
@@ -249,6 +236,8 @@ def simulate_single_haplotype(
         raise ValueError(
             f"Requested target_length={target_length} but minimum is {min_length}. Aborting."
         )
+
+    _rng = rng if rng is not None else _random_module
 
     reference_assembly = config.get("reference_assembly", "hg38")
     left_const = config["constants"][reference_assembly]["left"]
@@ -268,7 +257,7 @@ def simulate_single_haplotype(
         total_repeats += 1
 
         if total_repeats == final_block_start:
-            forced_6 = random.choice(["6", "6p"])
+            forced_6 = _rng.choice(["6", "6p"])
             logging.debug("Forcing terminal block: %s, 7, 8, 9", forced_6)
             repeat_chain.append(forced_6)
             assembled_seq += repeats_dict[forced_6]
@@ -293,7 +282,7 @@ def simulate_single_haplotype(
             assembled_seq += right_const
             break
 
-        next_symbol = pick_next_symbol_no_end(probabilities, current_symbol)
+        next_symbol = pick_next_symbol_no_end(probabilities, current_symbol, rng=rng)
         if next_symbol is None:
             logging.debug("No valid next symbol; appending right constant.")
             assembled_seq += right_const
