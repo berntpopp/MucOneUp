@@ -41,7 +41,7 @@ See Also:
 """
 
 import logging
-import random
+import random as _random_module
 
 from .assembly import assemble_sequence
 from .type_defs import (
@@ -88,6 +88,7 @@ def apply_mutations(
     results: HaplotypeList,
     mutation_name: MutationName,
     targets: MutationTargets,
+    rng: _random_module.Random | None = None,
 ) -> tuple[HaplotypeList, dict[int, list[tuple[int, str]]]]:
     """Apply named mutation to specific haplotype positions.
 
@@ -173,7 +174,8 @@ def apply_mutations(
                 )
 
             # In non-strict mode, force a change to a random allowed repeat
-            new_symbol = random.choice(list(allowed_repeats))
+            _rng = rng if rng is not None else _random_module
+            new_symbol = _rng.choice(list(allowed_repeats))
             logging.warning(
                 "Forcing change at haplotype %d, repeat %d: %s -> %s for mutation '%s'",
                 hap_i,
