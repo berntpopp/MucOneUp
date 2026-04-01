@@ -42,7 +42,15 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, cast
 
-from .config_fingerprint import compute_config_fingerprint
+try:
+    from .config_fingerprint import compute_config_fingerprint
+except ImportError:
+
+    def compute_config_fingerprint(config: dict) -> str:  # type: ignore[misc]
+        """Fallback when config_fingerprint module cannot be loaded."""
+        return "error:fingerprint_failed:ImportError"
+
+
 from .version import __version__
 
 logger = logging.getLogger(__name__)
