@@ -176,7 +176,7 @@ def apply_mutations(
                 )
 
             # In non-strict mode, force a change to a random allowed repeat
-            new_symbol = _rng.choice(list(allowed_repeats))
+            new_symbol = _rng.choice(sorted(allowed_repeats))
             logging.warning(
                 "Forcing change at haplotype %d, repeat %d: %s -> %s for mutation '%s'",
                 hap_i,

@@ -34,22 +34,21 @@ def assemble_sequence(chain: RepeatChain, config: ConfigDict) -> DNASequence:
         Assembled DNA sequence string.
 
     Raises:
-        KeyError: If a repeat symbol (after stripping 'm') is not in config.
+        KeyError: If a repeat symbol (after stripping 'm') is not in config,
+            or if required constants for the reference assembly are missing.
     """
     repeats_dict = config["repeats"]
     ref_assembly = config.get("reference_assembly", "hg38")
-    constants = config.get("constants", {}).get(ref_assembly, {})
-    left_const = constants.get("left", "")
-    right_const = constants.get("right", "")
+    constants = config["constants"][ref_assembly]
+    left_const = constants["left"]
+    right_const = constants["right"]
 
     # Build repeat region
     parts: list[str] = [left_const]
     for symbol in chain:
         base_symbol = symbol.rstrip("m")
         if base_symbol not in repeats_dict:
-            raise KeyError(
-                f"Repeat symbol '{base_symbol}' not found in config repeats"
-            )
+            raise KeyError(f"Repeat symbol '{base_symbol}' not found in config repeats")
         parts.append(repeats_dict[base_symbol])
 
     # Right constant only if chain ends with canonical terminal repeat "9"

@@ -20,6 +20,7 @@ def pick_next_repeat(
         probabilities: Probability table mapping current state to next state probabilities
         current_symbol: The current repeat symbol
         force_end: Boolean flag to force end state
+        rng: Optional explicit Random instance. Defaults to global random module.
 
     Returns:
         The next symbol as a string

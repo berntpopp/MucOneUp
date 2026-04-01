@@ -90,27 +90,35 @@ class TestAssembleSequence:
         assert seq == left + r9 + right
 
 
-def test_simulate_uses_centralized_assembly():
-    """simulate.py should delegate to assembly.assemble_sequence."""
-    import inspect
+def test_simulate_delegates_to_centralized_assembly():
+    """simulate.assemble_haplotype_from_chain should delegate to assemble_sequence."""
+    from unittest.mock import patch
 
-    import muc_one_up.simulate as mod
+    from muc_one_up.simulate import assemble_haplotype_from_chain
 
-    source = inspect.getsource(mod)
-    assert (
-        "from .assembly import assemble_sequence" in source
-        or "from muc_one_up.assembly import assemble_sequence" in source
-    ), "simulate.py should import assemble_sequence from assembly module"
+    config = {
+        "repeats": {"1": "ACGT", "9": "TGCA"},
+        "constants": {"hg38": {"left": "L", "right": "R"}},
+        "reference_assembly": "hg38",
+    }
+    with patch("muc_one_up.simulate.assemble_sequence", return_value="MOCKED") as mock:
+        result = assemble_haplotype_from_chain(["1", "9"], config)
+    mock.assert_called_once_with(["1", "9"], config)
+    assert result == "MOCKED"
 
 
-def test_mutate_uses_centralized_assembly():
-    """mutate.py should delegate to assembly.assemble_sequence."""
-    import inspect
+def test_mutate_delegates_to_centralized_assembly():
+    """mutate.rebuild_haplotype_sequence should delegate to assemble_sequence."""
+    from unittest.mock import patch
 
-    import muc_one_up.mutate as mod
+    from muc_one_up.mutate import rebuild_haplotype_sequence
 
-    source = inspect.getsource(mod)
-    assert (
-        "from .assembly import assemble_sequence" in source
-        or "from muc_one_up.assembly import assemble_sequence" in source
-    ), "mutate.py should import assemble_sequence from assembly module"
+    config = {
+        "repeats": {"1": "ACGT", "9": "TGCA"},
+        "constants": {"hg38": {"left": "L", "right": "R"}},
+        "reference_assembly": "hg38",
+    }
+    with patch("muc_one_up.mutate.assemble_sequence", return_value="MOCKED") as mock:
+        result = rebuild_haplotype_sequence(["1", "9"], config)
+    mock.assert_called_once_with(["1", "9"], config)
+    assert result == "MOCKED"
