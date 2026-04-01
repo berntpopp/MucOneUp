@@ -596,14 +596,10 @@ def load_config_raw(config_path: str) -> dict[str, Any]:
         config = json.load(fh)
 
     # Normalize constants format: convert flat format to nested format
-    if (
-        "constants" in config
-        and "left" in config["constants"]
-        and "right" in config["constants"]
-    ):
+    if "constants" in config and "left" in config["constants"] and "right" in config["constants"]:
         ref_assembly = config.get("reference_assembly", "hg38")
         old_constants = config["constants"].copy()
         config["constants"] = {ref_assembly: old_constants}
         logging.debug("Normalized flat constants format to nested format")
 
-    return config
+    return config  # type: ignore[no-any-return]

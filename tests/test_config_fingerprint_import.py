@@ -19,10 +19,6 @@ def test_config_fingerprint_module_imports_without_rfc8785_at_top_level():
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                assert alias.name != "rfc8785", (
-                    "rfc8785 should not be imported at module level"
-                )
+                assert alias.name != "rfc8785", "rfc8785 should not be imported at module level"
         elif isinstance(node, ast.ImportFrom):
-            assert node.module != "rfc8785", (
-                "rfc8785 should not be imported at module level"
-            )
+            assert node.module != "rfc8785", "rfc8785 should not be imported at module level"

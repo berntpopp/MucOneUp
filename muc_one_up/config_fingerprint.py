@@ -197,11 +197,9 @@ def compute_config_fingerprint(config: dict[str, Any]) -> str:
         - Very large config (10MB): ~500ms
     """
     try:
-        import rfc8785
+        import rfc8785  # type: ignore[import-not-found]
     except ImportError:
-        logger.warning(
-            "rfc8785 package not available; config fingerprinting disabled"
-        )
+        logger.warning("rfc8785 package not available; config fingerprinting disabled")
         return "error:fingerprint_failed:ImportError"
 
     try:
