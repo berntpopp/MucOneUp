@@ -733,13 +733,16 @@ class TestErrorHandling:
         assert result.exit_code in [1, 2]  # Expected error
 
     def test_keyboard_interrupt_handling(self, runner, temp_config):
-        """Test KeyboardInterrupt handling exists in implementation."""
-        # Verify KeyboardInterrupt handler is in the module source
+        """Test KeyboardInterrupt handling exists in implementation.
+
+        The centralized cli_error_handler decorator now provides this;
+        verify it exists in error_handling module.
+        """
         import inspect
 
-        from muc_one_up.cli import click_main
+        from muc_one_up.cli import error_handling
 
-        module_source = inspect.getsource(click_main)
+        module_source = inspect.getsource(error_handling)
         assert "except KeyboardInterrupt:" in module_source
         assert "ctx.exit(130)" in module_source  # Standard Unix code for SIGINT
 
