@@ -65,7 +65,7 @@ class TestAssembleSequence:
         assert seq == left + r1 + r2
 
     def test_unknown_symbol_raises(self, config):
-        with pytest.raises(KeyError):
+        with pytest.raises(KeyError, match="UNKNOWN"):
             assemble_sequence(["UNKNOWN"], config)
 
     def test_hg19_assembly(self):

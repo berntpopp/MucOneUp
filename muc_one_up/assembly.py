@@ -46,10 +46,16 @@ def assemble_sequence(chain: RepeatChain, config: ConfigDict) -> DNASequence:
     parts: list[str] = [left_const]
     for symbol in chain:
         base_symbol = symbol.rstrip("m")
+        if base_symbol not in repeats_dict:
+            raise KeyError(
+                f"Repeat symbol '{base_symbol}' not found in config repeats"
+            )
         parts.append(repeats_dict[base_symbol])
 
     # Right constant only if chain ends with canonical terminal repeat "9"
-    if chain and chain[-1].replace("m", "") == "9":
+    if chain and chain[-1].rstrip("m") == "9":
         parts.append(right_const)
+    elif chain:
+        logger.debug("Chain does not end with '9'; right constant omitted.")
 
     return "".join(parts)

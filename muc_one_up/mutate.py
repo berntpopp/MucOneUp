@@ -135,6 +135,8 @@ def apply_mutations(
     strict_mode = mutation_def.get("strict_mode", False)
     changes = mutation_def["changes"]
 
+    _rng = rng if rng is not None else _random_module
+
     updated_results = list(results)
     mutated_units: dict[
         int, list[tuple[int, str]]
@@ -174,7 +176,6 @@ def apply_mutations(
                 )
 
             # In non-strict mode, force a change to a random allowed repeat
-            _rng = rng if rng is not None else _random_module
             new_symbol = _rng.choice(list(allowed_repeats))
             logging.warning(
                 "Forcing change at haplotype %d, repeat %d: %s -> %s for mutation '%s'",

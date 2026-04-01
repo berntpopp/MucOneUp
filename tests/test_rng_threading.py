@@ -23,15 +23,17 @@ class TestDistributionRNG:
         assert 20 <= result <= 60
 
     def test_sample_repeat_count_reproducible_with_rng(self):
-        """Same RNG seed should produce same results."""
+        """Same RNG seed should produce same sequence of results."""
         length_model = {
             "distribution": "normal",
             "min_repeats": 20,
             "max_repeats": 60,
             "mean_repeats": 40,
         }
-        results_a = [sample_repeat_count(length_model, rng=random.Random(42)) for _ in range(5)]
-        results_b = [sample_repeat_count(length_model, rng=random.Random(42)) for _ in range(5)]
+        rng_a = random.Random(42)
+        results_a = [sample_repeat_count(length_model, rng=rng_a) for _ in range(5)]
+        rng_b = random.Random(42)
+        results_b = [sample_repeat_count(length_model, rng=rng_b) for _ in range(5)]
         assert results_a == results_b
 
     def test_sample_repeat_count_defaults_to_global_random(self):
@@ -55,10 +57,12 @@ class TestProbabilitiesRNG:
         assert result in ("2", "3")
 
     def test_pick_next_repeat_reproducible_with_rng(self):
-        """Same RNG seed should produce same sequence."""
+        """Same RNG seed should produce same sequence of results."""
         probs = {"1": {"2": 0.5, "3": 0.5}, "2": {}, "3": {}}
-        results_a = [pick_next_repeat(probs, "1", rng=random.Random(42)) for _ in range(10)]
-        results_b = [pick_next_repeat(probs, "1", rng=random.Random(42)) for _ in range(10)]
+        rng_a = random.Random(42)
+        results_a = [pick_next_repeat(probs, "1", rng=rng_a) for _ in range(10)]
+        rng_b = random.Random(42)
+        results_b = [pick_next_repeat(probs, "1", rng=rng_b) for _ in range(10)]
         assert results_a == results_b
 
     def test_pick_next_repeat_defaults_to_global_random(self):

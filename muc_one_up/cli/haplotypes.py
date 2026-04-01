@@ -39,8 +39,8 @@ def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[tup
                 config=config,
                 num_haplotypes=args.num_haplotypes,
                 fixed_lengths=fixed_conf,
-                seed=args.seed,
                 rng=rng,
+                seed=args.seed if rng is None else None,
             )
         return results
     except Exception as e:
