@@ -37,6 +37,7 @@ See Also:
 import logging
 import random
 
+from .assembly import assemble_sequence
 from .distribution import sample_repeat_count
 from .type_defs import (
     ConfigDict,
@@ -85,8 +86,8 @@ def pick_next_symbol_no_end(
 def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNASequence:
     """Assemble complete haplotype sequence from repeat chain.
 
-    Concatenates left constant + repeat units + right constant to form
-    the final haplotype sequence.
+    Delegates to assembly.assemble_sequence().
+    Kept as a thin wrapper for backward compatibility.
 
     Args:
         chain: List of repeat symbols to assemble (e.g., ['1', '2', '7', '8', '9'])
@@ -94,33 +95,8 @@ def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNA
 
     Returns:
         Assembled haplotype DNA sequence
-
-    Raises:
-        ValueError: If repeat symbol not found in config
-        KeyError: If reference assembly constants not found
     """
-    reference_assembly = config.get("reference_assembly", "hg38")
-    left_const = config["constants"][reference_assembly]["left"]
-    right_const = config["constants"][reference_assembly]["right"]
-    repeats_dict = config["repeats"]
-
-    # Start with the left constant
-    assembled_seq = left_const
-
-    # Add each repeat unit according to the chain
-    for symbol in chain:
-        # If symbol has mutation marker ('m'), we still use the base symbol for lookup
-        base_symbol = symbol.rstrip("m")
-        if base_symbol not in repeats_dict:
-            raise ValueError(f"Symbol '{base_symbol}' not found in config repeats.")
-
-        assembled_seq += str(repeats_dict[base_symbol])
-
-    # Add right constant
-    assembled_seq += right_const
-
-    logging.info(f"Assembled haplotype with {len(chain)} repeats.")
-    return assembled_seq  # type: ignore[no-any-return]
+    return assemble_sequence(chain, config)
 
 
 def simulate_from_chains(

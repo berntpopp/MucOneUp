@@ -88,3 +88,16 @@ class TestAssembleSequence:
         right = config["constants"]["hg38"]["right"]
         r9 = config["repeats"]["9"]
         assert seq == left + r9 + right
+
+
+def test_simulate_uses_centralized_assembly():
+    """simulate.py should delegate to assembly.assemble_sequence."""
+    import inspect
+
+    import muc_one_up.simulate as mod
+
+    source = inspect.getsource(mod)
+    assert (
+        "from .assembly import assemble_sequence" in source
+        or "from muc_one_up.assembly import assemble_sequence" in source
+    ), "simulate.py should import assemble_sequence from assembly module"
