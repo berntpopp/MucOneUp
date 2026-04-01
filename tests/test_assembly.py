@@ -45,9 +45,9 @@ class TestAssembleSequence:
         left = config["constants"]["hg38"]["left"]
         right = config["constants"]["hg38"]["right"]
         r1 = config["repeats"]["1"]
-        rX = config["repeats"]["X"]
+        r_x = config["repeats"]["X"]
         r9 = config["repeats"]["9"]
-        assert seq == left + r1 + rX + r9 + right
+        assert seq == left + r1 + r_x + r9 + right
 
     def test_empty_chain(self, config):
         """Empty chain produces only the left constant (no terminal '9' means no right)."""
