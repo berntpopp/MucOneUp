@@ -498,12 +498,11 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
     require_config(ctx)
 
     try:
+        from ..config import load_config_raw
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
 
         # Load config once (DRY principle)
-        config_path = Path(ctx.obj["config_path"])
-        with config_path.open() as f:
-            config = json.load(f)
+        config = load_config_raw(str(ctx.obj["config_path"]))
 
         # Configure read simulation (shared for all files)
         if "read_simulation" not in config:
@@ -648,12 +647,11 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     require_config(ctx)
 
     try:
+        from ..config import load_config_raw
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
 
         # Load config once (DRY principle)
-        config_path = Path(ctx.obj["config_path"])
-        with config_path.open() as f:
-            config = json.load(f)
+        config = load_config_raw(str(ctx.obj["config_path"]))
 
         # Configure ONT simulation (shared for all files)
         if "read_simulation" not in config:
@@ -870,12 +868,11 @@ def pacbio(
     require_config(ctx)
 
     try:
+        from ..config import load_config_raw
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
 
         # Load config once (DRY principle)
-        config_path = Path(ctx.obj["config_path"])
-        with config_path.open() as f:
-            config = json.load(f)
+        config = load_config_raw(str(ctx.obj["config_path"]))
 
         # Configure PacBio simulation (shared for all files)
         if "read_simulation" not in config:
@@ -1043,11 +1040,13 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
 
     try:
         # Load config once for toxic protein detection (DRY principle)
-        config_path = Path(ctx.obj["config_path"])
-        with config_path.open() as f:
-            config = json.load(f)
-        left_const = config.get("constants", {}).get("left")
-        right_const = config.get("constants", {}).get("right")
+        from ..config import load_config_raw
+
+        config = load_config_raw(str(ctx.obj["config_path"]))
+        ref_assembly = config.get("reference_assembly", "hg38")
+        assembly_constants = config.get("constants", {}).get(ref_assembly, {})
+        left_const = assembly_constants.get("left")
+        right_const = assembly_constants.get("right")
 
         # Warn if --out-base provided for multiple files
         if len(input_fastas) > 1 and out_base:
@@ -1334,9 +1333,9 @@ def vntr_stats(ctx, input_file, structure_column, delimiter, header, output):
 
     try:
         # Load config for known repeats (DRY principle - reuse existing pattern)
-        config_path = Path(ctx.obj["config_path"])
-        with config_path.open() as f:
-            config = json.load(f)
+        from ..config import load_config_raw
+
+        config = load_config_raw(str(ctx.obj["config_path"]))
 
         known_repeats = config.get("repeats", {})
         if not known_repeats:

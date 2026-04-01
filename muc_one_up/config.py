@@ -569,3 +569,41 @@ def load_config(config_path: str) -> dict[str, Any]:
         raise
 
     return config  # type: ignore[no-any-return]
+
+
+def load_config_raw(config_path: str) -> dict[str, Any]:
+    """Load config JSON and normalize constants without full schema validation.
+
+    Use this for CLI subcommands (reads, analyze) that accept partial configs
+    where full schema validation is too strict. Normalizes flat constants
+    format to nested assembly-keyed format.
+
+    Args:
+        config_path: Path to the JSON config file
+
+    Returns:
+        Configuration dictionary with normalized constants
+
+    Raises:
+        FileNotFoundError: If the config file does not exist
+        json.JSONDecodeError: If the config file is not valid JSON
+    """
+    if not Path(config_path).exists():
+        logging.error("Config file not found: %s", config_path)
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+
+    with Path(config_path).open() as fh:
+        config = json.load(fh)
+
+    # Normalize constants format: convert flat format to nested format
+    if (
+        "constants" in config
+        and "left" in config["constants"]
+        and "right" in config["constants"]
+    ):
+        ref_assembly = config.get("reference_assembly", "hg38")
+        old_constants = config["constants"].copy()
+        config["constants"] = {ref_assembly: old_constants}
+        logging.debug("Normalized flat constants format to nested format")
+
+    return config
