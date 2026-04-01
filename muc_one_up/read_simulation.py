@@ -192,7 +192,9 @@ def simulate_reads(
     # Dispatch to appropriate pipeline using Strategy Pattern
     simulator_func = SIMULATOR_MAP[simulator]
     return simulator_func(
-        config, input_fa, human_reference,
+        config,
+        input_fa,
+        human_reference,
         source_tracker=source_tracker,
         output_config=output_config,
     )
