@@ -3,6 +3,7 @@
 import ast
 import inspect
 
+import muc_one_up.cli.analysis as analysis_module
 import muc_one_up.cli.click_main as cli_module
 
 
@@ -31,4 +32,19 @@ def test_no_raw_json_load_in_cli_commands():
     assert violations == [], (
         f"Found json.load() calls at lines {violations} in click_main.py. "
         f"Use config.load_config() instead to ensure constants normalization."
+    )
+
+
+def test_no_flat_constant_access_in_analysis():
+    """analysis.py must not use config['constants']['left'] (flat format).
+
+    After load_config() normalization, constants are nested:
+    config['constants']['hg38']['left'], not config['constants']['left'].
+    """
+    source = inspect.getsource(analysis_module)
+    assert '.get("constants", {}).get("left")' not in source, (
+        "analysis.py uses flat constant access. Use assembly-keyed access instead."
+    )
+    assert '.get("constants", {}).get("right")' not in source, (
+        "analysis.py uses flat constant access. Use assembly-keyed access instead."
     )

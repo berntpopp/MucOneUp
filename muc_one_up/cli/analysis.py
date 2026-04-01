@@ -57,8 +57,10 @@ def run_orf_prediction(
         try:
             from ..toxic_protein_detector import scan_orf_fasta
 
-            left_const_val = config.get("constants", {}).get("left")
-            right_const_val = config.get("constants", {}).get("right")
+            ref_assembly = config.get("reference_assembly", "hg38")
+            assembly_constants = config.get("constants", {}).get(ref_assembly, {})
+            left_const_val = assembly_constants.get("left")
+            right_const_val = assembly_constants.get("right")
 
             # Extract toxic protein detection parameters from config (with defaults)
             toxic_config = config.get("toxic_protein_detection", {})
@@ -122,8 +124,10 @@ def run_orf_prediction(
         try:
             from ..toxic_protein_detector import scan_orf_fasta
 
-            left_const_val = config.get("constants", {}).get("left")
-            right_const_val = config.get("constants", {}).get("right")
+            ref_assembly = config.get("reference_assembly", "hg38")
+            assembly_constants = config.get("constants", {}).get(ref_assembly, {})
+            left_const_val = assembly_constants.get("left")
+            right_const_val = assembly_constants.get("right")
 
             # Extract toxic protein detection parameters from config (with defaults)
             toxic_config = config.get("toxic_protein_detection", {})
