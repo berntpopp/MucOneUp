@@ -50,10 +50,15 @@ where <input_fasta> is typically the output from muconeup
 (e.g., muc1_simulated.fa).
 """
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from muc_one_up.read_simulator.output_config import OutputConfig
 
 from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
 from muc_one_up.read_simulator.pacbio_pipeline import simulate_pacbio_hifi_reads
@@ -100,7 +105,7 @@ def simulate_reads(
     config: dict[str, Any],
     input_fa: str,
     source_tracker: Any | None = None,
-    output_config: Any | None = None,
+    output_config: OutputConfig | None = None,
 ) -> str:
     """
     Run the complete read simulation pipeline using Strategy Pattern.

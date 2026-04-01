@@ -20,13 +20,18 @@ Implementation details:
 For usage information, see the main read_simulation.py module.
 """
 
+from __future__ import annotations
+
 import contextlib
 import json
 import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .output_config import OutputConfig
 
 # Import bioinformatics modules (Issue #28)
 from ..bioinformatics.reference_validation import (
@@ -71,7 +76,7 @@ def simulate_reads_pipeline(
     config: dict[str, Any],
     input_fa: str,
     source_tracker: Any | None = None,
-    output_config: Any | None = None,
+    output_config: OutputConfig | None = None,
 ) -> str:
     """
     Run the complete read simulation pipeline.

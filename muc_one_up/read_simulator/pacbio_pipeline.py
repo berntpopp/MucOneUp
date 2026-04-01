@@ -57,10 +57,15 @@ References:
     - minimap2: https://github.com/lh3/minimap2
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .output_config import OutputConfig
 
 from ..exceptions import ExternalToolError, FileOperationError
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
@@ -76,7 +81,7 @@ def simulate_pacbio_hifi_reads(
     input_fa: str,
     human_reference: str | None = None,
     source_tracker: Any | None = None,
-    output_config: Any | None = None,
+    output_config: OutputConfig | None = None,
 ) -> str:
     """
     Complete PacBio HiFi read simulation pipeline.

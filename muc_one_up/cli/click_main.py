@@ -500,6 +500,7 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
     try:
         from ..config import load_config_raw
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
+        from ..read_simulator.output_config import OutputConfig
 
         # Load config once (DRY principle)
         config = load_config_raw(str(ctx.obj["config_path"]))
@@ -538,22 +539,23 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
         for idx, input_fasta in enumerate(input_fastas, start=1):
             # Determine output base name
             if out_base:
-                # User provided: use as-is (or append index for multiple files)
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
-                # Auto-generate from input filename
-                actual_out_base = generate_output_base(Path(input_fasta), "_reads")
+                actual_out_base = None
 
-            from ..read_simulator.output_config import OutputConfig
-
-            output_config = OutputConfig(out_dir=Path(out_dir), out_base=actual_out_base)
+            output_config = OutputConfig.from_input_fasta(
+                input_fa=input_fasta,
+                out_dir=out_dir,
+                out_base=actual_out_base,
+                suffix="_reads",
+            )
 
             logging.info(
                 "[%d/%d] Simulating Illumina reads: %s -> %s",
                 idx,
                 total_files,
                 input_fasta,
-                actual_out_base,
+                output_config.out_base,
             )
 
             # Build source tracker from companion files if requested
@@ -656,6 +658,7 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     try:
         from ..config import load_config_raw
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
+        from ..read_simulator.output_config import OutputConfig
 
         # Load config once (DRY principle)
         config = load_config_raw(str(ctx.obj["config_path"]))
@@ -696,22 +699,23 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
         for idx, input_fasta in enumerate(input_fastas, start=1):
             # Determine output base name
             if out_base:
-                # User provided: use as-is (or append index for multiple files)
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
-                # Auto-generate from input filename
-                actual_out_base = generate_output_base(Path(input_fasta), "_ont_reads")
+                actual_out_base = None
 
-            from ..read_simulator.output_config import OutputConfig
-
-            output_config = OutputConfig(out_dir=Path(out_dir), out_base=actual_out_base)
+            output_config = OutputConfig.from_input_fasta(
+                input_fa=input_fasta,
+                out_dir=out_dir,
+                out_base=actual_out_base,
+                suffix="_ont_reads",
+            )
 
             logging.info(
                 "[%d/%d] Simulating ONT reads: %s -> %s",
                 idx,
                 total_files,
                 input_fasta,
-                actual_out_base,
+                output_config.out_base,
             )
 
             # Build source tracker from companion files if requested
@@ -884,6 +888,7 @@ def pacbio(
     try:
         from ..config import load_config_raw
         from ..read_simulation import simulate_reads as simulate_reads_pipeline
+        from ..read_simulator.output_config import OutputConfig
 
         # Load config once (DRY principle)
         config = load_config_raw(str(ctx.obj["config_path"]))
@@ -942,22 +947,23 @@ def pacbio(
         for idx, input_fasta in enumerate(input_fastas, start=1):
             # Determine output base name
             if out_base:
-                # User provided: use as-is (or append index for multiple files)
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
-                # Auto-generate from input filename
-                actual_out_base = generate_output_base(Path(input_fasta), "_pacbio_hifi")
+                actual_out_base = None
 
-            from ..read_simulator.output_config import OutputConfig
-
-            output_config = OutputConfig(out_dir=Path(out_dir), out_base=actual_out_base)
+            output_config = OutputConfig.from_input_fasta(
+                input_fa=input_fasta,
+                out_dir=out_dir,
+                out_base=actual_out_base,
+                suffix="_pacbio_hifi",
+            )
 
             logging.info(
                 "[%d/%d] Simulating PacBio HiFi reads: %s -> %s",
                 idx,
                 total_files,
                 input_fasta,
-                actual_out_base,
+                output_config.out_base,
             )
 
             # Build source tracker from companion files if requested
