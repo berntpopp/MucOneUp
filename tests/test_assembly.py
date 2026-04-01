@@ -101,3 +101,16 @@ def test_simulate_uses_centralized_assembly():
         "from .assembly import assemble_sequence" in source
         or "from muc_one_up.assembly import assemble_sequence" in source
     ), "simulate.py should import assemble_sequence from assembly module"
+
+
+def test_mutate_uses_centralized_assembly():
+    """mutate.py should delegate to assembly.assemble_sequence."""
+    import inspect
+
+    import muc_one_up.mutate as mod
+
+    source = inspect.getsource(mod)
+    assert (
+        "from .assembly import assemble_sequence" in source
+        or "from muc_one_up.assembly import assemble_sequence" in source
+    ), "mutate.py should import assemble_sequence from assembly module"

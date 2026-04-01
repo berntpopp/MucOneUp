@@ -43,6 +43,7 @@ See Also:
 import logging
 import random
 
+from .assembly import assemble_sequence
 from .type_defs import (
     ConfigDict,
     DNASequence,
@@ -209,10 +210,10 @@ def apply_mutations(
 
 
 def rebuild_haplotype_sequence(chain: RepeatChain, config: ConfigDict) -> DNASequence:
-    """Rebuild haplotype sequence from repeat chain and flanking constants.
+    """Rebuild haplotype sequence after mutation.
 
-    Concatenates left constant + repeat units + right constant (if terminal repeat is 9).
-    Strips mutation markers ('m') from symbols when looking up sequences.
+    Delegates to assembly.assemble_sequence().
+    Kept as a thin wrapper for backward compatibility.
 
     Args:
         chain: List of repeat symbols, possibly with 'm' suffix marking mutations
@@ -221,18 +222,7 @@ def rebuild_haplotype_sequence(chain: RepeatChain, config: ConfigDict) -> DNASeq
     Returns:
         Reassembled haplotype DNA sequence
     """
-    reference_assembly = config.get("reference_assembly", "hg38")
-    left_const = str(config["constants"][reference_assembly]["left"])
-    right_const = str(config["constants"][reference_assembly]["right"])
-    repeats_dict = config["repeats"]
-
-    seq = left_const
-    for sym in chain:
-        pure_sym = sym.replace("m", "")
-        seq += str(repeats_dict[pure_sym])
-    if chain[-1].replace("m", "") == "9":
-        seq += right_const
-    return seq
+    return assemble_sequence(chain, config)
 
 
 def apply_changes_to_repeat(
