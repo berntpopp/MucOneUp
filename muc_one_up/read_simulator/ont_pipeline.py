@@ -37,6 +37,7 @@ def simulate_ont_reads_pipeline(
     input_fa: str,
     human_reference: str | None = None,
     source_tracker: Any | None = None,
+    output_config: Any | None = None,
 ) -> str:
     """
     Run the complete Oxford Nanopore read simulation pipeline.
@@ -146,9 +147,13 @@ def simulate_ont_reads_pipeline(
 
     # Setup output paths
     input_path = Path(input_fa)
-    input_basename = input_path.stem
-    output_dir = rs_config.get("output_dir", str(input_path.parent))
-    output_prefix = str(Path(output_dir) / f"{input_basename}_ont")
+    if output_config is not None:
+        output_dir = str(output_config.out_dir)
+        output_prefix = str(output_config.out_dir / output_config.out_base)
+    else:
+        input_basename = input_path.stem
+        output_dir = rs_config.get("output_dir", str(input_path.parent))
+        output_prefix = str(Path(output_dir) / f"{input_basename}_ont")
 
     # Create output directory if it doesn't exist
     Path(output_dir).mkdir(parents=True, exist_ok=True)
