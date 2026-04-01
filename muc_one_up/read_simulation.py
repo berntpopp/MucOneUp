@@ -87,12 +87,21 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %
 #
 SIMULATOR_MAP: dict[str, Callable[..., str]] = {
     "illumina": lambda config, input_fa, _, **kw: simulate_illumina_reads(config, input_fa, **kw),
-    "ont": simulate_ont_reads_pipeline,
-    "pacbio": simulate_pacbio_hifi_reads,
+    "ont": lambda config, input_fa, human_reference, **kw: simulate_ont_reads_pipeline(
+        config, input_fa, human_reference=human_reference, **kw
+    ),
+    "pacbio": lambda config, input_fa, human_reference, **kw: simulate_pacbio_hifi_reads(
+        config, input_fa, human_reference=human_reference, **kw
+    ),
 }
 
 
-def simulate_reads(config: dict[str, Any], input_fa: str, source_tracker: Any | None = None) -> str:
+def simulate_reads(
+    config: dict[str, Any],
+    input_fa: str,
+    source_tracker: Any | None = None,
+    output_config: Any | None = None,
+) -> str:
     """
     Run the complete read simulation pipeline using Strategy Pattern.
 
@@ -182,7 +191,11 @@ def simulate_reads(config: dict[str, Any], input_fa: str, source_tracker: Any | 
 
     # Dispatch to appropriate pipeline using Strategy Pattern
     simulator_func = SIMULATOR_MAP[simulator]
-    return simulator_func(config, input_fa, human_reference, source_tracker=source_tracker)
+    return simulator_func(
+        config, input_fa, human_reference,
+        source_tracker=source_tracker,
+        output_config=output_config,
+    )
 
 
 if __name__ == "__main__":  # OK: top-level entry point
