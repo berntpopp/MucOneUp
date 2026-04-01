@@ -12,6 +12,7 @@ import functools
 import logging
 
 import click
+from click.exceptions import Exit as ClickExit
 
 from ..exceptions import MucOneUpError
 
@@ -24,6 +25,8 @@ def cli_error_handler(func):
         ctx = click.get_current_context()
         try:
             return func(*args, **kwargs)
+        except ClickExit:
+            raise
         except KeyboardInterrupt:
             logging.info("Operation cancelled by user")
             ctx.exit(130)
