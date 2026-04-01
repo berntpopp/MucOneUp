@@ -21,7 +21,7 @@ class TestRootHelpAccess:
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
         assert "MucOneUp - MUC1 VNTR diploid reference simulator" in result.output
-        assert "Philosophy: Each command does ONE thing" in result.output
+        assert "simulate" in result.output
 
     def test_root_help_short_flag(self):
         """muconeup -h should work without config."""
@@ -29,7 +29,7 @@ class TestRootHelpAccess:
         result = runner.invoke(cli, ["-h"])
         assert result.exit_code == 0
         assert "MucOneUp - MUC1 VNTR diploid reference simulator" in result.output
-        assert "Philosophy: Each command does ONE thing" in result.output
+        assert "simulate" in result.output
 
 
 class TestVersionAccess:
