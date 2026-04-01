@@ -1,7 +1,7 @@
 # muc_one_up/probabilities.py
 
 import logging
-import random
+import random as _random_module
 
 from .type_defs import ProbabilitiesDict
 
@@ -10,6 +10,7 @@ def pick_next_repeat(
     probabilities: ProbabilitiesDict,
     current_symbol: str,
     force_end: bool = False,
+    rng: _random_module.Random | None = None,
 ) -> str:
     """Randomly pick the next symbol from the probability table.
 
@@ -39,8 +40,10 @@ def pick_next_repeat(
         logging.debug("Force_end=True and 'END' available; returning 'END'.")
         return "END"
 
+    _rng = rng if rng is not None else _random_module
+
     items = list(next_options.items())
     symbols, weights = zip(*items, strict=True)
-    chosen = random.choices(symbols, weights=weights, k=1)[0]
+    chosen = _rng.choices(symbols, weights=weights, k=1)[0]
     logging.debug("Picked next symbol '%s' from current symbol '%s'.", chosen, current_symbol)
     return str(chosen)  # Type assertion: random.choices returns list of keys

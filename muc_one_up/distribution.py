@@ -1,12 +1,15 @@
 # muc_one_up/distribution.py
 
 import logging
-import random
+import random as _random_module
 
 from .type_defs import LengthModelDict
 
 
-def sample_repeat_count(length_model: LengthModelDict) -> int:
+def sample_repeat_count(
+    length_model: LengthModelDict,
+    rng: _random_module.Random | None = None,
+) -> int:
     """Sample repeat count from configured distribution.
 
     Samples from a normal distribution truncated between min_repeats and max_repeats.
@@ -31,6 +34,8 @@ def sample_repeat_count(length_model: LengthModelDict) -> int:
         >>> 20 <= count <= 100
         True
     """
+    _rng = rng if rng is not None else _random_module
+
     dist_type = length_model.get("distribution", "normal")
     min_rep = length_model["min_repeats"]
     max_rep = length_model["max_repeats"]
@@ -38,7 +43,7 @@ def sample_repeat_count(length_model: LengthModelDict) -> int:
 
     if dist_type == "normal":
         while True:
-            val = int(random.gauss(mean_rep, (max_rep - min_rep) / 4.0))
+            val = int(_rng.gauss(mean_rep, (max_rep - min_rep) / 4.0))
             if min_rep <= val <= max_rep:
                 logging.debug("Sampled repeat count: %d", val)
                 return val
