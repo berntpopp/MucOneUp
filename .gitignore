@@ -208,3 +208,4 @@ docs/archive/
 
 # codex
 .codex
+.worktrees/
