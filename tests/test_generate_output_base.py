@@ -1,11 +1,15 @@
 """Test generate_output_base from cli/outputs.py."""
+
 from pathlib import Path
 
 from muc_one_up.cli.outputs import generate_output_base
 
 
 def test_generate_output_base_reads():
-    assert generate_output_base(Path("sample.001.simulated.fa"), "_reads") == "sample.001.simulated_reads"
+    assert (
+        generate_output_base(Path("sample.001.simulated.fa"), "_reads")
+        == "sample.001.simulated_reads"
+    )
 
 
 def test_generate_output_base_orfs():

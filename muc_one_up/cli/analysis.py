@@ -322,3 +322,76 @@ def write_simulation_statistics(
 
         stats_output_file = numbered_filename(out_dir, out_base, sim_index, "simulation_stats.json")
         write_statistics_report(stats_report, stats_output_file)
+
+
+def run_orf_analysis_standalone(
+    input_fasta: str,
+    out_dir: str,
+    out_base: str,
+    orf_min_aa: int,
+    orf_aa_prefix: str | None,
+    left_const: str | None,
+    right_const: str | None,
+) -> None:
+    """Run ORF prediction and toxic protein detection on a FASTA file.
+
+    Single implementation for standalone ORF analysis, used by the
+    ``analyze orfs`` CLI command.
+    """
+    import subprocess
+
+    orf_output = Path(out_dir) / f"{out_base}.orfs.fa"
+
+    orf_filename = f"{out_base}.orfs.fa"
+    cmd = [
+        "orfipy",
+        input_fasta,
+        "--outdir",
+        str(out_dir),
+        "--pep",
+        orf_filename,
+        "--min",
+        str(orf_min_aa * 3),
+        "--start",
+        "ATG",
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+    if result.returncode != 0:
+        logging.error("orfipy failed for %s: %s", input_fasta, result.stderr)
+        return
+
+    logging.info("ORF prediction completed: %s", orf_output)
+
+    # Filter by amino acid prefix if specified
+    if orf_aa_prefix and orf_output.exists():
+        from Bio import SeqIO
+
+        filtered_orfs = []
+        total_orfs = 0
+
+        for record in SeqIO.parse(str(orf_output), "fasta"):
+            total_orfs += 1
+            if str(record.seq).startswith(orf_aa_prefix):
+                filtered_orfs.append(record)
+
+        SeqIO.write(filtered_orfs, str(orf_output), "fasta")
+        logging.info(
+            "Filtered ORFs by prefix '%s': %d/%d ORFs retained",
+            orf_aa_prefix,
+            len(filtered_orfs),
+            total_orfs,
+        )
+
+    # Toxic protein detection
+    if orf_output.exists():
+        from ..toxic_protein_detector import scan_orf_fasta
+
+        stats = scan_orf_fasta(str(orf_output), left_const=left_const, right_const=right_const)
+
+        stats_file = Path(out_dir) / f"{out_base}.orf_stats.json"
+        with stats_file.open("w") as f:
+            json.dump(stats, f, indent=4)
+
+        logging.info("Toxic protein stats written: %s", stats_file)

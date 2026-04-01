@@ -13,7 +13,6 @@ Follows SOLID principles: Single Responsibility, Dependency Inversion.
 
 import json
 import logging
-import subprocess
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
@@ -573,7 +572,8 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
 
             # Run simulation for this file
             simulate_reads_pipeline(
-                config, input_fasta,
+                config,
+                input_fasta,
                 source_tracker=source_tracker,
                 output_config=output_config,
             )
@@ -730,7 +730,8 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
 
             # Run simulation for this file
             simulate_reads_pipeline(
-                config, input_fasta,
+                config,
+                input_fasta,
                 source_tracker=source_tracker,
                 output_config=output_config,
             )
@@ -975,7 +976,8 @@ def pacbio(
 
             # Run simulation for this file
             simulate_reads_pipeline(
-                config, input_fasta,
+                config,
+                input_fasta,
                 source_tracker=source_tracker,
                 output_config=output_config,
             )
@@ -1081,87 +1083,30 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
         logging.info("Processing %d FASTA file(s) for ORF prediction", total_files)
 
         for idx, input_fasta in enumerate(input_fastas, start=1):
-            # Determine output base name
+            from .analysis import run_orf_analysis_standalone
+
             if out_base:
-                # User provided: use as-is (or append index for multiple files)
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
-                # Auto-generate from input filename
                 actual_out_base = generate_output_base(Path(input_fasta), "_orfs")
 
-            orf_output = Path(out_dir) / f"{actual_out_base}.orfs.fa"
             logging.info(
                 "[%d/%d] Running ORF prediction: %s -> %s",
                 idx,
                 total_files,
                 input_fasta,
-                orf_output,
+                actual_out_base,
             )
 
-            # Run orfipy command-line tool
-            # Note: orfipy creates its own output directory, so we must:
-            # 1. Use --outdir to specify the output directory
-            # 2. Use just the filename (not full path) for --pep
-            orf_filename = f"{actual_out_base}.orfs.fa"
-            cmd = [
-                "orfipy",
-                input_fasta,
-                "--outdir",
-                str(out_dir),
-                "--pep",
-                orf_filename,
-                "--min",
-                str(orf_min_aa * 3),  # Convert AA to nucleotides
-                "--start",
-                "ATG",
-            ]
-
-            # Note: Amino acid prefix filtering is done in translate.py after orfipy runs,
-            # not via orfipy flags (which don't support this feature)
-
-            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-
-            if result.returncode != 0:
-                logging.error("orfipy failed for %s: %s", input_fasta, result.stderr)
-                continue  # Continue with next file instead of exiting
-
-            logging.info("ORF prediction completed: %s", orf_output)
-
-            # Filter by amino acid prefix if specified
-            if orf_aa_prefix and orf_output.exists():
-                from Bio import SeqIO
-
-                filtered_orfs = []
-                total_orfs = 0
-
-                for record in SeqIO.parse(str(orf_output), "fasta"):
-                    total_orfs += 1
-                    # Check if protein sequence starts with required prefix
-                    if str(record.seq).startswith(orf_aa_prefix):
-                        filtered_orfs.append(record)
-
-                # Write filtered ORFs back to file
-                SeqIO.write(filtered_orfs, str(orf_output), "fasta")
-                logging.info(
-                    "Filtered ORFs by prefix '%s': %d/%d ORFs retained",
-                    orf_aa_prefix,
-                    len(filtered_orfs),
-                    total_orfs,
-                )
-
-            # Toxic protein detection
-            if orf_output.exists():
-                from ..toxic_protein_detector import scan_orf_fasta
-
-                stats = scan_orf_fasta(
-                    str(orf_output), left_const=left_const, right_const=right_const
-                )
-
-                stats_file = Path(out_dir) / f"{actual_out_base}.orf_stats.json"
-                with stats_file.open("w") as f:
-                    json.dump(stats, f, indent=4)
-
-                logging.info("Toxic protein stats written: %s", stats_file)
+            run_orf_analysis_standalone(
+                input_fasta=input_fasta,
+                out_dir=str(out_dir),
+                out_base=actual_out_base,
+                orf_min_aa=orf_min_aa,
+                orf_aa_prefix=orf_aa_prefix,
+                left_const=left_const,
+                right_const=right_const,
+            )
 
         logging.info("ORF prediction completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
