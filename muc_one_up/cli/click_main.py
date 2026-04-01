@@ -28,6 +28,7 @@ from .config import (
     setup_configuration,
 )
 from .orchestration import run_single_simulation_iteration
+from .outputs import generate_output_base
 
 # ============================================================================
 # CLI Context Settings
@@ -542,7 +543,7 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
                 # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_reads")
+                actual_out_base = generate_output_base(Path(input_fasta), "_reads")
 
             from ..read_simulator.output_config import OutputConfig
 
@@ -699,7 +700,7 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
                 # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_ont_reads")
+                actual_out_base = generate_output_base(Path(input_fasta), "_ont_reads")
 
             from ..read_simulator.output_config import OutputConfig
 
@@ -944,7 +945,7 @@ def pacbio(
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
                 # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_pacbio_hifi")
+                actual_out_base = generate_output_base(Path(input_fasta), "_pacbio_hifi")
 
             from ..read_simulator.output_config import OutputConfig
 
@@ -1086,7 +1087,7 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
                 # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_orfs")
+                actual_out_base = generate_output_base(Path(input_fasta), "_orfs")
 
             orf_output = Path(out_dir) / f"{actual_out_base}.orfs.fa"
             logging.info(
@@ -1230,7 +1231,7 @@ def stats(ctx, input_fastas, out_dir, out_base):
                 actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
             else:
                 # Auto-generate from input filename
-                actual_out_base = _generate_output_base(Path(input_fasta), "_stats")
+                actual_out_base = generate_output_base(Path(input_fasta), "_stats")
 
             logging.info("[%d/%d] Generating statistics: %s", idx, total_files, input_fasta)
 
@@ -1403,25 +1404,6 @@ def vntr_stats(ctx, input_file, structure_column, delimiter, header, output):
 # ============================================================================
 # Helper Functions
 # ============================================================================
-
-
-def _generate_output_base(input_path: Path, suffix: str) -> str:
-    """Generate output base name from input file path.
-
-    Args:
-        input_path: Path to input FASTA file
-        suffix: Suffix to append (e.g., '_reads', '_orfs')
-
-    Returns:
-        Output base name (e.g., 'sample.001.simulated_reads')
-
-    Examples:
-        >>> _generate_output_base(Path('sample.001.simulated.fa'), '_reads')
-        'sample.001.simulated_reads'
-        >>> _generate_output_base(Path('/path/sample.fa'), '_orfs')
-        'sample_orfs'
-    """
-    return input_path.stem + suffix
 
 
 def _make_args_namespace(config_path, kwargs):
