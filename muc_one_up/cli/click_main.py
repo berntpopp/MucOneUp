@@ -544,6 +544,10 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
                 # Auto-generate from input filename
                 actual_out_base = _generate_output_base(Path(input_fasta), "_reads")
 
+            from ..read_simulator.output_config import OutputConfig
+
+            output_config = OutputConfig(out_dir=Path(out_dir), out_base=actual_out_base)
+
             logging.info(
                 "[%d/%d] Simulating Illumina reads: %s -> %s",
                 idx,
@@ -562,14 +566,16 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
                 if source_tracker is None:
                     logging.warning("Could not reconstruct read source tracker from %s", stats_path)
                 else:
-                    coord_map_path = str(
-                        Path(out_dir) / f"{actual_out_base}_repeat_coordinates.tsv"
-                    )
+                    coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
                     source_tracker.write_coordinate_map(coord_map_path)
                     logging.info("Repeat coordinate map written: %s", coord_map_path)
 
             # Run simulation for this file
-            simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
+            simulate_reads_pipeline(
+                config, input_fasta,
+                source_tracker=source_tracker,
+                output_config=output_config,
+            )
 
         logging.info("Illumina read simulation completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
@@ -695,6 +701,10 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
                 # Auto-generate from input filename
                 actual_out_base = _generate_output_base(Path(input_fasta), "_ont_reads")
 
+            from ..read_simulator.output_config import OutputConfig
+
+            output_config = OutputConfig(out_dir=Path(out_dir), out_base=actual_out_base)
+
             logging.info(
                 "[%d/%d] Simulating ONT reads: %s -> %s",
                 idx,
@@ -713,14 +723,16 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
                 if source_tracker is None:
                     logging.warning("Could not reconstruct read source tracker from %s", stats_path)
                 else:
-                    coord_map_path = str(
-                        Path(out_dir) / f"{actual_out_base}_repeat_coordinates.tsv"
-                    )
+                    coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
                     source_tracker.write_coordinate_map(coord_map_path)
                     logging.info("Repeat coordinate map written: %s", coord_map_path)
 
             # Run simulation for this file
-            simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
+            simulate_reads_pipeline(
+                config, input_fasta,
+                source_tracker=source_tracker,
+                output_config=output_config,
+            )
 
         logging.info("ONT read simulation completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
@@ -934,6 +946,10 @@ def pacbio(
                 # Auto-generate from input filename
                 actual_out_base = _generate_output_base(Path(input_fasta), "_pacbio_hifi")
 
+            from ..read_simulator.output_config import OutputConfig
+
+            output_config = OutputConfig(out_dir=Path(out_dir), out_base=actual_out_base)
+
             logging.info(
                 "[%d/%d] Simulating PacBio HiFi reads: %s -> %s",
                 idx,
@@ -952,14 +968,16 @@ def pacbio(
                 if source_tracker is None:
                     logging.warning("Could not reconstruct read source tracker from %s", stats_path)
                 else:
-                    coord_map_path = str(
-                        Path(out_dir) / f"{actual_out_base}_repeat_coordinates.tsv"
-                    )
+                    coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
                     source_tracker.write_coordinate_map(coord_map_path)
                     logging.info("Repeat coordinate map written: %s", coord_map_path)
 
             # Run simulation for this file
-            simulate_reads_pipeline(config, input_fasta, source_tracker=source_tracker)
+            simulate_reads_pipeline(
+                config, input_fasta,
+                source_tracker=source_tracker,
+                output_config=output_config,
+            )
 
         logging.info("PacBio HiFi read simulation completed for all %d file(s).", total_files)
         return  # Click handles exit automatically
