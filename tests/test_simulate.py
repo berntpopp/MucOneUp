@@ -73,8 +73,8 @@ def test_simulate_diploid_fixed_length(simple_config):
     in a synthetic scenario.
     """
 
-    def patched_sim_single(cfg, target_length):
-        return simulate_single_haplotype(cfg, target_length, min_length=2)
+    def patched_sim_single(cfg, target_length, rng=None):
+        return simulate_single_haplotype(cfg, target_length, min_length=2, rng=rng)
 
     # We'll monkeypatch simulate_single_haplotype inside simulate_diploid
     original_func = simulate_single_haplotype
