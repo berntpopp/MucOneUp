@@ -21,7 +21,7 @@ class SimulationOptions:
     # Simulation parameters
     num_haplotypes: int = 2
     seed: int | None = None
-    reference_assembly: str = "hg38"
+    reference_assembly: str | None = "hg38"
 
     # Output control
     output_structure: bool = False

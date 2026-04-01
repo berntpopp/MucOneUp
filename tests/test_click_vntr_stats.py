@@ -270,7 +270,7 @@ PMID:123,S1,1-2-3
             ],
         )
 
-        assert result.exit_code != 0
+        assert result.exit_code in (1, 2)
         assert (
             "failed" in result.output.lower()
             or "no valid" in result.output.lower()

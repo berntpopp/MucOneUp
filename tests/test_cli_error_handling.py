@@ -46,6 +46,18 @@ class TestCLIErrorHandler:
         result = runner.invoke(_make_test_command(RuntimeError("unexpected")))
         assert result.exit_code == 2
 
+    def test_click_exception_passes_through(self):
+        runner = CliRunner()
+        result = runner.invoke(_make_test_command(click.ClickException("bad param")))
+        assert result.exit_code == 1
+        assert "bad param" in result.output
+
+    def test_usage_error_passes_through(self):
+        runner = CliRunner()
+        result = runner.invoke(_make_test_command(click.UsageError("missing option")))
+        assert result.exit_code == 2
+        assert "missing option" in result.output
+
     def test_no_exception_exits_0(self):
         @click.command()
         @cli_error_handler

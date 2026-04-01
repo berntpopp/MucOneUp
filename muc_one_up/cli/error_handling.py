@@ -27,6 +27,8 @@ def cli_error_handler(func):
             return func(*args, **kwargs)
         except ClickExit:
             raise
+        except click.ClickException:
+            raise
         except KeyboardInterrupt:
             logging.info("Operation cancelled by user")
             ctx.exit(130)

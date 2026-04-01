@@ -41,7 +41,7 @@ def run_single_simulation_iteration(
     mutation modes.
 
     Args:
-        args: Namespace containing all CLI arguments from argparse
+        args: SimulationOptions instance (or compatible namespace) with CLI arguments
         config: Configuration dictionary from load_config()
         out_dir: Output directory path for all generated files
         out_base: Base filename for outputs (without iteration suffix)
