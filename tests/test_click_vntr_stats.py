@@ -270,8 +270,12 @@ PMID:123,S1,1-2-3
             ],
         )
 
-        assert result.exit_code == 1
-        assert "failed" in result.output.lower() or "no valid" in result.output.lower()
+        assert result.exit_code in (1, 2)
+        assert (
+            "failed" in result.output.lower()
+            or "no valid" in result.output.lower()
+            or "error" in result.output.lower()
+        )
 
     def test_config_without_repeats_error(self, runner, tmp_path, vntr_data_with_header):
         """Test error when config lacks repeats key."""

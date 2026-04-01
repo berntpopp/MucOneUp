@@ -4,15 +4,15 @@ import inspect
 
 
 def test_click_main_delegates_orf_analysis():
-    """click_main.py should delegate ORF analysis, not shell out directly."""
-    import muc_one_up.cli.click_main as cli_mod
+    """Analyze commands should delegate ORF analysis, not shell out directly."""
+    import muc_one_up.cli.commands.analyze as analyze_mod
 
-    source = inspect.getsource(cli_mod)
+    source = inspect.getsource(analyze_mod)
     assert "subprocess" not in source, (
-        "click_main.py should not use subprocess to run ORF analysis."
+        "commands/analyze.py should not use subprocess to run ORF analysis."
     )
     assert "run_orf_analysis_standalone" in source, (
-        "click_main.py should delegate ORF analysis to analysis.run_orf_analysis_standalone()."
+        "commands/analyze.py should delegate ORF analysis to analysis.run_orf_analysis_standalone()."
     )
 
 
