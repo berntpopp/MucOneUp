@@ -6,8 +6,10 @@ VNTR efficiency modeling and other genomic analyses.
 """
 
 import logging
-import subprocess
 from pathlib import Path
+
+from ...exceptions import ExternalToolError
+from .common_utils import run_command
 
 logger = logging.getLogger(__name__)
 
@@ -159,19 +161,15 @@ def create_non_vntr_bed_from_capture(output_path: Path, capture_bed: Path, vntr_
     logger.debug(f"  VNTR BED: {vntr_bed}")
 
     try:
-        with open(output_path, "w") as out_f:
-            subprocess.run(
-                ["bedtools", "subtract", "-a", str(capture_bed), "-b", str(vntr_bed)],
-                stdout=out_f,
-                check=True,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+        run_command(
+            ["bedtools", "subtract", "-a", str(capture_bed), "-b", str(vntr_bed)],
+            stdout_path=Path(output_path),
+        )
 
         logger.debug(f"Non-VNTR BED created: {output_path}")
         return output_path
 
-    except subprocess.CalledProcessError as e:
+    except ExternalToolError as e:
         raise BedError(f"bedtools subtract failed: {e.stderr}") from e
     except FileNotFoundError as e:
         raise BedError("bedtools not found in PATH. Please install bedtools.") from e
@@ -185,7 +183,7 @@ def check_bedtools_available() -> bool:
         bool: True if bedtools is available
     """
     try:
-        subprocess.run(["bedtools", "--version"], capture_output=True, check=True, timeout=5)
+        run_command(["bedtools", "--version"], capture=True, timeout=5)
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+    except (ExternalToolError, FileNotFoundError):
         return False

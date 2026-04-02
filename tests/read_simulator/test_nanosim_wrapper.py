@@ -1,7 +1,7 @@
 """Tests for NanoSim wrapper - focuses on OUR command construction logic.
 
 Following Phase 2 testing principles:
-- Mock ONLY at system boundary (subprocess.Popen, subprocess.run)
+- Mock ONLY at system boundary (run_command)
 - Test OUR code's logic (command construction, error handling, file management)
 - NOT testing NanoSim or minimap2 themselves
 
@@ -18,6 +18,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from muc_one_up.read_simulator.utils.common_utils import RunResult
 from muc_one_up.read_simulator.wrappers.nanosim_wrapper import (
     align_ont_reads_with_minimap2,
     run_nanosim_simulation,
@@ -277,6 +278,37 @@ class TestRunNanoSimSimulation:
 class TestAlignONTReadsWithMinimap2:
     """Test align_ont_reads_with_minimap2 command chaining."""
 
+    @staticmethod
+    def _make_run_command_mock(output_bam, run_calls=None):
+        """Create a mock for run_command that handles minimap2 + samtools calls."""
+
+        def _side_effect(cmd, **kwargs):
+            if run_calls is not None:
+                run_calls.append(cmd)
+            # minimap2 call — write SAM data to stdout_path
+            if "minimap2" in cmd or "map-ont" in cmd:
+                stdout_path = kwargs.get("stdout_path")
+                if stdout_path:
+                    Path(stdout_path).write_text("@HD\tVN:1.0\n")
+                return RunResult(
+                    returncode=0,
+                    stdout=None,
+                    stderr="",
+                    command=" ".join(cmd),
+                )
+            # samtools view — create unsorted BAM
+            if "view" in cmd:
+                Path(str(output_bam) + ".unsorted").write_bytes(b"BAM_DATA")
+            # samtools sort — create sorted BAM
+            elif "sort" in cmd:
+                output_bam.write_bytes(b"SORTED_BAM")
+            # samtools index — create index
+            elif "index" in cmd:
+                Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
+            return RunResult(returncode=0, stdout="", stderr="", command=" ".join(cmd))
+
+        return _side_effect
+
     def test_constructs_minimap2_command(self, mocker, tmp_path):
         """Test that minimap2 command is constructed correctly."""
         # Arrange
@@ -287,39 +319,11 @@ class TestAlignONTReadsWithMinimap2:
         ref.write_text(">chr1\nACGT\n")
         reads.write_text("@read1\nACGT\n+\nIIII\n")
 
-        # Track subprocess.run calls (for minimap2)
         run_calls = []
-
-        def mock_run_side_effect(cmd, **kwargs):
-            run_calls.append(cmd)
-            # Create SAM output if stdout is redirected
-            if hasattr(kwargs.get("stdout"), "write"):
-                kwargs["stdout"].write("@HD\tVN:1.0\n")
-            return Mock(returncode=0, stderr="")
-
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
-
-        # Mock subprocess.Popen for samtools commands
-        def mock_popen_side_effect(cmd, **kwargs):
-            # Create outputs for samtools commands
-            if "view" in cmd:
-                Path(str(output_bam) + ".unsorted").write_bytes(b"BAM_DATA")
-            elif "sort" in cmd:
-                output_bam.write_bytes(b"SORTED_BAM")
-            elif "index" in cmd:
-                Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
-
-            mock_proc = Mock()
-            mock_proc.returncode = 0
-            mock_proc.stdout = Mock()
-            mock_proc.stderr = Mock()
-            mock_proc.stdout.readline = Mock(return_value=b"")
-            mock_proc.stderr.readline = Mock(return_value=b"")
-            mock_proc.wait = Mock(return_value=0)
-            mock_proc.pid = 12345
-            return mock_proc
-
-        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
+            side_effect=self._make_run_command_mock(output_bam, run_calls),
+        )
 
         # Act
         align_ont_reads_with_minimap2(
@@ -331,7 +335,7 @@ class TestAlignONTReadsWithMinimap2:
             threads=8,
         )
 
-        # Assert: Verify minimap2 command
+        # Assert: Verify minimap2 command (first call)
         assert len(run_calls) >= 1
         minimap2_cmd = run_calls[0]
 
@@ -353,61 +357,34 @@ class TestAlignONTReadsWithMinimap2:
         ref.write_text(">chr1\nACGT\n")
         reads.write_text("@read1\nACGT\n+\nIIII\n")
 
-        # Mock subprocess.run (minimap2)
-        def mock_run_side_effect(cmd, **kwargs):
-            if hasattr(kwargs.get("stdout"), "write"):
-                kwargs["stdout"].write("@HD\tVN:1.0\n")
-            return Mock(returncode=0, stderr="")
-
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
-
-        # Track Popen calls (samtools)
-        popen_calls = []
-
-        def mock_popen_side_effect(cmd, **kwargs):
-            popen_calls.append(cmd)
-
-            if "view" in cmd:
-                Path(str(output_bam) + ".unsorted").write_bytes(b"BAM_DATA")
-            elif "sort" in cmd:
-                output_bam.write_bytes(b"SORTED_BAM")
-            elif "index" in cmd:
-                Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
-
-            mock_proc = Mock()
-            mock_proc.returncode = 0
-            mock_proc.stdout = Mock()
-            mock_proc.stderr = Mock()
-            mock_proc.stdout.readline = Mock(return_value=b"")
-            mock_proc.stderr.readline = Mock(return_value=b"")
-            mock_proc.wait = Mock(return_value=0)
-            mock_proc.pid = 12345
-            return mock_proc
-
-        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
+        run_calls = []
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
+            side_effect=self._make_run_command_mock(output_bam, run_calls),
+        )
 
         # Act
         align_ont_reads_with_minimap2(
             "minimap2", "samtools", str(ref), str(reads), str(output_bam), threads=4
         )
 
-        # Assert: Verify samtools commands
-        assert len(popen_calls) == 3
+        # Assert: 4 calls total: minimap2 + samtools view/sort/index
+        assert len(run_calls) == 4
 
-        # Check view command
-        view_cmd = popen_calls[0]
+        # Check view command (2nd call)
+        view_cmd = run_calls[1]
         assert "samtools" in view_cmd
         assert "view" in view_cmd
         assert "-F" in view_cmd
         assert "4" in view_cmd  # Filter unmapped
 
-        # Check sort command
-        sort_cmd = popen_calls[1]
+        # Check sort command (3rd call)
+        sort_cmd = run_calls[2]
         assert "samtools" in sort_cmd
         assert "sort" in sort_cmd
 
-        # Check index command
-        index_cmd = popen_calls[2]
+        # Check index command (4th call)
+        index_cmd = run_calls[3]
         assert "samtools" in index_cmd
         assert "index" in index_cmd
 
@@ -421,47 +398,17 @@ class TestAlignONTReadsWithMinimap2:
         ref.write_text(">chr1\nACGT\n")
         reads.write_text("@read1\nACGT\n+\nIIII\n")
 
-        # Track temp files created
-        temp_files_created = []
-
-        def mock_run_side_effect(cmd, **kwargs):
-            stdout_file = kwargs.get("stdout")
-            if hasattr(stdout_file, "name"):
-                temp_files_created.append(stdout_file.name)
-            if hasattr(stdout_file, "write"):
-                stdout_file.write("@HD\tVN:1.0\n")
-            return Mock(returncode=0, stderr="")
-
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
-
-        def mock_popen_side_effect(cmd, **kwargs):
-            if "view" in cmd:
-                unsorted_path = Path(str(output_bam) + ".unsorted")
-                unsorted_path.write_bytes(b"BAM_DATA")
-                temp_files_created.append(str(unsorted_path))
-            elif "sort" in cmd:
-                output_bam.write_bytes(b"SORTED_BAM")
-            elif "index" in cmd:
-                Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
-
-            mock_proc = Mock()
-            mock_proc.returncode = 0
-            mock_proc.stdout = Mock()
-            mock_proc.stderr = Mock()
-            mock_proc.stdout.readline = Mock(return_value=b"")
-            mock_proc.stderr.readline = Mock(return_value=b"")
-            mock_proc.wait = Mock(return_value=0)
-            mock_proc.pid = 12345
-            return mock_proc
-
-        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
+            side_effect=self._make_run_command_mock(output_bam),
+        )
 
         # Act
         align_ont_reads_with_minimap2("minimap2", "samtools", str(ref), str(reads), str(output_bam))
 
-        # Assert: Temp files should be cleaned up
-        for temp_file in temp_files_created:
-            assert not Path(temp_file).exists(), f"Temp file not cleaned up: {temp_file}"
+        # Assert: Temp files (SAM + unsorted BAM) should be cleaned up
+        unsorted_path = Path(str(output_bam) + ".unsorted")
+        assert not unsorted_path.exists(), f"Temp file not cleaned up: {unsorted_path}"
 
     def test_handles_minimap2_failure(self, mocker, tmp_path):
         """Test that minimap2 failure is properly caught and reported."""
@@ -473,12 +420,17 @@ class TestAlignONTReadsWithMinimap2:
         ref.write_text(">chr1\nACGT\n")
         reads.write_text("@read1\nACGT\n+\nIIII\n")
 
-        # Mock minimap2 failure
-        import subprocess
+        from muc_one_up.exceptions import ExternalToolError
 
+        # Mock run_command to raise ExternalToolError for minimap2
         mocker.patch(
-            "subprocess.run",
-            side_effect=subprocess.CalledProcessError(1, "minimap2", stderr="Alignment failed"),
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
+            side_effect=ExternalToolError(
+                tool="minimap2",
+                exit_code=1,
+                stderr="Alignment failed",
+                cmd="minimap2 ...",
+            ),
         )
 
         # Act & Assert: Function wraps ExternalToolError in RuntimeError
@@ -498,34 +450,10 @@ class TestAlignONTReadsWithMinimap2:
         reads.write_text("@read1\nACGT\n+\nIIII\n")
 
         run_calls = []
-
-        def mock_run_side_effect(cmd, **kwargs):
-            run_calls.append(cmd)
-            if hasattr(kwargs.get("stdout"), "write"):
-                kwargs["stdout"].write("@HD\tVN:1.0\n")
-            return Mock(returncode=0, stderr="")
-
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
-
-        def mock_popen_side_effect(cmd, **kwargs):
-            if "view" in cmd:
-                Path(str(output_bam) + ".unsorted").write_bytes(b"BAM_DATA")
-            elif "sort" in cmd:
-                output_bam.write_bytes(b"SORTED_BAM")
-            elif "index" in cmd:
-                Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
-
-            mock_proc = Mock()
-            mock_proc.returncode = 0
-            mock_proc.stdout = Mock()
-            mock_proc.stderr = Mock()
-            mock_proc.stdout.readline = Mock(return_value=b"")
-            mock_proc.stderr.readline = Mock(return_value=b"")
-            mock_proc.wait = Mock(return_value=0)
-            mock_proc.pid = 12345
-            return mock_proc
-
-        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
+            side_effect=self._make_run_command_mock(output_bam, run_calls),
+        )
 
         # Act: Use conda command with spaces
         align_ont_reads_with_minimap2(
@@ -536,7 +464,7 @@ class TestAlignONTReadsWithMinimap2:
             output_bam=str(output_bam),
         )
 
-        # Assert: Conda command should be parsed
+        # Assert: Conda command should be parsed (first call is minimap2)
         minimap2_cmd = run_calls[0]
         assert "conda" in minimap2_cmd
         assert "run" in minimap2_cmd

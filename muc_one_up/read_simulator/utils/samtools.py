@@ -6,8 +6,10 @@ error handling and logging.
 """
 
 import logging
-import subprocess
 from pathlib import Path
+
+from ...exceptions import ExternalToolError
+from .common_utils import run_command
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +28,9 @@ def check_samtools_available() -> bool:
         bool: True if samtools is available
     """
     try:
-        subprocess.run(["samtools", "--version"], capture_output=True, check=True, timeout=5)
+        run_command(["samtools", "--version"], capture=True, timeout=5)
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+    except ExternalToolError:
         return False
 
 
@@ -53,7 +55,7 @@ def extract_reads_by_region(
     logger.debug(f"Extracting reads from {input_bam} using region {region_bed}")
 
     try:
-        subprocess.run(
+        run_command(
             [
                 "samtools",
                 "view",
@@ -67,15 +69,13 @@ def extract_reads_by_region(
                 "-o",
                 str(output_bam),
             ],
-            check=True,
-            capture_output=True,
-            text=True,
+            capture=True,
         )
 
         logger.debug(f"Reads extracted to {output_bam}")
 
-    except subprocess.CalledProcessError as e:
-        raise SamtoolsError(f"Failed to extract reads: {e.stderr}") from e
+    except ExternalToolError as e:
+        raise SamtoolsError(f"Failed to extract reads: {e}") from e
 
 
 def downsample_bam(input_bam: Path, output_bam: Path, fraction: float, seed: int = 42) -> None:
@@ -104,7 +104,7 @@ def downsample_bam(input_bam: Path, output_bam: Path, fraction: float, seed: int
     downsample_param = f"{seed}.{fraction_str}"
 
     try:
-        subprocess.run(
+        run_command(
             [
                 "samtools",
                 "view",
@@ -115,15 +115,13 @@ def downsample_bam(input_bam: Path, output_bam: Path, fraction: float, seed: int
                 "-o",
                 str(output_bam),
             ],
-            check=True,
-            capture_output=True,
-            text=True,
+            capture=True,
         )
 
         logger.debug(f"Downsampled BAM written to {output_bam}")
 
-    except subprocess.CalledProcessError as e:
-        raise SamtoolsError(f"Failed to downsample BAM: {e.stderr}") from e
+    except ExternalToolError as e:
+        raise SamtoolsError(f"Failed to downsample BAM: {e}") from e
 
 
 def merge_bams(
@@ -157,11 +155,11 @@ def merge_bams(
     cmd.extend([str(bam) for bam in input_bams])
 
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        run_command(cmd, capture=True)
         logger.debug(f"Merged BAM written to {output_bam}")
 
-    except subprocess.CalledProcessError as e:
-        raise SamtoolsError(f"Failed to merge BAMs: {e.stderr}") from e
+    except ExternalToolError as e:
+        raise SamtoolsError(f"Failed to merge BAMs: {e}") from e
 
 
 def sort_bam(input_bam: Path, output_bam: Path, threads: int = 1) -> None:
@@ -179,7 +177,7 @@ def sort_bam(input_bam: Path, output_bam: Path, threads: int = 1) -> None:
     logger.debug(f"Sorting {input_bam}")
 
     try:
-        subprocess.run(
+        run_command(
             [
                 "samtools",
                 "sort",
@@ -189,15 +187,13 @@ def sort_bam(input_bam: Path, output_bam: Path, threads: int = 1) -> None:
                 str(output_bam),
                 str(input_bam),
             ],
-            check=True,
-            capture_output=True,
-            text=True,
+            capture=True,
         )
 
         logger.debug(f"Sorted BAM written to {output_bam}")
 
-    except subprocess.CalledProcessError as e:
-        raise SamtoolsError(f"Failed to sort BAM: {e.stderr}") from e
+    except ExternalToolError as e:
+        raise SamtoolsError(f"Failed to sort BAM: {e}") from e
 
 
 def index_bam(bam_file: Path) -> None:
@@ -213,17 +209,15 @@ def index_bam(bam_file: Path) -> None:
     logger.debug(f"Indexing {bam_file}")
 
     try:
-        subprocess.run(
+        run_command(
             ["samtools", "index", str(bam_file)],
-            check=True,
-            capture_output=True,
-            text=True,
+            capture=True,
         )
 
         logger.debug(f"Index created: {bam_file}.bai")
 
-    except subprocess.CalledProcessError as e:
-        raise SamtoolsError(f"Failed to index BAM: {e.stderr}") from e
+    except ExternalToolError as e:
+        raise SamtoolsError(f"Failed to index BAM: {e}") from e
 
 
 def calculate_mean_coverage(bam_file: Path, region_bed: Path) -> float:
@@ -243,11 +237,9 @@ def calculate_mean_coverage(bam_file: Path, region_bed: Path) -> float:
     logger.debug(f"Calculating coverage for {bam_file} in region {region_bed}")
 
     try:
-        result = subprocess.run(
+        result = run_command(
             ["samtools", "depth", "-b", str(region_bed), str(bam_file)],
-            check=True,
-            capture_output=True,
-            text=True,
+            capture=True,
         )
 
         if not result.stdout.strip():
@@ -262,8 +254,8 @@ def calculate_mean_coverage(bam_file: Path, region_bed: Path) -> float:
 
         return mean_cov
 
-    except subprocess.CalledProcessError as e:
-        raise SamtoolsError(f"Failed to calculate coverage: {e.stderr}") from e
+    except ExternalToolError as e:
+        raise SamtoolsError(f"Failed to calculate coverage: {e}") from e
 
 
 def validate_bam(bam_file: Path) -> bool:
@@ -279,16 +271,15 @@ def validate_bam(bam_file: Path) -> bool:
     logger.debug(f"Validating {bam_file}")
 
     try:
-        subprocess.run(
+        run_command(
             ["samtools", "quickcheck", str(bam_file)],
-            check=True,
-            capture_output=True,
+            capture=True,
         )
 
         logger.debug(f"BAM file is valid: {bam_file}")
         return True
 
-    except subprocess.CalledProcessError:
+    except ExternalToolError:
         logger.error(f"BAM file is corrupted: {bam_file}")
         return False
 
@@ -309,11 +300,9 @@ def get_bam_read_count(bam_file: Path) -> int:
     logger.debug(f"Counting reads in {bam_file}")
 
     try:
-        result = subprocess.run(
+        result = run_command(
             ["samtools", "view", "-c", str(bam_file)],
-            check=True,
-            capture_output=True,
-            text=True,
+            capture=True,
         )
 
         count = int(result.stdout.strip())
@@ -321,7 +310,7 @@ def get_bam_read_count(bam_file: Path) -> int:
 
         return count
 
-    except subprocess.CalledProcessError as e:
-        raise SamtoolsError(f"Failed to count reads: {e.stderr}") from e
+    except ExternalToolError as e:
+        raise SamtoolsError(f"Failed to count reads: {e}") from e
     except ValueError as e:
         raise SamtoolsError(f"Invalid read count output: {result.stdout}") from e

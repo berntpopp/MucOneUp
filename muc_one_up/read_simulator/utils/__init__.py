@@ -11,10 +11,12 @@ from . import bed, samtools
 
 # Import from common_utils for backward compatibility
 from .common_utils import (
+    RunResult,
     check_external_tools,
     cleanup_files,
     fix_field,
     run_command,
+    run_pipeline,
 )
 from .diploid_handler import (
     DiploidSimulationResult,
@@ -46,6 +48,7 @@ from .tool_version import (
 
 __all__ = [
     "DiploidSimulationResult",
+    "RunResult",
     "calculate_corrected_coverage",
     "capture_tool_versions",
     "check_external_tools",
@@ -60,6 +63,7 @@ __all__ = [
     "merge_fastq_files",
     "prepare_diploid_simulation",
     "run_command",
+    "run_pipeline",
     "run_split_simulation",
     "validate_fastq",
     "validate_reference_compatibility",

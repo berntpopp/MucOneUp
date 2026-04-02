@@ -6,15 +6,52 @@ This module provides utility functions that are used across the read simulation
 process, including process execution, file management, and tool validation.
 """
 
+import contextlib
 import logging
 import os
 import shutil
 import signal
 import subprocess
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 
 from ...exceptions import ExternalToolError, ValidationError
+
+
+@dataclass(frozen=True, slots=True)
+class RunResult:
+    """Result of running an external command.
+
+    Supports comparison with int for backward compatibility:
+    callers that do ``if run_command(...) == 0:`` still work.
+
+    When returned from capture mode, stdout and stderr are always str
+    (never None). They are None only in streaming mode.
+    """
+
+    returncode: int
+    stdout: str | None
+    stderr: str | None
+    command: str
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, int):
+            return self.returncode == other
+        if isinstance(other, RunResult):
+            return (self.returncode, self.stdout, self.stderr, self.command) == (
+                other.returncode,
+                other.stdout,
+                other.stderr,
+                other.command,
+            )
+        return NotImplemented
+
+    def __bool__(self) -> bool:
+        return bool(self.returncode)
+
+    def __hash__(self) -> int:
+        return hash((self.returncode, self.stdout, self.stderr, self.command))
 
 
 def run_command(
@@ -22,10 +59,20 @@ def run_command(
     timeout: int | None = None,
     stderr_log_level: int = logging.ERROR,
     stderr_prefix: str = "",
-) -> int:
+    capture: bool = False,
+    cwd: Path | None = None,
+    stdout_path: Path | None = None,
+) -> RunResult:
     """
     Run a command in its own process group so that it can be killed on timeout.
     Capture both stdout and stderr live and log them line-by-line.
+
+    When *capture=True*, uses ``subprocess.run`` to collect stdout/stderr as
+    strings instead of streaming them to the logger.
+
+    When *stdout_path* is provided, stdout is streamed directly to the file
+    (no in-memory buffering) regardless of the capture flag. This avoids OOM
+    for commands that produce large output (e.g., samtools fasta, minimap2).
 
     SECURITY: This function NEVER uses shell=True to prevent command injection.
     All commands must be provided as lists, not strings.
@@ -35,9 +82,12 @@ def run_command(
         timeout: Timeout in seconds (None means wait indefinitely).
         stderr_log_level: Logging level for stderr output (default: ERROR).
         stderr_prefix: Prefix for stderr log messages.
+        capture: If True, capture stdout/stderr instead of streaming.
+        cwd: Working directory for the subprocess.
+        stdout_path: If provided, stream stdout directly to this file path.
 
     Returns:
-        The process return code.
+        A RunResult with returncode (and captured output when capture=True).
 
     Raises:
         ExternalToolError: If the process fails to start or returns non-zero.
@@ -48,6 +98,88 @@ def run_command(
     cmd_str = " ".join(cmd)
     logging.info("Running command: %s (timeout=%s)", cmd_str, timeout)
 
+    # ---- stdout-to-file mode: stream directly to disk (no memory buffering) ----
+    if stdout_path is not None:
+        try:
+            with Path(stdout_path).open("w") as stdout_fh:
+                proc = subprocess.run(
+                    cmd,
+                    shell=False,
+                    stdout=stdout_fh,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    errors="replace",
+                    timeout=timeout,
+                    cwd=cwd,
+                )
+        except subprocess.TimeoutExpired as e:
+            raise ExternalToolError(
+                tool="command",
+                exit_code=-1,
+                stderr=f"Command timed out after {timeout}s",
+                cmd=cmd_str,
+            ) from e
+        except FileNotFoundError:
+            raise
+        except Exception as e:
+            raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
+
+        if proc.returncode != 0:
+            logging.error("Command exited with code %d: %s", proc.returncode, cmd_str)
+            raise ExternalToolError(
+                tool="command",
+                exit_code=proc.returncode,
+                stderr=proc.stderr or "Command failed",
+                cmd=cmd_str,
+            )
+        return RunResult(
+            returncode=proc.returncode,
+            stdout=None,
+            stderr=proc.stderr,
+            command=cmd_str,
+        )
+
+    # ---- capture mode: collect output as strings ----
+    if capture:
+        try:
+            proc = subprocess.run(
+                cmd,
+                shell=False,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=timeout,
+                cwd=cwd,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise ExternalToolError(
+                tool="command",
+                exit_code=-1,
+                stderr=f"Command timed out after {timeout}s",
+                cmd=cmd_str,
+            ) from e
+        except FileNotFoundError:
+            raise  # Let callers handle "tool not found" directly
+        except Exception as e:
+            raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
+
+        result = RunResult(
+            returncode=proc.returncode,
+            stdout=proc.stdout,
+            stderr=proc.stderr,
+            command=cmd_str,
+        )
+        if proc.returncode != 0:
+            logging.error("Command exited with code %d: %s", proc.returncode, cmd_str)
+            raise ExternalToolError(
+                tool="command",
+                exit_code=proc.returncode,
+                stderr=proc.stderr or "Command failed",
+                stdout=proc.stdout or "",
+                cmd=cmd_str,
+            )
+        return result
+
     try:
         proc = subprocess.Popen(
             cmd,
@@ -57,6 +189,7 @@ def run_command(
             # Use binary mode and handle encoding manually to avoid decode errors
             universal_newlines=False,
             preexec_fn=os.setsid,  # Unix only
+            cwd=cwd,
         )
     except Exception as e:
         raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
@@ -117,7 +250,138 @@ def run_command(
         raise ExternalToolError(
             tool="command", exit_code=proc.returncode, stderr="Command failed", cmd=cmd_str
         )
-    return proc.returncode
+    return RunResult(
+        returncode=proc.returncode,
+        stdout=None,
+        stderr=None,
+        command=cmd_str,
+    )
+
+
+def run_pipeline(
+    cmds: list[list[str]],
+    *,
+    capture: bool = True,
+    timeout: int | None = None,
+    cwd: Path | None = None,
+) -> RunResult:
+    """Run a pipeline of commands connected by pipes.
+
+    Connects stdout of each process to stdin of the next.
+    Returns the RunResult from the final process.
+
+    Args:
+        cmds: List of commands, each as a list of strings.
+        capture: If True, capture final stdout/stderr.
+        timeout: Timeout in seconds for entire pipeline.
+        cwd: Working directory for all processes.
+
+    Returns:
+        RunResult from the final process in the pipeline.
+
+    Raises:
+        ExternalToolError: If any process in the pipeline fails.
+        ValueError: If cmds is empty.
+        TypeError: If any command is not a list.
+    """
+    if not cmds:
+        raise ValueError("Pipeline must have at least one command")
+
+    for cmd in cmds:
+        if not isinstance(cmd, list):
+            raise TypeError("Each command must be a list of strings")
+
+    pipeline_str = " | ".join(" ".join(cmd) for cmd in cmds)
+    logging.info("Running pipeline: %s (timeout=%s)", pipeline_str, timeout)
+
+    # Single command: delegate to run_command
+    if len(cmds) == 1:
+        return run_command(cmds[0], timeout=timeout, capture=capture, cwd=cwd)
+
+    processes: list[subprocess.Popen] = []
+    try:
+        # Start all processes in the pipeline
+        for i, cmd in enumerate(cmds):
+            stdin_source = processes[-1].stdout if i > 0 else None
+            # Only capture stderr from last process
+            stderr_dest = subprocess.PIPE if (i == len(cmds) - 1) else subprocess.DEVNULL
+
+            proc = subprocess.Popen(
+                cmd,
+                shell=False,
+                stdin=stdin_source,
+                stdout=subprocess.PIPE,
+                stderr=stderr_dest,
+                cwd=cwd,
+                start_new_session=True,
+            )
+            processes.append(proc)
+
+            # Close previous process's stdout so it gets SIGPIPE on reader close
+            if i > 0 and processes[-2].stdout:
+                processes[-2].stdout.close()
+
+        # Wait for the final process
+        last = processes[-1]
+        try:
+            stdout_bytes, stderr_bytes = last.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            for p in processes:
+                with contextlib.suppress(Exception):
+                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+            last.communicate()
+            raise ExternalToolError(
+                tool="pipeline",
+                exit_code=-1,
+                stderr=f"Pipeline timed out after {timeout}s",
+                cmd=pipeline_str,
+            ) from None
+
+        # Wait for upstream processes to finish (with timeout to avoid hanging)
+        for p in processes[:-1]:
+            try:
+                p.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(Exception):
+                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+                p.wait(timeout=5)
+
+        # Check for failures
+        for i, p in enumerate(processes):
+            if p.returncode != 0:
+                raise ExternalToolError(
+                    tool="pipeline",
+                    exit_code=p.returncode,
+                    stderr=(
+                        f"Pipeline stage {i} ({' '.join(cmds[i])}) "
+                        f"failed with exit code {p.returncode}"
+                    ),
+                    cmd=pipeline_str,
+                )
+
+        stdout_str = (
+            stdout_bytes.decode("utf-8", errors="replace") if capture and stdout_bytes else None
+        )
+        stderr_str = (
+            stderr_bytes.decode("utf-8", errors="replace") if capture and stderr_bytes else None
+        )
+
+        return RunResult(
+            returncode=0,
+            stdout=stdout_str,
+            stderr=stderr_str,
+            command=pipeline_str,
+        )
+    except ExternalToolError:
+        raise
+    except Exception as e:
+        # Clean up any running processes
+        for p in processes:
+            with contextlib.suppress(Exception):
+                os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+        raise ExternalToolError(
+            tool="pipeline", exit_code=1, stderr=str(e), cmd=pipeline_str
+        ) from e
 
 
 def fix_field(field: str, desired_length: int, pad_char: str) -> str:
