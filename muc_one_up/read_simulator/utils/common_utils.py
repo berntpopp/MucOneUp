@@ -122,6 +122,7 @@ def run_command(
                 tool="command",
                 exit_code=proc.returncode,
                 stderr=proc.stderr or "Command failed",
+                stdout=proc.stdout or "",
                 cmd=cmd_str,
             )
         return result

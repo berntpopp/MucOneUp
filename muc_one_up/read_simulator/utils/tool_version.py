@@ -18,10 +18,11 @@ testing in conda environments (see TESTING_RESULTS.md).
 
 import logging
 import re
-import subprocess
 from collections.abc import Callable
 
+from ...exceptions import ExternalToolError
 from ..command_utils import build_tool_command
+from .common_utils import run_command
 
 logger = logging.getLogger(__name__)
 
@@ -178,32 +179,30 @@ def get_tool_version(tool_cmd: str, tool_name: str) -> str:
         cmd = build_tool_command(tool_cmd, *args)
         logger.debug(f"Getting version: {' '.join(cmd)}")
 
-        # Run with check=False (tools may return non-zero)
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            errors="replace",  # Handle UTF-8 decode errors gracefully
-            check=False,  # CRITICAL: Don't raise on non-zero exit (bwa, pbsim, faToTwoBit)
-            timeout=5,
-        )
+        # Run and capture output; some tools return non-zero (bwa, pbsim, faToTwoBit)
+        # so we catch ExternalToolError and extract stdout/stderr from it.
+        try:
+            result = run_command(cmd, capture=True, timeout=5)
+            stdout = result.stdout or ""
+            stderr = result.stderr or ""
+        except ExternalToolError as e:
+            # Tools like bwa return non-zero on purpose; extract output from error
+            stdout = e.stdout or ""
+            stderr = e.stderr or ""
 
         # Parse version from stdout/stderr
-        version = parse_func(result.stdout, result.stderr)
+        version = parse_func(stdout, stderr)
 
         if version == "N/A":
             logger.warning(
                 f"Could not parse version for {tool_name}. "
-                f"stdout: {result.stdout[:100]}, stderr: {result.stderr[:100]}"
+                f"stdout: {stdout[:100]}, stderr: {stderr[:100]}"
             )
         else:
             logger.debug(f"Got version for {tool_name}: {version}")
 
         return version
 
-    except subprocess.TimeoutExpired:
-        logger.warning(f"Timeout getting version for {tool_name} (5s)")
-        return "N/A"
     except Exception as e:
         logger.warning(f"Failed to get version for {tool_name}: {e}")
         return "N/A"
