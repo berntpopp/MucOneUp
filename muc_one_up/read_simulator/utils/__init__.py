@@ -16,6 +16,7 @@ from .common_utils import (
     cleanup_files,
     fix_field,
     run_command,
+    run_pipeline,
 )
 from .diploid_handler import (
     DiploidSimulationResult,
@@ -62,6 +63,7 @@ __all__ = [
     "merge_fastq_files",
     "prepare_diploid_simulation",
     "run_command",
+    "run_pipeline",
     "run_split_simulation",
     "validate_fastq",
     "validate_reference_compatibility",

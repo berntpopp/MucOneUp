@@ -6,6 +6,7 @@ This module provides utility functions that are used across the read simulation
 process, including process execution, file management, and tool validation.
 """
 
+import contextlib
 import logging
 import os
 import shutil
@@ -200,6 +201,125 @@ def run_command(
         stderr=None,
         command=cmd_str,
     )
+
+
+def run_pipeline(
+    cmds: list[list[str]],
+    *,
+    capture: bool = True,
+    timeout: int | None = None,
+    cwd: Path | None = None,
+) -> RunResult:
+    """Run a pipeline of commands connected by pipes.
+
+    Connects stdout of each process to stdin of the next.
+    Returns the RunResult from the final process.
+
+    Args:
+        cmds: List of commands, each as a list of strings.
+        capture: If True, capture final stdout/stderr.
+        timeout: Timeout in seconds for entire pipeline.
+        cwd: Working directory for all processes.
+
+    Returns:
+        RunResult from the final process in the pipeline.
+
+    Raises:
+        ExternalToolError: If any process in the pipeline fails.
+        ValueError: If cmds is empty.
+        TypeError: If any command is not a list.
+    """
+    if not cmds:
+        raise ValueError("Pipeline must have at least one command")
+
+    for cmd in cmds:
+        if not isinstance(cmd, list):
+            raise TypeError("Each command must be a list of strings")
+
+    pipeline_str = " | ".join(" ".join(cmd) for cmd in cmds)
+    logging.info("Running pipeline: %s (timeout=%s)", pipeline_str, timeout)
+
+    # Single command: delegate to run_command
+    if len(cmds) == 1:
+        return run_command(cmds[0], timeout=timeout, capture=capture, cwd=cwd)
+
+    processes: list[subprocess.Popen] = []
+    try:
+        # Start all processes in the pipeline
+        for i, cmd in enumerate(cmds):
+            stdin_source = processes[-1].stdout if i > 0 else None
+            # Only capture stderr from last process
+            stderr_dest = subprocess.PIPE if (i == len(cmds) - 1) else subprocess.DEVNULL
+
+            proc = subprocess.Popen(
+                cmd,
+                shell=False,
+                stdin=stdin_source,
+                stdout=subprocess.PIPE,
+                stderr=stderr_dest,
+                cwd=cwd,
+            )
+            processes.append(proc)
+
+            # Close previous process's stdout so it gets SIGPIPE on reader close
+            if i > 0 and processes[-2].stdout:
+                processes[-2].stdout.close()
+
+        # Wait for the final process
+        last = processes[-1]
+        try:
+            stdout_bytes, stderr_bytes = last.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            for p in processes:
+                p.kill()
+            last.communicate()
+            raise ExternalToolError(
+                tool="pipeline",
+                exit_code=-1,
+                stderr=f"Pipeline timed out after {timeout}s",
+                cmd=pipeline_str,
+            ) from None
+
+        # Wait for upstream processes to finish
+        for p in processes[:-1]:
+            p.wait()
+
+        # Check for failures
+        for i, p in enumerate(processes):
+            if p.returncode != 0:
+                raise ExternalToolError(
+                    tool="pipeline",
+                    exit_code=p.returncode,
+                    stderr=(
+                        f"Pipeline stage {i} ({' '.join(cmds[i])}) "
+                        f"failed with exit code {p.returncode}"
+                    ),
+                    cmd=pipeline_str,
+                )
+
+        stdout_str = (
+            stdout_bytes.decode("utf-8", errors="replace") if capture and stdout_bytes else None
+        )
+        stderr_str = (
+            stderr_bytes.decode("utf-8", errors="replace") if capture and stderr_bytes else None
+        )
+
+        return RunResult(
+            returncode=0,
+            stdout=stdout_str,
+            stderr=stderr_str,
+            command=pipeline_str,
+        )
+    except ExternalToolError:
+        raise
+    except Exception as e:
+        # Clean up any running processes
+        for p in processes:
+            with contextlib.suppress(Exception):
+                p.kill()
+        raise ExternalToolError(
+            tool="pipeline", exit_code=1, stderr=str(e), cmd=pipeline_str
+        ) from e
 
 
 def fix_field(field: str, desired_length: int, pad_char: str) -> str:
