@@ -15,11 +15,10 @@ These tests verify that our wrapper correctly:
 from pathlib import Path
 from unittest.mock import Mock
 
-from muc_one_up.read_simulator.utils.common_utils import RunResult
-
 import pytest
 
 from muc_one_up.exceptions import FileOperationError
+from muc_one_up.read_simulator.utils.common_utils import RunResult
 from muc_one_up.read_simulator.wrappers.samtools_wrapper import (
     _count_fastq_reads,
     calculate_target_coverage,
@@ -45,7 +44,9 @@ class TestExtractSubsetReference:
         # Mock run_command for both collate (non-capture) and fasta (capture)
         def mock_run_cmd(cmd, **kwargs):
             if "fasta" in cmd:
-                return RunResult(returncode=0, stdout=">seq1\nACGT\n", stderr="", command=" ".join(cmd))
+                return RunResult(
+                    returncode=0, stdout=">seq1\nACGT\n", stderr="", command=" ".join(cmd)
+                )
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mock_run = mocker.patch(
@@ -74,7 +75,9 @@ class TestExtractSubsetReference:
 
         def mock_run_cmd(cmd, **kwargs):
             if "fasta" in cmd:
-                return RunResult(returncode=0, stdout=">seq1\nACGT\n", stderr="", command=" ".join(cmd))
+                return RunResult(
+                    returncode=0, stdout=">seq1\nACGT\n", stderr="", command=" ".join(cmd)
+                )
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mocker.patch(

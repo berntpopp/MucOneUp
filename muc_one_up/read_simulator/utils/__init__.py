@@ -47,8 +47,8 @@ from .tool_version import (
 )
 
 __all__ = [
-    "RunResult",
     "DiploidSimulationResult",
+    "RunResult",
     "calculate_corrected_coverage",
     "capture_tool_versions",
     "check_external_tools",

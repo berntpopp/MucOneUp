@@ -13,7 +13,7 @@ Tests cover:
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -330,9 +330,7 @@ class TestCalculateMeanCoverage:
     def test_coverage_calculation(self, mock_run, mock_bam_file, mock_bed_file):
         """Test successful coverage calculation."""
         # Mock samtools depth output: chr, pos, depth
-        mock_run.return_value = _ok(
-            stdout="chr1\t1000\t10\nchr1\t1001\t20\nchr1\t1002\t30\n"
-        )
+        mock_run.return_value = _ok(stdout="chr1\t1000\t10\nchr1\t1001\t20\nchr1\t1002\t30\n")
 
         coverage = calculate_mean_coverage(mock_bam_file, mock_bed_file)
 
