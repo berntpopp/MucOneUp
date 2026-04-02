@@ -8,8 +8,40 @@ Following SOLID principles:
 - Dependency Inversion: Protocol classes enable abstract interfaces
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
+
+
+@dataclass(frozen=True, slots=True)
+class RepeatUnit:
+    """A single repeat unit in a VNTR chain.
+
+    Replaces the convention of using plain strings with 'm' suffix
+    for mutated repeats. Provides typed access to the symbol and
+    mutation status.
+
+    Attributes:
+        symbol: The repeat type identifier (e.g., "1", "6p", "X").
+        mutated: Whether this repeat has been mutated.
+    """
+
+    symbol: str
+    mutated: bool = False
+
+    def __str__(self) -> str:
+        """Serialize to legacy string format (e.g., 'Xm' if mutated)."""
+        return f"{self.symbol}m" if self.mutated else self.symbol
+
+    @classmethod
+    def from_str(cls, s: str) -> RepeatUnit:
+        """Parse from legacy string format (e.g., 'Xm' -> RepeatUnit('X', True))."""
+        if s.endswith("m"):
+            return cls(symbol=s[:-1], mutated=True)
+        return cls(symbol=s, mutated=False)
+
 
 # Type aliases for haplotype representation
 HaplotypeName = str
