@@ -91,7 +91,7 @@ def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNA
     """Assemble complete haplotype sequence from repeat chain.
 
     Delegates to assembly.assemble_sequence().
-    Kept as a thin wrapper for backward compatibility.
+    Converts legacy string chain to RepeatUnit list.
 
     Args:
         chain: List of repeat symbols to assemble (e.g., ['1', '2', '7', '8', '9'])
@@ -100,7 +100,10 @@ def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNA
     Returns:
         Assembled haplotype DNA sequence
     """
-    return assemble_sequence(chain, config)
+    from .type_defs import RepeatUnit
+
+    typed_chain = [RepeatUnit.from_str(s) for s in chain]
+    return assemble_sequence(typed_chain, config)
 
 
 def simulate_from_chains(

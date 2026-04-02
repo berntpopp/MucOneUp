@@ -216,7 +216,7 @@ def rebuild_haplotype_sequence(chain: RepeatChain, config: ConfigDict) -> DNASeq
     """Rebuild haplotype sequence after mutation.
 
     Delegates to assembly.assemble_sequence().
-    Kept as a thin wrapper for backward compatibility.
+    Converts legacy string chain to RepeatUnit list.
 
     Args:
         chain: List of repeat symbols, possibly with 'm' suffix marking mutations
@@ -225,7 +225,10 @@ def rebuild_haplotype_sequence(chain: RepeatChain, config: ConfigDict) -> DNASeq
     Returns:
         Reassembled haplotype DNA sequence
     """
-    return assemble_sequence(chain, config)
+    from .type_defs import RepeatUnit
+
+    typed_chain = [RepeatUnit.from_str(s) for s in chain]
+    return assemble_sequence(typed_chain, config)
 
 
 def apply_changes_to_repeat(

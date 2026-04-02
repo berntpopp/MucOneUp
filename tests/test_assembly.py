@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from muc_one_up.assembly import assemble_sequence
+from muc_one_up.type_defs import RepeatUnit
 
 
 class TestAssembleSequence:
@@ -29,7 +30,7 @@ class TestAssembleSequence:
         }
 
     def test_simple_chain(self, config):
-        chain = ["1", "2", "9"]
+        chain = [RepeatUnit("1"), RepeatUnit("2"), RepeatUnit("9")]
         seq = assemble_sequence(chain, config)
         left = config["constants"]["hg38"]["left"]
         right = config["constants"]["hg38"]["right"]
@@ -39,8 +40,8 @@ class TestAssembleSequence:
         assert seq == left + r1 + r2 + r9 + right
 
     def test_mutation_marker_stripped(self, config):
-        """Chains with 'm' suffix should look up the base symbol."""
-        chain = ["1", "Xm", "9"]
+        """Chains with mutated RepeatUnit should look up the base symbol."""
+        chain = [RepeatUnit("1"), RepeatUnit("X", True), RepeatUnit("9")]
         seq = assemble_sequence(chain, config)
         left = config["constants"]["hg38"]["left"]
         right = config["constants"]["hg38"]["right"]
@@ -57,7 +58,7 @@ class TestAssembleSequence:
 
     def test_chain_not_ending_with_9_omits_right_constant(self, config):
         """If chain doesn't end with 9, right constant is omitted."""
-        chain = ["1", "2"]
+        chain = [RepeatUnit("1"), RepeatUnit("2")]
         seq = assemble_sequence(chain, config)
         left = config["constants"]["hg38"]["left"]
         r1 = config["repeats"]["1"]
@@ -66,7 +67,7 @@ class TestAssembleSequence:
 
     def test_unknown_symbol_raises(self, config):
         with pytest.raises(KeyError, match="UNKNOWN"):
-            assemble_sequence(["UNKNOWN"], config)
+            assemble_sequence([RepeatUnit("UNKNOWN")], config)
 
     def test_hg19_assembly(self):
         config = {
@@ -78,11 +79,11 @@ class TestAssembleSequence:
             "reference_assembly": "hg19",
         }
         # Chain doesn't end with "9", so no right constant
-        seq = assemble_sequence(["1"], config)
+        seq = assemble_sequence([RepeatUnit("1")], config)
         assert seq == "LEFT" + "ACGT"
 
     def test_single_repeat_ending_with_9(self, config):
-        chain = ["9"]
+        chain = [RepeatUnit("9")]
         seq = assemble_sequence(chain, config)
         left = config["constants"]["hg38"]["left"]
         right = config["constants"]["hg38"]["right"]
@@ -103,7 +104,7 @@ def test_simulate_delegates_to_centralized_assembly():
     }
     with patch("muc_one_up.simulate.assemble_sequence", return_value="MOCKED") as mock:
         result = assemble_haplotype_from_chain(["1", "9"], config)
-    mock.assert_called_once_with(["1", "9"], config)
+    mock.assert_called_once_with([RepeatUnit("1"), RepeatUnit("9")], config)
     assert result == "MOCKED"
 
 
@@ -120,5 +121,5 @@ def test_mutate_delegates_to_centralized_assembly():
     }
     with patch("muc_one_up.mutate.assemble_sequence", return_value="MOCKED") as mock:
         result = rebuild_haplotype_sequence(["1", "9"], config)
-    mock.assert_called_once_with(["1", "9"], config)
+    mock.assert_called_once_with([RepeatUnit("1"), RepeatUnit("9")], config)
     assert result == "MOCKED"
