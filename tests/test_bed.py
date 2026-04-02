@@ -217,9 +217,11 @@ class TestCreateFlankingBeds:
 class TestCreateNonVntrBedFromCapture:
     """Tests for non-VNTR BED creation via subtraction."""
 
-    @patch("subprocess.run")
-    def test_subtraction_success(self, mock_run, temp_dir):
+    @patch("muc_one_up.read_simulator.utils.bed.run_command")
+    def test_subtraction_success(self, mock_run_command, temp_dir):
         """Test successful BED subtraction."""
+        from muc_one_up.read_simulator.utils.common_utils import RunResult
+
         capture_bed = temp_dir / "capture.bed"
         vntr_bed = temp_dir / "vntr.bed"
         output_bed = temp_dir / "non_vntr.bed"
@@ -227,17 +229,19 @@ class TestCreateNonVntrBedFromCapture:
         capture_bed.write_text("chr1\t1000\t5000\tcapture\n")
         vntr_bed.write_text("chr1\t2000\t3000\tvntr\n")
 
-        mock_run.return_value = MagicMock(returncode=0)
+        mock_run_command.return_value = RunResult(
+            returncode=0, stdout="bed output content", stderr="", command="bedtools"
+        )
 
         result = create_non_vntr_bed_from_capture(output_bed, capture_bed, vntr_bed)
 
         assert result == output_bed
-        mock_run.assert_called_once()
-        args = mock_run.call_args[0][0]
-        assert args[0] == "bedtools"
-        assert args[1] == "subtract"
-        assert "-a" in args
-        assert "-b" in args
+        mock_run_command.assert_called_once()
+        cmd_arg = mock_run_command.call_args[0][0]
+        assert cmd_arg[0] == "bedtools"
+        assert cmd_arg[1] == "subtract"
+        assert "-a" in cmd_arg
+        assert "-b" in cmd_arg
 
     @patch("subprocess.run")
     def test_subtraction_bedtools_error(self, mock_run, temp_dir):
@@ -256,9 +260,11 @@ class TestCreateNonVntrBedFromCapture:
         with pytest.raises(BedError, match="bedtools subtract failed"):
             create_non_vntr_bed_from_capture(output_bed, capture_bed, vntr_bed)
 
-    @patch("subprocess.run")
-    def test_subtraction_bedtools_not_found(self, mock_run, temp_dir):
+    @patch("muc_one_up.read_simulator.utils.bed.run_command")
+    def test_subtraction_bedtools_not_found(self, mock_run_command, temp_dir):
         """Test handling of missing bedtools."""
+        from muc_one_up.exceptions import ExternalToolError
+
         capture_bed = temp_dir / "capture.bed"
         vntr_bed = temp_dir / "vntr.bed"
         output_bed = temp_dir / "non_vntr.bed"
@@ -266,9 +272,14 @@ class TestCreateNonVntrBedFromCapture:
         capture_bed.touch()
         vntr_bed.touch()
 
-        mock_run.side_effect = FileNotFoundError()
+        mock_run_command.side_effect = ExternalToolError(
+            tool="command",
+            exit_code=1,
+            stderr="[Errno 2] No such file or directory: 'bedtools'",
+            cmd="bedtools subtract",
+        )
 
-        with pytest.raises(BedError, match="bedtools not found in PATH"):
+        with pytest.raises(BedError, match="bedtools subtract failed"):
             create_non_vntr_bed_from_capture(output_bed, capture_bed, vntr_bed)
 
 

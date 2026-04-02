@@ -346,7 +346,7 @@ class TestErrorHandling:
         output_fq1 = tmp_path / "test_R1.fastq.gz"
         output_fq2 = tmp_path / "test_R2.fastq.gz"
 
-        with pytest.raises(ExternalToolError, match="samtools failed"):
+        with pytest.raises(ExternalToolError, match=r"pipeline failed|samtools failed"):
             convert_bam_to_paired_fastq(
                 samtools_cmd="/nonexistent/samtools",
                 input_bam=test_bam_with_unpaired_reads,
