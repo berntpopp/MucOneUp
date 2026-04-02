@@ -26,6 +26,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from .type_defs import HaplotypeResult, RepeatUnit
+
 # ---------------------------------------------------------------------------
 # Utility functions
 
@@ -67,12 +69,12 @@ def extract_vntr_region(seq: str, config: dict[str, Any]) -> str:
     return seq
 
 
-def get_repeat_lengths(chain: list[str], config: dict[str, Any]) -> list[int]:
+def get_repeat_lengths(chain: list[RepeatUnit], config: dict[str, Any]) -> list[int]:
     """
     Calculate the nucleotide lengths of each repeat in the chain.
 
     Args:
-        chain (List[str]): List of repeat symbols (possibly with a mutation marker).
+        chain: List of RepeatUnit objects.
         config (Dict[str, Any]): Configuration dict containing the 'repeats' sequences.
 
     Returns:
@@ -80,48 +82,43 @@ def get_repeat_lengths(chain: list[str], config: dict[str, Any]) -> list[int]:
     """
     lengths = []
     repeats_dict = config.get("repeats", {})
-    for symbol in chain:
-        pure_symbol = symbol.rstrip("m")
-        repeat_seq = repeats_dict.get(pure_symbol, "")
+    for unit in chain:
+        repeat_seq = repeats_dict.get(unit.symbol, "")
         lengths.append(len(repeat_seq))
     return lengths
 
 
-def count_repeat_types(chain: list[str]) -> dict[str, int]:
+def count_repeat_types(chain: list[RepeatUnit]) -> dict[str, int]:
     """
     Count the frequency of each repeat type in the chain.
 
     Args:
-        chain (List[str]): List of repeat symbols (with or without a mutation marker).
+        chain: List of RepeatUnit objects.
 
     Returns:
-        Dict[str, int]: A dictionary mapping each repeat type (without the 'm' marker)
-                        to its count.
+        Dict[str, int]: A dictionary mapping each repeat type to its count.
     """
     counts: dict[str, int] = {}
-    for symbol in chain:
-        pure_symbol = symbol.rstrip("m")
-        counts[pure_symbol] = counts.get(pure_symbol, 0) + 1
+    for unit in chain:
+        counts[unit.symbol] = counts.get(unit.symbol, 0) + 1
     return counts
 
 
-def get_mutation_details(chain: list[str]) -> list[dict[str, Any]]:
+def get_mutation_details(chain: list[RepeatUnit]) -> list[dict[str, Any]]:
     """
     Identify the positions in the chain where mutations have been applied.
 
-    A repeat is considered mutated if its symbol ends with "m".
-
     Args:
-        chain (List[str]): List of repeat symbols.
+        chain: List of RepeatUnit objects.
 
     Returns:
         List[Dict[str, Any]]: List of mutation details with 1-based positions and the
                               underlying repeat type.
     """
     mutations = []
-    for idx, symbol in enumerate(chain, start=1):
-        if symbol.endswith("m"):
-            mutations.append({"position": idx, "repeat": symbol.rstrip("m")})
+    for idx, unit in enumerate(chain, start=1):
+        if unit.mutated:
+            mutations.append({"position": idx, "repeat": unit.symbol})
     return mutations
 
 
@@ -130,12 +127,12 @@ def get_mutation_details(chain: list[str]) -> list[dict[str, Any]]:
 
 
 def generate_haplotype_stats(
-    simulation_results: list[tuple], config: dict[str, Any]
+    simulation_results: list[HaplotypeResult], config: dict[str, Any]
 ) -> list[dict[str, Any]]:
     """
     Generate statistics for each haplotype simulation result.
 
-    For each haplotype (a tuple of (sequence, chain)), the function calculates:
+    For each HaplotypeResult, the function calculates:
         - The VNTR region (by removing constant flanks).
         - The number of repeats (chain length).
         - The overall GC content of the full simulated sequence.
@@ -144,7 +141,7 @@ def generate_haplotype_stats(
         - The number of mutated repeats and their positions.
 
     Args:
-        simulation_results (List[tuple]): List of (sequence, chain) for each haplotype.
+        simulation_results: List of HaplotypeResult objects.
         config (Dict[str, Any]): Configuration dictionary.
 
     Returns:
@@ -152,22 +149,22 @@ def generate_haplotype_stats(
                               statistics.
     """
     hap_stats = []
-    for seq, chain in simulation_results:
-        vntr_region = extract_vntr_region(seq, config)
-        repeat_lengths = get_repeat_lengths(chain, config)
+    for hr in simulation_results:
+        vntr_region = extract_vntr_region(hr.sequence, config)
+        repeat_lengths = get_repeat_lengths(hr.chain, config)
         hap_stat = {
-            "repeat_count": len(chain),
+            "repeat_count": len(hr.chain),
             "vntr_length": len(vntr_region),
-            "gc_content": compute_gc_content(seq),
+            "gc_content": compute_gc_content(hr.sequence),
             "repeat_lengths": repeat_lengths,
             "repeat_lengths_summary": {
                 "min": min(repeat_lengths) if repeat_lengths else 0,
                 "max": max(repeat_lengths) if repeat_lengths else 0,
                 "average": (sum(repeat_lengths) / len(repeat_lengths) if repeat_lengths else 0),
             },
-            "repeat_type_counts": count_repeat_types(chain),
-            "mutant_repeat_count": sum(1 for r in chain if r.endswith("m")),
-            "mutation_details": get_mutation_details(chain),
+            "repeat_type_counts": count_repeat_types(hr.chain),
+            "mutant_repeat_count": sum(1 for ru in hr.chain if ru.mutated),
+            "mutation_details": get_mutation_details(hr.chain),
             # Initialize SNP fields that will be populated later if SNPs were applied
             "snp_count": 0,
             "applied_snps": [],
@@ -222,7 +219,7 @@ def generate_overall_stats(hap_stats: list[dict[str, Any]]) -> dict[str, Any]:
 def generate_simulation_statistics(
     start_time: float,
     end_time: float,
-    simulation_results: list[tuple],
+    simulation_results: list[HaplotypeResult],
     config: dict[str, Any],
     mutation_info: dict[str, Any] | None = None,
     vntr_coverage: dict[str, Any] | None = None,
@@ -244,7 +241,7 @@ def generate_simulation_statistics(
     Args:
         start_time (float): Simulation start time (timestamp).
         end_time (float): Simulation end time (timestamp).
-        simulation_results (List[tuple]): List of (sequence, chain) for each haplotype.
+        simulation_results: List of HaplotypeResult objects.
         config (Dict[str, Any]): Configuration dictionary.
         mutation_info (Optional[Dict[str, Any]]): Mutation details (e.g., mutation name,
             target positions). Defaults to None.

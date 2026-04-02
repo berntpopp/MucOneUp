@@ -27,6 +27,14 @@ from muc_one_up.simulation_statistics import (
     get_repeat_lengths,
     write_statistics_report,
 )
+from muc_one_up.type_defs import HaplotypeResult, RepeatUnit
+
+RU = RepeatUnit.from_str  # shorthand
+
+
+def _hr(seq: str, chain_strs: list[str]) -> HaplotypeResult:
+    """Build HaplotypeResult from legacy (seq, chain_strs) for test convenience."""
+    return HaplotypeResult(sequence=seq, chain=[RU(s) for s in chain_strs])
 
 
 @pytest.mark.unit
@@ -99,7 +107,7 @@ class TestGetRepeatLengths:
 
     def test_repeat_lengths_basic(self, minimal_config: dict):
         """Test getting repeat lengths for basic chain."""
-        chain = ["1", "2", "X"]
+        chain = [RU("1"), RU("2"), RU("X")]
 
         lengths = get_repeat_lengths(chain, minimal_config)
 
@@ -112,7 +120,7 @@ class TestGetRepeatLengths:
 
     def test_repeat_lengths_with_mutation_markers(self, minimal_config: dict):
         """Test getting repeat lengths with mutation markers."""
-        chain = ["1", "2m", "X"]  # "2m" should be treated as "2"
+        chain = [RU("1"), RU("2m"), RU("X")]  # "2m" should be treated as "2"
 
         lengths = get_repeat_lengths(chain, minimal_config)
 
@@ -135,7 +143,7 @@ class TestCountRepeatTypes:
 
     def test_count_repeat_types_basic(self):
         """Test counting repeat types in chain."""
-        chain = ["1", "2", "X", "X", "A", "2"]
+        chain = [RU("1"), RU("2"), RU("X"), RU("X"), RU("A"), RU("2")]
 
         counts = count_repeat_types(chain)
 
@@ -143,7 +151,7 @@ class TestCountRepeatTypes:
 
     def test_count_repeat_types_with_mutation_markers(self):
         """Test counting ignores mutation markers."""
-        chain = ["1", "2m", "X", "Xm", "A", "2"]
+        chain = [RU("1"), RU("2m"), RU("X"), RU("Xm"), RU("A"), RU("2")]
 
         counts = count_repeat_types(chain)
 
@@ -157,7 +165,7 @@ class TestCountRepeatTypes:
 
     def test_count_repeat_types_single_repeat(self):
         """Test counting single repeat type."""
-        chain = ["X", "X", "X", "X"]
+        chain = [RU("X"), RU("X"), RU("X"), RU("X")]
 
         counts = count_repeat_types(chain)
 
@@ -170,7 +178,7 @@ class TestGetMutationDetails:
 
     def test_mutation_details_basic(self):
         """Test getting mutation details."""
-        chain = ["1", "2m", "X", "Am", "B"]
+        chain = [RU("1"), RU("2m"), RU("X"), RU("Am"), RU("B")]
 
         mutations = get_mutation_details(chain)
 
@@ -180,7 +188,7 @@ class TestGetMutationDetails:
 
     def test_mutation_details_no_mutations(self):
         """Test getting mutation details when no mutations present."""
-        chain = ["1", "2", "X", "A", "B"]
+        chain = [RU("1"), RU("2"), RU("X"), RU("A"), RU("B")]
 
         mutations = get_mutation_details(chain)
 
@@ -188,7 +196,7 @@ class TestGetMutationDetails:
 
     def test_mutation_details_all_mutated(self):
         """Test getting mutation details when all repeats mutated."""
-        chain = ["1m", "2m", "Xm"]
+        chain = [RU("1m"), RU("2m"), RU("Xm")]
 
         mutations = get_mutation_details(chain)
 
@@ -199,7 +207,7 @@ class TestGetMutationDetails:
 
     def test_mutation_details_position_is_one_based(self):
         """Test that positions are 1-based."""
-        chain = ["Xm"]
+        chain = [RU("Xm")]
 
         mutations = get_mutation_details(chain)
 
@@ -216,8 +224,7 @@ class TestGenerateHaplotypeStats:
         """Test generating stats for single haplotype."""
         # Use first haplotype from fixture
         seq, _ = sample_haplotype_sequences[0]
-        chain = ["1", "2", "X", "B", "6", "7", "8", "9"]
-        simulation_results = [(seq, chain)]
+        simulation_results = [_hr(seq, ["1", "2", "X", "B", "6", "7", "8", "9"])]
 
         stats = generate_haplotype_stats(simulation_results, minimal_config)
 
@@ -237,8 +244,7 @@ class TestGenerateHaplotypeStats:
         right = minimal_config["constants"]["hg38"]["right"]
         vntr = "ATCGATCGATCG"
         seq = left + vntr + right
-        chain = ["1", "2m", "X", "Am", "6", "7", "8", "9"]
-        simulation_results = [(seq, chain)]
+        simulation_results = [_hr(seq, ["1", "2m", "X", "Am", "6", "7", "8", "9"])]
 
         stats = generate_haplotype_stats(simulation_results, minimal_config)
 
@@ -252,9 +258,10 @@ class TestGenerateHaplotypeStats:
         """Test generating stats for multiple haplotypes."""
         seq1, _ = sample_haplotype_sequences[0]
         seq2, _ = sample_haplotype_sequences[1]
-        chain1 = ["1", "2", "X", "B", "6", "7", "8", "9"]
-        chain2 = ["1", "2", "A", "B", "6p", "7", "8", "9"]
-        simulation_results = [(seq1, chain1), (seq2, chain2)]
+        simulation_results = [
+            _hr(seq1, ["1", "2", "X", "B", "6", "7", "8", "9"]),
+            _hr(seq2, ["1", "2", "A", "B", "6p", "7", "8", "9"]),
+        ]
 
         stats = generate_haplotype_stats(simulation_results, minimal_config)
 
@@ -268,8 +275,7 @@ class TestGenerateHaplotypeStats:
         right = minimal_config["constants"]["hg38"]["right"]
         vntr = "ATCGATCGATCG"
         seq = left + vntr + right
-        chain = ["1", "2", "X"]
-        simulation_results = [(seq, chain)]
+        simulation_results = [_hr(seq, ["1", "2", "X"])]
 
         stats = generate_haplotype_stats(simulation_results, minimal_config)
 
@@ -349,9 +355,10 @@ class TestGenerateSimulationStatistics:
         """Test full statistics report generation."""
         seq1, _ = sample_haplotype_sequences[0]
         seq2, _ = sample_haplotype_sequences[1]
-        chain1 = ["1", "2", "X", "B", "6", "7", "8", "9"]
-        chain2 = ["1", "2", "A", "B", "6p", "7", "8", "9"]
-        simulation_results = [(seq1, chain1), (seq2, chain2)]
+        simulation_results = [
+            _hr(seq1, ["1", "2", "X", "B", "6", "7", "8", "9"]),
+            _hr(seq2, ["1", "2", "A", "B", "6p", "7", "8", "9"]),
+        ]
 
         start_time = 100.0
         end_time = 110.5
@@ -380,8 +387,7 @@ class TestGenerateSimulationStatistics:
     ):
         """Test statistics generation with no mutation."""
         seq1, _ = sample_haplotype_sequences[0]
-        chain1 = ["1", "2", "X", "B", "6", "7", "8", "9"]
-        simulation_results = [(seq1, chain1)]
+        simulation_results = [_hr(seq1, ["1", "2", "X", "B", "6", "7", "8", "9"])]
 
         start_time = 100.0
         end_time = 105.0
@@ -449,13 +455,13 @@ class TestStatisticsBioinformatics:
     def test_repeat_statistics_realistic_vntr(self, minimal_config: dict):
         """Test repeat statistics for realistic VNTR."""
         # Typical MUC1 VNTR: 20-120 repeats
-        chain = ["1", "2", "X", "A", "B", "C", "6", "7", "8", "9"] * 5  # 50 repeats
+        chain_strs = ["1", "2", "X", "A", "B", "C", "6", "7", "8", "9"] * 5  # 50 repeats
         left = minimal_config["constants"]["hg38"]["left"]
         right = minimal_config["constants"]["hg38"]["right"]
         vntr = "ATCGATCG" * 50
         seq = left + vntr + right
 
-        simulation_results = [(seq, chain)]
+        simulation_results = [_hr(seq, chain_strs)]
         stats = generate_haplotype_stats(simulation_results, minimal_config)
 
         assert stats[0]["repeat_count"] == 50
@@ -469,7 +475,7 @@ class TestProvenanceIntegration:
 
     def test_provenance_in_report(self, minimal_config: dict):
         """Test provenance section is included when provided."""
-        results = [("ACGTACGT", ["X", "A"])]
+        results = [_hr("ACGTACGT", ["X", "A"])]
         start = 1730649330.0
         end = 1730649331.0
 
@@ -496,7 +502,7 @@ class TestProvenanceIntegration:
 
     def test_provenance_optional_backward_compatible(self, minimal_config: dict):
         """Test backward compatibility when provenance not provided."""
-        results = [("ACGTACGT", ["X", "A"])]
+        results = [_hr("ACGTACGT", ["X", "A"])]
         start = 1730000000.0
         end = start + 1.0
 
@@ -513,7 +519,7 @@ class TestProvenanceIntegration:
 
     def test_runtime_computed_from_provenance(self, minimal_config: dict):
         """Test runtime_seconds uses provenance.duration_seconds if available."""
-        results = [("ACGTACGT", ["X", "A"])]
+        results = [_hr("ACGTACGT", ["X", "A"])]
         start = 1000.0
         end = 1001.5
 
@@ -536,7 +542,7 @@ class TestProvenanceIntegration:
 
     def test_runtime_falls_back_to_calculation(self, minimal_config: dict):
         """Test runtime_seconds falls back to calculation if provenance missing."""
-        results = [("ACGTACGT", ["X", "A"])]
+        results = [_hr("ACGTACGT", ["X", "A"])]
         start = 1000.0
         end = 1002.5
 
@@ -553,7 +559,7 @@ class TestProvenanceIntegration:
 
     def test_provenance_with_all_fields(self, minimal_config: dict):
         """Test report with complete provenance metadata."""
-        results = [("ACGTACGT", ["X", "A"])]
+        results = [_hr("ACGTACGT", ["X", "A"])]
         start = 1730649330.0
         end = 1730649331.5
 
@@ -583,7 +589,7 @@ class TestProvenanceIntegration:
 
     def test_provenance_with_error_sentinels(self, minimal_config: dict):
         """Test report handles provenance with error sentinels."""
-        results = [("ACGTACGT", ["X", "A"])]
+        results = [_hr("ACGTACGT", ["X", "A"])]
         start = 1000.0
         end = 1001.0
 

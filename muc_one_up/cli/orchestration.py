@@ -117,10 +117,6 @@ def run_single_simulation_iteration(
         structure_mutation_info,
     )
 
-    # Convert to legacy tuple format for downstream functions not yet migrated
-    results_tuples = [hr.as_tuple() for hr in results]
-    mutated_results_tuples = [hr.as_tuple() for hr in mutated_results] if mutated_results else None
-
     # ORF prediction and toxic detection
     run_orf_prediction(
         args,
@@ -128,8 +124,8 @@ def run_single_simulation_iteration(
         out_dir,
         out_base,
         sim_index,
-        results_tuples,
-        mutated_results_tuples,
+        results,
+        mutated_results,
         dual_mutation_mode,
     )
 
@@ -141,10 +137,10 @@ def run_single_simulation_iteration(
 
         from ..read_simulator.source_tracking import ReadSourceTracker
 
-        # Build repeat chains dict (1-based haplotype keys) using string chains
+        # Build repeat chains dict (1-based haplotype keys) using typed chains
         repeat_chains = {}
         for i, hr in enumerate(results):
-            repeat_chains[i + 1] = hr.chain_strs()
+            repeat_chains[i + 1] = hr.chain
 
         # Get left constant length from config
         ref_assembly = getattr(args, "reference_assembly", None) or config.get(
@@ -156,12 +152,12 @@ def run_single_simulation_iteration(
         # Get repeats dict
         repeats_dict = config.get("repeats", {})
 
-        # Get mutation info - convert MutationTarget to legacy tuples
+        # Get mutation info
         mutation_name_str = getattr(args, "mutation_name", None)
         mut_positions: list[tuple[int, int]] = []
         mut_name = None
         if mutation_positions:
-            mut_positions = [mt.as_tuple() for mt in mutation_positions]
+            mut_positions = [(mt.haplotype_index, mt.repeat_index) for mt in mutation_positions]
             if mutation_name_str and mutation_name_str != "normal":
                 parts = mutation_name_str.split(",")
                 for p in parts:
@@ -191,7 +187,7 @@ def run_single_simulation_iteration(
             mut_chains = {}
             if mutated_results:
                 for i, hr in enumerate(mutated_results):
-                    mut_chains[i + 1] = hr.chain_strs()
+                    mut_chains[i + 1] = hr.chain
 
             # Get mutated SNP info
             mut_snp_info_dict: dict[int, list[dict[str, object]]] = {}
@@ -249,7 +245,7 @@ def run_single_simulation_iteration(
         source_tracker_mut=source_tracker_mut,
     )
 
-    # Statistics - use legacy tuple format for generate_simulation_statistics
+    # Statistics
     iteration_end = time.time()
     write_simulation_statistics(
         args,
@@ -259,8 +255,8 @@ def run_single_simulation_iteration(
         sim_index,
         iteration_start,
         iteration_end,
-        results_tuples,
-        mutated_results_tuples,
+        results,
+        mutated_results,
         dual_mutation_mode,
         mutation_pair,
         applied_snp_info_normal,

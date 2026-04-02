@@ -21,6 +21,13 @@ from muc_one_up.simulate import (
 )
 from muc_one_up.type_defs import HaplotypeResult, RepeatUnit
 
+RU = RepeatUnit.from_str
+
+
+def _ru_chains(*str_chains: list[str]) -> list[list[RepeatUnit]]:
+    """Convert string chain lists to RepeatUnit chain lists."""
+    return [[RU(s) for s in chain] for chain in str_chains]
+
 
 @pytest.fixture
 def simple_config():
@@ -190,10 +197,10 @@ class TestSimulateFromChains:
 
     def test_creates_haplotypes_from_chains(self, minimal_config: dict):
         """Given predefined chains, when simulating, then creates haplotypes."""
-        chains = [
+        chains = _ru_chains(
             ["1", "2", "X", "B", "6", "7", "8", "9"],
             ["1", "2", "A", "B", "6p", "7", "8", "9"],
-        ]
+        )
 
         results = simulate_from_chains(chains, minimal_config)
 
@@ -202,7 +209,7 @@ class TestSimulateFromChains:
 
     def test_preserves_original_chains(self, minimal_config: dict):
         """Given chains, when simulating, then preserves chain structure."""
-        chains = [["1", "2", "X"], ["1", "A", "B"]]
+        chains = _ru_chains(["1", "2", "X"], ["1", "A", "B"])
 
         results = simulate_from_chains(chains, minimal_config)
 
@@ -211,7 +218,7 @@ class TestSimulateFromChains:
 
     def test_applies_mutation_to_specific_haplotype(self, minimal_config: dict):
         """Given mutation target, when simulating, then applies mutation correctly."""
-        chains = [["1", "2", "X"], ["1", "A", "B"]]
+        chains = _ru_chains(["1", "2", "X"], ["1", "A", "B"])
         targets = [(1, 2)]  # Haplotype 1, position 2
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
@@ -223,7 +230,7 @@ class TestSimulateFromChains:
 
     def test_applies_multiple_mutations(self, minimal_config: dict):
         """Given multiple targets, when simulating, then applies all mutations."""
-        chains = [["1", "2", "X"], ["1", "A", "B"]]
+        chains = _ru_chains(["1", "2", "X"], ["1", "A", "B"])
         targets = [(1, 2), (2, 3)]
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
@@ -235,7 +242,7 @@ class TestSimulateFromChains:
 
     def test_skips_out_of_range_mutations(self, minimal_config: dict):
         """Given out-of-range target, when simulating, then skips mutation."""
-        chains = [["1", "2"]]  # Only 2 repeats
+        chains = _ru_chains(["1", "2"])  # Only 2 repeats
         targets = [(1, 10)]  # Position 10 doesn't exist
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
@@ -245,7 +252,7 @@ class TestSimulateFromChains:
 
     def test_does_not_duplicate_mutation_markers(self, minimal_config: dict):
         """Given already-marked repeat, when mutating, then doesn't add duplicate marker."""
-        chains = [["1", "2m"]]  # Already mutated
+        chains = _ru_chains(["1", "2m"])  # Already mutated
         targets = [(1, 2)]  # Target same position
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
@@ -356,10 +363,10 @@ class TestSimulationIntegration:
 
     def test_predefined_chains_with_mutations(self, minimal_config: dict):
         """Test predefined chains simulation with mutations."""
-        chains = [
+        chains = _ru_chains(
             ["1", "2", "X", "B", "6", "7", "8", "9"],
             ["1", "2", "A", "B", "6p", "7", "8", "9"],
-        ]
+        )
         targets = [(1, 3), (2, 4)]
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)

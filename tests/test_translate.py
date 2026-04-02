@@ -10,6 +10,7 @@ from muc_one_up.translate import (
     reverse_complement,
     run_orf_finder_in_memory,
 )
+from muc_one_up.type_defs import HaplotypeResult, RepeatUnit
 
 
 @pytest.mark.parametrize(
@@ -43,7 +44,7 @@ def test_predict_orfs_in_haplotypes_basic(tmp_path):
     # Suppose chain doesn't matter for this test
     # DNA has an ORF from 0..9 => ATGAAA (Met + Lys) => "MK"
     results = [
-        ("ATGAAATAG", ["dummy"]),  # single haplotype
+        HaplotypeResult("ATGAAATAG", [RepeatUnit("dummy")]),  # single haplotype
     ]
 
     # orf_min_aa=2 => minimal 2 AAs => should keep "MK"
@@ -90,7 +91,7 @@ def test_predict_orfs_in_haplotypes_prefix_filter():
     #   ATG GGC => "MG"? etc. Enough to pass length if orf_min_aa=4
 
     results = [
-        (dna_seq, ["whatever"]),
+        HaplotypeResult(dna_seq, [RepeatUnit("whatever")]),
     ]
 
     # We'll set orf_min_aa=4 => need 4 AAs => "MTSS" wouldn't be enough => must be 5
@@ -111,7 +112,7 @@ def test_run_orf_finder_in_memory(tmp_path):
     """
     dna_seq = "ATGCCCCTGTAA"  # => 'MP' + ??? => we'll see
     results = [
-        (dna_seq, ["mock"]),
+        HaplotypeResult(dna_seq, [RepeatUnit("mock")]),
     ]
     # We'll require min 2 AAs => 6 nt => 'MP' => let's do orf_min_aa=2
     out_file = tmp_path / "orf_pep.fa"

@@ -68,9 +68,7 @@ def integrate_snps_unified(
             raise ValidationError("--random-snp-output-file is required when --random-snps is used")
 
         # Get VNTR boundaries if region filtering is used
-        # Convert to legacy tuple format for get_vntr_boundaries
-        legacy_results = [hr.as_tuple() for hr in results]
-        vntr_bounds = get_vntr_boundaries(legacy_results, config)
+        vntr_bounds = get_vntr_boundaries(results, config)
 
         # Generate random SNPs
         generated_snp_list_for_output = generate_random_snps(

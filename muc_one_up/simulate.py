@@ -105,7 +105,7 @@ def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNA
 
 
 def simulate_from_chains(
-    predefined_chains: list[RepeatChain],
+    predefined_chains: list[list[RepeatUnit]],
     config: ConfigDict,
     mutation_name: str | None = None,
     mutation_targets: MutationTargets | None = None,
@@ -116,7 +116,7 @@ def simulate_from_chains(
     Optionally marks positions with mutation markers if mutation_targets are specified.
 
     Args:
-        predefined_chains: List of repeat chains, one per haplotype
+        predefined_chains: List of RepeatUnit chains, one per haplotype
         config: Configuration dictionary
         mutation_name: Optional mutation name (for logging)
         mutation_targets: Optional list of (haplotype_idx, repeat_idx) tuples
@@ -131,8 +131,8 @@ def simulate_from_chains(
     haplotypes: list[HaplotypeResult] = []
 
     for i, chain in enumerate(predefined_chains):
-        # Convert string chain to RepeatUnit list
-        working_chain = [RepeatUnit.from_str(s) for s in chain]
+        # Copy the chain so we don't mutate the caller's data
+        working_chain = list(chain)
 
         # Apply mutations if specified in the mutation_targets
         if mutation_name and mutation_targets:

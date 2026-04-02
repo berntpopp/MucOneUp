@@ -26,6 +26,8 @@ import logging
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
+from ..type_defs import RepeatUnit
+
 logger = logging.getLogger(__name__)
 
 
@@ -142,7 +144,7 @@ class AnnotatedRead:
 
 def build_coordinate_map(
     haplotype: int,
-    chain: list[str],
+    chain: list[RepeatUnit],
     repeats_dict: dict[str, str],
     left_const_len: int,
     mutation_positions: list[tuple[int, int]],
@@ -153,7 +155,7 @@ def build_coordinate_map(
 
     Args:
         haplotype: 1-based haplotype number.
-        chain: List of repeat symbols (may include 'm' suffix for mutated).
+        chain: List of RepeatUnit objects.
         repeats_dict: Mapping of repeat symbol to DNA sequence.
         left_const_len: Length of the left constant region in bases.
         mutation_positions: List of (haplotype, repeat_index) tuples, both 1-based.
@@ -170,24 +172,22 @@ def build_coordinate_map(
     # Build set of mutated repeat indices for this haplotype (1-based)
     mutated_indices: set[int] = {rep_idx for hap, rep_idx in mutation_positions if hap == haplotype}
 
-    for i, symbol in enumerate(chain):
+    for i, unit in enumerate(chain):
         repeat_index = i + 1  # 1-based
 
-        # Strip 'm' suffix for sequence lookup
-        lookup_key = symbol.rstrip("m")
-        if lookup_key not in repeats_dict:
+        if unit.symbol not in repeats_dict:
             raise ValueError(
-                f"Unknown repeat symbol '{lookup_key}' (from '{symbol}') for haplotype "
+                f"Unknown repeat symbol '{unit.symbol}' (from '{unit}') for haplotype "
                 f"{haplotype} at index {repeat_index} in build_coordinate_map. "
                 f"Available symbols: {sorted(repeats_dict.keys())}"
             )
-        seq = repeats_dict[lookup_key]
+        seq = repeats_dict[unit.symbol]
         region_len = len(seq)
 
-        is_mutated = repeat_index in mutated_indices or symbol.endswith("m")
+        is_mutated = repeat_index in mutated_indices or unit.mutated
         region = RepeatRegion(
             index=repeat_index,
-            repeat_type=symbol,
+            repeat_type=str(unit),
             start=current_pos,
             end=current_pos + region_len,
             is_mutated=is_mutated,
@@ -251,7 +251,7 @@ class ReadSourceTracker:
 
     def __init__(
         self,
-        repeat_chains: dict[int, list[str]],
+        repeat_chains: dict[int, list[RepeatUnit]],
         repeats_dict: dict[str, str],
         left_const_len: int,
         mutation_positions: list[tuple[int, int]] | None = None,
@@ -261,7 +261,7 @@ class ReadSourceTracker:
         """Initialise the tracker and build coordinate maps.
 
         Args:
-            repeat_chains: Mapping of 1-based haplotype number to repeat chain.
+            repeat_chains: Mapping of 1-based haplotype number to RepeatUnit chain.
             repeats_dict: Mapping of repeat symbol to DNA sequence.
             left_const_len: Length of the left constant region in bases.
             mutation_positions: List of (haplotype, repeat_index) tuples, both
@@ -453,7 +453,7 @@ class ReadSourceTracker:
             logger.warning("Missing or invalid 'haplotypes' section in %s", stats_path)
             return None
 
-        repeat_chains: dict[int, list[str]] = {}
+        repeat_chains: dict[int, list[RepeatUnit]] = {}
         for key, hap_data in haplotypes_section.items():
             # Parse "haplotype_N" -> N
             if not key.startswith("haplotype_"):
@@ -466,7 +466,7 @@ class ReadSourceTracker:
             if not chain_str or not isinstance(chain_str, str):
                 logger.warning("Missing repeat_chain for %s in %s", key, stats_path)
                 return None
-            repeat_chains[hap_num] = chain_str.split("-")
+            repeat_chains[hap_num] = [RepeatUnit.from_str(s) for s in chain_str.split("-")]
 
         if not repeat_chains:
             logger.warning("No haplotype chains found in %s", stats_path)

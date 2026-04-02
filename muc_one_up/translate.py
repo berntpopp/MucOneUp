@@ -51,6 +51,8 @@ from pathlib import Path
 
 import orfipy_core
 
+from .type_defs import HaplotypeResult
+
 #: Standard genetic code codon table.
 #:
 #: Maps DNA codons (3-letter strings) to single-letter amino acid codes.
@@ -264,7 +266,7 @@ def find_orfs_in_memory(
 
 
 def predict_orfs_in_haplotypes(
-    results: list[tuple[str, list[str]]],
+    results: list[HaplotypeResult],
     min_len: int = 30,
     orf_min_aa: int = 100,
     required_prefix: str | None = None,
@@ -275,7 +277,7 @@ def predict_orfs_in_haplotypes(
     by minimum amino acid length and optional N-terminal prefix requirement.
 
     Args:
-        results: List of (dna_sequence, repeat_chain) tuples
+        results: List of HaplotypeResult objects.
         min_len: Minimum ORF length in nucleotides for orfipy detection
         orf_min_aa: Minimum peptide length in amino acids (post-translation filter)
         required_prefix: Optional N-terminal amino acid prefix filter
@@ -292,7 +294,7 @@ def predict_orfs_in_haplotypes(
         }
 
     Example:
-        >>> results = [(seq1, chain1), (seq2, chain2)]
+        >>> results = [HaplotypeResult(seq1, chain1), HaplotypeResult(seq2, chain2)]
         >>> orfs = predict_orfs_in_haplotypes(results, orf_min_aa=100)
         >>> orfs["haplotype_1"]
         [('haplotype_1_ORF1', 'MTRV...', 245, 1523, '+', 'len=1278')]
@@ -300,7 +302,8 @@ def predict_orfs_in_haplotypes(
     haplotype_orfs = {}
     min_nt_length = orf_min_aa * 3
 
-    for i, (dna_seq, _chain) in enumerate(results, start=1):
+    for i, hr in enumerate(results, start=1):
+        dna_seq = hr.sequence
         hap_id = f"haplotype_{i}"
         orfs = find_orfs_in_memory(
             seq=dna_seq,
@@ -362,7 +365,7 @@ def write_peptides_to_fasta(haplotype_orfs: dict[str, list[tuple]], output_pep: 
 
 
 def run_orf_finder_in_memory(
-    results: list[tuple[str, list[str]]],
+    results: list[HaplotypeResult],
     output_pep: str,
     min_len: int = 30,
     orf_min_aa: int = 100,
@@ -374,7 +377,7 @@ def run_orf_finder_in_memory(
     filtering, and FASTA output. Convenience wrapper for common workflow.
 
     Args:
-        results: List of (dna_sequence, repeat_chain) tuples from simulation
+        results: List of HaplotypeResult objects from simulation
         output_pep: Output FASTA filename for translated peptides
         min_len: Minimum ORF length in nucleotides
         orf_min_aa: Minimum peptide length in amino acids

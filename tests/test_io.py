@@ -15,6 +15,9 @@ from muc_one_up.io import (
     extract_mutation_info_from_comments,
     parse_vntr_structure_file,
 )
+from muc_one_up.type_defs import RepeatUnit
+
+RU = RepeatUnit.from_str
 
 
 @pytest.mark.unit
@@ -29,8 +32,8 @@ class TestParseVntrStructureFile:
         chains, mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
 
         assert len(chains) == 2
-        assert chains[0] == ["1", "2", "X", "B", "6", "7", "8", "9"]
-        assert chains[1] == ["1", "2", "A", "B", "6p", "7", "8", "9"]
+        assert chains[0] == [RU(s) for s in ["1", "2", "X", "B", "6", "7", "8", "9"]]
+        assert chains[1] == [RU(s) for s in ["1", "2", "A", "B", "6p", "7", "8", "9"]]
         assert mutation_info is None
 
     def test_parse_structure_file_with_mutation_markers(self, tmp_path: Path, minimal_config: dict):
@@ -46,8 +49,8 @@ class TestParseVntrStructureFile:
 
         assert len(chains) == 2
         # Mutation markers should be preserved in the chain
-        assert chains[0] == ["1", "2", "Xm", "B", "6", "7", "8", "9"]
-        assert chains[1] == ["1", "2", "A", "Bm", "6p", "7", "8", "9"]
+        assert chains[0] == [RU(s) for s in ["1", "2", "Xm", "B", "6", "7", "8", "9"]]
+        assert chains[1] == [RU(s) for s in ["1", "2", "A", "Bm", "6p", "7", "8", "9"]]
         # Mutation info should be extracted
         assert mutation_info is not None
         assert mutation_info["name"] == "dupC"
@@ -67,8 +70,8 @@ class TestParseVntrStructureFile:
         chains, _mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
 
         assert len(chains) == 2
-        assert chains[0] == ["1", "2", "X", "B", "6", "7", "8", "9"]
-        assert chains[1] == ["1", "2", "A", "B", "6p", "7", "8", "9"]
+        assert chains[0] == [RU(s) for s in ["1", "2", "X", "B", "6", "7", "8", "9"]]
+        assert chains[1] == [RU(s) for s in ["1", "2", "A", "B", "6p", "7", "8", "9"]]
 
     def test_parse_structure_file_with_empty_lines(self, tmp_path: Path, minimal_config: dict):
         """Test parsing structure file with empty lines."""
@@ -89,7 +92,7 @@ class TestParseVntrStructureFile:
         chains, _mutation_info = parse_vntr_structure_file(str(structure_file), minimal_config)
 
         assert len(chains) == 1
-        assert chains[0] == ["1", "2", "X", "B", "6", "7", "8", "9"]
+        assert chains[0] == [RU(s) for s in ["1", "2", "X", "B", "6", "7", "8", "9"]]
 
     def test_parse_structure_file_many_haplotypes(self, tmp_path: Path, minimal_config: dict):
         """Test parsing structure file with many haplotypes."""
@@ -101,7 +104,7 @@ class TestParseVntrStructureFile:
 
         assert len(chains) == 10
         for chain in chains:
-            assert chain == ["1", "2", "X", "B", "6", "7", "8", "9"]
+            assert chain == [RU(s) for s in ["1", "2", "X", "B", "6", "7", "8", "9"]]
 
     def test_parse_structure_file_missing_file(self, minimal_config: dict):
         """Test parsing nonexistent file raises FileNotFoundError."""
@@ -276,7 +279,9 @@ class TestStructureFileBioinformatics:
 
         # Check that canonical terminal sequences are preserved
         for chain in chains:
-            assert chain[-4:] == ["6", "7", "8", "9"] or chain[-4:] == ["6p", "7", "8", "9"]
+            assert chain[-4:] == [RU(s) for s in ["6", "7", "8", "9"]] or chain[-4:] == [
+                RU(s) for s in ["6p", "7", "8", "9"]
+            ]
 
     def test_repeat_symbols_match_config(self, tmp_path: Path, minimal_config: dict):
         """Test that all symbols in parsed chains are valid per config."""
@@ -288,7 +293,5 @@ class TestStructureFileBioinformatics:
         valid_symbols = set(minimal_config["repeats"].keys())
 
         for chain in chains:
-            for symbol in chain:
-                # Strip mutation marker if present
-                pure_symbol = symbol.rstrip("m")
-                assert pure_symbol in valid_symbols
+            for unit in chain:
+                assert unit.symbol in valid_symbols
