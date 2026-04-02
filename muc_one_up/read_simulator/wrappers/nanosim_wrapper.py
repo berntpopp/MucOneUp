@@ -8,11 +8,9 @@ command construction, execution, and error handling.
 """
 
 import logging
-import subprocess
 import tempfile
 from pathlib import Path
 
-from ...exceptions import ExternalToolError
 from ..command_utils import build_tool_command
 from ..utils import run_command
 
@@ -191,34 +189,15 @@ def align_ont_reads_with_minimap2(
 
         logging.info("[minimap2] Running alignment: %s > %s", " ".join(align_cmd_list), sam_path)
 
-        # Run with output redirection to SAM file using subprocess
-        try:
-            with Path(sam_path).open("w") as sam_file:
-                result = subprocess.run(
-                    align_cmd_list,
-                    stdout=sam_file,
-                    stderr=subprocess.PIPE,
-                    timeout=timeout,
-                    check=True,
-                    text=True,
-                )
-            if result.stderr:
-                logging.info("[minimap2] %s", result.stderr)
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr if e.stderr else "Unknown error"
-            raise ExternalToolError(
-                tool="minimap2",
-                exit_code=e.returncode,
-                stderr=error_msg,
-                cmd=" ".join(align_cmd_list),
-            ) from e
-        except subprocess.TimeoutExpired as e:
-            raise ExternalToolError(
-                tool="minimap2",
-                exit_code=-1,
-                stderr=f"Timed out after {timeout}s",
-                cmd=" ".join(align_cmd_list),
-            ) from e
+        # Run minimap2 and capture stdout (SAM data), then write to file
+        result = run_command(
+            align_cmd_list,
+            capture=True,
+            timeout=timeout,
+        )
+        Path(sam_path).write_text(result.stdout or "")
+        if result.stderr:
+            logging.info("[minimap2] %s", result.stderr)
 
         # Convert SAM to BAM
         # SECURITY: Always use list form, never shell=True
