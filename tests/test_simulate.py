@@ -19,6 +19,7 @@ from muc_one_up.simulate import (
     simulate_from_chains,
     simulate_single_haplotype,
 )
+from muc_one_up.type_defs import HaplotypeResult, RepeatUnit
 
 
 @pytest.fixture
@@ -56,12 +57,12 @@ def test_simulate_single_haplotype_override_min_len(simple_config):
     def patched(cfg, target_length):
         return simulate_single_haplotype(cfg, target_length, min_length=2)
 
-    seq, _chain = patched(simple_config, target_length=3)
+    hr = patched(simple_config, target_length=3)
     # We have a small chain. Possibly 2 or 3 repeats, depending on logic.
     # Just confirm it produced something valid:
-    assert seq.startswith("TTTT")  # left const
-    assert "AAA" in seq or "CCC" in seq  # we used '1' -> '2'
-    assert seq.endswith(
+    assert hr.sequence.startswith("TTTT")  # left const
+    assert "AAA" in hr.sequence or "CCC" in hr.sequence  # we used '1' -> '2'
+    assert hr.sequence.endswith(
         "AAAA"
     )  # right const if final repeat was '9'? Maybe not if we never forced it.
 
@@ -87,10 +88,10 @@ def test_simulate_diploid_fixed_length(simple_config):
             config=simple_config, num_haplotypes=2, fixed_lengths=[3, 3], seed=42
         )
         assert len(results) == 2
-        for seq, chain in results:
+        for hr in results:
             # chain might have 2 or 3 repeats. Just confirm the sequence is non-empty
-            assert len(chain) > 0
-            assert seq.startswith("TTTT")
+            assert len(hr.chain) > 0
+            assert hr.sequence.startswith("TTTT")
     finally:
         # Restore original function so other tests remain unaffected
         simulate.simulate_single_haplotype = original_func
@@ -197,7 +198,7 @@ class TestSimulateFromChains:
         results = simulate_from_chains(chains, minimal_config)
 
         assert len(results) == 2
-        assert all(isinstance(r, tuple) and len(r) == 2 for r in results)
+        assert all(isinstance(r, HaplotypeResult) for r in results)
 
     def test_preserves_original_chains(self, minimal_config: dict):
         """Given chains, when simulating, then preserves chain structure."""
@@ -205,10 +206,8 @@ class TestSimulateFromChains:
 
         results = simulate_from_chains(chains, minimal_config)
 
-        _, chain1 = results[0]
-        _, chain2 = results[1]
-        assert chain1 == ["1", "2", "X"]
-        assert chain2 == ["1", "A", "B"]
+        assert results[0].chain_strs() == ["1", "2", "X"]
+        assert results[1].chain_strs() == ["1", "A", "B"]
 
     def test_applies_mutation_to_specific_haplotype(self, minimal_config: dict):
         """Given mutation target, when simulating, then applies mutation correctly."""
@@ -217,10 +216,10 @@ class TestSimulateFromChains:
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
-        _, chain1 = results[0]
-        _, chain2 = results[1]
-        assert chain1[1].endswith("m")  # Position 2 (0-indexed: 1)
-        assert not any(r.endswith("m") for r in chain2)
+        chain1 = results[0].chain
+        chain2 = results[1].chain
+        assert chain1[1].mutated  # Position 2 (0-indexed: 1)
+        assert not any(ru.mutated for ru in chain2)
 
     def test_applies_multiple_mutations(self, minimal_config: dict):
         """Given multiple targets, when simulating, then applies all mutations."""
@@ -229,10 +228,10 @@ class TestSimulateFromChains:
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
-        _, chain1 = results[0]
-        _, chain2 = results[1]
-        assert chain1[1].endswith("m")
-        assert chain2[2].endswith("m")
+        chain1 = results[0].chain
+        chain2 = results[1].chain
+        assert chain1[1].mutated
+        assert chain2[2].mutated
 
     def test_skips_out_of_range_mutations(self, minimal_config: dict):
         """Given out-of-range target, when simulating, then skips mutation."""
@@ -241,8 +240,8 @@ class TestSimulateFromChains:
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
-        _, chain = results[0]
-        assert not any(r.endswith("m") for r in chain)
+        chain = results[0].chain
+        assert not any(ru.mutated for ru in chain)
 
     def test_does_not_duplicate_mutation_markers(self, minimal_config: dict):
         """Given already-marked repeat, when mutating, then doesn't add duplicate marker."""
@@ -251,8 +250,8 @@ class TestSimulateFromChains:
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
-        _, chain = results[0]
-        assert chain[1] == "2m"  # Not "2mm"
+        chain = results[0].chain
+        assert chain[1] == RepeatUnit("2", mutated=True)  # Not double-mutated
 
 
 @pytest.mark.unit
@@ -264,32 +263,32 @@ class TestSimulateSingleHaplotypeAdvanced:
         random.seed(42)
         target = 20
 
-        seq, chain = simulate_single_haplotype(minimal_config, target)
+        hr = simulate_single_haplotype(minimal_config, target)
 
-        assert len(chain) > 0
-        assert len(seq) > 0
+        assert len(hr.chain) > 0
+        assert len(hr.sequence) > 0
         # Verify has constants
         left = minimal_config["constants"]["hg38"]["left"]
         right = minimal_config["constants"]["hg38"]["right"]
-        assert seq.startswith(left)
-        assert seq.endswith(right)
+        assert hr.sequence.startswith(left)
+        assert hr.sequence.endswith(right)
 
     def test_uses_hg38_constants_by_default(self, minimal_config: dict):
         """Given no assembly specified, when simulating, then uses hg38."""
         random.seed(42)
 
-        seq, _ = simulate_single_haplotype(minimal_config, 15)
+        hr = simulate_single_haplotype(minimal_config, 15)
 
         left = minimal_config["constants"]["hg38"]["left"]
-        assert seq.startswith(left)
+        assert hr.sequence.startswith(left)
 
     def test_chain_always_starts_with_1(self, minimal_config: dict):
         """Given any simulation, when complete, then chain starts with '1'."""
         random.seed(42)
 
-        _, chain = simulate_single_haplotype(minimal_config, 15)
+        hr = simulate_single_haplotype(minimal_config, 15)
 
-        assert chain[0] == "1"
+        assert hr.chain[0] == RepeatUnit("1")
 
 
 @pytest.mark.unit
@@ -303,7 +302,7 @@ class TestSimulateDiploidAdvanced:
         results = simulate_diploid(minimal_config, num_haplotypes=3)
 
         assert len(results) == 3
-        assert all(isinstance(r, tuple) and len(r) == 2 for r in results)
+        assert all(isinstance(r, HaplotypeResult) for r in results)
 
     def test_produces_valid_sequences(self, minimal_config: dict):
         """Given simulation, when complete, then sequences are valid."""
@@ -314,19 +313,19 @@ class TestSimulateDiploidAdvanced:
         left = minimal_config["constants"]["hg38"]["left"]
         right = minimal_config["constants"]["hg38"]["right"]
 
-        for seq, chain in results:
-            assert len(seq) > 0
-            assert len(chain) > 0
-            assert seq.startswith(left)
-            assert seq.endswith(right)
+        for hr in results:
+            assert len(hr.sequence) > 0
+            assert len(hr.chain) > 0
+            assert hr.sequence.startswith(left)
+            assert hr.sequence.endswith(right)
 
     def test_seed_ensures_reproducibility(self, minimal_config: dict):
         """Given same seed, when simulating, then produces identical results."""
         r1 = simulate_diploid(minimal_config, num_haplotypes=2, seed=42)
         r2 = simulate_diploid(minimal_config, num_haplotypes=2, seed=42)
 
-        assert r1[0][1] == r2[0][1]  # Same chains
-        assert r1[1][1] == r2[1][1]
+        assert r1[0].chain == r2[0].chain  # Same chains
+        assert r1[1].chain == r2[1].chain
 
 
 @pytest.mark.integration
@@ -341,20 +340,19 @@ class TestSimulationIntegration:
 
         # Verify structure
         assert len(results) == 2
-        seq1, chain1 = results[0]
-        seq2, chain2 = results[1]
+        hr1, hr2 = results[0], results[1]
 
         # Verify basic properties
-        assert len(chain1) > 0
-        assert len(chain2) > 0
-        assert chain1[0] == "1"
-        assert chain2[0] == "1"
+        assert len(hr1.chain) > 0
+        assert len(hr2.chain) > 0
+        assert hr1.chain[0] == RepeatUnit("1")
+        assert hr2.chain[0] == RepeatUnit("1")
 
         # Verify sequences have correct structure
         left = minimal_config["constants"]["hg38"]["left"]
         right = minimal_config["constants"]["hg38"]["right"]
-        assert seq1.startswith(left) and seq1.endswith(right)
-        assert seq2.startswith(left) and seq2.endswith(right)
+        assert hr1.sequence.startswith(left) and hr1.sequence.endswith(right)
+        assert hr2.sequence.startswith(left) and hr2.sequence.endswith(right)
 
     def test_predefined_chains_with_mutations(self, minimal_config: dict):
         """Test predefined chains simulation with mutations."""
@@ -366,9 +364,9 @@ class TestSimulationIntegration:
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
-        _, chain1 = results[0]
-        _, chain2 = results[1]
+        chain1 = results[0].chain
+        chain2 = results[1].chain
 
         # Verify mutations
-        assert chain1[2] == "Xm"
-        assert chain2[3] == "Bm"
+        assert chain1[2] == RepeatUnit("X", mutated=True)
+        assert chain2[3] == RepeatUnit("B", mutated=True)

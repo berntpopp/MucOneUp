@@ -25,8 +25,8 @@ Example:
 
         config = load_config("config.json")
         results = simulate_diploid(config, num_haplotypes=2, fixed_lengths=[50, 60])
-        for seq, chain in results:
-            print(f"Chain: {'-'.join(chain)}, Length: {len(seq)} bp")
+        for hr in results:
+            print(f"Chain: {'-'.join(hr.chain_strs())}, Length: {len(hr.sequence)} bp")
 
 See Also:
     - probabilities.py: Weighted random repeat selection
@@ -42,11 +42,11 @@ from .distribution import sample_repeat_count
 from .type_defs import (
     ConfigDict,
     DNASequence,
-    Haplotype,
-    HaplotypeList,
+    HaplotypeResult,
     MutationTargets,
     ProbabilitiesDict,
     RepeatChain,
+    RepeatUnit,
 )
 
 
@@ -100,8 +100,6 @@ def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNA
     Returns:
         Assembled haplotype DNA sequence
     """
-    from .type_defs import RepeatUnit
-
     typed_chain = [RepeatUnit.from_str(s) for s in chain]
     return assemble_sequence(typed_chain, config)
 
@@ -111,12 +109,11 @@ def simulate_from_chains(
     config: ConfigDict,
     mutation_name: str | None = None,
     mutation_targets: MutationTargets | None = None,
-) -> HaplotypeList:
+) -> list[HaplotypeResult]:
     """Simulate haplotypes from predefined repeat chains.
 
     Takes predefined repeat chains and assembles them into haplotype sequences.
-    Optionally marks positions with mutation markers ('m' suffix) if
-    mutation_targets are specified.
+    Optionally marks positions with mutation markers if mutation_targets are specified.
 
     Args:
         predefined_chains: List of repeat chains, one per haplotype
@@ -126,16 +123,16 @@ def simulate_from_chains(
                          using 1-based indexing
 
     Returns:
-        List of (haplotype_sequence, repeat_chain) tuples
+        List of HaplotypeResult objects
 
     Note:
         mutation_targets use 1-based indexing for both haplotype and repeat positions
     """
-    haplotypes = []
+    haplotypes: list[HaplotypeResult] = []
 
     for i, chain in enumerate(predefined_chains):
-        # Create a copy of the chain to avoid modifying the original
-        working_chain = chain.copy()
+        # Convert string chain to RepeatUnit list
+        working_chain = [RepeatUnit.from_str(s) for s in chain]
 
         # Apply mutations if specified in the mutation_targets
         if mutation_name and mutation_targets:
@@ -146,13 +143,14 @@ def simulate_from_chains(
                     zero_based_idx = repeat_idx - 1
                     # Ensure the repeat index is valid
                     if 0 <= zero_based_idx < len(working_chain):
+                        ru = working_chain[zero_based_idx]
                         # Only add mutation marker if it doesn't already have one
-                        if not working_chain[zero_based_idx].endswith("m"):
+                        if not ru.mutated:
                             logging.info(
                                 f"Applying mutation '{mutation_name}' to haplotype {i + 1}, "
                                 f"repeat position {repeat_idx} (0-based: {zero_based_idx})"
                             )
-                            working_chain[zero_based_idx] = working_chain[zero_based_idx] + "m"
+                            working_chain[zero_based_idx] = RepeatUnit(ru.symbol, mutated=True)
                     else:
                         logging.warning(
                             f"Mutation target repeat index {repeat_idx} (0-based: {zero_based_idx}) "
@@ -162,8 +160,8 @@ def simulate_from_chains(
         logging.info(
             f"Assembling haplotype {i + 1} from predefined chain with {len(working_chain)} repeats"
         )
-        seq = assemble_haplotype_from_chain(working_chain, config)
-        haplotypes.append((seq, working_chain))
+        seq = assemble_sequence(working_chain, config)
+        haplotypes.append(HaplotypeResult(sequence=seq, chain=working_chain))
 
     return haplotypes
 
@@ -174,7 +172,7 @@ def simulate_diploid(
     fixed_lengths: list[int] | None = None,
     seed: int | None = None,
     rng: _random_module.Random | None = None,
-) -> HaplotypeList:
+) -> list[HaplotypeResult]:
     """Simulate multiple haplotypes with configurable parameters.
 
     Generates the specified number of haplotypes, either with fixed repeat lengths
@@ -188,7 +186,7 @@ def simulate_diploid(
         rng: Optional explicit Random instance (overrides seed if both provided)
 
     Returns:
-        List of (haplotype_sequence, repeat_chain) tuples
+        List of HaplotypeResult objects
 
     Raises:
         IndexError: If fixed_lengths is provided but has wrong length
@@ -200,15 +198,15 @@ def simulate_diploid(
         # Backward compat: fall back to global random
         rng = None
 
-    haplotypes = []
+    haplotypes: list[HaplotypeResult] = []
     for i in range(num_haplotypes):
         if fixed_lengths is not None:
             target_length = fixed_lengths[i]
         else:
             target_length = sample_repeat_count(config["length_model"], rng=rng)
         logging.info("Simulating haplotype %d with target length %d", i + 1, target_length)
-        seq, chain = simulate_single_haplotype(config, target_length, rng=rng)
-        haplotypes.append((seq, chain))
+        result = simulate_single_haplotype(config, target_length, rng=rng)
+        haplotypes.append(result)
     return haplotypes
 
 
@@ -217,7 +215,7 @@ def simulate_single_haplotype(
     target_length: int,
     min_length: int = 10,
     rng: _random_module.Random | None = None,
-) -> Haplotype:
+) -> HaplotypeResult:
     """Build single haplotype by chaining repeats probabilistically.
 
     Chains repeats according to configured probabilities to reach target length.
@@ -230,7 +228,7 @@ def simulate_single_haplotype(
         rng: Optional explicit Random instance (defaults to global random)
 
     Returns:
-        Tuple of (assembled_sequence, repeat_chain)
+        HaplotypeResult with assembled sequence and RepeatUnit chain
 
     Raises:
         ValueError: If target_length is below min_length
@@ -249,32 +247,32 @@ def simulate_single_haplotype(
     repeats_dict = config["repeats"]
 
     assembled_seq = left_const
-    repeat_chain = []
+    repeat_chain: list[RepeatUnit] = []
     current_symbol = "1"
     total_repeats = 0
     final_block_start = target_length - 4
 
     while True:
-        repeat_chain.append(current_symbol)
+        repeat_chain.append(RepeatUnit(current_symbol))
         assembled_seq += repeats_dict[current_symbol]
         total_repeats += 1
 
         if total_repeats == final_block_start:
             forced_6 = _rng.choice(["6", "6p"])
             logging.debug("Forcing terminal block: %s, 7, 8, 9", forced_6)
-            repeat_chain.append(forced_6)
+            repeat_chain.append(RepeatUnit(forced_6))
             assembled_seq += repeats_dict[forced_6]
             total_repeats += 1
 
-            repeat_chain.append("7")
+            repeat_chain.append(RepeatUnit("7"))
             assembled_seq += repeats_dict["7"]
             total_repeats += 1
 
-            repeat_chain.append("8")
+            repeat_chain.append(RepeatUnit("8"))
             assembled_seq += repeats_dict["8"]
             total_repeats += 1
 
-            repeat_chain.append("9")
+            repeat_chain.append(RepeatUnit("9"))
             assembled_seq += repeats_dict["9"]
             total_repeats += 1
 
@@ -294,4 +292,4 @@ def simulate_single_haplotype(
         current_symbol = next_symbol
 
     logging.info("Simulated haplotype with %d repeats.", total_repeats)
-    return assembled_seq, repeat_chain
+    return HaplotypeResult(sequence=assembled_seq, chain=repeat_chain)
