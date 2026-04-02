@@ -1,25 +1,33 @@
 """Tests for BWA wrapper - focuses on OUR command construction logic.
 
 Following Phase 2 testing principles:
-- Mock ONLY at system boundary (subprocess.Popen, subprocess.run)
+- Mock ONLY at system boundary (run_command, run_pipeline)
 - Test OUR code's logic (command construction, error handling, file validation)
 - NOT testing external tools (BWA, samtools) - that's integration testing
 
 These tests verify that our wrapper correctly:
 1. Constructs BWA mem commands
-2. Chains BWA → samtools view using subprocess.Popen
+2. Chains BWA -> samtools view using run_pipeline
 3. Sorts and indexes BAM files
 4. Validates input files
 5. Handles tool failures appropriately
 """
 
 from pathlib import Path
-from unittest.mock import Mock
 
 import pytest
 
 from muc_one_up.exceptions import ExternalToolError, FileOperationError
+from muc_one_up.read_simulator.utils.common_utils import RunResult
 from muc_one_up.read_simulator.wrappers.bwa_wrapper import align_reads
+
+# Common mock target paths
+_PIPELINE = "muc_one_up.read_simulator.wrappers.bwa_wrapper.run_pipeline"
+_RUN_CMD = "muc_one_up.read_simulator.wrappers.bwa_wrapper.run_command"
+
+
+def _ok_result(cmd: str = "ok") -> RunResult:
+    return RunResult(returncode=0, stdout="", stderr="", command=cmd)
 
 
 class TestBWAWrapperCommandConstruction:
@@ -27,7 +35,6 @@ class TestBWAWrapperCommandConstruction:
 
     def test_constructs_correct_bwa_mem_command(self, mocker, tmp_path, tools_dict):
         """Test that BWA mem command is constructed with correct arguments."""
-        # Arrange: Create real test files
         ref = tmp_path / "ref.fa"
         r1 = tmp_path / "R1.fq"
         r2 = tmp_path / "R2.fq"
@@ -37,29 +44,18 @@ class TestBWAWrapperCommandConstruction:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        # Mock subprocess.Popen for BWA | samtools pipeline
-        mock_bwa = Mock()
-        mock_bwa.returncode = 0
-        mock_bwa.stdout = Mock()
-        mock_bwa.communicate = Mock(return_value=(b"", b""))
+        mock_pipeline = mocker.patch(_PIPELINE, return_value=_ok_result())
 
-        mock_samtools = Mock()
-        mock_samtools.returncode = 0
-        mock_samtools.communicate = Mock(return_value=(b"", b""))
-
-        mock_popen = mocker.patch("subprocess.Popen", side_effect=[mock_bwa, mock_samtools])
-
-        # Mock subprocess.run for sort and index - create output files
-        def mock_run_side_effect(cmd, **kwargs):
+        # Mock run_command for sort and index - create output files
+        def mock_run_cmd(cmd, **kwargs):
             if "sort" in cmd:
                 out.write_bytes(b"SORTED_BAM_DATA")
             elif "index" in cmd:
                 Path(str(out) + ".bai").write_bytes(b"INDEX_DATA")
-            return Mock(returncode=0, stderr=b"")
+            return _ok_result()
 
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
+        mocker.patch(_RUN_CMD, side_effect=mock_run_cmd)
 
-        # Act: Call our wrapper
         align_reads(
             read1=str(r1),
             read2=str(r2),
@@ -69,18 +65,14 @@ class TestBWAWrapperCommandConstruction:
             threads=4,
         )
 
-        # Assert: Verify BWA mem command construction (tests OUR logic)
-        assert mock_popen.call_count == 2  # BWA + samtools
-
-        bwa_call = mock_popen.call_args_list[0]
-        bwa_cmd = bwa_call[0][0]  # First positional argument
-
-        # Our code should construct this exact command
+        # Verify run_pipeline was called with correct BWA mem command
+        assert mock_pipeline.call_count == 1
+        pipeline_cmds = mock_pipeline.call_args[0][0]
+        bwa_cmd = pipeline_cmds[0]
         assert bwa_cmd == ["bwa", "mem", "-t", "4", str(ref), str(r1), str(r2)]
 
     def test_constructs_correct_samtools_view_command(self, mocker, tmp_path, tools_dict):
         """Test that samtools view command is constructed correctly."""
-        # Arrange
         ref = tmp_path / "ref.fa"
         r1 = tmp_path / "R1.fq"
         r2 = tmp_path / "R2.fq"
@@ -90,33 +82,28 @@ class TestBWAWrapperCommandConstruction:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        mock_bwa = Mock(returncode=0, stdout=Mock(), communicate=Mock(return_value=(b"", b"")))
-        mock_samtools = Mock(returncode=0, communicate=Mock(return_value=(b"", b"")))
+        mock_pipeline = mocker.patch(_PIPELINE, return_value=_ok_result())
 
-        mock_popen = mocker.patch("subprocess.Popen", side_effect=[mock_bwa, mock_samtools])
-
-        # Mock subprocess.run to create output files
-        def mock_run_side_effect(cmd, **kwargs):
+        def mock_run_cmd(cmd, **kwargs):
             if "sort" in cmd:
                 out.write_bytes(b"SORTED_BAM_DATA")
             elif "index" in cmd:
                 Path(str(out) + ".bai").write_bytes(b"INDEX_DATA")
-            return Mock(returncode=0, stderr=b"")
+            return _ok_result()
 
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
+        mocker.patch(_RUN_CMD, side_effect=mock_run_cmd)
 
-        # Act
         align_reads(str(r1), str(r2), str(ref), str(out), tools_dict, threads=4)
 
-        # Assert: Verify samtools view command (tests OUR logic)
-        samtools_call = mock_popen.call_args_list[1]
-        samtools_cmd = samtools_call[0][0]
+        # Verify samtools view command includes -o for direct file output
+        pipeline_cmds = mock_pipeline.call_args[0][0]
+        samtools_cmd = pipeline_cmds[1]
 
-        assert samtools_cmd == ["samtools", "view", "-bS", "-"]
+        unsorted_bam = str(out.parent / f"{out.stem}_unsorted.bam")
+        assert samtools_cmd == ["samtools", "view", "-bS", "-o", unsorted_bam, "-"]
 
     def test_uses_correct_thread_count(self, mocker, tmp_path, tools_dict):
-        """Test that thread count is correctly passed to BWA."""
-        # Arrange
+        """Test that thread count is correctly passed to BWA and samtools sort."""
         ref = tmp_path / "ref.fa"
         r1 = tmp_path / "R1.fq"
         r2 = tmp_path / "R2.fq"
@@ -126,43 +113,30 @@ class TestBWAWrapperCommandConstruction:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        mock_bwa = Mock(returncode=0, stdout=Mock(), communicate=Mock(return_value=(b"", b"")))
-        mock_samtools = Mock(returncode=0, communicate=Mock(return_value=(b"", b"")))
+        mock_pipeline = mocker.patch(_PIPELINE, return_value=_ok_result())
 
-        mock_popen = mocker.patch("subprocess.Popen", side_effect=[mock_bwa, mock_samtools])
+        run_cmd_calls = []
 
-        # Mock subprocess.run to create output files
-        def mock_run_side_effect(cmd, **kwargs):
+        def mock_run_cmd(cmd, **kwargs):
+            run_cmd_calls.append(cmd)
             if "sort" in cmd:
                 out.write_bytes(b"SORTED_BAM_DATA")
             elif "index" in cmd:
                 Path(str(out) + ".bai").write_bytes(b"INDEX_DATA")
-            return Mock(returncode=0, stderr=b"")
+            return _ok_result()
 
-        mock_run = mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
+        mocker.patch(_RUN_CMD, side_effect=mock_run_cmd)
 
-        # Act: Use 8 threads
-        align_reads(
-            str(r1),
-            str(r2),
-            str(ref),
-            str(out),
-            tools_dict,
-            threads=8,
-        )
+        align_reads(str(r1), str(r2), str(ref), str(out), tools_dict, threads=8)
 
-        # Assert: BWA command should have -t 8
-        bwa_call = mock_popen.call_args_list[0]
-        bwa_cmd = bwa_call[0][0]
-
+        # BWA command should have -t 8
+        bwa_cmd = mock_pipeline.call_args[0][0][0]
         assert "-t" in bwa_cmd
         t_index = bwa_cmd.index("-t")
         assert bwa_cmd[t_index + 1] == "8"
 
-        # Assert: samtools sort should also have 8 threads
-        sort_call = mock_run.call_args_list[0]
-        sort_cmd = sort_call[0][0]
-
+        # samtools sort should have -@ 8
+        sort_cmd = run_cmd_calls[0]
         assert "-@" in sort_cmd
         at_index = sort_cmd.index("-@")
         assert sort_cmd[at_index + 1] == "8"
@@ -229,9 +203,8 @@ class TestBWAWrapperInputValidation:
 class TestBWAWrapperErrorHandling:
     """Test that BWA wrapper handles tool failures correctly (tests OUR code)."""
 
-    def test_raises_error_when_bwa_fails(self, mocker, tmp_path, tools_dict):
-        """Test that BWA failure is properly caught and reported."""
-        # Arrange
+    def test_raises_error_when_pipeline_fails(self, mocker, tmp_path, tools_dict):
+        """Test that pipeline failure (bwa or samtools view) is properly reported."""
         ref = tmp_path / "ref.fa"
         r1 = tmp_path / "R1.fq"
         r2 = tmp_path / "R2.fq"
@@ -240,48 +213,17 @@ class TestBWAWrapperErrorHandling:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        # Mock BWA failure
-        mock_bwa = Mock()
-        mock_bwa.returncode = 1  # Non-zero = failure
-        mock_bwa.stdout = Mock()
-        mock_bwa.communicate = Mock(return_value=(b"", b"BWA alignment failed"))
+        mocker.patch(
+            _PIPELINE,
+            side_effect=ExternalToolError(
+                tool="pipeline",
+                exit_code=1,
+                stderr="Pipeline stage 0 (bwa mem) failed with exit code 1",
+                cmd="bwa mem | samtools view",
+            ),
+        )
 
-        mocker.patch("subprocess.Popen", return_value=mock_bwa)
-
-        # Act & Assert: Should raise ExternalToolError with details
-        with pytest.raises(ExternalToolError, match=r"bwa mem.*failed"):
-            align_reads(
-                str(r1),
-                str(r2),
-                str(ref),
-                str(tmp_path / "out.bam"),
-                tools_dict,
-                threads=4,
-            )
-
-    def test_raises_error_when_samtools_view_fails(self, mocker, tmp_path, tools_dict):
-        """Test that samtools view failure is properly caught and reported."""
-        # Arrange
-        ref = tmp_path / "ref.fa"
-        r1 = tmp_path / "R1.fq"
-        r2 = tmp_path / "R2.fq"
-
-        ref.write_text(">chr1\nACGT")
-        r1.write_text("@read1\nACGT\n+\nIIII")
-        r2.write_text("@read1\nACGT\n+\nIIII")
-
-        # BWA succeeds
-        mock_bwa = Mock(returncode=0, stdout=Mock(), communicate=Mock(return_value=(b"", b"")))
-
-        # samtools view fails
-        mock_samtools = Mock()
-        mock_samtools.returncode = 1
-        mock_samtools.communicate = Mock(return_value=(b"", b"samtools error"))
-
-        mocker.patch("subprocess.Popen", side_effect=[mock_bwa, mock_samtools])
-
-        # Act & Assert
-        with pytest.raises(ExternalToolError, match=r"samtools view.*failed"):
+        with pytest.raises(ExternalToolError, match=r"pipeline.*failed"):
             align_reads(
                 str(r1),
                 str(r2),
@@ -293,7 +235,6 @@ class TestBWAWrapperErrorHandling:
 
     def test_raises_error_when_sort_fails(self, mocker, tmp_path, tools_dict):
         """Test that samtools sort failure is properly caught and reported."""
-        # Arrange
         ref = tmp_path / "ref.fa"
         r1 = tmp_path / "R1.fq"
         r2 = tmp_path / "R2.fq"
@@ -302,22 +243,20 @@ class TestBWAWrapperErrorHandling:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        # BWA and samtools view succeed
-        mock_bwa = Mock(returncode=0, stdout=Mock(), communicate=Mock(return_value=(b"", b"")))
-        mock_samtools = Mock(returncode=0, communicate=Mock(return_value=(b"", b"")))
+        mocker.patch(_PIPELINE, return_value=_ok_result())
 
-        mocker.patch("subprocess.Popen", side_effect=[mock_bwa, mock_samtools])
-
-        # samtools sort fails
-        from subprocess import CalledProcessError
-
+        # run_command for sort raises ExternalToolError
         mocker.patch(
-            "subprocess.run",
-            side_effect=CalledProcessError(1, "samtools sort", stderr=b"sort failed"),
+            _RUN_CMD,
+            side_effect=ExternalToolError(
+                tool="command",
+                exit_code=1,
+                stderr="sort failed",
+                cmd="samtools sort",
+            ),
         )
 
-        # Act & Assert
-        with pytest.raises(ExternalToolError, match=r"samtools sort.*failed"):
+        with pytest.raises(ExternalToolError, match=r"command.*failed"):
             align_reads(
                 str(r1),
                 str(r2),
@@ -333,7 +272,6 @@ class TestBWAWrapperOutputValidation:
 
     def test_creates_output_bam_file(self, mocker, tmp_path, tools_dict):
         """Test that output BAM file is created."""
-        # Arrange
         ref = tmp_path / "ref.fa"
         r1 = tmp_path / "R1.fq"
         r2 = tmp_path / "R2.fq"
@@ -343,33 +281,24 @@ class TestBWAWrapperOutputValidation:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        mock_bwa = Mock(returncode=0, stdout=Mock(), communicate=Mock(return_value=(b"", b"")))
-        mock_samtools = Mock(returncode=0, communicate=Mock(return_value=(b"", b"")))
+        mocker.patch(_PIPELINE, return_value=_ok_result())
 
-        mocker.patch("subprocess.Popen", side_effect=[mock_bwa, mock_samtools])
-
-        # Mock subprocess.run to create output files
-        def mock_run_side_effect(cmd, **kwargs):
-            # Create the output files that tools would create
+        def mock_run_cmd(cmd, **kwargs):
             if "sort" in cmd:
                 out.write_bytes(b"SORTED_BAM_DATA")
             elif "index" in cmd:
-                index_file = Path(str(out) + ".bai")
-                index_file.write_bytes(b"INDEX_DATA")
-            return Mock(returncode=0, stderr=b"")
+                Path(str(out) + ".bai").write_bytes(b"INDEX_DATA")
+            return _ok_result()
 
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
+        mocker.patch(_RUN_CMD, side_effect=mock_run_cmd)
 
-        # Act
         align_reads(str(r1), str(r2), str(ref), str(out), tools_dict, threads=4)
 
-        # Assert: Output files should exist
         assert out.exists()
         assert Path(str(out) + ".bai").exists()
 
     def test_raises_error_when_output_bam_missing(self, mocker, tmp_path, tools_dict):
         """Test that missing output BAM raises FileOperationError."""
-        # Arrange
         ref = tmp_path / "ref.fa"
         r1 = tmp_path / "R1.fq"
         r2 = tmp_path / "R2.fq"
@@ -379,14 +308,10 @@ class TestBWAWrapperOutputValidation:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        mock_bwa = Mock(returncode=0, stdout=Mock(), communicate=Mock(return_value=(b"", b"")))
-        mock_samtools = Mock(returncode=0, communicate=Mock(return_value=(b"", b"")))
+        mocker.patch(_PIPELINE, return_value=_ok_result())
 
-        mocker.patch("subprocess.Popen", side_effect=[mock_bwa, mock_samtools])
+        # run_command succeeds but doesn't create output files
+        mocker.patch(_RUN_CMD, return_value=_ok_result())
 
-        # Mock subprocess.run but DON'T create output files
-        mocker.patch("subprocess.run", return_value=Mock(returncode=0, stderr=b""))
-
-        # Act & Assert: Should raise error because BAM file wasn't created
         with pytest.raises(FileOperationError, match="output file missing or empty"):
             align_reads(str(r1), str(r2), str(ref), str(out), tools_dict, threads=4)
