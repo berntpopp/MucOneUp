@@ -338,10 +338,16 @@ if __name__ == "__main__":
         "constants": {"left": "TTTT", "right": "AAAA"},
         "repeats": {"1": "AAA", "2": "CCC", "9": "GGG"},
     }
-    # Dummy simulation results: two haplotypes (sequence, chain).
+    # Dummy simulation results: two haplotypes.
     dummy_results = [
-        ("TTTTAAACCCGGGAAAA", ["1", "2", "9"]),
-        ("TTTTAAACCCGGGAAAA", ["1", "2", "9m"]),
+        HaplotypeResult(
+            sequence="TTTTAAACCCGGGAAAA",
+            chain=[RepeatUnit("1"), RepeatUnit("2"), RepeatUnit("9")],
+        ),
+        HaplotypeResult(
+            sequence="TTTTAAACCCGGGAAAA",
+            chain=[RepeatUnit("1"), RepeatUnit("2"), RepeatUnit("9", mutated=True)],
+        ),
     ]
 
     # Simulate a run by waiting a bit.

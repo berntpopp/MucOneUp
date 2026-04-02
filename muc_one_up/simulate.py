@@ -136,11 +136,11 @@ def simulate_from_chains(
 
         # Apply mutations if specified in the mutation_targets
         if mutation_name and mutation_targets:
-            for hap_idx, repeat_idx in mutation_targets:
+            for target in mutation_targets:
                 # Check if this mutation applies to the current haplotype
-                if hap_idx == i + 1:  # User provides 1-indexed haplotype numbers
+                if target.haplotype_index == i + 1:  # 1-indexed haplotype numbers
                     # Convert from 1-indexed to 0-indexed for the repeat position
-                    zero_based_idx = repeat_idx - 1
+                    zero_based_idx = target.repeat_index - 1
                     # Ensure the repeat index is valid
                     if 0 <= zero_based_idx < len(working_chain):
                         ru = working_chain[zero_based_idx]
@@ -148,12 +148,12 @@ def simulate_from_chains(
                         if not ru.mutated:
                             logging.info(
                                 f"Applying mutation '{mutation_name}' to haplotype {i + 1}, "
-                                f"repeat position {repeat_idx} (0-based: {zero_based_idx})"
+                                f"repeat position {target.repeat_index} (0-based: {zero_based_idx})"
                             )
                             working_chain[zero_based_idx] = RepeatUnit(ru.symbol, mutated=True)
                     else:
                         logging.warning(
-                            f"Mutation target repeat index {repeat_idx} (0-based: {zero_based_idx}) "
+                            f"Mutation target repeat index {target.repeat_index} (0-based: {zero_based_idx}) "
                             f"is out of range for haplotype {i + 1} (length {len(working_chain)})"
                         )
 

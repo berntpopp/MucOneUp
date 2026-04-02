@@ -19,7 +19,7 @@ from muc_one_up.simulate import (
     simulate_from_chains,
     simulate_single_haplotype,
 )
-from muc_one_up.type_defs import HaplotypeResult, RepeatUnit
+from muc_one_up.type_defs import HaplotypeResult, MutationTarget, RepeatUnit
 
 RU = RepeatUnit.from_str
 
@@ -219,7 +219,7 @@ class TestSimulateFromChains:
     def test_applies_mutation_to_specific_haplotype(self, minimal_config: dict):
         """Given mutation target, when simulating, then applies mutation correctly."""
         chains = _ru_chains(["1", "2", "X"], ["1", "A", "B"])
-        targets = [(1, 2)]  # Haplotype 1, position 2
+        targets = [MutationTarget(1, 2)]  # Haplotype 1, position 2
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
@@ -231,7 +231,7 @@ class TestSimulateFromChains:
     def test_applies_multiple_mutations(self, minimal_config: dict):
         """Given multiple targets, when simulating, then applies all mutations."""
         chains = _ru_chains(["1", "2", "X"], ["1", "A", "B"])
-        targets = [(1, 2), (2, 3)]
+        targets = [MutationTarget(1, 2), MutationTarget(2, 3)]
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
@@ -243,7 +243,7 @@ class TestSimulateFromChains:
     def test_skips_out_of_range_mutations(self, minimal_config: dict):
         """Given out-of-range target, when simulating, then skips mutation."""
         chains = _ru_chains(["1", "2"])  # Only 2 repeats
-        targets = [(1, 10)]  # Position 10 doesn't exist
+        targets = [MutationTarget(1, 10)]  # Position 10 doesn't exist
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
@@ -253,7 +253,7 @@ class TestSimulateFromChains:
     def test_does_not_duplicate_mutation_markers(self, minimal_config: dict):
         """Given already-marked repeat, when mutating, then doesn't add duplicate marker."""
         chains = _ru_chains(["1", "2m"])  # Already mutated
-        targets = [(1, 2)]  # Target same position
+        targets = [MutationTarget(1, 2)]  # Target same position
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
@@ -367,7 +367,7 @@ class TestSimulationIntegration:
             ["1", "2", "X", "B", "6", "7", "8", "9"],
             ["1", "2", "A", "B", "6p", "7", "8", "9"],
         )
-        targets = [(1, 3), (2, 4)]
+        targets = [MutationTarget(1, 3), MutationTarget(2, 4)]
 
         results = simulate_from_chains(chains, minimal_config, "dupC", targets)
 
