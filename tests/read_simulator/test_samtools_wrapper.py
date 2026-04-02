@@ -1,7 +1,7 @@
 """Tests for samtools wrapper - focuses on OUR command construction logic.
 
 Following Phase 2 testing principles:
-- Mock ONLY at system boundary (subprocess.run, subprocess.Popen)
+- Mock ONLY at system boundary (run_command, run_pipeline)
 - Test OUR code's logic (command construction, error handling)
 - NOT testing samtools itself
 
@@ -14,6 +14,8 @@ These tests verify that our wrapper correctly:
 
 from pathlib import Path
 from unittest.mock import Mock
+
+from muc_one_up.read_simulator.utils.common_utils import RunResult
 
 import pytest
 
@@ -40,25 +42,23 @@ class TestExtractSubsetReference:
         output_fa = tmp_path / "output.fa"
         input_bam.write_bytes(b"FAKE_BAM_DATA")
 
-        # Mock run_command for collate
-        mock_run_cmd = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command"
-        )
-
-        # Mock subprocess.run for fasta extraction - create output
-        def mock_run_side_effect(cmd, **kwargs):
+        # Mock run_command for both collate (non-capture) and fasta (capture)
+        def mock_run_cmd(cmd, **kwargs):
             if "fasta" in cmd:
-                output_fa.write_text(">seq1\nACGT\n")
-            return Mock(returncode=0, stderr=b"")
+                return RunResult(returncode=0, stdout=">seq1\nACGT\n", stderr="", command=" ".join(cmd))
+            return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
+        mock_run = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            side_effect=mock_run_cmd,
+        )
 
         # Act
         extract_subset_reference(str(input_bam), str(output_fa), tools_dict)
 
         # Assert: Check collate command (tests OUR logic)
-        assert mock_run_cmd.call_count == 1
-        collate_call = mock_run_cmd.call_args_list[0]
+        assert mock_run.call_count == 2
+        collate_call = mock_run.call_args_list[0]
         collate_cmd = collate_call[0][0]
 
         assert collate_cmd[0] == "samtools"
@@ -72,13 +72,15 @@ class TestExtractSubsetReference:
         output_fa = tmp_path / "output.fa"
         input_bam.write_bytes(b"FAKE_BAM_DATA")
 
-        mocker.patch("muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command")
+        def mock_run_cmd(cmd, **kwargs):
+            if "fasta" in cmd:
+                return RunResult(returncode=0, stdout=">seq1\nACGT\n", stderr="", command=" ".join(cmd))
+            return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
-        def mock_run_side_effect(cmd, **kwargs):
-            output_fa.write_text(">seq1\nACGT\n")
-            return Mock(returncode=0, stderr=b"")
-
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            side_effect=mock_run_cmd,
+        )
 
         # Act
         extract_subset_reference(str(input_bam), str(output_fa), tools_dict)
@@ -94,9 +96,16 @@ class TestExtractSubsetReference:
         output_fa = tmp_path / "output.fa"
         input_bam.write_bytes(b"FAKE_BAM_DATA")
 
-        mocker.patch("muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command")
-        # Don't create output file
-        mocker.patch("subprocess.run", return_value=Mock(returncode=0, stderr=b""))
+        # Mock run_command to return empty stdout (produces empty file)
+        def mock_run_cmd(cmd, **kwargs):
+            if "fasta" in cmd:
+                return RunResult(returncode=0, stdout="", stderr="", command=" ".join(cmd))
+            return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
+
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            side_effect=mock_run_cmd,
+        )
 
         # Act & Assert
         with pytest.raises(FileOperationError, match="missing or empty"):
@@ -112,17 +121,16 @@ class TestCalculateVNTRCoverage:
         bam = tmp_path / "input.bam"
         bam.write_bytes(b"BAM_DATA")
 
-        depth_file = tmp_path / "test_vntr_depth.txt"
-        depth_file.write_text("chr1\t100\t50\nchr1\t101\t50\n")
-
-        # Mock subprocess.run
-        def mock_run_side_effect(cmd, **kwargs):
-            # Create depth file when depth command is run
-            if "depth" in cmd:
-                depth_file.write_text("chr1\t100\t50\nchr1\t101\t50\n")
-            return Mock(returncode=0, stderr=b"")
-
-        mock_run = mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
+        # Mock run_command to return depth data as captured stdout
+        mock_run = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            return_value=RunResult(
+                returncode=0,
+                stdout="chr1\t100\t50\nchr1\t101\t50\n",
+                stderr="",
+                command="samtools depth",
+            ),
+        )
 
         # Act
         calculate_vntr_coverage(
@@ -152,14 +160,16 @@ class TestCalculateVNTRCoverage:
         bam = tmp_path / "input.bam"
         bam.write_bytes(b"BAM_DATA")
 
-        depth_file = tmp_path / "test_vntr_depth.txt"
-
-        def mock_run_side_effect(cmd, **kwargs):
-            # Create depth file with known values: depths of 10, 20, 30 = mean 20
-            depth_file.write_text("chr1\t100\t10\nchr1\t101\t20\nchr1\t102\t30\n")
-            return Mock(returncode=0, stderr=b"")
-
-        mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
+        # Mock run_command to return depth data with known values: depths of 10, 20, 30 = mean 20
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            return_value=RunResult(
+                returncode=0,
+                stdout="chr1\t100\t10\nchr1\t101\t20\nchr1\t102\t30\n",
+                stderr="",
+                command="samtools depth",
+            ),
+        )
 
         # Act
         coverage, depth_file = calculate_vntr_coverage(
@@ -184,13 +194,16 @@ class TestCalculateTargetCoverage:
         bam.write_bytes(b"BAM_DATA")
         bed.write_text("chr1\t100\t200\n")
 
-        depth_file = tmp_path / "test_target_depth.txt"
-
-        def mock_run_side_effect(cmd, **kwargs):
-            depth_file.write_text("chr1\t150\t25\n")
-            return Mock(returncode=0, stderr=b"")
-
-        mock_run = mocker.patch("subprocess.run", side_effect=mock_run_side_effect)
+        # Mock run_command to return depth data as captured stdout
+        mock_run = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            return_value=RunResult(
+                returncode=0,
+                stdout="chr1\t150\t25\n",
+                stderr="",
+                command="samtools depth",
+            ),
+        )
 
         # Act
         calculate_target_coverage("samtools", str(bam), str(bed), 4, str(tmp_path), "test")

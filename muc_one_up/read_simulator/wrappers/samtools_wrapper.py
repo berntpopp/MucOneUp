@@ -15,14 +15,13 @@ This module provides wrapper functions for samtools operations:
 """
 
 import logging
-import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from ...exceptions import ExternalToolError, FileOperationError
 from ..command_utils import build_tool_command
-from ..utils import run_command
+from ..utils import run_command, run_pipeline
 
 
 def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, str]) -> str:
@@ -54,32 +53,12 @@ def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, s
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Extract sequences into FASTA format
-    # SECURITY: Use subprocess.run with file handle redirection, never shell=True
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     cmd = build_tool_command(tools["samtools"], "fasta", "-n", "-F", "0x900", collated_bam)
 
-    try:
-        logging.info(f"[samtools] Running: {' '.join(cmd)} > {output_fa}")
-        with Path(output_fa).open("w") as fasta_out:
-            result = subprocess.run(
-                cmd, stdout=fasta_out, stderr=subprocess.PIPE, timeout=60, check=True
-            )
-        if result.stderr:
-            logging.info(f"[samtools] {result.stderr.decode('utf-8', errors='ignore')}")
-    except subprocess.CalledProcessError as e:
-        raise ExternalToolError(
-            tool="samtools fasta",
-            exit_code=e.returncode,
-            stderr=e.stderr.decode("utf-8", errors="ignore") if e.stderr else "Unknown error",
-            cmd=" ".join(cmd),
-        ) from e
-    except subprocess.TimeoutExpired as e:
-        raise ExternalToolError(
-            tool="samtools fasta",
-            exit_code=-1,
-            stderr="Timed out after 60s",
-            cmd=" ".join(cmd),
-        ) from e
+    logging.info(f"[samtools] Running: {' '.join(cmd)} > {output_fa}")
+    result = run_command(cmd, timeout=60, capture=True)
+    Path(output_fa).write_text(result.stdout or "")
 
     # Verify the output FASTA exists and is non-empty
     if not output_path.exists() or output_path.stat().st_size == 0:
@@ -119,7 +98,6 @@ def calculate_vntr_coverage(
     depth_file = str(Path(output_dir) / f"{output_name}_vntr_depth.txt")
 
     # Run samtools depth to get per-base coverage
-    # SECURITY: Use subprocess.run with file handle redirection, never shell=True
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     cmd = build_tool_command(
         samtools_exe,
@@ -132,28 +110,9 @@ def calculate_vntr_coverage(
         bam_file,
     )
 
-    try:
-        logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
-        with Path(depth_file).open("w") as depth_out:
-            result = subprocess.run(
-                cmd, stdout=depth_out, stderr=subprocess.PIPE, timeout=60, check=True
-            )
-        if result.stderr:
-            logging.info(f"[samtools] {result.stderr.decode('utf-8', errors='ignore')}")
-    except subprocess.CalledProcessError as e:
-        raise ExternalToolError(
-            tool="samtools depth",
-            exit_code=e.returncode,
-            stderr=e.stderr.decode("utf-8", errors="ignore") if e.stderr else "Unknown error",
-            cmd=" ".join(cmd),
-        ) from e
-    except subprocess.TimeoutExpired as e:
-        raise ExternalToolError(
-            tool="samtools depth",
-            exit_code=-1,
-            stderr="Timed out after 60s",
-            cmd=" ".join(cmd),
-        ) from e
+    logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
+    result = run_command(cmd, timeout=60, capture=True)
+    Path(depth_file).write_text(result.stdout or "")
 
     # Calculate mean coverage from depth file
     total_depth = 0
@@ -213,7 +172,6 @@ def calculate_target_coverage(
     depth_file = str(Path(output_dir) / f"{output_name}_target_depth.txt")
 
     # Run samtools depth with BED file to get per-base coverage
-    # SECURITY: Use subprocess.run with file handle redirection, never shell=True
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     cmd = build_tool_command(
         samtools_exe,
@@ -226,28 +184,9 @@ def calculate_target_coverage(
         bam_file,
     )
 
-    try:
-        logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
-        with Path(depth_file).open("w") as depth_out:
-            result = subprocess.run(
-                cmd, stdout=depth_out, stderr=subprocess.PIPE, timeout=60, check=True
-            )
-        if result.stderr:
-            logging.info(f"[samtools] {result.stderr.decode('utf-8', errors='ignore')}")
-    except subprocess.CalledProcessError as e:
-        raise ExternalToolError(
-            tool="samtools depth",
-            exit_code=e.returncode,
-            stderr=e.stderr.decode("utf-8", errors="ignore") if e.stderr else "Unknown error",
-            cmd=" ".join(cmd),
-        ) from e
-    except subprocess.TimeoutExpired as e:
-        raise ExternalToolError(
-            tool="samtools depth",
-            exit_code=-1,
-            stderr="Timed out after 60s",
-            cmd=" ".join(cmd),
-        ) from e
+    logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
+    result = run_command(cmd, timeout=60, capture=True)
+    Path(depth_file).write_text(result.stdout or "")
 
     # Calculate mean coverage from depth file
     total_depth = 0
@@ -832,7 +771,7 @@ def convert_bam_to_paired_fastq(
                 ) from e
 
         else:
-            # Use subprocess.Popen piping for non-wrapped commands
+            # Use run_pipeline for non-wrapped commands
 
             collate_cmd = [
                 *samtools_cmd_list,
@@ -865,76 +804,17 @@ def convert_bam_to_paired_fastq(
             logging.debug(f"  Collate command: {' '.join(collate_cmd)}")
             logging.debug(f"  Fastq command: {' '.join(fastq_cmd)}")
 
-            try:
-                # Start collate process
-                collate_proc = subprocess.Popen(
-                    collate_cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
+            result = run_pipeline(
+                [collate_cmd, fastq_cmd],
+                capture=True,
+                timeout=opts.timeout,
+            )
 
-                # Start fastq process reading from collate stdout
-                fastq_proc = subprocess.Popen(
-                    fastq_cmd,
-                    stdin=collate_proc.stdout,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-
-                # Close collate stdout in parent to allow SIGPIPE
-                if collate_proc.stdout:
-                    collate_proc.stdout.close()
-
-                # Wait for both processes with timeout
-                try:
-                    _fastq_stdout, fastq_stderr = fastq_proc.communicate(timeout=opts.timeout)
-                    collate_returncode = collate_proc.wait(timeout=5)
-                    fastq_returncode = fastq_proc.returncode
-
-                    # Check return codes
-                    if collate_returncode != 0:
-                        collate_stderr = collate_proc.stderr.read() if collate_proc.stderr else b""
-                        stderr_text = collate_stderr.decode("utf-8", errors="ignore").strip()
-                        raise ExternalToolError(
-                            tool="samtools collate",
-                            exit_code=collate_returncode,
-                            stderr=stderr_text,
-                            cmd=" ".join(collate_cmd),
-                        )
-                    if fastq_returncode != 0:
-                        stderr_text = fastq_stderr.decode("utf-8", errors="ignore").strip()
-                        raise ExternalToolError(
-                            tool="samtools fastq",
-                            exit_code=fastq_returncode,
-                            stderr=stderr_text,
-                            cmd=" ".join(fastq_cmd),
-                        )
-
-                    # Log any warnings from samtools
-                    if fastq_stderr:
-                        stderr_text = fastq_stderr.decode("utf-8", errors="ignore").strip()
-                        if stderr_text:
-                            logging.debug(f"  Samtools stderr: {stderr_text}")
-
-                except subprocess.TimeoutExpired:
-                    collate_proc.kill()
-                    fastq_proc.kill()
-                    raise ExternalToolError(
-                        tool="samtools collate|fastq",
-                        exit_code=-1,
-                        stderr=f"Command timed out after {opts.timeout}s",
-                        cmd=" ".join(collate_cmd) + " | " + " ".join(fastq_cmd),
-                    ) from None
-
-            except Exception as e:
-                if isinstance(e, ExternalToolError):
-                    raise
-                raise ExternalToolError(
-                    tool="samtools",
-                    exit_code=-1,
-                    stderr=str(e),
-                    cmd=" ".join(collate_cmd) + " | " + " ".join(fastq_cmd),
-                ) from e
+            # Log any warnings from samtools
+            if result.stderr:
+                stderr_text = result.stderr.strip()
+                if stderr_text:
+                    logging.debug(f"  Samtools stderr: {stderr_text}")
 
     else:
         # Single-step: direct fastq conversion (no collation)
