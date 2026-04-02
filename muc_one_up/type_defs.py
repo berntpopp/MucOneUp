@@ -43,6 +43,70 @@ class RepeatUnit:
         return cls(symbol=s, mutated=False)
 
 
+@dataclass(slots=True)
+class HaplotypeResult:
+    """Result of simulating a single haplotype.
+
+    Replaces the raw tuple[str, list[str]] convention with named fields.
+
+    Attributes:
+        sequence: The assembled DNA sequence.
+        chain: The repeat chain as typed RepeatUnit objects.
+    """
+
+    sequence: str
+    chain: list[RepeatUnit]
+
+    def chain_strs(self) -> list[str]:
+        """Return chain as legacy string list (e.g., ['1', 'Xm', '9'])."""
+        return [str(ru) for ru in self.chain]
+
+    def as_tuple(self) -> tuple[str, list[str]]:
+        """Convert to legacy (sequence, chain_strs) tuple."""
+        return (self.sequence, self.chain_strs())
+
+    @classmethod
+    def from_tuple(cls, t: tuple[str, list[str]]) -> HaplotypeResult:
+        """Parse from legacy (sequence, chain_strs) tuple."""
+        return cls(
+            sequence=t[0],
+            chain=[RepeatUnit.from_str(s) for s in t[1]],
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class MutationTarget:
+    """A target position for mutation application.
+
+    Replaces raw tuple[int, int] with named, validated fields.
+    Uses 1-based indexing matching biological conventions.
+
+    Attributes:
+        haplotype_index: 1-based haplotype number.
+        repeat_index: 1-based repeat position within the chain.
+    """
+
+    haplotype_index: int
+    repeat_index: int
+
+    def __post_init__(self) -> None:
+        if self.haplotype_index < 1 or self.repeat_index < 1:
+            raise ValueError(
+                f"MutationTarget uses 1-based indexing, got "
+                f"haplotype_index={self.haplotype_index}, "
+                f"repeat_index={self.repeat_index}"
+            )
+
+    def as_tuple(self) -> tuple[int, int]:
+        """Convert to legacy (haplotype_index, repeat_index) tuple."""
+        return (self.haplotype_index, self.repeat_index)
+
+    @classmethod
+    def from_tuple(cls, t: tuple[int, int]) -> MutationTarget:
+        """Parse from legacy (haplotype_index, repeat_index) tuple."""
+        return cls(haplotype_index=t[0], repeat_index=t[1])
+
+
 # Type aliases for haplotype representation
 HaplotypeName = str
 RepeatChain = list[str]
