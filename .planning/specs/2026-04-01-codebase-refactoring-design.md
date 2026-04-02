@@ -1,7 +1,7 @@
 # MucOneUp Codebase Refactoring Design
 
 **Date:** 2026-04-01
-**Status:** Draft (pending user review)
+**Status:** COMPLETE. All phases (1, 2A, 2B, 3A, 3B, 4A, 4B) merged. v0.36.0 released 2026-04-02.
 **Based on:** `.planning/codebase-review-report.md` (overall rating: 5/10)
 **Research sources:** Click Complex Applications docs, Python subprocess best practices, OpenStack shell-avoidance guide, Simon Willison CLI design principles
 
@@ -375,3 +375,39 @@ Each phase defines **behavioral checks** (not just structural goals) that serve 
 - CI green (ruff, mypy, pytest across 3.10-3.12).
 - Coverage >= 30% threshold.
 - No new ruff warnings.
+
+---
+
+## Completion Summary
+
+**All phases completed and merged as of 2026-04-02.**
+
+| Phase | Version | PR | Description | Key Deliverables |
+|-------|---------|-----|-------------|-----------------|
+| 1 | v0.31.0 | #55 | Stabilize operability | Lazy rfc8785, config normalization, smoke tests |
+| 2A | v0.31.0 | #55 | Output contract & ORF | Single ORF implementation, output contract fix |
+| 2B | v0.32.0 | #57 | CLI split & typed options | click_main.py split, typed option dataclasses |
+| 3A | v0.33.0 | #58 | RNG threading & assembly | Centralized assembly.py, explicit RNG instances |
+| 3B | v0.34.0 | #59 | Typed domain models | RepeatUnit, HaplotypeResult, MutationTarget dataclasses |
+| 4A | v0.35.0 | #60 | Execution abstraction | RunResult, run_command capture/stdout_path, run_pipeline |
+| 4B | v0.36.0 | #61 | Assembly context & fixes | AssemblyContext, stale temp-file fix, alignment dedup |
+
+### Success criteria verification (final state at v0.36.0)
+
+**Phase 1:** All criteria met.
+**Phase 2:** All criteria met. click_main.py is ~75 lines (registration only). No argparse.Namespace usage.
+**Phase 3:** Partially met.
+- `.rstrip("m")` eliminated from domain code.
+- Global random replaced with explicit rng instances.
+- RepeatUnit, HaplotypeResult, MutationTarget replace raw types.
+- `SimulationConfig` dataclass deferred (would touch every function signature — diminishing returns for pre-1.0 project).
+- `dict[str, Any]` remains in domain signatures via `ConfigDict` (deferred with SimulationConfig).
+**Phase 4:** All criteria met.
+- subprocess centralized to common_utils.py (+ 1 justified conda exception).
+- AssemblyContext constructed once per pipeline run.
+- DiploidSimulationResult returns None for stale temp paths.
+- nanosim alignment reuses samtools_wrapper sort_and_index_bam.
+
+### Deferred items
+- **SimulationConfig dataclass** (spec 3.1): Typed wrapper for ConfigDict. Would replace `config: ConfigDict` with `config: SimulationConfig` in all domain functions. Deferred as diminishing returns — the config dict pattern is deeply embedded and the project is pre-1.0.
+- **MutationResult dataclass** (spec 3.1): The current `apply_mutations` return type is already descriptive. Adding another dataclass would be overengineering.

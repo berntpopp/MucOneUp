@@ -2,6 +2,7 @@
 
 Date: 2026-04-01
 Repository: `MucOneUp`
+**Remediation status: COMPLETE (v0.36.0, 2026-04-02). All 13 findings addressed.**
 
 ## Scope
 
@@ -42,7 +43,7 @@ The main issue is architectural drift. The CLI layer has become a god module, do
 
 ### 1. Import-time CLI coupling breaks basic operability
 
-Severity: Critical
+Severity: Critical | **RESOLVED** (Phase 1, v0.31.0)
 
 Importing the CLI package eagerly imports the full Click application and transitive dependencies. That currently hard-fails if `rfc8785` is unavailable.
 
@@ -58,7 +59,7 @@ Impact:
 
 ### 2. `click_main.py` is a god module
 
-Severity: High
+Severity: High | **RESOLVED** (Phase 2B, v0.32.0) — split into commands/, ~75 LOC registration-only root
 
 The CLI entrypoint owns too many responsibilities: Click wiring, JSON loading, backend preparation, subprocess execution, FASTA parsing, output naming, and analysis flow.
 
@@ -83,7 +84,7 @@ Impact:
 
 ### 3. CLI contracts do not consistently match backend behavior
 
-Severity: High
+Severity: High | **RESOLVED** (Phase 2A, v0.31.0) — output contract fixed, typed options
 
 The read commands expose `--out-dir` and `--out-base`, but those values are not reliably propagated into the underlying simulator outputs. They affect logs and some side files more than the actual simulated read outputs.
 
@@ -103,7 +104,7 @@ Impact:
 
 ### 4. ORF/toxic-protein workflows are duplicated and drifting
 
-Severity: High
+Severity: High | **RESOLVED** (Phase 2A, v0.31.0) — single ORF implementation in analysis.py
 
 ORF analysis behavior exists in more than one place and has already diverged. Parts of the code read constants as if they were flat keys, while other parts use assembly-keyed constants.
 
@@ -122,7 +123,7 @@ Impact:
 
 ### 5. CLI orchestration is carrying domain logic
 
-Severity: Medium-High
+Severity: Medium-High | **MITIGATED** (Phases 2B, 3B) — typed models reduce coupling; orchestration still exists but with cleaner boundaries
 
 `run_single_simulation_iteration()` is nominally an orchestrator, but it also reshapes data, derives mutation metadata, constructs source trackers, and makes output decisions.
 
@@ -137,7 +138,7 @@ Impact:
 
 ### 6. The core domain is coupled to raw config dictionaries
 
-Severity: High
+Severity: High | **PARTIALLY RESOLVED** (Phase 3B, v0.34.0) — RepeatUnit/HaplotypeResult/MutationTarget replace raw tuples; ConfigDict remains (SimulationConfig deferred)
 
 Simulation and mutation code depend directly on wide `dict[str, Any]` structures rather than focused typed domain objects.
 
@@ -156,7 +157,7 @@ Impact:
 
 ### 7. Domain state is encoded implicitly in strings and tuples
 
-Severity: High
+Severity: High | **RESOLVED** (Phase 3B, v0.34.0) — RepeatUnit(symbol, mutated), HaplotypeResult, MutationTarget replace all "m" suffix and raw tuples
 
 Mutation state is represented with a `"m"` string suffix, mutation targets are 1-based positional tuples, and haplotypes are loose tuples/lists.
 
@@ -176,7 +177,7 @@ Impact:
 
 ### 8. Mutation handling has weak source-of-truth boundaries
 
-Severity: High
+Severity: High | **RESOLVED** (Phase 3A+3B, v0.33.0-v0.34.0) — centralized assembly.py, RepeatUnit typed chains
 
 Mutation logic maintains both `seq` and `chain` representations and updates them through mixed strategies. Assembly rules are not centralized.
 
@@ -196,7 +197,7 @@ Impact:
 
 ### 9. Read simulation resolves assembly inconsistently
 
-Severity: High
+Severity: High | **RESOLVED** (Phase 4B, v0.36.0) — AssemblyContext constructed once per pipeline run
 
 The Illumina pipeline reads the active assembly from more than one config location during a single run.
 
@@ -210,7 +211,7 @@ Impact:
 
 ### 10. External tool boundaries are inconsistent and duplicated
 
-Severity: Medium-High
+Severity: Medium-High | **RESOLVED** (Phase 4A+4B, v0.35.0-v0.36.0) — RunResult/run_command/run_pipeline centralized; nanosim reuses samtools_wrapper
 
 Some wrappers use shared helpers, others bypass them with ad hoc subprocess handling. Long-read alignment also appears duplicated across wrappers.
 
@@ -231,7 +232,7 @@ Impact:
 
 ### 11. Temporary-file lifetime management is fragile
 
-Severity: High
+Severity: High | **RESOLVED** (Phase 4B, v0.36.0) — DiploidSimulationResult sets stale paths to None
 
 The ONT split-simulation path returns FASTQ paths from inside a temporary directory and later code consumes them after that directory scope may already have ended.
 
@@ -246,7 +247,7 @@ Impact:
 
 ### 12. Randomness is global and not injectable
 
-Severity: Medium
+Severity: Medium | **RESOLVED** (Phase 3A, v0.33.0) — explicit rng: random.Random threaded through all domain functions
 
 The code uses module-level `random.*` and seeds the global RNG.
 
@@ -265,7 +266,7 @@ Impact:
 
 ### 13. Error handling is inconsistent and too broad
 
-Severity: Medium
+Severity: Medium | **RESOLVED** (Phase 2B, v0.32.0) — centralized error_handling.py with typed exception-to-exit-code mapping
 
 Commands mix continue-on-error and fail-fast behavior, and many paths collapse all failures into generic exit codes after broad exception handling.
 
@@ -339,6 +340,11 @@ Commands run during review:
 
 ## Conclusion
 
-The repository has strong domain value and enough structure to improve incrementally. The main technical debt is not lack of functionality, but weak boundaries: the CLI does too much, the domain model is too implicit, and the read-simulation stack has inconsistent contracts.
+**Original assessment (2026-04-01):** The repository had strong domain value but weak boundaries: god module CLI, implicit domain model, inconsistent subprocess handling, and fragile temp-file management. Overall rating: 5/10.
 
-The highest-value next move is to refactor the CLI boundary first. That will reduce coupling, improve testability, and make subsequent domain and pipeline cleanup much easier to perform safely.
+**Post-remediation (2026-04-02, v0.36.0):** All 13 findings addressed across 7 phases (1, 2A, 2B, 3A, 3B, 4A, 4B). 11 findings fully resolved, 1 partially resolved (ConfigDict remains — SimulationConfig deferred), 1 mitigated (orchestration domain coupling reduced but not eliminated). Test suite grew from ~600 to 1199 tests. Coverage at 84%.
+
+**Remaining technical debt:**
+- `ConfigDict = dict[str, Any]` still used in domain function signatures (SimulationConfig deferred)
+- CLI orchestration still carries some data reshaping logic (acceptable for pre-1.0)
+- One justified `shell=True` exception in samtools_wrapper (conda/mamba activation)
