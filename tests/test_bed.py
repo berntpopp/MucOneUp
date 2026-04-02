@@ -263,8 +263,6 @@ class TestCreateNonVntrBedFromCapture:
     @patch("muc_one_up.read_simulator.utils.bed.run_command")
     def test_subtraction_bedtools_not_found(self, mock_run_command, temp_dir):
         """Test handling of missing bedtools."""
-        from muc_one_up.exceptions import ExternalToolError
-
         capture_bed = temp_dir / "capture.bed"
         vntr_bed = temp_dir / "vntr.bed"
         output_bed = temp_dir / "non_vntr.bed"
@@ -272,14 +270,11 @@ class TestCreateNonVntrBedFromCapture:
         capture_bed.touch()
         vntr_bed.touch()
 
-        mock_run_command.side_effect = ExternalToolError(
-            tool="command",
-            exit_code=1,
-            stderr="[Errno 2] No such file or directory: 'bedtools'",
-            cmd="bedtools subtract",
+        mock_run_command.side_effect = FileNotFoundError(
+            "[Errno 2] No such file or directory: 'bedtools'"
         )
 
-        with pytest.raises(BedError, match="bedtools subtract failed"):
+        with pytest.raises(BedError, match="bedtools not found in PATH"):
             create_non_vntr_bed_from_capture(output_bed, capture_bed, vntr_bed)
 
 

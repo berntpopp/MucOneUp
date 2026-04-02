@@ -25,6 +25,9 @@ class RunResult:
 
     Supports comparison with int for backward compatibility:
     callers that do ``if run_command(...) == 0:`` still work.
+
+    When returned from capture mode, stdout and stderr are always str
+    (never None). They are None only in streaming mode.
     """
 
     returncode: int
@@ -48,7 +51,7 @@ class RunResult:
         return bool(self.returncode)
 
     def __hash__(self) -> int:
-        return hash(self.returncode)
+        return hash((self.returncode, self.stdout, self.stderr, self.command))
 
 
 def run_command(
@@ -107,6 +110,8 @@ def run_command(
                 stderr=f"Command timed out after {timeout}s",
                 cmd=cmd_str,
             ) from e
+        except FileNotFoundError:
+            raise  # Let callers handle "tool not found" directly
         except Exception as e:
             raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
 
@@ -259,6 +264,7 @@ def run_pipeline(
                 stdout=subprocess.PIPE,
                 stderr=stderr_dest,
                 cwd=cwd,
+                start_new_session=True,
             )
             processes.append(proc)
 
@@ -272,7 +278,8 @@ def run_pipeline(
             stdout_bytes, stderr_bytes = last.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
             for p in processes:
-                p.kill()
+                with contextlib.suppress(Exception):
+                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
             last.communicate()
             raise ExternalToolError(
                 tool="pipeline",
@@ -317,7 +324,7 @@ def run_pipeline(
         # Clean up any running processes
         for p in processes:
             with contextlib.suppress(Exception):
-                p.kill()
+                os.killpg(os.getpgid(p.pid), signal.SIGTERM)
         raise ExternalToolError(
             tool="pipeline", exit_code=1, stderr=str(e), cmd=pipeline_str
         ) from e
