@@ -15,6 +15,9 @@ from muc_one_up.read_simulator.source_tracking import (
     RepeatRegion,
     build_coordinate_map,
 )
+from muc_one_up.type_defs import RepeatUnit
+
+RU = RepeatUnit.from_str  # shorthand for tests
 
 
 class TestRepeatRegion:
@@ -64,7 +67,7 @@ class TestBuildCoordinateMap:
         }
 
     def test_simple_chain(self, repeats_dict):
-        chain = ["1", "2", "X", "7", "8", "9"]
+        chain = [RU("1"), RU("2"), RU("X"), RU("7"), RU("8"), RU("9")]
         coord_map = build_coordinate_map(
             haplotype=1,
             chain=chain,
@@ -86,7 +89,7 @@ class TestBuildCoordinateMap:
         assert coord_map.vntr_end == 86 + 9 + 9 + 9
 
     def test_with_mutation_markers(self, repeats_dict):
-        chain = ["1", "2", "Xm", "7", "8", "9"]
+        chain = [RU("1"), RU("2"), RU("Xm"), RU("7"), RU("8"), RU("9")]
         coord_map = build_coordinate_map(
             haplotype=1,
             chain=chain,
@@ -104,7 +107,7 @@ class TestBuildCoordinateMap:
         assert coord_map.regions[0].mutation_name is None
 
     def test_with_snps(self, repeats_dict):
-        chain = ["1", "2", "X"]
+        chain = [RU("1"), RU("2"), RU("X")]
         snps = [{"position": 55, "ref_base": "A", "alt_base": "T"}]
         coord_map = build_coordinate_map(
             haplotype=1,
@@ -121,7 +124,7 @@ class TestBuildCoordinateMap:
         assert coord_map.snp_positions[0].repeat_index == 1
 
     def test_snp_outside_vntr(self, repeats_dict):
-        chain = ["1"]
+        chain = [RU("1")]
         snps = [{"position": 10, "ref_base": "G", "alt_base": "C"}]
         coord_map = build_coordinate_map(
             haplotype=1,
@@ -149,7 +152,7 @@ class TestBuildCoordinateMap:
         assert coord_map.vntr_end == 50
 
     def test_single_repeat(self, repeats_dict):
-        chain = ["X"]
+        chain = [RU("X")]
         coord_map = build_coordinate_map(
             haplotype=1,
             chain=chain,
@@ -166,7 +169,7 @@ class TestBuildCoordinateMap:
         assert coord_map.vntr_end == 18
 
     def test_unknown_repeat_symbol_raises(self, repeats_dict):
-        chain = ["1", "Z"]  # Z is not in repeats_dict
+        chain = [RU("1"), RU("Z")]  # Z is not in repeats_dict
         with pytest.raises(ValueError, match="Unknown repeat symbol 'Z'"):
             build_coordinate_map(
                 haplotype=1,
@@ -197,8 +200,8 @@ class TestReadSourceTracker:
     def tracker(self, repeats_dict):
         return ReadSourceTracker(
             repeat_chains={
-                1: ["1", "2", "Xm", "7", "8", "9"],
-                2: ["1", "2", "X", "7", "8", "9"],
+                1: [RU("1"), RU("2"), RU("Xm"), RU("7"), RU("8"), RU("9")],
+                2: [RU("1"), RU("2"), RU("X"), RU("7"), RU("8"), RU("9")],
             },
             repeats_dict=repeats_dict,
             left_const_len=50,

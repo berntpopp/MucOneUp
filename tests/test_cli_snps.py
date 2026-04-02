@@ -15,6 +15,12 @@ import pytest
 
 from muc_one_up.cli.snps import integrate_snps_unified
 from muc_one_up.exceptions import SNPIntegrationError, ValidationError
+from muc_one_up.type_defs import HaplotypeResult
+
+
+def _hr(seq: str, chain: list[str]) -> HaplotypeResult:
+    """Helper to build HaplotypeResult from legacy-style arguments."""
+    return HaplotypeResult.from_tuple((seq, chain))
 
 
 @pytest.mark.unit
@@ -27,7 +33,7 @@ class TestIntegrateSNPsUnified:
         args.snp_input_file = None
         args.random_snps = False
 
-        results = [("ATCGATCGATCG", ["1", "2"])]
+        results = [_hr("ATCGATCGATCG", ["1", "2"])]
 
         modified_results, applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
@@ -46,7 +52,7 @@ class TestIntegrateSNPsUnified:
         args.snp_input_file = str(snp_file)
         args.random_snps = False
 
-        results = [("ATCGATCGATCG", ["1"]), ("GCTAGCTAGCTA", ["2"])]
+        results = [_hr("ATCGATCGATCG", ["1"]), _hr("GCTAGCTAGCTA", ["2"])]
 
         modified_results, applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
@@ -66,7 +72,7 @@ class TestIntegrateSNPsUnified:
         args.snp_input_file = str(snp_file)
         args.random_snps = False
 
-        results = [("ATCGATCGATCG", ["1"])]
+        results = [_hr("ATCGATCGATCG", ["1"])]
 
         with pytest.raises(SNPIntegrationError, match="Failed to parse SNP input file"):
             integrate_snps_unified(
@@ -81,7 +87,7 @@ class TestIntegrateSNPsUnified:
         args.random_snp_density = None  # Missing required parameter
         args.random_snp_output_file = "output.tsv"
 
-        results = [("ATCGATCGATCG", ["1"])]
+        results = [_hr("ATCGATCGATCG", ["1"])]
 
         with pytest.raises(ValidationError, match="--random-snp-density is required"):
             integrate_snps_unified(
@@ -96,7 +102,7 @@ class TestIntegrateSNPsUnified:
         args.random_snp_density = 1.0
         args.random_snp_output_file = None  # Missing required parameter
 
-        results = [("ATCGATCGATCG", ["1"])]
+        results = [_hr("ATCGATCGATCG", ["1"])]
 
         with pytest.raises(ValidationError, match="--random-snp-output-file is required"):
             integrate_snps_unified(
@@ -119,7 +125,7 @@ class TestIntegrateSNPsUnified:
         left = minimal_config["constants"]["hg38"]["left"]
         right = minimal_config["constants"]["hg38"]["right"]
         repeat = "ATCGATCGATCGATCGATCGATCG" * 10
-        results = [(f"{left}{repeat}{right}", ["1"])]
+        results = [_hr(f"{left}{repeat}{right}", ["1"])]
 
         modified_results, _applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
@@ -130,8 +136,7 @@ class TestIntegrateSNPsUnified:
 
         # Verify results structure is maintained
         assert len(modified_results) == 1
-        assert isinstance(modified_results[0], tuple)
-        assert len(modified_results[0]) == 2
+        assert isinstance(modified_results[0], HaplotypeResult)
 
     def test_random_snps_constants_only_region(self, tmp_path: Path, minimal_config: dict):
         """Given constants_only region, when generating SNPs, then restricts to constants."""
@@ -148,7 +153,7 @@ class TestIntegrateSNPsUnified:
         left = minimal_config["constants"]["hg38"]["left"]
         right = minimal_config["constants"]["hg38"]["right"]
         repeat = "ATCGATCGATCGATCGATCGATCG" * 10
-        results = [(f"{left}{repeat}{right}", ["1"])]
+        results = [_hr(f"{left}{repeat}{right}", ["1"])]
 
         modified_results, _applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
@@ -173,8 +178,8 @@ class TestIntegrateSNPsUnified:
         right = minimal_config["constants"]["hg38"]["right"]
         repeat = "ATCGATCGATCGATCGATCGATCG" * 10
         results = [
-            (f"{left}{repeat}{right}", ["1"]),
-            (f"{left}{repeat}{right}", ["2"]),
+            _hr(f"{left}{repeat}{right}", ["1"]),
+            _hr(f"{left}{repeat}{right}", ["2"]),
         ]
 
         modified_results, _applied_snp_info = integrate_snps_unified(
@@ -195,7 +200,7 @@ class TestIntegrateSNPsUnified:
         args.snp_input_file = str(snp_file)
         args.random_snps = False
 
-        results = [("ATCGATCGATCG", ["1"])]
+        results = [_hr("ATCGATCGATCG", ["1"])]
 
         # Should not raise error with skip_reference_check=True
         # SNPs that don't match reference will be skipped, but no error raised
@@ -205,7 +210,7 @@ class TestIntegrateSNPsUnified:
 
         # Results structure should be preserved
         assert len(modified_results) == 1
-        assert len(modified_results[0]) == 2
+        assert isinstance(modified_results[0], HaplotypeResult)
 
     @patch("muc_one_up.cli.snps.write_snps_to_file")
     def test_random_snps_write_failure_continues(
@@ -233,7 +238,7 @@ class TestIntegrateSNPsUnified:
         left = minimal_config["constants"]["hg38"]["left"]
         right = minimal_config["constants"]["hg38"]["right"]
         repeat = "ATCGATCGATCGATCGATCGATCG" * 10
-        results = [(f"{left}{repeat}{right}", ["1"])]
+        results = [_hr(f"{left}{repeat}{right}", ["1"])]
 
         # Should not raise error, just log it
         modified_results, _applied_snp_info = integrate_snps_unified(
@@ -255,12 +260,12 @@ class TestIntegrateSNPsUnified:
         args.snp_input_file = str(snp_file)
         args.random_snps = False
 
-        original_chain = ["1", "2", "X"]
-        results = [("ATCGATCGATCGATCGATCG", original_chain)]
+        original_chain_strs = ["1", "2", "X"]
+        results = [_hr("ATCGATCGATCGATCGATCG", original_chain_strs)]
 
         modified_results, _applied_snp_info = integrate_snps_unified(
             args=args, config=minimal_config, results=results, skip_reference_check=False
         )
 
         # Chain should be preserved
-        assert modified_results[0][1] == original_chain
+        assert modified_results[0].chain_strs() == original_chain_strs

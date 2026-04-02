@@ -25,10 +25,9 @@ from muc_one_up.read_simulator.source_tracking import (
     ReadOrigin,
     ReadSourceTracker,
 )
+from muc_one_up.type_defs import RepeatUnit
 
-# ---------------------------------------------------------------------------
-# Shared fixtures
-# ---------------------------------------------------------------------------
+RU = RepeatUnit.from_str
 
 REPEATS_DICT = {
     "1": "AACCCTCCC",  # 9 bp
@@ -49,8 +48,8 @@ def tracker_with_mutation():
     """Tracker with mutation on haplotype 1, repeat 3 (Xm), SNP at pos 55."""
     return ReadSourceTracker(
         repeat_chains={
-            1: ["1", "2", "Xm", "7", "8", "9"],
-            2: ["1", "2", "X", "7", "8", "9"],
+            1: [RU("1"), RU("2"), RU("Xm"), RU("7"), RU("8"), RU("9")],
+            2: [RU("1"), RU("2"), RU("X"), RU("7"), RU("8"), RU("9")],
         },
         repeats_dict=REPEATS_DICT,
         left_const_len=LEFT_CONST_LEN,
@@ -65,8 +64,8 @@ def tracker_no_mutation():
     """Tracker with no mutations or SNPs."""
     return ReadSourceTracker(
         repeat_chains={
-            1: ["1", "2", "X", "7", "8", "9"],
-            2: ["1", "2", "X", "7", "8", "9"],
+            1: [RU("1"), RU("2"), RU("X"), RU("7"), RU("8"), RU("9")],
+            2: [RU("1"), RU("2"), RU("X"), RU("7"), RU("8"), RU("9")],
         },
         repeats_dict=REPEATS_DICT,
         left_const_len=LEFT_CONST_LEN,

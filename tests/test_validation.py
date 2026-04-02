@@ -3,6 +3,7 @@
 import pytest
 
 from muc_one_up.exceptions import FileOperationError, ValidationError
+from muc_one_up.type_defs import MutationTarget, RepeatUnit
 from muc_one_up.validation import (
     validate_directory_exists,
     validate_file_exists,
@@ -16,6 +17,8 @@ from muc_one_up.validation import (
     validate_repeat_index,
     validate_repeat_symbol,
 )
+
+RU = RepeatUnit.from_str
 
 
 class TestValidateHaplotypeIndex:
@@ -128,21 +131,24 @@ class TestValidateMutationTargets:
 
     def test_valid_targets(self):
         """Valid targets should not raise errors."""
-        targets = [(1, 5), (2, 10)]
-        chains = [["1", "2", "7", "8", "9"] * 2, ["1", "2", "7", "8", "9"] * 3]
+        targets = [MutationTarget(1, 5), MutationTarget(2, 10)]
+        chains = [
+            [RU(s) for s in ["1", "2", "7", "8", "9"]] * 2,
+            [RU(s) for s in ["1", "2", "7", "8", "9"]] * 3,
+        ]
         validate_mutation_targets(targets, 2, chains)
 
     def test_invalid_haplotype_index(self):
         """Should raise ValidationError for invalid haplotype."""
-        targets = [(3, 5)]
-        chains = [["1", "2"], ["1", "2"]]
+        targets = [MutationTarget(3, 5)]
+        chains = [[RU("1"), RU("2")], [RU("1"), RU("2")]]
         with pytest.raises(ValidationError, match=r"haplotype index.*out of range"):
             validate_mutation_targets(targets, 2, chains)
 
     def test_invalid_repeat_index(self):
         """Should raise ValidationError for invalid repeat position."""
-        targets = [(1, 10)]
-        chains = [["1", "2", "7"]]
+        targets = [MutationTarget(1, 10)]
+        chains = [[RU("1"), RU("2"), RU("7")]]
         with pytest.raises(ValidationError, match=r"repeat index.*out of range"):
             validate_mutation_targets(targets, 1, chains)
 

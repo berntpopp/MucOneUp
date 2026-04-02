@@ -22,6 +22,8 @@ import random
 from pathlib import Path
 from typing import Any
 
+from .type_defs import HaplotypeResult
+
 # Valid DNA bases for SNP generation
 DNA_BASES = ["A", "C", "G", "T"]
 
@@ -124,13 +126,13 @@ def parse_snp_file(filepath: str) -> list[dict[str, Any]]:
 
 
 def get_vntr_boundaries(
-    simulation_results: list[tuple[str, list[str]]], config: dict
+    simulation_results: list[HaplotypeResult], config: dict
 ) -> list[dict[str, int]]:
     """
     Calculate the boundaries of the VNTR region within each haplotype sequence.
 
     Args:
-        simulation_results (List[Tuple[str, List[str]]]): Simulation results with sequences and chains
+        simulation_results: List of HaplotypeResult objects.
         config (dict): Configuration dictionary with constants
 
     Returns:
@@ -139,12 +141,12 @@ def get_vntr_boundaries(
     boundaries = []
     reference_assembly = config.get("reference_assembly", "hg38")
 
-    for seq, _ in simulation_results:
+    for hr in simulation_results:
         left_const = config["constants"][reference_assembly]["left"]
         right_const = config["constants"][reference_assembly]["right"]
 
         vntr_start = len(left_const)
-        vntr_end = len(seq) - len(right_const)
+        vntr_end = len(hr.sequence) - len(right_const)
 
         boundaries.append({"start": vntr_start, "end": vntr_end})
 

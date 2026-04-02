@@ -14,6 +14,12 @@ import pytest
 
 from muc_one_up.cli.mutations import apply_mutation_pipeline
 from muc_one_up.exceptions import MutationError
+from muc_one_up.type_defs import HaplotypeResult, MutationTarget, RepeatUnit
+
+
+def _hr(seq: str, chain: list[str]) -> HaplotypeResult:
+    """Helper to build HaplotypeResult from legacy-style arguments."""
+    return HaplotypeResult.from_tuple((seq, chain))
 
 
 @pytest.mark.unit
@@ -24,7 +30,7 @@ class TestApplyMutationPipeline:
         """Given no mutation name, when applying, then returns unchanged results."""
         args = Mock()
         args.mutation_targets = None
-        results = [("ATCG", ["1", "2"])]
+        results = [_hr("ATCG", ["1", "2"])]
 
         res, mut_res, mut_units, mut_pos = apply_mutation_pipeline(
             args=args,
@@ -49,7 +55,7 @@ class TestApplyMutationPipeline:
         left = minimal_config["constants"]["hg38"]["left"]
         repeat_seq = minimal_config["repeats"]["X"]
         right = minimal_config["constants"]["hg38"]["right"]
-        results = [(f"{left}{repeat_seq}{right}", ["X"])]
+        results = [_hr(f"{left}{repeat_seq}{right}", ["X"])]
 
         # Mock the apply_mutations to return expected structure
         mock_apply.return_value = (results, {"mutated": "units"})
@@ -63,7 +69,7 @@ class TestApplyMutationPipeline:
             mutation_pair=None,
         )
 
-        assert mut_pos == [(1, 1)]
+        assert mut_pos == [MutationTarget(1, 1)]
         assert mut_res is None  # Single mode doesn't create separate mutated results
         assert mut_units is not None
         mock_apply.assert_called_once()
@@ -77,7 +83,7 @@ class TestApplyMutationPipeline:
         left = minimal_config["constants"]["hg38"]["left"]
         repeat_seq = minimal_config["repeats"]["X"]
         right = minimal_config["constants"]["hg38"]["right"]
-        results = [(f"{left}{repeat_seq}{right}", ["X"])]
+        results = [_hr(f"{left}{repeat_seq}{right}", ["X"])]
 
         mock_apply.return_value = (results, {"mutated": "units"})
 
@@ -103,7 +109,7 @@ class TestApplyMutationPipeline:
         left = minimal_config["constants"]["hg38"]["left"]
         repeat_seq = minimal_config["repeats"]["X"]
         right = minimal_config["constants"]["hg38"]["right"]
-        results = [(f"{left}{repeat_seq}{right}", ["X"])]
+        results = [_hr(f"{left}{repeat_seq}{right}", ["X"])]
 
         mock_apply.return_value = (results, {"mutated": "units"})
 
@@ -119,7 +125,7 @@ class TestApplyMutationPipeline:
         assert res == results  # Normal results unchanged in dual mode
         assert mut_res is not None  # Mutated results created
         assert mut_units is not None
-        assert mut_pos == [(1, 1)]
+        assert mut_pos == [MutationTarget(1, 1)]
 
     @patch("muc_one_up.cli.mutations.apply_mutations")
     def test_dual_mode_with_random_target(self, mock_apply: Mock, minimal_config: dict):
@@ -130,7 +136,7 @@ class TestApplyMutationPipeline:
         left = minimal_config["constants"]["hg38"]["left"]
         repeat_seq = minimal_config["repeats"]["X"]
         right = minimal_config["constants"]["hg38"]["right"]
-        results = [(f"{left}{repeat_seq}{right}", ["X"])]
+        results = [_hr(f"{left}{repeat_seq}{right}", ["X"])]
 
         mock_apply.return_value = (results, {"mutated": "units"})
 
@@ -156,7 +162,7 @@ class TestApplyMutationPipeline:
         left = minimal_config["constants"]["hg38"]["left"]
         repeat_seq = minimal_config["repeats"]["X"]
         right = minimal_config["constants"]["hg38"]["right"]
-        results = [(f"{left}{repeat_seq}{right}", ["X"])]
+        results = [_hr(f"{left}{repeat_seq}{right}", ["X"])]
 
         # Try to apply non-existent mutation
         with pytest.raises(MutationError, match="Mutation application failed"):
@@ -177,7 +183,7 @@ class TestApplyMutationPipeline:
         left = minimal_config["constants"]["hg38"]["left"]
         repeat_seq = minimal_config["repeats"]["X"]
         right = minimal_config["constants"]["hg38"]["right"]
-        results = [(f"{left}{repeat_seq}{right}", ["X"])]
+        results = [_hr(f"{left}{repeat_seq}{right}", ["X"])]
 
         with pytest.raises(MutationError, match="Dual mutation application failed"):
             apply_mutation_pipeline(
@@ -198,13 +204,13 @@ class TestApplyMutationPipeline:
         left = minimal_config["constants"]["hg38"]["left"]
         repeat_seq = minimal_config["repeats"]["X"]
         right = minimal_config["constants"]["hg38"]["right"]
-        original_chain = ["X", "B"]
-        results = [(f"{left}{repeat_seq}{right}", original_chain)]
+        original_chain = [RepeatUnit("X"), RepeatUnit("B")]
+        results = [HaplotypeResult(f"{left}{repeat_seq}{right}", original_chain)]
 
         # Mock returns modified chain for mutated results
-        mutated_chain = ["Xm", "B"]
+        mutated_chain = [RepeatUnit("X", mutated=True), RepeatUnit("B")]
         mock_apply.return_value = (
-            [(f"{left}{repeat_seq}{right}", mutated_chain)],
+            [HaplotypeResult(f"{left}{repeat_seq}{right}", mutated_chain)],
             {"mutated": "units"},
         )
 
@@ -218,9 +224,9 @@ class TestApplyMutationPipeline:
         )
 
         # Original chain should be unchanged
-        assert res[0][1] == original_chain
+        assert res[0].chain == original_chain
         # Mutated chain should be different
-        assert mut_res[0][1] != original_chain
+        assert mut_res[0].chain != original_chain
 
     @patch("muc_one_up.cli.mutations.apply_mutations")
     def test_multiple_haplotypes_with_random_target(self, mock_apply: Mock, minimal_config: dict):
@@ -233,8 +239,8 @@ class TestApplyMutationPipeline:
         repeat_b = minimal_config["repeats"]["B"]
         right = minimal_config["constants"]["hg38"]["right"]
         results = [
-            (f"{left}{repeat_x}{right}", ["X"]),
-            (f"{left}{repeat_b}{right}", ["B"]),
+            _hr(f"{left}{repeat_x}{right}", ["X"]),
+            _hr(f"{left}{repeat_b}{right}", ["B"]),
         ]
 
         mock_apply.return_value = (results, {"mutated": "units"})
@@ -251,6 +257,6 @@ class TestApplyMutationPipeline:
         assert mut_pos is not None
         assert len(mut_pos) == 1
         # Should target one of the valid repeats
-        hap_idx, rep_idx = mut_pos[0]
-        assert 1 <= hap_idx <= 2
-        assert rep_idx == 1
+        target = mut_pos[0]
+        assert 1 <= target.haplotype_index <= 2
+        assert target.repeat_index == 1

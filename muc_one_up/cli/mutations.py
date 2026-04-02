@@ -9,19 +9,20 @@ import random
 
 from ..exceptions import MutationError, ValidationError
 from ..mutate import apply_mutations
+from ..type_defs import HaplotypeResult, MutationTarget
 
 
 def parse_mutation_targets(
     mutation_targets_list: list[str | tuple[int, int]],
-) -> list[tuple[int, int]]:
+) -> list[MutationTarget]:
     """
-    Parse mutation target strings into tuples.
+    Parse mutation target strings into MutationTarget objects.
 
     Args:
         mutation_targets_list: List of "haplotype,repeat" strings
 
     Returns:
-        List of (haplotype_idx, repeat_idx) tuples
+        List of MutationTarget objects
 
     Raises:
         ValidationError: If target format is invalid
@@ -37,25 +38,25 @@ def parse_mutation_targets(
                 hap_i, rep_i = t
             else:
                 raise ValueError(f"Unexpected target format: {t}")
-            mutation_positions.append((hap_i, rep_i))
+            mutation_positions.append(MutationTarget(hap_i, rep_i))
         except Exception as e:
             raise ValidationError(f"Invalid --mutation-targets format: '{t}' ({e})") from e
     return mutation_positions
 
 
 def find_random_mutation_target(
-    results: list[tuple[str, list[str]]], config: dict, mutation_name: str
-) -> list[tuple[int, int]]:
+    results: list[HaplotypeResult], config: dict, mutation_name: str
+) -> list[MutationTarget]:
     """
     Find random valid targets for mutation.
 
     Args:
-        results: List of (sequence, chain) tuples
+        results: List of HaplotypeResult objects
         config: Configuration dictionary
         mutation_name: Name of mutation to apply
 
     Returns:
-        List with single (haplotype_idx, repeat_idx) tuple
+        List with single MutationTarget
 
     Raises:
         MutationError: If mutation not found or no valid targets exist
@@ -70,11 +71,10 @@ def find_random_mutation_target(
     allowed_repeats = set(mut_def["allowed_repeats"])
     possible_targets = []
 
-    for hap_idx, (_seq, chain) in enumerate(results, start=1):
-        for rep_idx, sym in enumerate(chain, start=1):
-            pure_sym = sym.replace("m", "")
-            if pure_sym in allowed_repeats:
-                possible_targets.append((hap_idx, rep_idx))
+    for hap_idx, hr in enumerate(results, start=1):
+        for rep_idx, unit in enumerate(hr.chain, start=1):
+            if unit.symbol in allowed_repeats:
+                possible_targets.append(MutationTarget(hap_idx, rep_idx))
 
     if not possible_targets:
         raise MutationError(
@@ -87,7 +87,9 @@ def find_random_mutation_target(
 
 def apply_mutation_pipeline(
     args, config, results, mutation_name, dual_mutation_mode, mutation_pair
-) -> tuple[list, list | None, dict | None, list | None]:
+) -> tuple[
+    list[HaplotypeResult], list[HaplotypeResult] | None, dict | None, list[MutationTarget] | None
+]:
     """
     Apply mutations based on configuration.
 
@@ -129,7 +131,7 @@ def apply_mutation_pipeline(
         try:
             mutated_results, mutated_units = apply_mutations(
                 config=config,
-                results=[(seq, chain.copy()) for seq, chain in results],
+                results=[HaplotypeResult(hr.sequence, list(hr.chain)) for hr in results],
                 mutation_name=mutation_pair[1],
                 targets=mutation_positions,
             )

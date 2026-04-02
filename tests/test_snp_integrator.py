@@ -20,6 +20,7 @@ from muc_one_up.snp_integrator import (
     parse_snp_file,
     write_snps_to_file,
 )
+from muc_one_up.type_defs import HaplotypeResult, RepeatUnit
 
 
 @pytest.mark.unit
@@ -161,7 +162,10 @@ class TestGetVntrBoundaries:
         seq1 = left_const + vntr_region + right_const
         seq2 = left_const + vntr_region + right_const
 
-        simulation_results = [(seq1, ["1", "2", "X"]), (seq2, ["1", "2", "A"])]
+        simulation_results = [
+            HaplotypeResult(seq1, [RepeatUnit("1"), RepeatUnit("2"), RepeatUnit("X")]),
+            HaplotypeResult(seq2, [RepeatUnit("1"), RepeatUnit("2"), RepeatUnit("A")]),
+        ]
 
         boundaries = get_vntr_boundaries(simulation_results, minimal_config)
 
@@ -180,7 +184,10 @@ class TestGetVntrBoundaries:
         seq1 = left_const + "ATCG" * 30 + right_const  # 120 bp VNTR
         seq2 = left_const + "ATCG" * 60 + right_const  # 240 bp VNTR
 
-        simulation_results = [(seq1, ["1", "2"]), (seq2, ["1", "2"])]
+        simulation_results = [
+            HaplotypeResult(seq1, [RepeatUnit("1"), RepeatUnit("2")]),
+            HaplotypeResult(seq2, [RepeatUnit("1"), RepeatUnit("2")]),
+        ]
 
         boundaries = get_vntr_boundaries(simulation_results, minimal_config)
 

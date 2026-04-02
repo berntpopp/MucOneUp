@@ -119,7 +119,14 @@ def run_single_simulation_iteration(
 
     # ORF prediction and toxic detection
     run_orf_prediction(
-        args, config, out_dir, out_base, sim_index, results, mutated_results, dual_mutation_mode
+        args,
+        config,
+        out_dir,
+        out_base,
+        sim_index,
+        results,
+        mutated_results,
+        dual_mutation_mode,
     )
 
     # Build read source tracker(s) if requested
@@ -130,12 +137,10 @@ def run_single_simulation_iteration(
 
         from ..read_simulator.source_tracking import ReadSourceTracker
 
-        # Build repeat chains dict (1-based haplotype keys)
-        # results is list[tuple[str, list[str]]] — (sequence, chain)
+        # Build repeat chains dict (1-based haplotype keys) using typed chains
         repeat_chains = {}
-        for i, result in enumerate(results):
-            _sequence, chain = result
-            repeat_chains[i + 1] = chain
+        for i, hr in enumerate(results):
+            repeat_chains[i + 1] = hr.chain
 
         # Get left constant length from config
         ref_assembly = getattr(args, "reference_assembly", None) or config.get(
@@ -149,10 +154,10 @@ def run_single_simulation_iteration(
 
         # Get mutation info
         mutation_name_str = getattr(args, "mutation_name", None)
-        mut_positions = []
+        mut_positions: list[tuple[int, int]] = []
         mut_name = None
         if mutation_positions:
-            mut_positions = mutation_positions
+            mut_positions = [(mt.haplotype_index, mt.repeat_index) for mt in mutation_positions]
             if mutation_name_str and mutation_name_str != "normal":
                 parts = mutation_name_str.split(",")
                 for p in parts:
@@ -181,9 +186,8 @@ def run_single_simulation_iteration(
             # Build mutated chains from mutated_results
             mut_chains = {}
             if mutated_results:
-                for i, result in enumerate(mutated_results):
-                    _sequence, chain = result
-                    mut_chains[i + 1] = chain
+                for i, hr in enumerate(mutated_results):
+                    mut_chains[i + 1] = hr.chain
 
             # Get mutated SNP info
             mut_snp_info_dict: dict[int, list[dict[str, object]]] = {}

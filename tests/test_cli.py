@@ -20,6 +20,7 @@ from muc_one_up.cli.mutations import (
     parse_mutation_targets,
 )
 from muc_one_up.cli.snps import integrate_snps_unified
+from muc_one_up.type_defs import HaplotypeResult, MutationTarget
 
 # ==============================================================================
 # Fixtures
@@ -106,8 +107,8 @@ def mock_args(temp_config_file, tmp_path):
 def sample_results():
     """Sample haplotype results."""
     return [
-        ("ATCGATCGATCG", ["1", "2", "7", "8", "9"]),
-        ("GCTAGCTAGCTA", ["1", "2", "7", "8", "9"]),
+        HaplotypeResult.from_tuple(("ATCGATCGATCG", ["1", "2", "7", "8", "9"])),
+        HaplotypeResult.from_tuple(("GCTAGCTAGCTA", ["1", "2", "7", "8", "9"])),
     ]
 
 
@@ -251,7 +252,7 @@ def test_parse_mutation_targets_valid_strings():
 
     result = parse_mutation_targets(targets)
 
-    assert result == [(1, 5), (2, 10)]
+    assert result == [MutationTarget(1, 5), MutationTarget(2, 10)]
 
 
 def test_parse_mutation_targets_valid_tuples():
@@ -260,7 +261,7 @@ def test_parse_mutation_targets_valid_tuples():
 
     result = parse_mutation_targets(targets)
 
-    assert result == [(1, 5), (2, 10)]
+    assert result == [MutationTarget(1, 5), MutationTarget(2, 10)]
 
 
 def test_parse_mutation_targets_mixed():
@@ -269,7 +270,7 @@ def test_parse_mutation_targets_mixed():
 
     result = parse_mutation_targets(targets)
 
-    assert result == [(1, 5), (2, 10)]
+    assert result == [MutationTarget(1, 5), MutationTarget(2, 10)]
 
 
 def test_parse_mutation_targets_invalid_format():
@@ -292,9 +293,9 @@ def test_find_random_mutation_target_success(sample_results, minimal_config):
     result = find_random_mutation_target(sample_results, minimal_config, "dupC")
 
     assert len(result) == 1
-    hap_idx, rep_idx = result[0]
-    assert 1 <= hap_idx <= 2
-    assert 1 <= rep_idx <= 5
+    target = result[0]
+    assert 1 <= target.haplotype_index <= 2
+    assert 1 <= target.repeat_index <= 5
 
 
 def test_find_random_mutation_target_mutation_not_found(sample_results, minimal_config):

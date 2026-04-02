@@ -16,14 +16,15 @@ from ..snp_integrator import (
     parse_snp_file,
     write_snps_to_file,
 )
+from ..type_defs import HaplotypeResult
 
 
 def integrate_snps_unified(
     args,
     config,
-    results: list[tuple[str, list[str]]],
+    results: list[HaplotypeResult],
     skip_reference_check: bool = False,
-) -> tuple[list[tuple[str, list[str]]], dict]:
+) -> tuple[list[HaplotypeResult], dict]:
     """
     Unified SNP integration function - eliminates duplication.
 
@@ -33,7 +34,7 @@ def integrate_snps_unified(
     Args:
         args: Parsed command-line arguments
         config: Configuration dictionary
-        results: List of (sequence, chain) tuples
+        results: List of HaplotypeResult objects
         skip_reference_check: Skip reference base validation (for mutated sequences)
 
     Returns:
@@ -47,7 +48,7 @@ def integrate_snps_unified(
     snps_from_source = []
     generated_snp_list_for_output = []
 
-    current_sequences = [seq for seq, chain in results]
+    current_sequences = [hr.sequence for hr in results]
 
     # Check for SNP integration options
     if args.snp_input_file:
@@ -96,8 +97,8 @@ def integrate_snps_unified(
         )
 
         # Replace original sequences with modified ones
-        for i, (_seq, chain) in enumerate(results):
-            results[i] = (modified_sequences[i], chain)
+        for i, hr in enumerate(results):
+            results[i] = HaplotypeResult(modified_sequences[i], hr.chain)
 
         logging.info(f"Applied {sum(len(v) for v in applied_snp_info.values())} SNPs to sequences")
 

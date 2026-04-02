@@ -13,10 +13,12 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .type_defs import RepeatUnit
+
 
 def parse_vntr_structure_file(
     filepath: str, config: dict
-) -> tuple[list[list[str]], dict[str, Any] | None]:
+) -> tuple[list[list[RepeatUnit]], dict[str, Any] | None]:
     """Parse VNTR structure file for predefined chain simulation.
 
     Reads tab-delimited file with haplotype IDs and repeat chains. Extracts
@@ -55,7 +57,7 @@ def parse_vntr_structure_file(
         the marker before checking against config["repeats"].
     """
     valid_repeat_symbols = set(config["repeats"].keys())
-    haplotype_chains = []
+    haplotype_chains: list[list[RepeatUnit]] = []
     mutation_info = None
 
     try:
@@ -91,18 +93,18 @@ def parse_vntr_structure_file(
                     raise ValueError(f"Invalid format in line {i}: Expected tab-separated columns")
 
                 chain_str = columns[1]
-                chain = chain_str.split("-")
+                raw_symbols = chain_str.split("-")
 
-                # Validate each symbol in the chain
-                for symbol in chain:
-                    # Strip any mutation marker ('m') for validation
-                    # This allows structures with pre-marked mutations
-                    pure_symbol = symbol.rstrip("m")
-                    if pure_symbol not in valid_repeat_symbols:
+                # Validate each symbol and build typed chain
+                chain: list[RepeatUnit] = []
+                for symbol in raw_symbols:
+                    ru = RepeatUnit.from_str(symbol)
+                    if ru.symbol not in valid_repeat_symbols:
                         raise ValueError(
-                            f"Invalid repeat symbol '{pure_symbol}' in line {i}. "
+                            f"Invalid repeat symbol '{ru.symbol}' in line {i}. "
                             f"Valid symbols are: {sorted(valid_repeat_symbols)}"
                         )
+                    chain.append(ru)
 
                 haplotype_chains.append(chain)
                 logging.debug(f"Parsed haplotype {i} with {len(chain)} repeat units")

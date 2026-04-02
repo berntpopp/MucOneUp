@@ -157,7 +157,9 @@ def test_generate_haplotypes_simulation_error():
 
 def test_find_random_mutation_target_not_found():
     """find_random_mutation_target should raise MutationError when mutation doesn't exist."""
-    results = [("ATCG", ["A", "B", "C"])]
+    from muc_one_up.type_defs import HaplotypeResult
+
+    results = [HaplotypeResult.from_tuple(("ATCG", ["A", "B", "C"]))]
     config = {"mutations": {"dupC": {"allowed_repeats": ["C"]}}}
 
     with pytest.raises(MutationError, match="not in config\\['mutations'\\]"):
@@ -166,7 +168,9 @@ def test_find_random_mutation_target_not_found():
 
 def test_find_random_mutation_target_no_valid_repeats():
     """find_random_mutation_target should raise MutationError when no valid targets."""
-    results = [("ATCG", ["A", "B", "C"])]
+    from muc_one_up.type_defs import HaplotypeResult
+
+    results = [HaplotypeResult.from_tuple(("ATCG", ["A", "B", "C"]))]
     config = {"mutations": {"test": {"allowed_repeats": ["X", "Y", "Z"]}}}
 
     with pytest.raises(MutationError, match="No repeats match"):

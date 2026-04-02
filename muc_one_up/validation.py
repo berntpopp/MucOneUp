@@ -12,7 +12,7 @@ Functions in this module:
 from pathlib import Path
 
 from .exceptions import FileOperationError, ValidationError
-from .type_defs import ConfigDict, MutationTargets
+from .type_defs import ConfigDict, MutationTarget, RepeatUnit
 
 
 def validate_haplotype_index(index: int, num_haplotypes: int) -> None:
@@ -101,50 +101,49 @@ def validate_mutation_exists(mutation_name: str, config: ConfigDict) -> None:
 
 
 def validate_mutation_targets(
-    targets: MutationTargets,
+    targets: list[MutationTarget],
     num_haplotypes: int,
-    chains: list[list[str]],
+    chains: list[list[RepeatUnit]],
 ) -> None:
     """Validate mutation targets are within bounds.
 
     Args:
-        targets: List of (haplotype_idx, repeat_idx) tuples (1-based)
+        targets: List of MutationTarget objects (1-based indexing)
         num_haplotypes: Number of haplotypes
-        chains: List of repeat chains
+        chains: List of repeat chains as RepeatUnit lists
 
     Raises:
         ValidationError: If any target is invalid
     """
-    for hap_idx, repeat_idx in targets:
+    for mt in targets:
         # Validate haplotype index (1-based)
-        if not 1 <= hap_idx <= num_haplotypes:
+        if not 1 <= mt.haplotype_index <= num_haplotypes:
             raise ValidationError(
-                f"Mutation target haplotype index {hap_idx} out of range. "
+                f"Mutation target haplotype index {mt.haplotype_index} out of range. "
                 f"Must be 1-{num_haplotypes} (1-based indexing)."
             )
 
         # Validate repeat index (1-based)
-        chain = chains[hap_idx - 1]  # Convert to 0-based
-        if not 1 <= repeat_idx <= len(chain):
+        chain = chains[mt.haplotype_index - 1]  # Convert to 0-based
+        if not 1 <= mt.repeat_index <= len(chain):
             raise ValidationError(
-                f"Mutation target repeat index {repeat_idx} out of range "
-                f"for haplotype {hap_idx} (chain length: {len(chain)}). "
+                f"Mutation target repeat index {mt.repeat_index} out of range "
+                f"for haplotype {mt.haplotype_index} (chain length: {len(chain)}). "
                 f"Must be 1-{len(chain)} (1-based indexing)."
             )
 
 
-def validate_repeat_symbol(symbol: str, valid_symbols: set[str]) -> None:
+def validate_repeat_symbol(symbol: str | RepeatUnit, valid_symbols: set[str]) -> None:
     """Validate repeat symbol is in valid set.
 
     Args:
-        symbol: Repeat symbol to validate (e.g., '1', '2', 'X')
+        symbol: Repeat symbol string or RepeatUnit to validate
         valid_symbols: Set of valid repeat symbols
 
     Raises:
         ValidationError: If symbol is invalid
     """
-    # Remove mutation marker if present
-    clean_symbol = symbol.rstrip("m")
+    clean_symbol = symbol.symbol if isinstance(symbol, RepeatUnit) else symbol.rstrip("m")
 
     if clean_symbol not in valid_symbols:
         raise ValidationError(

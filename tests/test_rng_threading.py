@@ -121,5 +121,5 @@ class TestSimulateRNG:
         rng2 = random.Random(42)
         r1 = simulate_diploid(config, seed=None, rng=rng1)
         r2 = simulate_diploid(config, seed=None, rng=rng2)
-        assert r1[0][1] == r2[0][1]  # same chains
-        assert r1[1][1] == r2[1][1]
+        assert r1[0].chain == r2[0].chain  # same chains
+        assert r1[1].chain == r2[1].chain

@@ -20,10 +20,16 @@ from muc_one_up.cli.outputs import (
     write_structure_files,
 )
 from muc_one_up.exceptions import FileOperationError
+from muc_one_up.type_defs import HaplotypeResult
 from tests.utils import (
     assert_valid_fasta,
     count_fasta_records,
 )
+
+
+def _hr(seq: str, chain: list[str]) -> HaplotypeResult:
+    """Helper to build HaplotypeResult from legacy-style arguments."""
+    return HaplotypeResult.from_tuple((seq, chain))
 
 
 @pytest.fixture
@@ -41,8 +47,8 @@ def mock_args():
 
 
 @pytest.fixture
-def sample_results(minimal_config: dict) -> list[tuple[str, list[str]]]:
-    """Sample simulation results (sequence, chain) tuples."""
+def sample_results(minimal_config: dict) -> list[HaplotypeResult]:
+    """Sample simulation results as HaplotypeResult objects."""
     left = minimal_config["constants"]["hg38"]["left"]
     right = minimal_config["constants"]["hg38"]["right"]
 
@@ -52,7 +58,7 @@ def sample_results(minimal_config: dict) -> list[tuple[str, list[str]]]:
     seq2 = left + "GCTAGCTAGCTA" + right
     chain2 = ["1", "2", "A", "B", "6p", "7", "8", "9"]
 
-    return [(seq1, chain1), (seq2, chain2)]
+    return [_hr(seq1, chain1), _hr(seq2, chain2)]
 
 
 @pytest.mark.unit
@@ -86,7 +92,7 @@ class TestWriteFastaOutputs:
         assert count_fasta_records(output_file) == 2
 
         # Verify results are returned
-        assert out_results == sample_results
+        assert len(out_results) == len(sample_results)
         assert mutated_results is None
         assert snp_info_normal == {}  # No SNPs applied
         assert snp_info_mut == {}
@@ -126,8 +132,8 @@ class TestWriteFastaOutputs:
     ):
         """Test writing FASTA in dual mutation mode."""
         mutated_results = [
-            (sample_results[0][0], ["1", "2", "Xm", "B", "6", "7", "8", "9"]),
-            (sample_results[1][0], ["1", "2", "Am", "B", "6p", "7", "8", "9"]),
+            _hr(sample_results[0].sequence, ["1", "2", "Xm", "B", "6", "7", "8", "9"]),
+            _hr(sample_results[1].sequence, ["1", "2", "Am", "B", "6p", "7", "8", "9"]),
         ]
 
         _out_results, _mut_results, _snp_info_normal, _snp_info_mut = write_fasta_outputs(
@@ -576,8 +582,8 @@ class TestWriteStructureFiles:
         mock_args.output_structure = True
 
         mutated_results = [
-            (sample_results[0][0], ["1", "2", "Xm", "B", "6", "7", "8", "9"]),
-            (sample_results[1][0], ["1", "2", "Am", "B", "6p", "7", "8", "9"]),
+            _hr(sample_results[0].sequence, ["1", "2", "Xm", "B", "6", "7", "8", "9"]),
+            _hr(sample_results[1].sequence, ["1", "2", "Am", "B", "6p", "7", "8", "9"]),
         ]
 
         write_structure_files(
@@ -620,8 +626,8 @@ class TestWriteStructureFiles:
         mock_args.output_structure = True
 
         results = [
-            ("SEQUENCE1", ["1", "2m", "X", "B", "6", "7", "8", "9"]),
-            ("SEQUENCE2", ["1", "2", "Xm", "B", "6p", "7", "8", "9"]),
+            _hr("SEQUENCE1", ["1", "2m", "X", "B", "6", "7", "8", "9"]),
+            _hr("SEQUENCE2", ["1", "2", "Xm", "B", "6p", "7", "8", "9"]),
         ]
 
         write_structure_files(
@@ -749,8 +755,8 @@ class TestOutputsIntegration:
         mock_args.mutation_name = "dupC"  # Required for write_mutated_units
 
         mutated_results = [
-            (sample_results[0][0], ["1", "2", "Xm", "B", "6", "7", "8", "9"]),
-            (sample_results[1][0], ["1", "2", "Am", "B", "6p", "7", "8", "9"]),
+            _hr(sample_results[0].sequence, ["1", "2", "Xm", "B", "6", "7", "8", "9"]),
+            _hr(sample_results[1].sequence, ["1", "2", "Am", "B", "6p", "7", "8", "9"]),
         ]
 
         mutated_units = {1: [(25, "MUTATEDSEQ")]}

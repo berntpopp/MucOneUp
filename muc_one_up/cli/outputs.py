@@ -58,7 +58,7 @@ def write_fasta_outputs(
             )
 
             write_fasta(
-                [seq for seq, chain in results],
+                [hr.sequence for hr in results],
                 normal_out,
                 comment="Normal sequence (no mutations applied)",
             )
@@ -66,7 +66,7 @@ def write_fasta_outputs(
                 f"Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})"
             )
             write_fasta(
-                [seq for seq, chain in mutated_results],
+                [hr.sequence for hr in mutated_results],
                 mut_out,
                 comment=mutation_comment,
             )
@@ -110,7 +110,7 @@ def write_fasta_outputs(
             results, applied_snp_info = integrate_snps_unified(args, config, results)
 
             write_fasta(
-                [seq for seq, chain in results],
+                [hr.sequence for hr in results],
                 out_file,
                 prefix="haplotype",
                 comments=haplotype_comments,
@@ -165,8 +165,8 @@ def write_structure_files(
         try:
             with Path(normal_struct_out).open("w") as nf:
                 nf.write("# Normal sequence (no mutations applied)\n")
-                for i, (_sequence, chain) in enumerate(results, start=1):
-                    chain_str = "-".join(chain)
+                for i, hr in enumerate(results, start=1):
+                    chain_str = "-".join(str(ru) for ru in hr.chain)
                     nf.write(f"haplotype_{i}\t{chain_str}\n")
 
             with Path(mut_struct_out).open("w") as mf:
@@ -174,8 +174,8 @@ def write_structure_files(
                     f"# Mutation Applied: {mutation_pair[1]} (Targets: {mutation_positions})\n"
                 )
                 mf.write(mutation_comment)
-                for i, (_sequence, chain) in enumerate(mutated_results, start=1):
-                    chain_str = "-".join(chain)
+                for i, hr in enumerate(mutated_results, start=1):
+                    chain_str = "-".join(str(ru) for ru in hr.chain)
                     mf.write(f"haplotype_{i}\t{chain_str}\n")
 
             logging.info("Structure files written: %s and %s", normal_struct_out, mut_struct_out)
@@ -199,8 +199,8 @@ def write_structure_files(
                             f"# Mutation Applied: {args.mutation_name} (Target: random)\n"
                         )
 
-                for i, (_sequence, chain) in enumerate(results, start=1):
-                    chain_str = "-".join(chain)
+                for i, hr in enumerate(results, start=1):
+                    chain_str = "-".join(str(ru) for ru in hr.chain)
                     struct_fh.write(f"haplotype_{i}\t{chain_str}\n")
 
             logging.info("Structure file written to %s", struct_out)
