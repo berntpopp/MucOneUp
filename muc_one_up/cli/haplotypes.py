@@ -8,9 +8,10 @@ import random
 
 from ..exceptions import SimulationError
 from ..simulate import simulate_diploid, simulate_from_chains
+from ..type_defs import HaplotypeResult
 
 
-def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[tuple[str, list[str]]]:
+def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[HaplotypeResult]:
     """
     Generate haplotypes based on simulation mode.
 
@@ -23,7 +24,7 @@ def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[tup
         predefined_chains: Predefined chains from structure file (if any)
 
     Returns:
-        List of (sequence, chain) tuples
+        List of HaplotypeResult objects
 
     Raises:
         SimulationError: If simulation fails
