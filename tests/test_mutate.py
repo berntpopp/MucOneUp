@@ -1,6 +1,7 @@
 import pytest
 
 from muc_one_up.mutate import apply_mutations, validate_allowed_repeats
+from muc_one_up.type_defs import HaplotypeResult, MutationTarget, RepeatUnit
 
 
 @pytest.fixture
@@ -35,25 +36,25 @@ def test_apply_mutations_forced_change(mutation_config):
     and the mutation applied. In this case, the chain has "C" but only "X" is allowed.
     After replacement, the mutated unit should be "XZXXX" and the chain marker becomes "Xm".
     """
-    # Original haplotype: left constant "TTTT", repeat "CCCCC", right constant not appended because repeat != "9".
     results = [
-        ("TTTTCCCCC", ["C"]),
+        HaplotypeResult(sequence="TTTTCCCCC", chain=[RepeatUnit("C")]),
     ]
     updated, mutated_units = apply_mutations(
         config=mutation_config,
         results=results,
         mutation_name="testMut",
-        targets=[(1, 1)],
+        targets=[MutationTarget(1, 1)],
     )
     # Verify updated results
     assert len(updated) == 1
-    new_seq, new_chain = updated[0]
-    # Forced change: "C" should be replaced with "X" and then mutated marker appended ("Xm")
-    assert new_chain[0] == "Xm"
-    # Verify that the mutated unit "XZXXX" appears in the new sequence (i.e. left constant + mutated unit)
-    assert "XZXXX" in new_seq
+    hr = updated[0]
+    # Forced change: "C" should be replaced with "X" and then mutated
+    assert hr.chain[0].symbol == "X"
+    assert hr.chain[0].mutated is True
+    # Verify that the mutated unit "XZXXX" appears in the new sequence
+    assert "XZXXX" in hr.sequence
     # Ensure we no longer see the unmodified "XXXXX"
-    assert "XXXXX" not in new_seq
+    assert "XXXXX" not in hr.sequence
 
     # Verify that the mutated_units dict has a record for haplotype 1, repeat 1.
     assert 1 in mutated_units
@@ -68,21 +69,24 @@ def test_apply_mutations_forced_change(mutation_config):
 def test_apply_mutations_replace_ok(mutation_config):
     """Test a normal replacement mutation in an allowed repeat (X)."""
     results = [
-        ("TTTTXXXXXGGGG", ["X"]),  # chain has allowed symbol "X"
+        HaplotypeResult(
+            sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")]
+        ),  # chain has allowed symbol "X"
     ]
     updated, mutated_units = apply_mutations(
         config=mutation_config,
         results=results,
         mutation_name="testMut",
-        targets=[(1, 1)],
+        targets=[MutationTarget(1, 1)],
     )
-    new_seq, new_chain = updated[0]
-    # After mutation, chain symbol becomes "Xm"
-    assert new_chain[0] == "Xm"
+    hr = updated[0]
+    # After mutation, chain symbol is "X" with mutated=True
+    assert hr.chain[0].symbol == "X"
+    assert hr.chain[0].mutated is True
     # With the replacement at base position 2, "XXXXX" should become "XZXXX"
-    assert "XZXXX" in new_seq
+    assert "XZXXX" in hr.sequence
     # The right constant ("GGGG") should remain unchanged.
-    assert new_seq.endswith("GGGG")
+    assert hr.sequence.endswith("GGGG")
     # Verify mutated_units contains the expected mutated repeat.
     assert 1 in mutated_units
     found = False
@@ -102,14 +106,14 @@ def test_apply_mutations_out_of_range(mutation_config):
         {"type": "replace", "start": 100, "end": 101, "sequence": "ABC"}
     ]
     results = [
-        ("TTTTXXXXXGGGG", ["X"]),
+        HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")]),
     ]
     with pytest.raises(ValueError) as exc:
         apply_mutations(
             config=mutation_config,
             results=results,
             mutation_name="testMut",
-            targets=[(1, 1)],
+            targets=[MutationTarget(1, 1)],
         )
     assert "out of bounds" in str(exc.value)
 
@@ -139,9 +143,9 @@ def test_strict_mode_enforcement(mutation_config):
     Test that strict mode raises an error when encountering a disallowed repeat.
     """
     results = [
-        (
-            "TTTTCCCCC",
-            ["C"],
+        HaplotypeResult(
+            sequence="TTTTCCCCC",
+            chain=[RepeatUnit("C")],
         ),  # Chain has symbol "C" but strict mutation only allows "X"
     ]
 
@@ -151,7 +155,7 @@ def test_strict_mode_enforcement(mutation_config):
             config=mutation_config,
             results=results,
             mutation_name="strictMut",
-            targets=[(1, 1)],
+            targets=[MutationTarget(1, 1)],
         )
     assert "Cannot apply mutation 'strictMut'" in str(exc.value)
     assert "Repeat symbol 'C' is not in allowed_repeats" in str(exc.value)
@@ -164,7 +168,7 @@ def test_invalid_allowed_repeats_in_mutations(mutation_config):
     Test that using a mutation with invalid allowed_repeats raises an error.
     """
     results = [
-        ("TTTTCCCCC", ["C"]),
+        HaplotypeResult(sequence="TTTTCCCCC", chain=[RepeatUnit("C")]),
     ]
 
     with pytest.raises(ValueError) as exc:
@@ -172,7 +176,7 @@ def test_invalid_allowed_repeats_in_mutations(mutation_config):
             config=mutation_config,
             results=results,
             mutation_name="invalidAllowedMut",
-            targets=[(1, 1)],
+            targets=[MutationTarget(1, 1)],
         )
     assert "Invalid repeats in allowed_repeats" in str(exc.value)
     assert "Y" in str(exc.value)
@@ -189,31 +193,31 @@ class TestMutateErrorConditions:
             "repeats": {"X": "XXX"},
             "constants": {"hg38": {"left": "TT", "right": "GG"}},
         }
-        results = [("TTXXXGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTXXXGG", chain=[RepeatUnit("X")])]
 
         with pytest.raises(ValueError, match="No 'mutations' section in config"):
-            apply_mutations(config, results, "someMut", [(1, 1)])
+            apply_mutations(config, results, "someMut", [MutationTarget(1, 1)])
 
     def test_mutation_name_not_found(self, mutation_config):
         """Test error when mutation name doesn't exist."""
-        results = [("TTTTXXXXXGGGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")])]
 
         with pytest.raises(ValueError, match="Mutation 'nonExistent' not found"):
-            apply_mutations(mutation_config, results, "nonExistent", [(1, 1)])
+            apply_mutations(mutation_config, results, "nonExistent", [MutationTarget(1, 1)])
 
     def test_haplotype_index_out_of_range(self, mutation_config):
         """Test error when haplotype index exceeds number of haplotypes."""
-        results = [("TTTTXXXXXGGGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")])]
 
         with pytest.raises(ValueError, match="Haplotype index 5 out of range"):
-            apply_mutations(mutation_config, results, "testMut", [(5, 1)])
+            apply_mutations(mutation_config, results, "testMut", [MutationTarget(5, 1)])
 
     def test_repeat_index_out_of_range(self, mutation_config):
         """Test error when repeat index exceeds chain length."""
-        results = [("TTTTXXXXXGGGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")])]
 
         with pytest.raises(ValueError, match="Repeat index 10 out of range"):
-            apply_mutations(mutation_config, results, "testMut", [(1, 10)])
+            apply_mutations(mutation_config, results, "testMut", [MutationTarget(1, 10)])
 
     def test_empty_allowed_repeats_raises_error(self, mutation_config):
         """Test error when mutation has no allowed_repeats and symbol doesn't match."""
@@ -221,10 +225,10 @@ class TestMutateErrorConditions:
             "allowed_repeats": [],
             "changes": [{"type": "replace", "start": 1, "end": 1, "sequence": "Z"}],
         }
-        results = [("TTTTCCCCC", ["C"])]
+        results = [HaplotypeResult(sequence="TTTTCCCCC", chain=[RepeatUnit("C")])]
 
         with pytest.raises(ValueError, match="has no allowed_repeats, cannot fix symbol"):
-            apply_mutations(mutation_config, results, "emptyAllowed", [(1, 1)])
+            apply_mutations(mutation_config, results, "emptyAllowed", [MutationTarget(1, 1)])
 
     def test_malformed_change_missing_fields(self, mutation_config):
         """Test error when change definition is missing required fields."""
@@ -232,10 +236,10 @@ class TestMutateErrorConditions:
             "allowed_repeats": ["X"],
             "changes": [{"type": "replace", "start": 1}],  # Missing 'end'
         }
-        results = [("TTTTXXXXXGGGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")])]
 
         with pytest.raises(ValueError, match=r"Malformed change.*missing fields"):
-            apply_mutations(mutation_config, results, "badChange", [(1, 1)])
+            apply_mutations(mutation_config, results, "badChange", [MutationTarget(1, 1)])
 
     def test_insert_out_of_bounds(self, mutation_config):
         """Test error when insert position is out of bounds."""
@@ -243,10 +247,10 @@ class TestMutateErrorConditions:
             "allowed_repeats": ["X"],
             "changes": [{"type": "insert", "start": 100, "end": 100, "sequence": "ZZZ"}],
         }
-        results = [("TTTTXXXXXGGGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")])]
 
         with pytest.raises(ValueError, match="Insert out of bounds"):
-            apply_mutations(mutation_config, results, "badInsert", [(1, 1)])
+            apply_mutations(mutation_config, results, "badInsert", [MutationTarget(1, 1)])
 
     def test_delete_out_of_bounds(self, mutation_config):
         """Test error when delete range is out of bounds."""
@@ -254,10 +258,10 @@ class TestMutateErrorConditions:
             "allowed_repeats": ["X"],
             "changes": [{"type": "delete", "start": 1, "end": 100, "sequence": ""}],
         }
-        results = [("TTTTXXXXXGGGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")])]
 
         with pytest.raises(ValueError, match="Delete out of bounds"):
-            apply_mutations(mutation_config, results, "badDelete", [(1, 1)])
+            apply_mutations(mutation_config, results, "badDelete", [MutationTarget(1, 1)])
 
     def test_delete_insert_operation(self, mutation_config):
         """Test delete_insert mutation type."""
@@ -267,14 +271,15 @@ class TestMutateErrorConditions:
                 {"type": "delete_insert", "start": 1, "end": 4, "sequence": "ZZZ"}
             ],  # Delete between positions 1 and 4, insert ZZZ
         }
-        results = [("TTTTXXXXXGGGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")])]
 
-        updated, _ = apply_mutations(mutation_config, results, "delIns", [(1, 1)])
+        updated, _ = apply_mutations(mutation_config, results, "delIns", [MutationTarget(1, 1)])
 
         # Should have applied delete_insert successfully
         assert len(updated) == 1
-        _new_seq, new_chain = updated[0]
-        assert new_chain[0] == "Xm"
+        hr = updated[0]
+        assert hr.chain[0].symbol == "X"
+        assert hr.chain[0].mutated is True
 
     def test_delete_insert_out_of_bounds(self, mutation_config):
         """Test error when delete_insert range is invalid."""
@@ -282,10 +287,10 @@ class TestMutateErrorConditions:
             "allowed_repeats": ["X"],
             "changes": [{"type": "delete_insert", "start": 1, "end": 100, "sequence": "Z"}],
         }
-        results = [("TTTTXXXXXGGGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")])]
 
         with pytest.raises(ValueError, match="delete_insert out of bounds"):
-            apply_mutations(mutation_config, results, "badDelIns", [(1, 1)])
+            apply_mutations(mutation_config, results, "badDelIns", [MutationTarget(1, 1)])
 
     def test_unknown_mutation_type(self, mutation_config):
         """Test error for unknown mutation type."""
@@ -293,10 +298,10 @@ class TestMutateErrorConditions:
             "allowed_repeats": ["X"],
             "changes": [{"type": "unknown_op", "start": 1, "end": 1, "sequence": "Z"}],
         }
-        results = [("TTTTXXXXXGGGG", ["X"])]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=[RepeatUnit("X")])]
 
         with pytest.raises(ValueError, match="Unknown mutation type 'unknown_op'"):
-            apply_mutations(mutation_config, results, "unknownType", [(1, 1)])
+            apply_mutations(mutation_config, results, "unknownType", [MutationTarget(1, 1)])
 
     def test_chain_not_ending_with_9(self, mutation_config):
         """Test sequence assembly when chain doesn't end with '9'."""
@@ -320,11 +325,17 @@ class TestMutateErrorConditions:
         mutation_config["mutations"]["testMut"]["allowed_repeats"] = ["X", "A", "B"]
 
         # Chain with multiple repeats
-        results = [("TTTTXXXXXAAAAABBBBB", ["X", "A", "B"])]
+        results = [
+            HaplotypeResult(
+                sequence="TTTTXXXXXAAAAABBBBB",
+                chain=[RepeatUnit("X"), RepeatUnit("A"), RepeatUnit("B")],
+            )
+        ]
 
         # Target the 3rd repeat (B)
-        updated, _ = apply_mutations(mutation_config, results, "testMut", [(1, 3)])
+        updated, _ = apply_mutations(mutation_config, results, "testMut", [MutationTarget(1, 3)])
 
-        _new_seq, new_chain = updated[0]
+        hr = updated[0]
         # Third repeat should be marked
-        assert new_chain[2] == "Bm"
+        assert hr.chain[2].symbol == "B"
+        assert hr.chain[2].mutated is True

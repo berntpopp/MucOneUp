@@ -25,14 +25,14 @@ Example:
         config = load_config("config.json")
         results, mutated_units = apply_mutations(
             config=config,
-            results=[(seq1, chain1), (seq2, chain2)],
+            results=[HaplotypeResult(seq1, chain1), HaplotypeResult(seq2, chain2)],
             mutation_name="dupC",
-            targets=[(1, 25)]  # 1-based indexing
+            targets=[MutationTarget(1, 25)]  # 1-based indexing
         )
 
 Notes:
     - Positions use 1-based indexing (matching biological conventions)
-    - Mutated repeats are marked with 'm' suffix in chains
+    - Mutated repeats are marked via RepeatUnit.mutated flag
     - Strict mode prevents silent auto-conversions (recommended for reproducibility)
 
 See Also:
@@ -47,11 +47,12 @@ from .assembly import assemble_sequence
 from .type_defs import (
     ConfigDict,
     DNASequence,
-    HaplotypeList,
+    HaplotypeResult,
     MutationDefinition,
     MutationName,
-    MutationTargets,
+    MutationTarget,
     RepeatChain,
+    RepeatUnit,
 )
 
 
@@ -85,11 +86,11 @@ def validate_allowed_repeats(mutation_def: MutationDefinition, config: ConfigDic
 
 def apply_mutations(
     config: ConfigDict,
-    results: HaplotypeList,
+    results: list[HaplotypeResult],
     mutation_name: MutationName,
-    targets: MutationTargets,
+    targets: list[MutationTarget],
     rng: _random_module.Random | None = None,
-) -> tuple[HaplotypeList, dict[int, list[tuple[int, str]]]]:
+) -> tuple[list[HaplotypeResult], dict[int, list[tuple[int, str]]]]:
     """Apply named mutation to specific haplotype positions.
 
     Applies the mutation defined in config["mutations"][mutation_name] to each
@@ -98,9 +99,9 @@ def apply_mutations(
 
     Args:
         config: Configuration dict containing mutations section
-        results: List of (sequence, chain) tuples for each haplotype
+        results: List of HaplotypeResult for each haplotype
         mutation_name: Key in config["mutations"] defining the mutation
-        targets: List of (haplotype_idx, repeat_idx) tuples using 1-based indexing
+        targets: List of MutationTarget using 1-based indexing
 
     Returns:
         Tuple containing:
@@ -113,7 +114,7 @@ def apply_mutations(
                    strict mode rejects invalid repeat symbol
 
     Note:
-        Mutated repeats are marked with 'm' suffix in the chain.
+        Mutated repeats are marked via RepeatUnit.mutated flag.
         Positions use 1-based indexing (haplotype and repeat).
     """
     if "mutations" not in config:
@@ -143,22 +144,22 @@ def apply_mutations(
     ] = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
 
     # Apply the mutation to each specified target.
-    for hap_i, rep_i in targets:
+    for target in targets:
+        hap_i = target.haplotype_index
+        rep_i = target.repeat_index
         hap_index = hap_i - 1
         repeat_index = rep_i - 1
 
         if hap_index < 0 or hap_index >= len(updated_results):
             raise ValueError(f"Haplotype index {hap_i} out of range (1..{len(updated_results)}).")
 
-        seq, chain = updated_results[hap_index]
+        hr = updated_results[hap_index]
 
-        if repeat_index < 0 or repeat_index >= len(chain):
-            raise ValueError(f"Repeat index {rep_i} out of range (1..{len(chain)}).")
-
-        current_symbol = chain[repeat_index]
+        if repeat_index < 0 or repeat_index >= len(hr.chain):
+            raise ValueError(f"Repeat index {rep_i} out of range (1..{len(hr.chain)}).")
 
         # Handle the case where the current symbol is not in allowed_repeats
-        current_symbol_clean = current_symbol.replace("m", "")
+        current_symbol_clean = hr.chain[repeat_index].symbol
         if current_symbol_clean not in allowed_repeats:
             if not allowed_repeats:
                 raise ValueError(
@@ -185,20 +186,19 @@ def apply_mutations(
                 new_symbol,
                 mutation_name,
             )
-            chain[repeat_index] = new_symbol
-            seq = rebuild_haplotype_sequence(chain, config)
-            updated_results[hap_index] = (seq, chain)
-
-        current_symbol = chain[repeat_index]
+            hr.chain[repeat_index] = RepeatUnit(new_symbol)
+            seq = assemble_sequence(hr.chain, config)
+            updated_results[hap_index] = HaplotypeResult(sequence=seq, chain=hr.chain)
+            hr = updated_results[hap_index]
 
         # Apply the specified changes and capture the mutated unit.
         seq, chain, mutated_repeat = apply_changes_to_repeat(
-            seq, chain, repeat_index, changes, config, mutation_name
+            hr.sequence, hr.chain, repeat_index, changes, config, mutation_name
         )
 
         # Mark the mutated repeat.
-        chain[repeat_index] = chain[repeat_index] + "m"
-        updated_results[hap_index] = (seq, chain)
+        chain[repeat_index] = RepeatUnit(chain[repeat_index].symbol, mutated=True)
+        updated_results[hap_index] = HaplotypeResult(sequence=seq, chain=chain)
         logging.info(
             "Applied mutation '%s' at haplotype %d, repeat %d",
             mutation_name,
@@ -225,20 +225,18 @@ def rebuild_haplotype_sequence(chain: RepeatChain, config: ConfigDict) -> DNASeq
     Returns:
         Reassembled haplotype DNA sequence
     """
-    from .type_defs import RepeatUnit
-
     typed_chain = [RepeatUnit.from_str(s) for s in chain]
     return assemble_sequence(typed_chain, config)
 
 
 def apply_changes_to_repeat(
     seq: DNASequence,
-    chain: RepeatChain,
+    chain: list[RepeatUnit],
     repeat_index: int,
     changes: list[dict[str, int | str]],
     config: ConfigDict,
     mutation_name: MutationName,
-) -> tuple[DNASequence, RepeatChain, DNASequence]:
+) -> tuple[DNASequence, list[RepeatUnit], DNASequence]:
     """Modify repeat unit sequence using mutation change operations.
 
     Applies a series of change operations (insert, delete, replace, delete_insert)
@@ -247,7 +245,7 @@ def apply_changes_to_repeat(
 
     Args:
         seq: Full haplotype sequence before mutation
-        chain: Repeat chain identifying unit positions
+        chain: Repeat chain as list of RepeatUnit
         repeat_index: Index (0-based) of the repeat to modify
         changes: List of change dicts with 'type', 'start', 'end', 'sequence' keys
         config: Configuration dict for assembly constants and repeat lookups
@@ -275,10 +273,9 @@ def apply_changes_to_repeat(
 
     offset = left_const_len
     for i in range(repeat_index):
-        pure_sym = chain[i].replace("m", "")
-        offset += len(repeats_dict[pure_sym])
+        offset += len(repeats_dict[chain[i].symbol])
 
-    current_symbol = chain[repeat_index].replace("m", "")
+    current_symbol = chain[repeat_index].symbol
     repeat_seq = repeats_dict[current_symbol]
     start_pos = offset
     end_pos = offset + len(repeat_seq) - 1  # inclusive
