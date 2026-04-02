@@ -12,9 +12,42 @@ import shutil
 import signal
 import subprocess
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 
 from ...exceptions import ExternalToolError, ValidationError
+
+
+@dataclass(frozen=True, slots=True)
+class RunResult:
+    """Result of running an external command.
+
+    Supports comparison with int for backward compatibility:
+    callers that do ``if run_command(...) == 0:`` still work.
+    """
+
+    returncode: int
+    stdout: str | None
+    stderr: str | None
+    command: str
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, int):
+            return self.returncode == other
+        if isinstance(other, RunResult):
+            return (self.returncode, self.stdout, self.stderr, self.command) == (
+                other.returncode,
+                other.stdout,
+                other.stderr,
+                other.command,
+            )
+        return NotImplemented
+
+    def __bool__(self) -> bool:
+        return bool(self.returncode)
+
+    def __hash__(self) -> int:
+        return hash(self.returncode)
 
 
 def run_command(
@@ -22,10 +55,15 @@ def run_command(
     timeout: int | None = None,
     stderr_log_level: int = logging.ERROR,
     stderr_prefix: str = "",
-) -> int:
+    capture: bool = False,
+    cwd: Path | None = None,
+) -> RunResult:
     """
     Run a command in its own process group so that it can be killed on timeout.
     Capture both stdout and stderr live and log them line-by-line.
+
+    When *capture=True*, uses ``subprocess.run`` to collect stdout/stderr as
+    strings instead of streaming them to the logger.
 
     SECURITY: This function NEVER uses shell=True to prevent command injection.
     All commands must be provided as lists, not strings.
@@ -35,9 +73,11 @@ def run_command(
         timeout: Timeout in seconds (None means wait indefinitely).
         stderr_log_level: Logging level for stderr output (default: ERROR).
         stderr_prefix: Prefix for stderr log messages.
+        capture: If True, capture stdout/stderr instead of streaming.
+        cwd: Working directory for the subprocess.
 
     Returns:
-        The process return code.
+        A RunResult with returncode (and captured output when capture=True).
 
     Raises:
         ExternalToolError: If the process fails to start or returns non-zero.
@@ -47,6 +87,43 @@ def run_command(
 
     cmd_str = " ".join(cmd)
     logging.info("Running command: %s (timeout=%s)", cmd_str, timeout)
+
+    # ---- capture mode: collect output as strings ----
+    if capture:
+        try:
+            proc = subprocess.run(
+                cmd,
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=cwd,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise ExternalToolError(
+                tool="command",
+                exit_code=-1,
+                stderr=f"Command timed out after {timeout}s",
+                cmd=cmd_str,
+            ) from e
+        except Exception as e:
+            raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
+
+        result = RunResult(
+            returncode=proc.returncode,
+            stdout=proc.stdout,
+            stderr=proc.stderr,
+            command=cmd_str,
+        )
+        if proc.returncode != 0:
+            logging.error("Command exited with code %d: %s", proc.returncode, cmd_str)
+            raise ExternalToolError(
+                tool="command",
+                exit_code=proc.returncode,
+                stderr=proc.stderr or "Command failed",
+                cmd=cmd_str,
+            )
+        return result
 
     try:
         proc = subprocess.Popen(
@@ -117,7 +194,12 @@ def run_command(
         raise ExternalToolError(
             tool="command", exit_code=proc.returncode, stderr="Command failed", cmd=cmd_str
         )
-    return proc.returncode
+    return RunResult(
+        returncode=proc.returncode,
+        stdout=None,
+        stderr=None,
+        command=cmd_str,
+    )
 
 
 def fix_field(field: str, desired_length: int, pad_char: str) -> str:

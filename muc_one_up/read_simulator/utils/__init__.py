@@ -11,6 +11,7 @@ from . import bed, samtools
 
 # Import from common_utils for backward compatibility
 from .common_utils import (
+    RunResult,
     check_external_tools,
     cleanup_files,
     fix_field,
@@ -45,6 +46,7 @@ from .tool_version import (
 )
 
 __all__ = [
+    "RunResult",
     "DiploidSimulationResult",
     "calculate_corrected_coverage",
     "capture_tool_versions",
