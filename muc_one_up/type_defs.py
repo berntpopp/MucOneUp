@@ -107,11 +107,8 @@ class MutationTarget:
         return cls(haplotype_index=t[0], repeat_index=t[1])
 
 
-# Type aliases for haplotype representation
-HaplotypeName = str
+# Legacy type alias — used by thin wrappers accepting raw string chains
 RepeatChain = list[str]
-Haplotype = tuple[HaplotypeName, RepeatChain]
-HaplotypeList = list[Haplotype]
 
 # Configuration types
 ConfigDict = dict[str, Any]
@@ -122,7 +119,6 @@ LengthModelDict = dict[str, Any]
 
 # Mutation types
 MutationName = str
-MutationTargets = list[tuple[int, int]]
 MutatedUnits = dict[str, str]
 MutationChange = dict[str, int | str]
 MutationDefinition = dict[str, Any]

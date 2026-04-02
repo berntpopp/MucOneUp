@@ -43,7 +43,7 @@ from .type_defs import (
     ConfigDict,
     DNASequence,
     HaplotypeResult,
-    MutationTargets,
+    MutationTarget,
     ProbabilitiesDict,
     RepeatChain,
     RepeatUnit,
@@ -108,7 +108,7 @@ def simulate_from_chains(
     predefined_chains: list[list[RepeatUnit]],
     config: ConfigDict,
     mutation_name: str | None = None,
-    mutation_targets: MutationTargets | None = None,
+    mutation_targets: list[MutationTarget] | None = None,
 ) -> list[HaplotypeResult]:
     """Simulate haplotypes from predefined repeat chains.
 
