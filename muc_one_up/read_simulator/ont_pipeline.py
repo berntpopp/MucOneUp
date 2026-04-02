@@ -351,7 +351,8 @@ def simulate_ont_reads_pipeline(
             if result.hap1_fastq is None or result.hap2_fastq is None:
                 logging.warning(
                     "Haplotype FASTQ paths are not available (keep_intermediate=False); "
-                    "skipping per-haplotype read source tracking."
+                    "falling back to merged FASTQ parsing. Per-haplotype read "
+                    "attribution will not be available in source tracking."
                 )
                 all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
             else:

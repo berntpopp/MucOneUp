@@ -7,8 +7,11 @@ calls scattered across pipeline stages.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +52,9 @@ class AssemblyContext:
         rs_config = rs_config or {}
         assembly = config.get("reference_assembly", "hg38")
         constants = config.get("constants", {}).get(assembly, {})
+
+        if not constants:
+            logger.debug("No constants found for assembly '%s' in config", assembly)
 
         return cls(
             assembly_name=assembly,
