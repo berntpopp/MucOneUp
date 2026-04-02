@@ -13,6 +13,7 @@ from pathlib import Path
 
 from ..command_utils import build_tool_command
 from ..utils import run_command
+from .samtools_wrapper import sort_and_index_bam
 
 
 def run_nanosim_simulation(
@@ -225,42 +226,13 @@ def align_ont_reads_with_minimap2(
             stderr_prefix="[samtools] ",
         )
 
-        # Sort BAM
-        # SECURITY: Always use list form, never shell=True
-        # Use centralized build_tool_command to safely handle multi-word commands (conda/mamba)
-        sort_cmd_list = build_tool_command(
-            samtools_cmd,
-            "sort",
-            "-@",
-            threads,  # build_tool_command handles conversion
-            "-o",
-            output_bam,
-            output_bam + ".unsorted",
-        )
-
-        logging.info("[samtools] Sorting BAM: %s", " ".join(sort_cmd_list))
-
-        # Run BAM sorting
-        run_command(
-            sort_cmd_list,
-            timeout=timeout,
-            stderr_log_level=logging.INFO,
-            stderr_prefix="[samtools] ",
-        )
-
-        # Index BAM
-        # SECURITY: Always use list form, never shell=True
-        # Use centralized build_tool_command to safely handle multi-word commands (conda/mamba)
-        index_cmd_list = build_tool_command(samtools_cmd, "index", output_bam)
-
-        logging.info("[samtools] Indexing BAM: %s", " ".join(index_cmd_list))
-
-        # Run BAM indexing
-        run_command(
-            index_cmd_list,
-            timeout=timeout,
-            stderr_log_level=logging.INFO,
-            stderr_prefix="[samtools] ",
+        # Sort and index BAM using reusable samtools wrapper
+        logging.info("[samtools] Sorting and indexing BAM: %s", output_bam)
+        sort_and_index_bam(
+            samtools_exe=samtools_cmd,
+            input_bam=output_bam + ".unsorted",
+            output_bam=output_bam,
+            threads=threads,
         )
 
         logging.info("[minimap2] ONT read alignment completed successfully")

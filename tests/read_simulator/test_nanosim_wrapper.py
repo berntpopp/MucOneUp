@@ -280,7 +280,7 @@ class TestAlignONTReadsWithMinimap2:
 
     @staticmethod
     def _make_run_command_mock(output_bam, run_calls=None):
-        """Create a mock for run_command that handles minimap2 + samtools calls."""
+        """Create a mock for run_command that handles minimap2 + samtools view calls."""
 
         def _side_effect(cmd, **kwargs):
             if run_calls is not None:
@@ -299,13 +299,19 @@ class TestAlignONTReadsWithMinimap2:
             # samtools view — create unsorted BAM
             if "view" in cmd:
                 Path(str(output_bam) + ".unsorted").write_bytes(b"BAM_DATA")
-            # samtools sort — create sorted BAM
-            elif "sort" in cmd:
-                output_bam.write_bytes(b"SORTED_BAM")
-            # samtools index — create index
-            elif "index" in cmd:
-                Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
             return RunResult(returncode=0, stdout="", stderr="", command=" ".join(cmd))
+
+        return _side_effect
+
+    @staticmethod
+    def _make_sort_and_index_mock(default_output_bam):
+        """Create a mock for sort_and_index_bam that creates output files."""
+
+        def _side_effect(samtools_exe, input_bam, output_bam=None, threads=4, **kwargs):
+            bam_path = Path(output_bam) if output_bam else Path(input_bam)
+            bam_path.write_bytes(b"SORTED_BAM")
+            Path(str(bam_path) + ".bai").write_bytes(b"INDEX")
+            return str(bam_path)
 
         return _side_effect
 
@@ -323,6 +329,10 @@ class TestAlignONTReadsWithMinimap2:
         mocker.patch(
             "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
             side_effect=self._make_run_command_mock(output_bam, run_calls),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.sort_and_index_bam",
+            side_effect=self._make_sort_and_index_mock(output_bam),
         )
 
         # Act
@@ -348,7 +358,7 @@ class TestAlignONTReadsWithMinimap2:
         assert str(reads) in minimap2_cmd
 
     def test_chains_samtools_commands(self, mocker, tmp_path):
-        """Test that samtools view, sort, and index are called in sequence."""
+        """Test that samtools view is called, then sort_and_index_bam is delegated."""
         # Arrange
         ref = tmp_path / "ref.fa"
         reads = tmp_path / "reads.fq"
@@ -362,31 +372,31 @@ class TestAlignONTReadsWithMinimap2:
             "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
             side_effect=self._make_run_command_mock(output_bam, run_calls),
         )
+        mock_sort_index = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.sort_and_index_bam",
+            side_effect=self._make_sort_and_index_mock(output_bam),
+        )
 
         # Act
         align_ont_reads_with_minimap2(
             "minimap2", "samtools", str(ref), str(reads), str(output_bam), threads=4
         )
 
-        # Assert: 4 calls total: minimap2 + samtools view/sort/index
-        assert len(run_calls) == 4
+        # Assert: 2 run_command calls: minimap2 + samtools view
+        assert len(run_calls) == 2
 
-        # Check view command (2nd call)
+        # Check view command (2nd call) still filters unmapped reads
         view_cmd = run_calls[1]
         assert "samtools" in view_cmd
         assert "view" in view_cmd
         assert "-F" in view_cmd
         assert "4" in view_cmd  # Filter unmapped
 
-        # Check sort command (3rd call)
-        sort_cmd = run_calls[2]
-        assert "samtools" in sort_cmd
-        assert "sort" in sort_cmd
-
-        # Check index command (4th call)
-        index_cmd = run_calls[3]
-        assert "samtools" in index_cmd
-        assert "index" in index_cmd
+        # Check sort_and_index_bam was called with correct params
+        mock_sort_index.assert_called_once()
+        sort_call = mock_sort_index.call_args
+        assert sort_call.kwargs.get("samtools_exe") == "samtools"
+        assert sort_call.kwargs.get("threads") == 4
 
     def test_cleans_up_temporary_files(self, mocker, tmp_path):
         """Test that temporary SAM and unsorted BAM are cleaned up."""
@@ -401,6 +411,10 @@ class TestAlignONTReadsWithMinimap2:
         mocker.patch(
             "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
             side_effect=self._make_run_command_mock(output_bam),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.sort_and_index_bam",
+            side_effect=self._make_sort_and_index_mock(output_bam),
         )
 
         # Act
@@ -432,6 +446,9 @@ class TestAlignONTReadsWithMinimap2:
                 cmd="minimap2 ...",
             ),
         )
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.sort_and_index_bam",
+        )
 
         # Act & Assert: Function wraps ExternalToolError in RuntimeError
         with pytest.raises(RuntimeError, match="ONT read alignment failed"):
@@ -453,6 +470,10 @@ class TestAlignONTReadsWithMinimap2:
         mocker.patch(
             "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
             side_effect=self._make_run_command_mock(output_bam, run_calls),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.sort_and_index_bam",
+            side_effect=self._make_sort_and_index_mock(output_bam),
         )
 
         # Act: Use conda command with spaces
