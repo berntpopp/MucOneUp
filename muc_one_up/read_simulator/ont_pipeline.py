@@ -348,9 +348,16 @@ def simulate_ont_reads_pipeline(
 
         if use_split_simulation:
             # Parse each haplotype's reads separately using split-sim result
-            origins_hap1 = parse_nanosim_reads(result.hap1_fastq, haplotype_map=1)
-            origins_hap2 = parse_nanosim_reads(result.hap2_fastq, haplotype_map=2)
-            all_origins = origins_hap1 + origins_hap2
+            if result.hap1_fastq is None or result.hap2_fastq is None:
+                logging.warning(
+                    "Haplotype FASTQ paths are not available (keep_intermediate=False); "
+                    "skipping per-haplotype read source tracking."
+                )
+                all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
+            else:
+                origins_hap1 = parse_nanosim_reads(result.hap1_fastq, haplotype_map=1)
+                origins_hap2 = parse_nanosim_reads(result.hap2_fastq, haplotype_map=2)
+                all_origins = origins_hap1 + origins_hap2
         else:
             all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
 
