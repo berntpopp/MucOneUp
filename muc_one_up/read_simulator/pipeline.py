@@ -41,6 +41,7 @@ from ..bioinformatics.reference_validation import (
 
 # Import exceptions
 from ..exceptions import ConfigurationError, FileOperationError, ValidationError
+from .assembly_context import AssemblyContext
 
 # Import fragment simulation
 from .fragment_simulation import simulate_fragments
@@ -134,6 +135,9 @@ def simulate_reads_pipeline(
     tools = config.get("tools", {})
     rs_config = config.get("read_simulation", {})
 
+    # Resolve assembly context once for the entire pipeline run
+    assembly_ctx = AssemblyContext.from_configs(config, rs_config)
+
     # Validate external tools
     check_external_tools(tools)
 
@@ -211,33 +215,32 @@ def simulate_reads_pipeline(
     intermediate_files.append(twobit_file)
 
     # Stage 4: Extract subset reference from BAM
-    # Get the reference assembly setting from the config
-    reference_assembly = rs_config.get("reference_assembly", "hg38")
-
-    # Get the appropriate sample_bam based on the reference assembly
-    sample_bam_key = f"sample_bam_{reference_assembly}"
-    sample_bam = rs_config.get(sample_bam_key)
+    # Use assembly context for sample BAM resolution
+    sample_bam = assembly_ctx.sample_bam
 
     # Fall back to the generic sample_bam if assembly-specific one not found
     if not sample_bam:
         sample_bam = rs_config.get("sample_bam")
         if sample_bam:
             logging.warning(
-                f"Assembly-specific sample BAM not found for {reference_assembly}. "
-                f"Using generic sample_bam: {sample_bam}"
+                "Assembly-specific sample BAM not found for %s. Using generic sample_bam: %s",
+                assembly_ctx.assembly_name,
+                sample_bam,
             )
 
     if not sample_bam:
         logging.error(
-            f"Error: No sample BAM specified for {reference_assembly}. "
-            f"Please add 'sample_bam_{reference_assembly}' or 'sample_bam' to the config."
+            "Error: No sample BAM specified for %s. "
+            "Please add 'sample_bam_%s' or 'sample_bam' to the config.",
+            assembly_ctx.assembly_name,
+            assembly_ctx.assembly_name,
         )
         raise ConfigurationError(
-            f"No sample BAM specified for {reference_assembly}. "
-            f"Add 'sample_bam_{reference_assembly}' or 'sample_bam' to config"
+            f"No sample BAM specified for {assembly_ctx.assembly_name}. "
+            f"Add 'sample_bam_{assembly_ctx.assembly_name}' or 'sample_bam' to config"
         )
 
-    logging.info(f"Using sample BAM for {reference_assembly}: {sample_bam}")
+    logging.info("Using sample BAM for %s: %s", assembly_ctx.assembly_name, sample_bam)
     subset_ref = str(Path(output_dir) / f"_{output_base}_subset_ref.fa")
     logging.info("4. Extracting subset reference from BAM")
     collated_bam = extract_subset_reference(sample_bam, subset_ref, tools)
@@ -313,26 +316,29 @@ def simulate_reads_pipeline(
     # Try to get reference from reference_genomes section (Issue #28)
     human_reference = None
     try:
-        # Get assembly from config (default: hg38)
-        assembly = config.get("reference_assembly", "hg38")
-
         # Get reference path for assembly using new helper function
-        ref_path = get_reference_path_for_assembly(config, assembly)
+        ref_path = get_reference_path_for_assembly(config, assembly_ctx.assembly_name)
         human_reference = str(ref_path)
 
         # Validate reference and indices for BWA (logs warnings automatically)
-        warnings = validate_reference_for_assembly(config, assembly, aligner="bwa")
+        warnings = validate_reference_for_assembly(
+            config, assembly_ctx.assembly_name, aligner="bwa"
+        )
 
-        logging.info("Using reference from config: %s (%s)", human_reference, assembly)
+        logging.info(
+            "Using reference from config: %s (%s)",
+            human_reference,
+            assembly_ctx.assembly_name,
+        )
 
         # Log index warnings if any
         if warnings:
             for warning in warnings:
                 logging.warning("%s", warning)
     except (ValidationError, FileOperationError) as e:
-        # Fall back to old human_reference config setting
+        # Fall back to assembly context human_reference, then old config setting
         logging.debug("Could not load reference from reference_genomes: %s", e)
-        human_reference = rs_config.get("human_reference")
+        human_reference = assembly_ctx.human_reference or rs_config.get("human_reference")
 
     # Final validation
     if not human_reference:
@@ -464,14 +470,15 @@ def simulate_reads_pipeline(
         logging.info("11. Downsampling to target coverage")
         mode = rs_config.get("downsample_mode", "vntr").strip().lower()
         if mode == "vntr":
-            reference_assembly = rs_config.get("reference_assembly", "hg38")
-            vntr_region_key = f"vntr_region_{reference_assembly}"
-            vntr_region = rs_config.get(vntr_region_key)
+            vntr_region = assembly_ctx.vntr_region
             if not vntr_region:
-                logging.error(f"VNTR region not specified in config for {reference_assembly}.")
+                logging.error(
+                    "VNTR region not specified in config for %s.",
+                    assembly_ctx.assembly_name,
+                )
                 raise ConfigurationError(
-                    f"VNTR region not specified in config for {reference_assembly}. "
-                    f"Add '{vntr_region_key}' to config"
+                    f"VNTR region not specified in config for {assembly_ctx.assembly_name}. "
+                    f"Add 'vntr_region_{assembly_ctx.assembly_name}' to config"
                 )
             current_cov, depth_file = calculate_vntr_coverage(
                 tools["samtools"],

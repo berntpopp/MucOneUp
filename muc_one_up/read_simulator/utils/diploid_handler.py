@@ -36,10 +36,10 @@ class DiploidSimulationResult(NamedTuple):
     """
 
     merged_fastq: str
-    hap1_fastq: str
-    hap2_fastq: str
-    hap1_reference: str
-    hap2_reference: str
+    hap1_fastq: str | None
+    hap2_fastq: str | None
+    hap1_reference: str | None
+    hap2_reference: str | None
     reads_hap1: int
     reads_hap2: int
 
@@ -307,9 +307,6 @@ def run_split_simulation(
         logging.info("=" * 70)
 
         # Optionally copy intermediate files before temp dir is cleaned up
-        final_hap1_fastq = hap1_fastq
-        final_hap2_fastq = hap2_fastq
-
         if keep_intermediate:
             import shutil
 
@@ -320,12 +317,23 @@ def run_split_simulation(
             shutil.copy(hap2_fastq, final_hap2_fastq)
             logging.info("Kept intermediate files: %s, %s", final_hap1_fastq, final_hap2_fastq)
 
+            return DiploidSimulationResult(
+                merged_fastq=merged_fastq,
+                hap1_fastq=final_hap1_fastq,
+                hap2_fastq=final_hap2_fastq,
+                hap1_reference=hap1_ref,
+                hap2_reference=hap2_ref,
+                reads_hap1=reads_hap1,
+                reads_hap2=reads_hap2,
+            )
+
+        # Temp dir is about to be deleted; paths would be stale
         return DiploidSimulationResult(
             merged_fastq=merged_fastq,
-            hap1_fastq=final_hap1_fastq,
-            hap2_fastq=final_hap2_fastq,
-            hap1_reference=hap1_ref,
-            hap2_reference=hap2_ref,
+            hap1_fastq=None,
+            hap2_fastq=None,
+            hap1_reference=None,
+            hap2_reference=None,
             reads_hap1=reads_hap1,
             reads_hap2=reads_hap2,
         )

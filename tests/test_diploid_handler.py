@@ -407,16 +407,13 @@ def test_run_split_simulation_result_structure(diploid_fasta, temp_dir):
 
     # Check all fields are present and correct types
     assert isinstance(result.merged_fastq, str)
-    assert isinstance(result.hap1_fastq, str)
-    assert isinstance(result.hap2_fastq, str)
-    assert isinstance(result.hap1_reference, str)
-    assert isinstance(result.hap2_reference, str)
+    # When keep_intermediate=False (default), temp paths are set to None
+    assert result.hap1_fastq is None
+    assert result.hap2_fastq is None
+    assert result.hap1_reference is None
+    assert result.hap2_reference is None
     assert isinstance(result.reads_hap1, int)
     assert isinstance(result.reads_hap2, int)
 
-    # Check merged FASTQ exists (others are in temp dir and cleaned up)
+    # Check merged FASTQ exists
     assert Path(result.merged_fastq).exists()
-
-    # Check reference paths have expected format (temp files are cleaned up)
-    assert "hap1.fa" in result.hap1_reference
-    assert "hap2.fa" in result.hap2_reference

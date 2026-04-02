@@ -30,6 +30,7 @@ from ..bioinformatics.reference_validation import (
     validate_reference_for_assembly,
 )
 from ..exceptions import FileOperationError, ValidationError
+from .assembly_context import AssemblyContext
 from .utils import is_diploid_reference, run_split_simulation, write_metadata_file
 from .wrappers.nanosim_wrapper import (
     align_ont_reads_with_minimap2,
@@ -116,6 +117,9 @@ def simulate_ont_reads_pipeline(
     tools = config.get("tools", {})
     ns_params = config.get("nanosim_params", {})
     rs_config = config.get("read_simulation", {})
+
+    # Resolve assembly context once for the entire pipeline run
+    assembly_ctx = AssemblyContext.from_configs(config, rs_config)
 
     # Validate required tools
     nanosim_cmd = tools.get("nanosim")
@@ -280,17 +284,20 @@ def simulate_ont_reads_pipeline(
     # Use human_reference if provided, otherwise get from config (Issue #28)
     if human_reference is None:
         try:
-            # Get assembly from config (default: hg38)
-            assembly = config.get("reference_assembly", "hg38")
-
             # Get reference path for assembly
-            ref_path = get_reference_path_for_assembly(config, assembly)
+            ref_path = get_reference_path_for_assembly(config, assembly_ctx.assembly_name)
             reference_for_alignment = str(ref_path)
 
             # Validate reference and indices for minimap2 (logs warnings automatically)
-            warnings = validate_reference_for_assembly(config, assembly, aligner="minimap2")
+            warnings = validate_reference_for_assembly(
+                config, assembly_ctx.assembly_name, aligner="minimap2"
+            )
 
-            logging.info("Using reference from config: %s (%s)", reference_for_alignment, assembly)
+            logging.info(
+                "Using reference from config: %s (%s)",
+                reference_for_alignment,
+                assembly_ctx.assembly_name,
+            )
 
             # Log index warnings if any
             if warnings:
@@ -341,9 +348,17 @@ def simulate_ont_reads_pipeline(
 
         if use_split_simulation:
             # Parse each haplotype's reads separately using split-sim result
-            origins_hap1 = parse_nanosim_reads(result.hap1_fastq, haplotype_map=1)
-            origins_hap2 = parse_nanosim_reads(result.hap2_fastq, haplotype_map=2)
-            all_origins = origins_hap1 + origins_hap2
+            if result.hap1_fastq is None or result.hap2_fastq is None:
+                logging.warning(
+                    "Haplotype FASTQ paths are not available (keep_intermediate=False); "
+                    "falling back to merged FASTQ parsing. Per-haplotype read "
+                    "attribution will not be available in source tracking."
+                )
+                all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
+            else:
+                origins_hap1 = parse_nanosim_reads(result.hap1_fastq, haplotype_map=1)
+                origins_hap2 = parse_nanosim_reads(result.hap2_fastq, haplotype_map=2)
+                all_origins = origins_hap1 + origins_hap2
         else:
             all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
 
