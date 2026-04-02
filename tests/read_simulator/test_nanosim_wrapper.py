@@ -285,11 +285,14 @@ class TestAlignONTReadsWithMinimap2:
         def _side_effect(cmd, **kwargs):
             if run_calls is not None:
                 run_calls.append(cmd)
-            # minimap2 call (capture=True) — return SAM data in stdout
+            # minimap2 call — write SAM data to stdout_path
             if "minimap2" in cmd or "map-ont" in cmd:
+                stdout_path = kwargs.get("stdout_path")
+                if stdout_path:
+                    Path(stdout_path).write_text("@HD\tVN:1.0\n")
                 return RunResult(
                     returncode=0,
-                    stdout="@HD\tVN:1.0\n",
+                    stdout=None,
                     stderr="",
                     command=" ".join(cmd),
                 )

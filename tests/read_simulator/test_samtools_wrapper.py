@@ -41,12 +41,11 @@ class TestExtractSubsetReference:
         output_fa = tmp_path / "output.fa"
         input_bam.write_bytes(b"FAKE_BAM_DATA")
 
-        # Mock run_command for both collate (non-capture) and fasta (capture)
+        # Mock run_command: collate uses streaming, fasta uses stdout_path
         def mock_run_cmd(cmd, **kwargs):
-            if "fasta" in cmd:
-                return RunResult(
-                    returncode=0, stdout=">seq1\nACGT\n", stderr="", command=" ".join(cmd)
-                )
+            stdout_path = kwargs.get("stdout_path")
+            if "fasta" in cmd and stdout_path:
+                Path(stdout_path).write_text(">seq1\nACGT\n")
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mock_run = mocker.patch(
@@ -74,10 +73,9 @@ class TestExtractSubsetReference:
         input_bam.write_bytes(b"FAKE_BAM_DATA")
 
         def mock_run_cmd(cmd, **kwargs):
-            if "fasta" in cmd:
-                return RunResult(
-                    returncode=0, stdout=">seq1\nACGT\n", stderr="", command=" ".join(cmd)
-                )
+            stdout_path = kwargs.get("stdout_path")
+            if "fasta" in cmd and stdout_path:
+                Path(stdout_path).write_text(">seq1\nACGT\n")
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mocker.patch(
@@ -99,10 +97,11 @@ class TestExtractSubsetReference:
         output_fa = tmp_path / "output.fa"
         input_bam.write_bytes(b"FAKE_BAM_DATA")
 
-        # Mock run_command to return empty stdout (produces empty file)
+        # Mock: fasta command writes empty file
         def mock_run_cmd(cmd, **kwargs):
-            if "fasta" in cmd:
-                return RunResult(returncode=0, stdout="", stderr="", command=" ".join(cmd))
+            stdout_path = kwargs.get("stdout_path")
+            if "fasta" in cmd and stdout_path:
+                Path(stdout_path).write_text("")
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mocker.patch(
@@ -124,15 +123,16 @@ class TestCalculateVNTRCoverage:
         bam = tmp_path / "input.bam"
         bam.write_bytes(b"BAM_DATA")
 
-        # Mock run_command to return depth data as captured stdout
+        # Mock run_command: write depth data to stdout_path when provided
+        def mock_run_cmd(cmd, **kwargs):
+            stdout_path = kwargs.get("stdout_path")
+            if "depth" in cmd and stdout_path:
+                Path(stdout_path).write_text("chr1\t100\t50\nchr1\t101\t50\n")
+            return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
+
         mock_run = mocker.patch(
             "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
-            return_value=RunResult(
-                returncode=0,
-                stdout="chr1\t100\t50\nchr1\t101\t50\n",
-                stderr="",
-                command="samtools depth",
-            ),
+            side_effect=mock_run_cmd,
         )
 
         # Act
@@ -163,15 +163,16 @@ class TestCalculateVNTRCoverage:
         bam = tmp_path / "input.bam"
         bam.write_bytes(b"BAM_DATA")
 
-        # Mock run_command to return depth data with known values: depths of 10, 20, 30 = mean 20
+        # Mock: write depth data to stdout_path (depths 10, 20, 30 = mean 20)
+        def mock_run_cmd(cmd, **kwargs):
+            stdout_path = kwargs.get("stdout_path")
+            if "depth" in cmd and stdout_path:
+                Path(stdout_path).write_text("chr1\t100\t10\nchr1\t101\t20\nchr1\t102\t30\n")
+            return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
+
         mocker.patch(
             "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
-            return_value=RunResult(
-                returncode=0,
-                stdout="chr1\t100\t10\nchr1\t101\t20\nchr1\t102\t30\n",
-                stderr="",
-                command="samtools depth",
-            ),
+            side_effect=mock_run_cmd,
         )
 
         # Act
@@ -197,15 +198,16 @@ class TestCalculateTargetCoverage:
         bam.write_bytes(b"BAM_DATA")
         bed.write_text("chr1\t100\t200\n")
 
-        # Mock run_command to return depth data as captured stdout
+        # Mock: write depth data to stdout_path
+        def mock_run_cmd(cmd, **kwargs):
+            stdout_path = kwargs.get("stdout_path")
+            if "depth" in cmd and stdout_path:
+                Path(stdout_path).write_text("chr1\t150\t25\n")
+            return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
+
         mock_run = mocker.patch(
             "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
-            return_value=RunResult(
-                returncode=0,
-                stdout="chr1\t150\t25\n",
-                stderr="",
-                command="samtools depth",
-            ),
+            side_effect=mock_run_cmd,
         )
 
         # Act

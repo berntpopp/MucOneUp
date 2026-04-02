@@ -229,9 +229,16 @@ class TestCreateNonVntrBedFromCapture:
         capture_bed.write_text("chr1\t1000\t5000\tcapture\n")
         vntr_bed.write_text("chr1\t2000\t3000\tvntr\n")
 
-        mock_run_command.return_value = RunResult(
-            returncode=0, stdout="bed output content", stderr="", command="bedtools"
-        )
+        # Mock: write output to stdout_path when provided
+        def mock_run_side_effect(cmd, **kwargs):
+            stdout_path = kwargs.get("stdout_path")
+            if stdout_path:
+                from pathlib import Path
+
+                Path(stdout_path).write_text("bed output content")
+            return RunResult(returncode=0, stdout=None, stderr=None, command="bedtools")
+
+        mock_run_command.side_effect = mock_run_side_effect
 
         result = create_non_vntr_bed_from_capture(output_bed, capture_bed, vntr_bed)
 
@@ -243,9 +250,11 @@ class TestCreateNonVntrBedFromCapture:
         assert "-a" in cmd_arg
         assert "-b" in cmd_arg
 
-    @patch("subprocess.run")
-    def test_subtraction_bedtools_error(self, mock_run, temp_dir):
+    @patch("muc_one_up.read_simulator.utils.bed.run_command")
+    def test_subtraction_bedtools_error(self, mock_run_command, temp_dir):
         """Test handling of bedtools execution error."""
+        from muc_one_up.exceptions import ExternalToolError
+
         capture_bed = temp_dir / "capture.bed"
         vntr_bed = temp_dir / "vntr.bed"
         output_bed = temp_dir / "non_vntr.bed"
@@ -253,8 +262,11 @@ class TestCreateNonVntrBedFromCapture:
         capture_bed.touch()
         vntr_bed.touch()
 
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, "bedtools", stderr="Subtraction failed"
+        mock_run_command.side_effect = ExternalToolError(
+            tool="command",
+            exit_code=1,
+            stderr="Subtraction failed",
+            cmd="bedtools subtract",
         )
 
         with pytest.raises(BedError, match="bedtools subtract failed"):

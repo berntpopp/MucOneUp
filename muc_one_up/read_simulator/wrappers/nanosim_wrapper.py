@@ -189,13 +189,12 @@ def align_ont_reads_with_minimap2(
 
         logging.info("[minimap2] Running alignment: %s > %s", " ".join(align_cmd_list), sam_path)
 
-        # Run minimap2 and capture stdout (SAM data), then write to file
+        # Stream minimap2 SAM output directly to file (avoids OOM on large alignments)
         result = run_command(
             align_cmd_list,
-            capture=True,
             timeout=timeout,
+            stdout_path=Path(sam_path),
         )
-        Path(sam_path).write_text(result.stdout or "")
         if result.stderr:
             logging.info("[minimap2] %s", result.stderr)
 

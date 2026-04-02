@@ -161,11 +161,10 @@ def create_non_vntr_bed_from_capture(output_path: Path, capture_bed: Path, vntr_
     logger.debug(f"  VNTR BED: {vntr_bed}")
 
     try:
-        result = run_command(
+        run_command(
             ["bedtools", "subtract", "-a", str(capture_bed), "-b", str(vntr_bed)],
-            capture=True,
+            stdout_path=Path(output_path),
         )
-        Path(output_path).write_text(result.stdout or "")
 
         logger.debug(f"Non-VNTR BED created: {output_path}")
         return output_path

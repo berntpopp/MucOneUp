@@ -57,8 +57,7 @@ def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, s
     cmd = build_tool_command(tools["samtools"], "fasta", "-n", "-F", "0x900", collated_bam)
 
     logging.info(f"[samtools] Running: {' '.join(cmd)} > {output_fa}")
-    result = run_command(cmd, timeout=60, capture=True)
-    Path(output_fa).write_text(result.stdout or "")
+    run_command(cmd, timeout=60, stdout_path=Path(output_fa))
 
     # Verify the output FASTA exists and is non-empty
     if not output_path.exists() or output_path.stat().st_size == 0:
@@ -111,8 +110,7 @@ def calculate_vntr_coverage(
     )
 
     logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
-    result = run_command(cmd, timeout=60, capture=True)
-    Path(depth_file).write_text(result.stdout or "")
+    run_command(cmd, timeout=60, stdout_path=Path(depth_file))
 
     # Calculate mean coverage from depth file
     total_depth = 0
@@ -185,8 +183,7 @@ def calculate_target_coverage(
     )
 
     logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
-    result = run_command(cmd, timeout=60, capture=True)
-    Path(depth_file).write_text(result.stdout or "")
+    run_command(cmd, timeout=60, stdout_path=Path(depth_file))
 
     # Calculate mean coverage from depth file
     total_depth = 0

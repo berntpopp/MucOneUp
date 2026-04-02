@@ -61,6 +61,7 @@ def run_command(
     stderr_prefix: str = "",
     capture: bool = False,
     cwd: Path | None = None,
+    stdout_path: Path | None = None,
 ) -> RunResult:
     """
     Run a command in its own process group so that it can be killed on timeout.
@@ -68,6 +69,10 @@ def run_command(
 
     When *capture=True*, uses ``subprocess.run`` to collect stdout/stderr as
     strings instead of streaming them to the logger.
+
+    When *stdout_path* is provided, stdout is streamed directly to the file
+    (no in-memory buffering) regardless of the capture flag. This avoids OOM
+    for commands that produce large output (e.g., samtools fasta, minimap2).
 
     SECURITY: This function NEVER uses shell=True to prevent command injection.
     All commands must be provided as lists, not strings.
@@ -79,6 +84,7 @@ def run_command(
         stderr_prefix: Prefix for stderr log messages.
         capture: If True, capture stdout/stderr instead of streaming.
         cwd: Working directory for the subprocess.
+        stdout_path: If provided, stream stdout directly to this file path.
 
     Returns:
         A RunResult with returncode (and captured output when capture=True).
@@ -92,6 +98,47 @@ def run_command(
     cmd_str = " ".join(cmd)
     logging.info("Running command: %s (timeout=%s)", cmd_str, timeout)
 
+    # ---- stdout-to-file mode: stream directly to disk (no memory buffering) ----
+    if stdout_path is not None:
+        try:
+            with Path(stdout_path).open("w") as stdout_fh:
+                proc = subprocess.run(
+                    cmd,
+                    shell=False,
+                    stdout=stdout_fh,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    errors="replace",
+                    timeout=timeout,
+                    cwd=cwd,
+                )
+        except subprocess.TimeoutExpired as e:
+            raise ExternalToolError(
+                tool="command",
+                exit_code=-1,
+                stderr=f"Command timed out after {timeout}s",
+                cmd=cmd_str,
+            ) from e
+        except FileNotFoundError:
+            raise
+        except Exception as e:
+            raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
+
+        if proc.returncode != 0:
+            logging.error("Command exited with code %d: %s", proc.returncode, cmd_str)
+            raise ExternalToolError(
+                tool="command",
+                exit_code=proc.returncode,
+                stderr=proc.stderr or "Command failed",
+                cmd=cmd_str,
+            )
+        return RunResult(
+            returncode=proc.returncode,
+            stdout=None,
+            stderr=proc.stderr,
+            command=cmd_str,
+        )
+
     # ---- capture mode: collect output as strings ----
     if capture:
         try:
@@ -100,6 +147,7 @@ def run_command(
                 shell=False,
                 capture_output=True,
                 text=True,
+                errors="replace",
                 timeout=timeout,
                 cwd=cwd,
             )
@@ -141,6 +189,7 @@ def run_command(
             # Use binary mode and handle encoding manually to avoid decode errors
             universal_newlines=False,
             preexec_fn=os.setsid,  # Unix only
+            cwd=cwd,
         )
     except Exception as e:
         raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
@@ -288,9 +337,14 @@ def run_pipeline(
                 cmd=pipeline_str,
             ) from None
 
-        # Wait for upstream processes to finish
+        # Wait for upstream processes to finish (with timeout to avoid hanging)
         for p in processes[:-1]:
-            p.wait()
+            try:
+                p.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(Exception):
+                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+                p.wait(timeout=5)
 
         # Check for failures
         for i, p in enumerate(processes):
