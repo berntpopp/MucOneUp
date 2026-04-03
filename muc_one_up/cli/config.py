@@ -10,7 +10,7 @@ import json
 import logging
 import random
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from ..exceptions import ConfigurationError, SimulationError, ValidationError
 from ..io import parse_vntr_structure_file
@@ -112,7 +112,7 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
 
 def determine_simulation_mode(
     args, config
-) -> tuple[list[list[int] | None], list | None, dict | None]:
+) -> tuple[list[Any], list | None, dict | None]:
     """
     Determine simulation mode and return appropriate configurations.
 
@@ -129,6 +129,7 @@ def determine_simulation_mode(
         SimulationError: If structure file cannot be parsed
         ValidationError: If fixed-length format is invalid
     """
+    simulation_configs: list[Any] = []
     predefined_chains = None
     structure_mutation_info = None
 
@@ -190,14 +191,14 @@ def determine_simulation_mode(
                 len(simulation_configs),
             )
         else:
-            simulation_configs = [[random.choice(lst) for lst in fixed_matrix]]  # type: ignore[list-item]
+            simulation_configs = [[random.choice(lst) for lst in fixed_matrix]]
             logging.info(
                 "Single simulation iteration generated using a random choice from each fixed-length range."
             )
     else:
-        simulation_configs = cast(Any, [None])  # Use random lengths if not provided
+        simulation_configs = [None]  # Use random lengths if not provided
 
-    return simulation_configs, predefined_chains, structure_mutation_info  # type: ignore[return-value]
+    return simulation_configs, predefined_chains, structure_mutation_info
 
 
 def process_mutation_config(
