@@ -287,6 +287,51 @@ def sample_haplotype_sequences(minimal_config: dict[str, Any]) -> list[tuple[str
 
 
 # ============================================================================
+# Simulation Options Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def mock_simulation_options(tmp_path: Path, temp_config_file: Path):
+    """SimulationOptions with sensible defaults for testing."""
+    from muc_one_up.cli.options import SimulationOptions
+
+    out_dir = tmp_path / "output"
+    out_dir.mkdir(exist_ok=True)
+    return SimulationOptions(
+        config=str(temp_config_file),
+        out_base="test_sim",
+        out_dir=str(out_dir),
+        num_haplotypes=2,
+        seed=42,
+        reference_assembly="hg38",
+        output_structure=False,
+        mutation_name=None,
+        mutation_targets=None,
+        simulate_reads=None,
+        output_orfs=False,
+        orf_min_aa=100,
+        orf_aa_prefix=None,
+        snp_input_file=None,
+        random_snps=False,
+        track_read_source=False,
+    )
+
+
+@pytest.fixture
+def sample_haplotype_results(minimal_config: dict[str, Any]) -> list:
+    """Two HaplotypeResult objects with real assembled sequences."""
+    from muc_one_up.simulate import simulate_from_chains
+    from muc_one_up.type_defs import RepeatUnit
+
+    chains = [
+        [RepeatUnit.from_str(s) for s in ["1", "2", "X", "B", "6", "7", "8", "9"]],
+        [RepeatUnit.from_str(s) for s in ["1", "2", "A", "B", "6p", "7", "8", "9"]],
+    ]
+    return simulate_from_chains(chains, minimal_config)
+
+
+# ============================================================================
 # Mock Fixtures
 # ============================================================================
 
