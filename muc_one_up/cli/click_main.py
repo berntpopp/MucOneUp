@@ -31,6 +31,7 @@ from ._common import (
     "--log-level",
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "NONE"]),
     default="INFO",
+    show_default=True,
     help="Set logging level.",
 )
 @click.option(

@@ -23,8 +23,9 @@ def analyze():
     """Analysis utilities.
 
     \b
-    Single Responsibility: Analyze ANY FASTA file.
+    Analyze ANY FASTA file.
     Works with MucOneUp outputs or external sequences.
+    Requires --config at the top level.
     """
 
 
