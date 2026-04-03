@@ -40,6 +40,7 @@ import random as _random_module
 from .assembly import assemble_sequence
 from .distribution import sample_repeat_count
 from .type_defs import (
+    AssemblyConstants,
     ConfigDict,
     DNASequence,
     HaplotypeResult,
@@ -241,10 +242,11 @@ def simulate_single_haplotype(
     _rng = rng if rng is not None else _random_module
 
     reference_assembly = config.get("reference_assembly", "hg38")
-    left_const = config["constants"][reference_assembly]["left"]
-    right_const = config["constants"][reference_assembly]["right"]
-    probabilities = config["probabilities"]
-    repeats_dict = config["repeats"]
+    assembly_const: AssemblyConstants = config["constants"][reference_assembly]
+    left_const = assembly_const["left"]
+    right_const = assembly_const["right"]
+    probabilities: ProbabilitiesDict = config["probabilities"]
+    repeats_dict: dict[str, str] = config["repeats"]
 
     assembled_seq = left_const
     repeat_chain: list[RepeatUnit] = []
