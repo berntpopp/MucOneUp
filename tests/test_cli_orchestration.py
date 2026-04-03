@@ -207,12 +207,11 @@ class TestRunSingleSimulationIteration:
         mock_simulation_options.track_read_source = True
         mock_simulation_options.simulate_reads = "illumina"
 
+        mock_tracker_instance = MagicMock()
         with patch(
-            "muc_one_up.read_simulator.source_tracking.ReadSourceTracker"
-        ) as mock_tracker_cls:
-            mock_tracker_instance = MagicMock()
-            mock_tracker_cls.return_value = mock_tracker_instance
-
+            "muc_one_up.read_simulator.source_tracking.ReadSourceTracker.from_simulation_results",
+            return_value=mock_tracker_instance,
+        ) as mock_factory:
             run_single_simulation_iteration(
                 args=mock_simulation_options,
                 config=minimal_config,
@@ -226,8 +225,8 @@ class TestRunSingleSimulationIteration:
                 structure_mutation_info=None,
             )
 
-        # ReadSourceTracker was constructed
-        mock_tracker_cls.assert_called_once()
+        # Factory was called
+        mock_factory.assert_called_once()
         # Coordinate map was written
         mock_tracker_instance.write_coordinate_map.assert_called_once()
 
@@ -259,13 +258,12 @@ class TestRunSingleSimulationIteration:
             None,
         )
 
+        mock_instance_1 = MagicMock()
+        mock_instance_2 = MagicMock()
         with patch(
-            "muc_one_up.read_simulator.source_tracking.ReadSourceTracker"
-        ) as mock_tracker_cls:
-            mock_instance_1 = MagicMock()
-            mock_instance_2 = MagicMock()
-            mock_tracker_cls.side_effect = [mock_instance_1, mock_instance_2]
-
+            "muc_one_up.read_simulator.source_tracking.ReadSourceTracker.from_simulation_results",
+            side_effect=[mock_instance_1, mock_instance_2],
+        ) as mock_factory:
             run_single_simulation_iteration(
                 args=mock_simulation_options,
                 config=minimal_config,
@@ -279,8 +277,8 @@ class TestRunSingleSimulationIteration:
                 structure_mutation_info=None,
             )
 
-        # Two trackers created
-        assert mock_tracker_cls.call_count == 2
+        # Two trackers created via factory
+        assert mock_factory.call_count == 2
         # Both wrote coordinate maps
         mock_instance_1.write_coordinate_map.assert_called_once()
         mock_instance_2.write_coordinate_map.assert_called_once()
