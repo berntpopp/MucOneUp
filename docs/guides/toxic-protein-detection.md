@@ -561,7 +561,7 @@ The algorithm detects this pathogenic pattern:
 
 **Tests:** `tests/test_toxic_protein_detector.py`
 
-**CLI:** `muc_one_up/cli/click_main.py:790-952` (analyze orfs command)
+**CLI:** `muc_one_up/cli/commands/analyze.py` (analyze orfs command)
 
 ---
 

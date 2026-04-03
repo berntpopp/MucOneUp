@@ -79,9 +79,10 @@ haplotype_2 1-2-3-4-5-C-X-B-X-A-X-B-A-6p-7-8-9
 ```bash
 muconeup --config config.json simulate \
   --output-structure \
-  --output-stats \
   --out-base output/sample
 ```
+
+Statistics are generated automatically alongside the simulation output.
 
 **Output:**
 
@@ -437,13 +438,12 @@ Let MucOneUp select positions:
 ```bash
 muconeup --config config.json simulate \
   --mutation-name dupC \
-  --random-mutation-targets 3 \
   --out-base output/random_mut
 ```
 
 **Behavior:**
 
-- Selects 3 random positions
+- Selects random positions automatically
 - Respects `allowed_repeats` constraint (only mutates valid repeat types)
 - Records positions in `simulation_stats.json`
 
@@ -532,7 +532,7 @@ diff run1.001.simulated.fa run2.001.simulated.fa
 
 ### Provenance Metadata
 
-When using `--output-stats`, MucOneUp automatically records provenance metadata in `*.simulation_stats.json`:
+MucOneUp automatically records provenance metadata in `*.simulation_stats.json`:
 
 ```json
 {
@@ -747,7 +747,6 @@ VNTR Length:
 Mutations:
   --mutation-name TEXT         Mutation name (or "normal,name" for dual)
   --mutation-targets TEXT      Targets as "hap,pos" (e.g., "1,25 2,30")
-  --random-mutation-targets INT  Random target count
 
 SNPs:
   --random-snps                Generate random SNPs
@@ -763,7 +762,6 @@ Assembly:
 
 Output:
   --out-dir PATH               Output directory (default: .)
-  --output-stats               Output simulation statistics JSON
 
 Reproducibility:
   --seed INT                   Random seed for reproducibility

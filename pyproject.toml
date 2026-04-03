@@ -60,6 +60,7 @@ muconeup = "muc_one_up.cli.click_main:main"
 Homepage = "https://github.com/berntpopp/MucOneUp"
 Repository = "https://github.com/berntpopp/MucOneUp"
 Issues = "https://github.com/berntpopp/MucOneUp/issues"
+Documentation = "https://berntpopp.github.io/MucOneUp/"
 
 # ==================== RUFF ====================
 [tool.ruff]

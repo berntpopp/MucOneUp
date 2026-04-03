@@ -668,4 +668,4 @@ pip install biopython
 **Algorithm Source:** `muc_one_up/analysis/snapshot_validator.py`
 **Implementation:** Lines 1-591
 **Tests:** `tests/test_snapshot_validator.py`
-**CLI Integration:** `muc_one_up/cli/click_main.py:1235-1285`
+**CLI Integration:** `muc_one_up/cli/commands/analyze.py`
