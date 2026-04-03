@@ -11,13 +11,12 @@ The `--track-read-source` flag annotates every simulated read with its ground-tr
 ## Quick Start
 
 ```bash
-# Full pipeline: simulate haplotypes + Illumina reads with tracking
+# Step 1: simulate haplotypes
 muconeup --config config.json simulate \
   --out-base sample --fixed-lengths 30 \
-  --mutation-name dupC --mutation-targets 1,25 \
-  --simulate-reads illumina --track-read-source
+  --mutation-name dupC --mutation-targets 1,25
 
-# Standalone read simulation with tracking
+# Step 2: simulate Illumina reads with source tracking
 muconeup --config config.json reads illumina sample.001.simulated.fa \
   --track-read-source
 ```
