@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, TypedDict
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,12 +110,106 @@ class MutationTarget:
 # Legacy type alias — used by thin wrappers accepting raw string chains
 RepeatChain = list[str]
 
-# Configuration types
+# ---------------------------------------------------------------------------
+# Typed config sections (TypedDict — still plain dicts at runtime)
+# ---------------------------------------------------------------------------
+
+
+class LengthModelConfig(TypedDict):
+    """Length model configuration section."""
+
+    distribution: str
+    min_repeats: int
+    max_repeats: int
+    mean_repeats: int
+    median_repeats: int
+
+
+class AssemblyConstants(TypedDict, total=False):
+    """Constants for a single reference assembly (hg19/hg38)."""
+
+    left: str
+    right: str
+    vntr_region: str
+    vntr_start: int
+    vntr_end: int
+
+
+class MutationChangeConfig(TypedDict, total=False):
+    """A single mutation change operation."""
+
+    type: str
+    start: int
+    end: int
+    sequence: str
+
+
+class MutationConfig(TypedDict, total=False):
+    """A single named mutation definition."""
+
+    allowed_repeats: list[str]
+    strict_mode: bool
+    type: str
+    citation: str
+    changes: list[MutationChangeConfig]
+
+
+class ReadSimulationConfig(TypedDict, total=False):
+    """Read simulation configuration section."""
+
+    simulator: str
+    reseq_model: str
+    sample_bam: str
+    sample_bam_hg19: str
+    sample_bam_hg38: str
+    human_reference: str
+    read_number: int
+    fragment_size: int
+    fragment_sd: int
+    min_fragment: int
+    threads: int
+    coverage: int
+    seed: int | None
+    aligner: str
+    keep_intermediate_files: bool
+
+
+class NanosimConfig(TypedDict, total=False):
+    """NanoSim (ONT) simulation parameters."""
+
+    training_data_path: str
+    coverage: float
+    num_threads: int | None
+    min_read_length: int | None
+    max_read_length: int | None
+    seed: int | None
+    min_len: int
+
+
+class PacbioConfig(TypedDict, total=False):
+    """PacBio HiFi simulation parameters."""
+
+    model_type: str
+    model_file: str
+    coverage: float
+    pass_num: int
+    min_passes: int
+    min_rq: float
+    threads: int
+    seed: int | None
+    pbsim3_cmd: str
+    ccs_cmd: str
+
+
+# ---------------------------------------------------------------------------
+# Legacy aliases (kept for backward compatibility)
+# ---------------------------------------------------------------------------
+
 ConfigDict = dict[str, Any]
 RepeatsDict = dict[str, str]
 ProbabilitiesDict = dict[str, dict[str, float]]
 ConstantsDict = dict[str, dict[str, str]]
-LengthModelDict = dict[str, Any]
+LengthModelDict = LengthModelConfig  # Now an alias for the TypedDict
 
 # Mutation types
 MutationName = str

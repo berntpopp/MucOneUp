@@ -45,6 +45,7 @@ import random as _random_module
 
 from .assembly import assemble_sequence
 from .type_defs import (
+    AssemblyConstants,
     ConfigDict,
     DNASequence,
     HaplotypeResult,
@@ -267,9 +268,10 @@ def apply_changes_to_repeat(
         - replace: Replace bases from start to end with sequence
         - delete_insert: Delete between boundaries, insert at boundary
     """
-    repeats_dict = config["repeats"]
+    repeats_dict: dict[str, str] = config["repeats"]
     reference_assembly = config.get("reference_assembly", "hg38")
-    left_const_len = len(config["constants"][reference_assembly]["left"])
+    assembly_const: AssemblyConstants = config["constants"][reference_assembly]
+    left_const_len = len(assembly_const["left"])
 
     offset = left_const_len
     for i in range(repeat_index):
