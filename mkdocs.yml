@@ -148,6 +148,9 @@ markdown_extensions:
       custom_checkbox: true
   - pymdownx.tilde
 
+  # mkdocs-click for CLI reference
+  - mkdocs-click
+
 # Navigation structure
 nav:
   - Home: index.md
@@ -165,7 +168,7 @@ nav:
     - SNaPshot Validation: guides/snapshot-validation.md
 
   - Reference:
-    # - CLI Commands: reference/cli.md  # Disabled: requires mkdocs-click setup
+    - CLI Commands: reference/cli.md
     - Configuration: reference/configuration.md
     - Test Datasets: reference/test-datasets.md
 
