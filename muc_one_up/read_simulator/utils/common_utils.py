@@ -180,8 +180,9 @@ def run_command(
             )
         return result
 
+    # ---- streaming mode: log stdout/stderr line-by-line via threads ----
     try:
-        proc = subprocess.Popen(
+        popen_proc = subprocess.Popen(
             cmd,
             shell=False,  # SECURITY: Never use shell=True
             stdout=subprocess.PIPE,
@@ -215,43 +216,46 @@ def run_command(
         stream.close()
 
     # Log stdout always as INFO
-    stdout_thread = threading.Thread(target=log_stream, args=(proc.stdout, logging.info))
+    stdout_thread = threading.Thread(target=log_stream, args=(popen_proc.stdout, logging.info))
     # Log stderr with configurable level
     logger = logging.getLogger()
     stderr_thread = threading.Thread(
         target=log_stream,
-        args=(proc.stderr, logger.log, stderr_log_level, stderr_prefix),
+        args=(popen_proc.stderr, logger.log, stderr_log_level, stderr_prefix),
     )
     stdout_thread.start()
     stderr_thread.start()
 
     try:
-        proc.wait(timeout=timeout)
+        popen_proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
         try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)  # Unix only
+            os.killpg(os.getpgid(popen_proc.pid), signal.SIGTERM)  # Unix only
         except Exception:
             logging.exception("Error killing process group")
-        proc.wait()
+        popen_proc.wait()
     stdout_thread.join()
     stderr_thread.join()
 
-    if proc.returncode != 0:
+    if popen_proc.returncode != 0:
         # Check if this is a timeout-related exit code (-15 is typical for SIGTERM)
-        if timeout is not None and proc.returncode == -15:
+        if timeout is not None and popen_proc.returncode == -15:
             logging.info("Command terminated due to timeout (%d seconds): %s", timeout, cmd_str)
         else:
             logging.error(
                 "Command exited with non-zero exit code %d: %s",
-                proc.returncode,
+                popen_proc.returncode,
                 cmd_str,
             )
         raise ExternalToolError(
-            tool="command", exit_code=proc.returncode, stderr="Command failed", cmd=cmd_str
+            tool="command",
+            exit_code=popen_proc.returncode,
+            stderr="Command failed",
+            cmd=cmd_str,
         )
     return RunResult(
-        returncode=proc.returncode,
+        returncode=popen_proc.returncode,
         stdout=None,
         stderr=None,
         command=cmd_str,

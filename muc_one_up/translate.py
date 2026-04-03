@@ -49,8 +49,6 @@ See Also:
 import logging
 from pathlib import Path
 
-import orfipy_core
-
 from .type_defs import HaplotypeResult
 
 #: Standard genetic code codon table.
@@ -245,6 +243,8 @@ def find_orfs_in_memory(
         List of ORF tuples: (start_pos, stop_pos, strand, description)
         Positions are 0-based indices into the sequence
     """
+    import orfipy_core
+
     if stops is None:
         stops = ["TAA", "TAG", "TGA"]
     if starts is None:

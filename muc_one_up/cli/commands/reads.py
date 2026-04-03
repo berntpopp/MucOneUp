@@ -4,11 +4,94 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import click
 
 from .._common import require_config
 from ..error_handling import cli_error_handler
+
+# ============================================================================
+# Shared batch helper
+# ============================================================================
+
+
+def _run_batch_simulation(
+    config: dict[str, Any],
+    input_fastas: tuple[str, ...],
+    out_dir: str,
+    out_base: str | None,
+    suffix: str,
+    simulator_label: str,
+    track_read_source: bool,
+) -> None:
+    """Run read simulation over one or more FASTA files.
+
+    Shared loop for illumina, ont, and pacbio commands. Handles output naming,
+    source tracker reconstruction, and pipeline dispatch.
+    """
+    from ...read_simulation import simulate_reads as simulate_reads_pipeline
+    from ...read_simulator.output_config import OutputConfig
+
+    # Warn if --out-base provided for multiple files
+    if len(input_fastas) > 1 and out_base:
+        logging.warning(
+            "--out-base '%s' will be used for all %d files. "
+            "Consider omitting --out-base for auto-generated names.",
+            out_base,
+            len(input_fastas),
+        )
+
+    total_files = len(input_fastas)
+    logging.info("Processing %d FASTA file(s) for %s read simulation", total_files, simulator_label)
+
+    for idx, input_fasta in enumerate(input_fastas, start=1):
+        # Determine output base name
+        if out_base:
+            actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
+        else:
+            actual_out_base = None
+
+        output_config = OutputConfig.from_input_fasta(
+            input_fa=input_fasta,
+            out_dir=out_dir,
+            out_base=actual_out_base,
+            suffix=suffix,
+        )
+
+        logging.info(
+            "[%d/%d] Simulating %s reads: %s -> %s",
+            idx,
+            total_files,
+            simulator_label,
+            input_fasta,
+            output_config.out_base,
+        )
+
+        # Build source tracker from companion files if requested
+        source_tracker = None
+        if track_read_source:
+            from ...read_simulator.source_tracking import ReadSourceTracker
+
+            stats_path = str(Path(input_fasta).with_suffix(".simulation_stats.json"))
+            source_tracker = ReadSourceTracker.from_companion_files(stats_path)
+            if source_tracker is None:
+                logging.warning("Could not reconstruct read source tracker from %s", stats_path)
+            else:
+                coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
+                source_tracker.write_coordinate_map(coord_map_path)
+                logging.info("Repeat coordinate map written: %s", coord_map_path)
+
+        # Run simulation for this file
+        simulate_reads_pipeline(
+            config,
+            input_fasta,
+            source_tracker=source_tracker,
+            output_config=output_config,
+        )
+
+    logging.info("%s read simulation completed for all %d file(s).", simulator_label, total_files)
+
 
 # ============================================================================
 # READS Command Group - Pure Read Simulation Utilities
@@ -93,92 +176,31 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
       # Compose with shell (Unix philosophy)
       for f in *.fa; do muconeup --config X reads illumina "$f"; done
     """
-    # Validate config is provided
     require_config(ctx)
 
     from ...config import load_config_raw
-    from ...read_simulation import simulate_reads as simulate_reads_pipeline
-    from ...read_simulator.output_config import OutputConfig
 
-    # Load config once (DRY principle)
     config = load_config_raw(str(ctx.obj["config_path"]))
 
-    # Configure read simulation (shared for all files)
+    # Configure Illumina simulation
     if "read_simulation" not in config:
         config["read_simulation"] = {}
     config["read_simulation"]["simulator"] = "illumina"
 
-    # Only override coverage if explicitly provided, otherwise use config or default
     if coverage is not None:
         config["read_simulation"]["coverage"] = coverage
     elif "coverage" not in config.get("read_simulation", {}):
-        config["read_simulation"]["coverage"] = 30  # Default fallback
+        config["read_simulation"]["coverage"] = 30
 
     config["read_simulation"]["threads"] = threads
 
-    # Set seed if provided
     if seed is not None:
         config["read_simulation"]["seed"] = seed
         logging.info(f"Using random seed: {seed} (results will be reproducible)")
 
-    # Warn if --out-base provided for multiple files
-    if len(input_fastas) > 1 and out_base:
-        logging.warning(
-            "--out-base '%s' will be used for all %d files. "
-            "Consider omitting --out-base for auto-generated names.",
-            out_base,
-            len(input_fastas),
-        )
-
-    # Process each file (KISS principle - simple iteration)
-    total_files = len(input_fastas)
-    logging.info("Processing %d FASTA file(s) for Illumina read simulation", total_files)
-
-    for idx, input_fasta in enumerate(input_fastas, start=1):
-        # Determine output base name
-        if out_base:
-            actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
-        else:
-            actual_out_base = None
-
-        output_config = OutputConfig.from_input_fasta(
-            input_fa=input_fasta,
-            out_dir=out_dir,
-            out_base=actual_out_base,
-            suffix="_reads",
-        )
-
-        logging.info(
-            "[%d/%d] Simulating Illumina reads: %s -> %s",
-            idx,
-            total_files,
-            input_fasta,
-            output_config.out_base,
-        )
-
-        # Build source tracker from companion files if requested
-        source_tracker = None
-        if track_read_source:
-            from ...read_simulator.source_tracking import ReadSourceTracker
-
-            stats_path = str(Path(input_fasta).with_suffix(".simulation_stats.json"))
-            source_tracker = ReadSourceTracker.from_companion_files(stats_path)
-            if source_tracker is None:
-                logging.warning("Could not reconstruct read source tracker from %s", stats_path)
-            else:
-                coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
-                source_tracker.write_coordinate_map(coord_map_path)
-                logging.info("Repeat coordinate map written: %s", coord_map_path)
-
-        # Run simulation for this file
-        simulate_reads_pipeline(
-            config,
-            input_fasta,
-            source_tracker=source_tracker,
-            output_config=output_config,
-        )
-
-    logging.info("Illumina read simulation completed for all %d file(s).", total_files)
+    _run_batch_simulation(
+        config, input_fastas, out_dir, out_base, "_reads", "Illumina", track_read_source
+    )
 
 
 @reads.command()
@@ -246,94 +268,33 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
       # Glob pattern (shell expands)
       muconeup --config X reads ont sample.*.simulated.fa
     """
-    # Validate config is provided
     require_config(ctx)
 
     from ...config import load_config_raw
-    from ...read_simulation import simulate_reads as simulate_reads_pipeline
-    from ...read_simulator.output_config import OutputConfig
 
-    # Load config once (DRY principle)
     config = load_config_raw(str(ctx.obj["config_path"]))
 
-    # Configure ONT simulation (shared for all files)
+    # Configure ONT simulation
     if "read_simulation" not in config:
         config["read_simulation"] = {}
     config["read_simulation"]["simulator"] = "ont"
 
-    # Only override coverage if explicitly provided, otherwise use config or default
     if coverage is not None:
         config["read_simulation"]["coverage"] = coverage
     elif "coverage" not in config.get("read_simulation", {}):
-        config["read_simulation"]["coverage"] = 30  # Default fallback
+        config["read_simulation"]["coverage"] = 30
 
     if "nanosim_params" not in config:
         config["nanosim_params"] = {}
     config["nanosim_params"]["min_len"] = min_read_length
 
-    # Set seed if provided
     if seed is not None:
         config["nanosim_params"]["seed"] = seed
         logging.info(f"Using random seed: {seed} (results will be reproducible)")
 
-    # Warn if --out-base provided for multiple files
-    if len(input_fastas) > 1 and out_base:
-        logging.warning(
-            "--out-base '%s' will be used for all %d files. "
-            "Consider omitting --out-base for auto-generated names.",
-            out_base,
-            len(input_fastas),
-        )
-
-    # Process each file (KISS principle - simple iteration)
-    total_files = len(input_fastas)
-    logging.info("Processing %d FASTA file(s) for ONT read simulation", total_files)
-
-    for idx, input_fasta in enumerate(input_fastas, start=1):
-        # Determine output base name
-        if out_base:
-            actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
-        else:
-            actual_out_base = None
-
-        output_config = OutputConfig.from_input_fasta(
-            input_fa=input_fasta,
-            out_dir=out_dir,
-            out_base=actual_out_base,
-            suffix="_ont_reads",
-        )
-
-        logging.info(
-            "[%d/%d] Simulating ONT reads: %s -> %s",
-            idx,
-            total_files,
-            input_fasta,
-            output_config.out_base,
-        )
-
-        # Build source tracker from companion files if requested
-        source_tracker = None
-        if track_read_source:
-            from ...read_simulator.source_tracking import ReadSourceTracker
-
-            stats_path = str(Path(input_fasta).with_suffix(".simulation_stats.json"))
-            source_tracker = ReadSourceTracker.from_companion_files(stats_path)
-            if source_tracker is None:
-                logging.warning("Could not reconstruct read source tracker from %s", stats_path)
-            else:
-                coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
-                source_tracker.write_coordinate_map(coord_map_path)
-                logging.info("Repeat coordinate map written: %s", coord_map_path)
-
-        # Run simulation for this file
-        simulate_reads_pipeline(
-            config,
-            input_fasta,
-            source_tracker=source_tracker,
-            output_config=output_config,
-        )
-
-    logging.info("ONT read simulation completed for all %d file(s).", total_files)
+    _run_batch_simulation(
+        config, input_fastas, out_dir, out_base, "_ont_reads", "ONT", track_read_source
+    )
 
 
 @reads.command()
@@ -471,27 +432,21 @@ def pacbio(
       - min_rq=0.99 is Q20 (standard HiFi threshold)
       - min_rq=0.999 is Q30 (ultra-high accuracy)
     """
-    # Validate config is provided
     require_config(ctx)
 
     from ...config import load_config_raw
-    from ...read_simulation import simulate_reads as simulate_reads_pipeline
-    from ...read_simulator.output_config import OutputConfig
 
-    # Load config once (DRY principle)
     config = load_config_raw(str(ctx.obj["config_path"]))
 
-    # Configure PacBio simulation (shared for all files)
+    # Configure PacBio simulation
     if "read_simulation" not in config:
         config["read_simulation"] = {}
     config["read_simulation"]["simulator"] = "pacbio"
 
-    # Initialize pacbio_params if not in config (config-first principle)
     if "pacbio_params" not in config:
         config["pacbio_params"] = {}
 
-    # Override config with CLI params only if provided (CLI takes precedence)
-    # This follows the ONT pattern: defaults -> config -> CLI override hierarchy
+    # Override config with CLI params only if provided
     if model_type is not None:
         config["pacbio_params"]["model_type"] = model_type
     if model_file is not None:
@@ -504,7 +459,7 @@ def pacbio(
         config["pacbio_params"]["min_passes"] = min_passes
     if min_rq is not None:
         config["pacbio_params"]["min_rq"] = min_rq
-    if threads != 4:  # threads has explicit default, so keep this check
+    if threads != 4:
         config["pacbio_params"]["threads"] = threads
     if seed is not None:
         config["pacbio_params"]["seed"] = seed
@@ -519,61 +474,6 @@ def pacbio(
             f"Either add them to config.json pacbio_params section or provide via CLI options."
         )
 
-    # Warn if --out-base provided for multiple files
-    if len(input_fastas) > 1 and out_base:
-        logging.warning(
-            "--out-base '%s' will be used for all %d files. "
-            "Consider omitting --out-base for auto-generated names.",
-            out_base,
-            len(input_fastas),
-        )
-
-    # Process each file (KISS principle - simple iteration)
-    total_files = len(input_fastas)
-    logging.info("Processing %d FASTA file(s) for PacBio HiFi read simulation", total_files)
-
-    for idx, input_fasta in enumerate(input_fastas, start=1):
-        # Determine output base name
-        if out_base:
-            actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
-        else:
-            actual_out_base = None
-
-        output_config = OutputConfig.from_input_fasta(
-            input_fa=input_fasta,
-            out_dir=out_dir,
-            out_base=actual_out_base,
-            suffix="_pacbio_hifi",
-        )
-
-        logging.info(
-            "[%d/%d] Simulating PacBio HiFi reads: %s -> %s",
-            idx,
-            total_files,
-            input_fasta,
-            output_config.out_base,
-        )
-
-        # Build source tracker from companion files if requested
-        source_tracker = None
-        if track_read_source:
-            from ...read_simulator.source_tracking import ReadSourceTracker
-
-            stats_path = str(Path(input_fasta).with_suffix(".simulation_stats.json"))
-            source_tracker = ReadSourceTracker.from_companion_files(stats_path)
-            if source_tracker is None:
-                logging.warning("Could not reconstruct read source tracker from %s", stats_path)
-            else:
-                coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
-                source_tracker.write_coordinate_map(coord_map_path)
-                logging.info("Repeat coordinate map written: %s", coord_map_path)
-
-        # Run simulation for this file
-        simulate_reads_pipeline(
-            config,
-            input_fasta,
-            source_tracker=source_tracker,
-            output_config=output_config,
-        )
-
-    logging.info("PacBio HiFi read simulation completed for all %d file(s).", total_files)
+    _run_batch_simulation(
+        config, input_fastas, out_dir, out_base, "_pacbio_hifi", "PacBio HiFi", track_read_source
+    )

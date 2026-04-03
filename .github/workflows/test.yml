@@ -39,7 +39,6 @@ jobs:
       - name: Check types with mypy
         run: |
           mypy muc_one_up/
-        continue-on-error: true  # Don't fail build on type errors yet
 
   test:
     name: Test Suite
@@ -104,4 +103,4 @@ jobs:
 
       - name: Check coverage threshold
         run: |
-          pytest --cov=muc_one_up --cov-fail-under=30
+          pytest --cov=muc_one_up --cov-fail-under=70

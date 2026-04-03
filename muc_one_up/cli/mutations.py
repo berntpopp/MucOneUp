@@ -5,7 +5,7 @@ Single Responsibility: Parse mutation targets and apply mutations to haplotypes.
 """
 
 import logging
-import random
+import random as _random_module
 
 from ..exceptions import MutationError, ValidationError
 from ..mutate import apply_mutations
@@ -45,7 +45,10 @@ def parse_mutation_targets(
 
 
 def find_random_mutation_target(
-    results: list[HaplotypeResult], config: dict, mutation_name: str
+    results: list[HaplotypeResult],
+    config: dict,
+    mutation_name: str,
+    rng: _random_module.Random | None = None,
 ) -> list[MutationTarget]:
     """
     Find random valid targets for mutation.
@@ -82,11 +85,18 @@ def find_random_mutation_target(
             f"Allowed repeats: {mut_def['allowed_repeats']}"
         )
 
-    return [random.choice(possible_targets)]
+    _rng = rng if rng is not None else _random_module
+    return [_rng.choice(possible_targets)]
 
 
 def apply_mutation_pipeline(
-    args, config, results, mutation_name, dual_mutation_mode, mutation_pair
+    args,
+    config,
+    results,
+    mutation_name,
+    dual_mutation_mode,
+    mutation_pair,
+    rng: _random_module.Random | None = None,
 ) -> tuple[
     list[HaplotypeResult], list[HaplotypeResult] | None, dict | None, list[MutationTarget] | None
 ]:
@@ -126,7 +136,9 @@ def apply_mutation_pipeline(
         if args.mutation_targets:
             mutation_positions = parse_mutation_targets(args.mutation_targets)
         else:
-            mutation_positions = find_random_mutation_target(results, config, mutation_pair[1])
+            mutation_positions = find_random_mutation_target(
+                results, config, mutation_pair[1], rng=rng
+            )
 
         try:
             mutated_results, mutated_units = apply_mutations(
@@ -134,6 +146,7 @@ def apply_mutation_pipeline(
                 results=[HaplotypeResult(hr.sequence, list(hr.chain)) for hr in results],
                 mutation_name=mutation_pair[1],
                 targets=mutation_positions,
+                rng=rng,
             )
             logging.info("Dual mutation applied for mutated version.")
             return normal_results, mutated_results, mutated_units, mutation_positions
@@ -144,7 +157,9 @@ def apply_mutation_pipeline(
         if args.mutation_targets:
             mutation_positions = parse_mutation_targets(args.mutation_targets)
         else:
-            mutation_positions = find_random_mutation_target(results, config, mutation_name)
+            mutation_positions = find_random_mutation_target(
+                results, config, mutation_name, rng=rng
+            )
 
         try:
             results, mutated_units = apply_mutations(
@@ -152,6 +167,7 @@ def apply_mutation_pipeline(
                 results=results,
                 mutation_name=mutation_name,
                 targets=mutation_positions,
+                rng=rng,
             )
             logging.info("Mutation applied at targets: %s", mutation_positions)
             return results, mutated_results, mutated_units, mutation_positions

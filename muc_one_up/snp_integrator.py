@@ -18,7 +18,7 @@ The SNP file format is TSV with the following columns:
 """
 
 import logging
-import random
+import random as _random_module
 from pathlib import Path
 from typing import Any
 
@@ -159,6 +159,7 @@ def generate_random_snps(
     region: str = "all",
     target_haplotypes: str = "all",
     vntr_boundaries: list[dict[str, int]] | None = None,
+    rng: _random_module.Random | None = None,
 ) -> list[dict[str, Any]]:
     """
     Generate random SNPs based on specified parameters.
@@ -246,7 +247,8 @@ def generate_random_snps(
             )
         else:
             # Sample without replacement
-            positions = random.sample(valid_pos_list, target_count)
+            _rng = rng if rng is not None else _random_module
+            positions = _rng.sample(valid_pos_list, target_count)
 
         # Create SNP definitions
         for pos in positions:
@@ -258,7 +260,8 @@ def generate_random_snps(
 
             # Choose a random alternative base different from reference
             alt_bases = [b for b in DNA_BASES if b != ref_base]
-            alt_base = random.choice(alt_bases)
+            _rng = rng if rng is not None else _random_module
+            alt_base = _rng.choice(alt_bases)
 
             all_snps.append(
                 {
