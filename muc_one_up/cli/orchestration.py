@@ -137,72 +137,28 @@ def run_single_simulation_iteration(
 
         from ..read_simulator.source_tracking import ReadSourceTracker
 
-        # Build repeat chains dict (1-based haplotype keys) using typed chains
-        repeat_chains = {}
-        for i, hr in enumerate(results):
-            repeat_chains[i + 1] = hr.chain
-
-        # Get left constant length from config
         ref_assembly = getattr(args, "reference_assembly", None) or config.get(
             "reference_assembly", "hg38"
         )
-        left_const = config.get("constants", {}).get(ref_assembly, {}).get("left", "")
-        left_const_len = len(left_const)
-
-        # Get repeats dict
-        repeats_dict = config.get("repeats", {})
-
-        # Get mutation info
         mutation_name_str = getattr(args, "mutation_name", None)
-        mut_positions: list[tuple[int, int]] = []
-        mut_name = None
-        if mutation_positions:
-            mut_positions = [(mt.haplotype_index, mt.repeat_index) for mt in mutation_positions]
-            if mutation_name_str and mutation_name_str != "normal":
-                parts = mutation_name_str.split(",")
-                for p in parts:
-                    if p != "normal":
-                        mut_name = p
-                        break
-
-        # Get SNP info (0-based haplotype indices)
-        snp_info_dict = {}
-        if applied_snp_info_normal:
-            for i, snp_list in enumerate(applied_snp_info_normal):
-                if snp_list:
-                    snp_info_dict[i] = snp_list
 
         if dual_mutation_mode:
-            # Build separate trackers: normal (no mutation) and mutated (with mutation)
-            source_tracker = ReadSourceTracker(
-                repeat_chains=repeat_chains,
-                repeats_dict=repeats_dict,
-                left_const_len=left_const_len,
-                mutation_positions=[],
-                mutation_name=None,
-                snp_info=snp_info_dict if snp_info_dict else None,
+            # Normal tracker: no mutations
+            source_tracker = ReadSourceTracker.from_simulation_results(
+                results=results,
+                config=config,
+                applied_snp_info=applied_snp_info_normal,
+                reference_assembly=ref_assembly,
             )
 
-            # Build mutated chains from mutated_results
-            mut_chains = {}
-            if mutated_results:
-                for i, hr in enumerate(mutated_results):
-                    mut_chains[i + 1] = hr.chain
-
-            # Get mutated SNP info
-            mut_snp_info_dict: dict[int, list[dict[str, object]]] = {}
-            if applied_snp_info_mut:
-                for i, snp_list in enumerate(applied_snp_info_mut):
-                    if snp_list:
-                        mut_snp_info_dict[i] = snp_list
-
-            source_tracker_mut = ReadSourceTracker(
-                repeat_chains=mut_chains if mut_chains else repeat_chains,
-                repeats_dict=repeats_dict,
-                left_const_len=left_const_len,
-                mutation_positions=mut_positions,
-                mutation_name=mut_name,
-                snp_info=mut_snp_info_dict if mut_snp_info_dict else None,
+            # Mutated tracker: with mutations, using mutated chains
+            source_tracker_mut = ReadSourceTracker.from_simulation_results(
+                results=mutated_results if mutated_results else results,
+                config=config,
+                mutation_positions=mutation_positions,
+                mutation_name=mutation_name_str,
+                applied_snp_info=applied_snp_info_mut,
+                reference_assembly=ref_assembly,
             )
 
             # Write coordinate maps for both variants
@@ -218,13 +174,13 @@ def run_single_simulation_iteration(
             source_tracker_mut.write_coordinate_map(mut_coord_path)
             logging.info("Mutated repeat coordinate map written: %s", mut_coord_path)
         else:
-            source_tracker = ReadSourceTracker(
-                repeat_chains=repeat_chains,
-                repeats_dict=repeats_dict,
-                left_const_len=left_const_len,
-                mutation_positions=mut_positions,
-                mutation_name=mut_name,
-                snp_info=snp_info_dict if snp_info_dict else None,
+            source_tracker = ReadSourceTracker.from_simulation_results(
+                results=results,
+                config=config,
+                mutation_positions=mutation_positions,
+                mutation_name=mutation_name_str,
+                applied_snp_info=applied_snp_info_normal,
+                reference_assembly=ref_assembly,
             )
 
             coord_map_path = str(
