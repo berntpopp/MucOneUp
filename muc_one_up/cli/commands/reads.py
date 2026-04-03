@@ -73,7 +73,17 @@ def _run_batch_simulation(
         if track_read_source:
             from ...read_simulator.source_tracking import ReadSourceTracker
 
-            stats_path = str(Path(input_fasta).with_suffix(".simulation_stats.json"))
+            # Derive stats path: input may be "base.001.simulated.fa" but stats
+            # file is "base.001.simulation_stats.json" (no ".simulated" component).
+            input_p = Path(input_fasta)
+            if input_p.stem.endswith(".simulated"):
+                stats_path = str(
+                    input_p.with_name(
+                        input_p.stem.removesuffix(".simulated") + ".simulation_stats.json"
+                    )
+                )
+            else:
+                stats_path = str(input_p.with_suffix(".simulation_stats.json"))
             source_tracker = ReadSourceTracker.from_companion_files(stats_path)
             if source_tracker is None:
                 logging.warning("Could not reconstruct read source tracker from %s", stats_path)

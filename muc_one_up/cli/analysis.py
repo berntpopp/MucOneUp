@@ -319,6 +319,7 @@ def run_orf_analysis_standalone(
     Single implementation for standalone ORF analysis, used by the
     ``analyze orfs`` CLI command.
     """
+    from ..exceptions import ExternalToolError
     from ..read_simulator.utils.common_utils import run_command
 
     orf_output = Path(out_dir) / f"{out_base}.orfs.fa"
@@ -339,8 +340,11 @@ def run_orf_analysis_standalone(
 
     try:
         run_command(cmd, capture=True)
-    except Exception:
-        logging.error("orfipy failed for %s", input_fasta)
+    except ExternalToolError as e:
+        logging.error("orfipy failed for %s: %s", input_fasta, e)
+        return
+    except FileNotFoundError:
+        logging.error("orfipy not found — is it installed?")
         return
 
     logging.info("ORF prediction completed: %s", orf_output)

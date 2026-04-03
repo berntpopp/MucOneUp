@@ -306,7 +306,12 @@ def get_bam_read_count(bam_file: Path) -> int:
             capture=True,
         )
 
-        count = int((result.stdout or "0").strip())
+        stdout = result.stdout
+        if stdout is None:
+            stdout = "0"
+        elif not stdout.strip():
+            raise SamtoolsError("Invalid read count output: empty stdout")
+        count = int(stdout.strip())
         logger.debug(f"Read count: {count:,}")
 
         return count
