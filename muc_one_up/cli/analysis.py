@@ -10,13 +10,43 @@ from pathlib import Path
 
 from ..exceptions import FileOperationError, ReadSimulationError
 from ..provenance import collect_provenance_metadata
-from ..read_simulation import simulate_reads as simulate_reads_pipeline
 from ..simulation_statistics import (
     generate_simulation_statistics,
     write_statistics_report,
 )
-from ..translate import run_orf_finder_in_memory
 from .config import numbered_filename
+
+
+def _run_toxic_detection(orf_path: str, config: dict) -> dict:
+    """Run toxic protein detection on an ORF FASTA file.
+
+    Extracts detection parameters from config and delegates to scan_orf_fasta.
+    Returns the stats dict from the scanner.
+    """
+    from ..toxic_protein_detector import scan_orf_fasta
+
+    ref_assembly = config.get("reference_assembly", "hg38")
+    assembly_constants = config.get("constants", {}).get(ref_assembly, {})
+    left_const_val = assembly_constants.get("left")
+    right_const_val = assembly_constants.get("right")
+
+    toxic_config = config.get("toxic_protein_detection", {})
+    detection_kwargs = {
+        "consensus": toxic_config.get("consensus_motif", "RCHLGPGHQAGPGLHR"),
+        "identity_threshold": toxic_config.get("identity_threshold", 0.8),
+        "key_residues": toxic_config.get("key_residues", ["R", "C", "H"]),
+        "expected_repeat_count": toxic_config.get("expected_repeat_count", 10),
+        "w_repeat": toxic_config.get("weights", {}).get("repeat", 0.6),
+        "w_composition": toxic_config.get("weights", {}).get("composition", 0.4),
+        "toxic_detection_cutoff": toxic_config.get("toxic_cutoff", 0.5),
+    }
+
+    return scan_orf_fasta(
+        orf_path,
+        left_const=left_const_val,
+        right_const=right_const_val,
+        **detection_kwargs,
+    )
 
 
 def run_orf_prediction(
@@ -25,6 +55,8 @@ def run_orf_prediction(
     """Run ORF prediction and toxic protein detection."""
     if not args.output_orfs:
         return
+
+    from ..translate import run_orf_finder_in_memory
 
     if dual_mutation_mode:
         normal_orf_out = numbered_filename(
@@ -55,37 +87,8 @@ def run_orf_prediction(
 
         # Toxic protein detection
         try:
-            from ..toxic_protein_detector import scan_orf_fasta
-
-            ref_assembly = config.get("reference_assembly", "hg38")
-            assembly_constants = config.get("constants", {}).get(ref_assembly, {})
-            left_const_val = assembly_constants.get("left")
-            right_const_val = assembly_constants.get("right")
-
-            # Extract toxic protein detection parameters from config (with defaults)
-            toxic_config = config.get("toxic_protein_detection", {})
-            detection_kwargs = {
-                "consensus": toxic_config.get("consensus_motif", "RCHLGPGHQAGPGLHR"),
-                "identity_threshold": toxic_config.get("identity_threshold", 0.8),
-                "key_residues": toxic_config.get("key_residues", ["R", "C", "H"]),
-                "expected_repeat_count": toxic_config.get("expected_repeat_count", 10),
-                "w_repeat": toxic_config.get("weights", {}).get("repeat", 0.6),
-                "w_composition": toxic_config.get("weights", {}).get("composition", 0.4),
-                "toxic_detection_cutoff": toxic_config.get("toxic_cutoff", 0.5),
-            }
-
-            normal_stats = scan_orf_fasta(
-                normal_orf_out,
-                left_const=left_const_val,
-                right_const=right_const_val,
-                **detection_kwargs,
-            )
-            mut_stats = scan_orf_fasta(
-                mut_orf_out,
-                left_const=left_const_val,
-                right_const=right_const_val,
-                **detection_kwargs,
-            )
+            normal_stats = _run_toxic_detection(normal_orf_out, config)
+            mut_stats = _run_toxic_detection(mut_orf_out, config)
 
             stats_file_normal = numbered_filename(
                 out_dir, out_base, sim_index, "orf_stats.txt", variant="normal"
@@ -122,31 +125,7 @@ def run_orf_prediction(
 
         # Toxic protein detection
         try:
-            from ..toxic_protein_detector import scan_orf_fasta
-
-            ref_assembly = config.get("reference_assembly", "hg38")
-            assembly_constants = config.get("constants", {}).get(ref_assembly, {})
-            left_const_val = assembly_constants.get("left")
-            right_const_val = assembly_constants.get("right")
-
-            # Extract toxic protein detection parameters from config (with defaults)
-            toxic_config = config.get("toxic_protein_detection", {})
-            detection_kwargs = {
-                "consensus": toxic_config.get("consensus_motif", "RCHLGPGHQAGPGLHR"),
-                "identity_threshold": toxic_config.get("identity_threshold", 0.8),
-                "key_residues": toxic_config.get("key_residues", ["R", "C", "H"]),
-                "expected_repeat_count": toxic_config.get("expected_repeat_count", 10),
-                "w_repeat": toxic_config.get("weights", {}).get("repeat", 0.6),
-                "w_composition": toxic_config.get("weights", {}).get("composition", 0.4),
-                "toxic_detection_cutoff": toxic_config.get("toxic_cutoff", 0.5),
-            }
-
-            stats = scan_orf_fasta(
-                orf_out,
-                left_const=left_const_val,
-                right_const=right_const_val,
-                **detection_kwargs,
-            )
+            stats = _run_toxic_detection(orf_out, config)
             stats_file = numbered_filename(out_dir, out_base, sim_index, "orf_stats.txt")
 
             with Path(stats_file).open("w") as sf:
@@ -170,6 +149,8 @@ def run_read_simulation(
     """Run read simulation pipeline if requested."""
     if not args.simulate_reads:
         return
+
+    from ..read_simulation import simulate_reads as simulate_reads_pipeline
 
     if "read_simulation" not in config:
         config["read_simulation"] = {}
@@ -338,7 +319,8 @@ def run_orf_analysis_standalone(
     Single implementation for standalone ORF analysis, used by the
     ``analyze orfs`` CLI command.
     """
-    import subprocess
+    from ..exceptions import ExternalToolError
+    from ..read_simulator.utils.common_utils import run_command
 
     orf_output = Path(out_dir) / f"{out_base}.orfs.fa"
 
@@ -356,10 +338,13 @@ def run_orf_analysis_standalone(
         "ATG",
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-
-    if result.returncode != 0:
-        logging.error("orfipy failed for %s: %s", input_fasta, result.stderr)
+    try:
+        run_command(cmd, capture=True)
+    except ExternalToolError as e:
+        logging.error("orfipy failed for %s: %s", input_fasta, e)
+        return
+    except FileNotFoundError:
+        logging.error("orfipy not found — is it installed?")
         return
 
     logging.info("ORF prediction completed: %s", orf_output)

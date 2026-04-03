@@ -128,9 +128,8 @@ def simulate(ctx, **kwargs):
     """Generate MUC1 VNTR diploid haplotypes.
 
     \b
-    Single Responsibility: ONLY generates haplotype FASTA files.
-    Does NOT run read simulation or ORF prediction.
-    Use 'pipeline' command or chain commands manually for full workflow.
+    Generates haplotype FASTA files only. For read simulation,
+    pipe output to 'reads' commands (e.g., reads illumina).
 
     \b
     Output:

@@ -801,15 +801,15 @@ def convert_bam_to_paired_fastq(
             logging.debug(f"  Collate command: {' '.join(collate_cmd)}")
             logging.debug(f"  Fastq command: {' '.join(fastq_cmd)}")
 
-            result = run_pipeline(
+            pipeline_result = run_pipeline(
                 [collate_cmd, fastq_cmd],
                 capture=True,
                 timeout=opts.timeout,
             )
 
             # Log any warnings from samtools
-            if result.stderr:
-                stderr_text = result.stderr.strip()
+            if pipeline_result.stderr:
+                stderr_text = pipeline_result.stderr.strip()
                 if stderr_text:
                     logging.debug(f"  Samtools stderr: {stderr_text}")
 

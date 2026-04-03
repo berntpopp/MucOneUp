@@ -60,45 +60,30 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from muc_one_up.read_simulator.output_config import OutputConfig
 
-from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
-from muc_one_up.read_simulator.pacbio_pipeline import simulate_pacbio_hifi_reads
 
-# Import the refactored pipelines
-from muc_one_up.read_simulator.pipeline import (
-    simulate_reads_pipeline as simulate_illumina_reads,
-)
+def _get_simulator_map() -> dict[str, Callable[..., str]]:
+    """Build simulator map with lazy imports to avoid import-time coupling.
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+    Pipeline modules depend on heavy external libraries (Bio, etc.) that should
+    only be loaded when a simulation is actually requested.
+    """
+    from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
+    from muc_one_up.read_simulator.pacbio_pipeline import simulate_pacbio_hifi_reads
+    from muc_one_up.read_simulator.pipeline import (
+        simulate_reads_pipeline as simulate_illumina_reads,
+    )
 
-
-# =============================================================================
-# Strategy Pattern: Simulator Selection
-# =============================================================================
-#
-# Maps simulator names to pipeline functions for extensible simulator support.
-# This design pattern (Strategy Pattern) follows the Open/Closed Principle:
-# - Open for extension: New simulators can be added without modifying existing code
-# - Closed for modification: Adding a simulator doesn't change the router logic
-#
-# To add a new simulator:
-# 1. Create a new pipeline module (e.g., nanopore_promethion_pipeline.py)
-# 2. Import the pipeline function
-# 3. Add an entry to SIMULATOR_MAP
-# 4. No changes to simulate_reads() required!
-#
-# Example:
-#     SIMULATOR_MAP["promethion"] = simulate_promethion_reads_pipeline
-#
-SIMULATOR_MAP: dict[str, Callable[..., str]] = {
-    "illumina": lambda config, input_fa, _, **kw: simulate_illumina_reads(config, input_fa, **kw),
-    "ont": lambda config, input_fa, human_reference, **kw: simulate_ont_reads_pipeline(
-        config, input_fa, human_reference=human_reference, **kw
-    ),
-    "pacbio": lambda config, input_fa, human_reference, **kw: simulate_pacbio_hifi_reads(
-        config, input_fa, human_reference=human_reference, **kw
-    ),
-}
+    return {
+        "illumina": lambda config, input_fa, _, **kw: simulate_illumina_reads(
+            config, input_fa, **kw
+        ),
+        "ont": lambda config, input_fa, human_reference, **kw: simulate_ont_reads_pipeline(
+            config, input_fa, human_reference=human_reference, **kw
+        ),
+        "pacbio": lambda config, input_fa, human_reference, **kw: simulate_pacbio_hifi_reads(
+            config, input_fa, human_reference=human_reference, **kw
+        ),
+    }
 
 
 def simulate_reads(
@@ -115,7 +100,7 @@ def simulate_reads(
     and delegates to the modular implementation in the read_simulator package.
 
     The Strategy Pattern enables extensible simulator support without modifying this
-    function - new simulators can be added by registering them in SIMULATOR_MAP.
+    function - new simulators can be added by registering them in _get_simulator_map().
 
     Args:
         config: Dictionary containing configuration sections:
@@ -135,7 +120,7 @@ def simulate_reads(
         Path to the final output BAM file (or FASTQ if alignment skipped).
 
     Raises:
-        ValueError: If simulator is unknown or not registered in SIMULATOR_MAP.
+        ValueError: If simulator is unknown or not registered in _get_simulator_map().
 
     Example:
         Illumina simulation::
@@ -174,13 +159,16 @@ def simulate_reads(
     # Extract human reference from config (needed for ONT and PacBio alignment)
     human_reference = config.get("read_simulation", {}).get("human_reference")
 
+    # Build simulator map (lazy imports happen here, not at module load)
+    simulator_map = _get_simulator_map()
+
     # Validate simulator is registered
-    if simulator not in SIMULATOR_MAP:
-        valid_simulators = ", ".join(sorted(SIMULATOR_MAP.keys()))
+    if simulator not in simulator_map:
+        valid_simulators = ", ".join(sorted(simulator_map.keys()))
         raise ValueError(
             f"Unknown simulator: '{simulator}'. "
             f"Valid options: {valid_simulators}. "
-            f"To add a new simulator, register it in SIMULATOR_MAP."
+            f"To add a new simulator, register it in _get_simulator_map()."
         )
 
     # Log which simulator is being used
@@ -199,7 +187,7 @@ def simulate_reads(
         )
 
     # Dispatch to appropriate pipeline using Strategy Pattern
-    simulator_func = SIMULATOR_MAP[simulator]
+    simulator_func = simulator_map[simulator]
     return simulator_func(
         config,
         input_fa,

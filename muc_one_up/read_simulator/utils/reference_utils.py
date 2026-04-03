@@ -10,8 +10,6 @@ import logging
 from pathlib import Path
 from typing import NamedTuple
 
-from Bio import SeqIO
-
 from ...exceptions import ValidationError
 
 
@@ -58,6 +56,8 @@ def get_reference_info(fasta_path: str | Path) -> ReferenceInfo:
 
     if not fasta_path.is_file():
         raise ValidationError(f"Reference path is not a file: {fasta_path}")
+
+    from Bio import SeqIO
 
     try:
         sequences = list(SeqIO.parse(str(fasta_path), "fasta"))
@@ -167,6 +167,8 @@ def extract_haplotypes(
         base_name = diploid_fasta.stem
 
     # Parse sequences
+    from Bio import SeqIO
+
     sequences = list(SeqIO.parse(str(diploid_fasta), "fasta"))
     hap1_seq = sequences[0]
     hap2_seq = sequences[1]

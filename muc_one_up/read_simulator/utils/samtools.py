@@ -242,12 +242,13 @@ def calculate_mean_coverage(bam_file: Path, region_bed: Path) -> float:
             capture=True,
         )
 
-        if not result.stdout.strip():
+        stdout = result.stdout or ""
+        if not stdout.strip():
             logger.warning(f"No coverage data for {region_bed}")
             return 0.0
 
         # Parse depth output (chr, pos, depth)
-        depths = [int(line.split()[2]) for line in result.stdout.strip().split("\n")]
+        depths = [int(line.split()[2]) for line in stdout.strip().split("\n")]
 
         mean_cov = sum(depths) / len(depths) if depths else 0.0
         logger.debug(f"Mean coverage: {mean_cov:.2f}x")
@@ -305,7 +306,12 @@ def get_bam_read_count(bam_file: Path) -> int:
             capture=True,
         )
 
-        count = int(result.stdout.strip())
+        stdout = result.stdout
+        if stdout is None:
+            stdout = "0"
+        elif not stdout.strip():
+            raise SamtoolsError("Invalid read count output: empty stdout")
+        count = int(stdout.strip())
         logger.debug(f"Read count: {count:,}")
 
         return count
