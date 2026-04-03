@@ -74,7 +74,7 @@ from ..orchestration import run_single_simulation_iteration
 # Mutation Options
 @click.option(
     "--mutation-name",
-    help="Mutation name. Use 'normal,mutation' for dual simulation.",
+    help="Mutation name (e.g., 'dupC'). Use 'normal,dupC' for dual output (normal + mutated).",
 )
 @click.option(
     "--mutation-targets",

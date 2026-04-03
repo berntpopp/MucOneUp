@@ -113,8 +113,9 @@ def reads():
     """Read simulation utilities.
 
     \b
-    Single Responsibility: Simulate reads from ANY FASTA file.
+    Simulate reads from ANY FASTA file.
     Works with MucOneUp outputs or external sequences.
+    Requires --config at the top level.
     """
 
 
@@ -345,7 +346,7 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     "--min-rq",
     type=float,
     default=None,
-    help="Minimum predicted accuracy for HiFi reads (0.0-1.0, overrides config if provided). 0.99 = Q20 (standard HiFi).",
+    help="Minimum predicted read quality (RQ) score (0.0-1.0). 0.99=Q20 (standard HiFi), 0.999=Q30.",
 )
 @click.option(
     "--model-type",
