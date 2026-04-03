@@ -110,9 +110,7 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
     return config, out_dir, out_base
 
 
-def determine_simulation_mode(
-    args, config
-) -> tuple[list[Any], list | None, dict | None]:
+def determine_simulation_mode(args, config) -> tuple[list[Any], list | None, dict | None]:
     """
     Determine simulation mode and return appropriate configurations.
 
