@@ -102,14 +102,12 @@ Defines left and right flanking regions surrounding the VNTR, assembly-specific.
     "hg19": {
       "left": "AGCAGGCAGTGCGGGGCCGCTGCTGCTG...",
       "right": "TGCTGCTGCTGCGGGGCCGCTGCTGCTG...",
-      "vntr_start": 1000,
-      "vntr_end": 8000
+      "vntr_region": "chr1:155158000-155165000"
     },
     "hg38": {
       "left": "AGCAGGCAGTGCGGGGCCGCTGCTGCTG...",
       "right": "TGCTGCTGCTGCGGGGCCGCTGCTGCTG...",
-      "vntr_start": 1500,
-      "vntr_end": 8500
+      "vntr_region": "chr1:155185824-155192916"
     }
   }
 }
@@ -122,13 +120,12 @@ Defines left and right flanking regions surrounding the VNTR, assembly-specific.
   "constants": {
     "left": "AGCAGGCAGTGCGGGGCCGCTGCTGCTG...",
     "right": "TGCTGCTGCTGCGGGGCCGCTGCTGCTG...",
-    "vntr_start": 1000,
-    "vntr_end": 8000
+    "vntr_region": "chr1:155158000-155165000"
   }
 }
 ```
 
-**Note:** Flat format assumed to be hg19 and auto-converted to nested format.
+**Note:** Flat format assumed to be hg38 and auto-converted to nested format.
 
 ### Fields
 
@@ -136,8 +133,7 @@ Defines left and right flanking regions surrounding the VNTR, assembly-specific.
 |-------|------|-------------|
 | `left` | string | DNA sequence upstream of VNTR |
 | `right` | string | DNA sequence downstream of VNTR |
-| `vntr_start` | integer | VNTR start position (0-indexed) |
-| `vntr_end` | integer | VNTR end position (0-indexed) |
+| `vntr_region` | string | VNTR genomic coordinates (e.g., "chr1:155185824-155192916") |
 
 ### Assembly-Specific Constants
 
@@ -229,7 +225,7 @@ Distribution parameters for sampling VNTR repeat counts.
 ```json
 {
   "length_model": {
-    "distribution_type": "normal",
+    "distribution": "normal",
     "mean_repeats": 63.3,
     "median_repeats": 70,
     "min_repeats": 42,
@@ -248,7 +244,7 @@ Distribution parameters for sampling VNTR repeat counts.
 ```json
 {
   "length_model": {
-    "distribution_type": "uniform",
+    "distribution": "uniform",
     "min_repeats": 40,
     "max_repeats": 100
   }
@@ -263,7 +259,7 @@ Distribution parameters for sampling VNTR repeat counts.
 
 | Field | Type | Description | Required |
 |-------|------|-------------|----------|
-| `distribution_type` | string | "normal" or "uniform" | Yes |
+| `distribution` | string | "normal" or "uniform" | Yes |
 | `mean_repeats` | float | Mean for normal distribution | If normal |
 | `median_repeats` | float | Median for normal distribution | If normal |
 | `min_repeats` | integer | Minimum repeat count | Yes |
@@ -287,9 +283,10 @@ Define named mutations with operations (insert/delete/replace/delete_insert).
       "strict_mode": false,
       "changes": [
         {
-          "operation": "insert",
-          "sequence": "GCCCACGGTGTCACCTCGGCCCCGGACACCAGGCCGGCCCCGGGCTCCACCGCCCCCCCA",
-          "position_offset": 0
+          "type": "insert",
+          "start": 0,
+          "end": 0,
+          "sequence": "GCCCACGGTGTCACCTCGGCCCCGGACACCAGGCCGGCCCCGGGCTCCACCGCCCCCCCA"
         }
       ]
     },
@@ -298,7 +295,9 @@ Define named mutations with operations (insert/delete/replace/delete_insert).
       "strict_mode": true,
       "changes": [
         {
-          "operation": "delete"
+          "type": "delete",
+          "start": 0,
+          "end": 0
         }
       ]
     }
@@ -312,7 +311,16 @@ Define named mutations with operations (insert/delete/replace/delete_insert).
 |-------|------|-------------|
 | `allowed_repeats` | array | Valid repeat symbols for this mutation |
 | `strict_mode` | boolean | Enforce allowed_repeats (error if violated) |
-| `changes` | array | List of mutation operations |
+| `changes` | array | List of mutation change objects |
+
+### Mutation Change Fields
+
+| Field | Type | Description | Required |
+|-------|------|-------------|----------|
+| `type` | string | "insert", "delete", "replace", or "delete_insert" | Yes |
+| `start` | integer | Start position within repeat | Yes |
+| `end` | integer | End position within repeat | Yes |
+| `sequence` | string | DNA sequence for insert/replace/delete_insert | No |
 
 ### Mutation Operations
 
@@ -320,9 +328,10 @@ Define named mutations with operations (insert/delete/replace/delete_insert).
 
 ```json
 {
-  "operation": "insert",
-  "sequence": "ATCGATCGATCG",
-  "position_offset": 0
+  "type": "insert",
+  "start": 0,
+  "end": 0,
+  "sequence": "ATCGATCGATCG"
 }
 ```
 
@@ -332,7 +341,9 @@ Inserts sequence at target position.
 
 ```json
 {
-  "operation": "delete"
+  "type": "delete",
+  "start": 0,
+  "end": 0
 }
 ```
 
@@ -342,7 +353,9 @@ Removes repeat at target position.
 
 ```json
 {
-  "operation": "replace",
+  "type": "replace",
+  "start": 0,
+  "end": 0,
   "sequence": "ATCGATCGATCG"
 }
 ```
@@ -353,9 +366,10 @@ Substitutes repeat at target position with new sequence.
 
 ```json
 {
-  "operation": "delete_insert",
-  "sequence": "ATCGATCGATCG",
-  "position_offset": 0
+  "type": "delete_insert",
+  "start": 0,
+  "end": 0,
+  "sequence": "ATCGATCGATCG"
 }
 ```
 
@@ -426,9 +440,13 @@ If paths not specified, MucOneUp searches system PATH:
 
 ```json
 {
-  "tools": {}  // Auto-detect all tools
+  "tools": {
+    "samtools": "/usr/bin/samtools"
+  }
 }
 ```
+
+**Note:** `samtools` is required and cannot be omitted. Other tools are auto-detected from system PATH.
 
 ### Conda Environments
 
@@ -462,13 +480,14 @@ Parameters for Illumina read simulation (w-Wessim2 pipeline).
 {
   "read_simulation": {
     "simulator": "illumina",
-    "read_length": 150,
+    "human_reference": "/path/to/hg38.fa",
+    "reseq_model": "/path/to/reseq_model",
+    "read_number": 10000,
     "fragment_size": 350,
     "fragment_sd": 50,
+    "min_fragment": 100,
     "coverage": 100,
     "threads": 4,
-    "reference_genome": "/path/to/hg38.fa",
-    "error_model": "reseq_illumina",
     "seed": null
   }
 }
@@ -479,13 +498,14 @@ Parameters for Illumina read simulation (w-Wessim2 pipeline).
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
 | `simulator` | string | "illumina", "ont", "pacbio", or "amplicon" | "illumina" |
-| `read_length` | integer | Read length (bp) | 150 |
+| `human_reference` | string | Path to reference FASTA | Required |
+| `reseq_model` | string | Path to ReSeq error model | - |
+| `read_number` | integer | Number of reads to generate | - |
 | `fragment_size` | integer | Mean insert size (bp) | 350 |
 | `fragment_sd` | integer | Insert size std dev (bp) | 50 |
+| `min_fragment` | integer | Minimum fragment size (bp) | - |
 | `coverage` | integer | Target coverage depth | 100 |
-| `threads` | integer | Parallel threads | 4 |
-| `reference_genome` | string | Path to reference FASTA | Required |
-| `error_model` | string | Error model name | "reseq_illumina" |
+| `threads` | integer | Parallel threads | Required |
 | `seed` | integer | Random seed (null = random) | null |
 
 ---
@@ -548,11 +568,13 @@ Parameters for PacBio HiFi read simulation.
 ```json
 {
   "pacbio_params": {
-    "model_type": "QSHMM",
+    "model_type": "qshmm",
     "model_file": "/path/to/pbsim3/models/QSHMM-RSII.model",
     "coverage": 30,
-    "min_pass": 3,
-    "max_pass": 15,
+    "pass_num": 10,
+    "min_passes": 3,
+    "min_rq": 0.99,
+    "threads": 4,
     "seed": null
   }
 }
@@ -562,11 +584,13 @@ Parameters for PacBio HiFi read simulation.
 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
-| `model_type` | string | "QSHMM" or "ERRHMM" | "QSHMM" |
+| `model_type` | string | "qshmm" or "errhmm" | Required |
 | `model_file` | string | pbsim3 model file path | Required |
-| `coverage` | integer | Target coverage depth | 30 |
-| `min_pass` | integer | Minimum CCS passes | 3 |
-| `max_pass` | integer | Maximum CCS passes | 15 |
+| `coverage` | number | Target coverage depth (0.1-10000) | Required |
+| `pass_num` | number | Number of passes per molecule (2-50) | Required |
+| `min_passes` | number | Minimum CCS passes (1-50) | Required |
+| `min_rq` | number | Minimum read quality (0.0-1.0) | Required |
+| `threads` | number | Parallel threads (minimum 1) | - |
 | `seed` | integer | Random seed (null = random) | null |
 
 ---
@@ -652,8 +676,7 @@ See the [Amplicon Simulation Guide](../guides/amplicon-simulation.md) for detail
     "hg38": {
       "left": "AGCAGGCAGTGCGGGGCCGCTGCTGCTG...",
       "right": "TGCTGCTGCTGCGGGGCCGCTGCTGCTG...",
-      "vntr_start": 1500,
-      "vntr_end": 8500
+      "vntr_region": "chr1:155185824-155192916"
     }
   },
 
@@ -666,7 +689,7 @@ See the [Amplicon Simulation Guide](../guides/amplicon-simulation.md) for detail
   },
 
   "length_model": {
-    "distribution_type": "normal",
+    "distribution": "normal",
     "mean_repeats": 63.3,
     "median_repeats": 70,
     "min_repeats": 42,
@@ -679,9 +702,10 @@ See the [Amplicon Simulation Guide](../guides/amplicon-simulation.md) for detail
       "strict_mode": false,
       "changes": [
         {
-          "operation": "insert",
-          "sequence": "GCCCACGGTGTCACCTCGGCCCCGGACACCAGGCCGGCCCCGGGCTCCACCGCCCCCCCA",
-          "position_offset": 0
+          "type": "insert",
+          "start": 0,
+          "end": 0,
+          "sequence": "GCCCACGGTGTCACCTCGGCCCCGGACACCAGGCCGGCCCCGGGCTCCACCGCCCCCCCA"
         }
       ]
     }
@@ -695,12 +719,12 @@ See the [Amplicon Simulation Guide](../guides/amplicon-simulation.md) for detail
 
   "read_simulation": {
     "simulator": "illumina",
-    "read_length": 150,
+    "human_reference": "/path/to/hg38.fa",
+    "reseq_model": "/path/to/reseq_model",
     "fragment_size": 350,
     "fragment_sd": 50,
     "coverage": 100,
     "threads": 4,
-    "reference_genome": "/path/to/hg38.fa",
     "seed": 42
   },
 
@@ -715,11 +739,13 @@ See the [Amplicon Simulation Guide](../guides/amplicon-simulation.md) for detail
   },
 
   "pacbio_params": {
-    "model_type": "QSHMM",
+    "model_type": "qshmm",
     "model_file": "/path/to/pbsim3/QSHMM-RSII.model",
     "coverage": 30,
-    "min_pass": 3,
-    "max_pass": 15,
+    "pass_num": 10,
+    "min_passes": 3,
+    "min_rq": 0.99,
+    "threads": 4,
     "seed": 42
   }
 }

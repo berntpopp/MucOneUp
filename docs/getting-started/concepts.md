@@ -203,7 +203,7 @@ MucOneUp supports two distribution models:
 ```json
 {
   "length_model": {
-    "distribution_type": "normal",
+    "distribution": "normal",
     "mean_repeats": 63.3,
     "median_repeats": 70,
     "min_repeats": 42,
@@ -219,7 +219,7 @@ Samples repeat counts from normal distribution, clipped to [min, max] range.
 ```json
 {
   "length_model": {
-    "distribution_type": "uniform",
+    "distribution": "uniform",
     "min_repeats": 40,
     "max_repeats": 100
   }
@@ -323,7 +323,7 @@ Let MucOneUp select positions:
 ```bash
 muconeup --config config.json simulate \
   --mutation-name dupC \
-  --random-mutation-targets 2
+  --mutation-targets 2
 ```
 
 Randomly selects 2 positions respecting `allowed_repeats` constraints.
@@ -587,7 +587,7 @@ muconeup --config config.json reads illumina run2.001.simulated.fa --seed 42
 
 ```
 Methods:
-Synthetic MUC1 VNTR sequences generated with MucOneUp v0.19.0
+Synthetic MUC1 VNTR sequences generated with MucOneUp v0.40.0
 (seed=42, config.json provided in supplementary materials).
 Illumina reads simulated at 100× coverage (reseq v1.1, seed=42).
 ```

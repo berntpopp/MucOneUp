@@ -139,7 +139,7 @@ muconeup --config config.json simulate \
 ```json
 {
   "length_model": {
-    "distribution_type": "normal",
+    "distribution": "normal",
     "mean_repeats": 63.3,
     "median_repeats": 70,
     "min_repeats": 42,
@@ -198,7 +198,7 @@ Simulating 5 iterations  [################---]  80%  00:01:23
 Choose human genome assembly (hg19 or hg38):
 
 ```bash
-# Use hg38 (default: hg19)
+# Use hg38 (default)
 muconeup --config config.json simulate \
   --reference-assembly hg38 \
   --out-base output/hg38_sample
@@ -537,7 +537,7 @@ MucOneUp automatically records provenance metadata in `*.simulation_stats.json`:
 ```json
 {
   "provenance": {
-    "software_version": "0.27.0",
+    "software_version": "0.40.0",
     "config_fingerprint": "sha256:aed09353ff7...",
     "seed": 42,
     "start_time": "2025-11-03T11:48:44.249499+00:00",
@@ -737,8 +737,8 @@ muconeup --config config.json simulate \
 ```bash
 muconeup --config CONFIG simulate [OPTIONS]
 
-Required:
-  --out-base TEXT              Output filename base
+Options:
+  --out-base TEXT              Output filename base (default: auto-generated)
 
 VNTR Length:
   --fixed-lengths INT|RANGE    Fixed repeat count (e.g., 60 or 40-80)
@@ -750,7 +750,7 @@ Mutations:
 
 SNPs:
   --random-snps                Generate random SNPs
-  --random-snp-density FLOAT   SNPs per 1000 bp (default: 1.0)
+  --random-snp-density FLOAT   SNPs per 1000 bp (default: 0.001)
   --snp-input-file PATH        TSV file with SNPs
 
 Structure:
@@ -758,7 +758,7 @@ Structure:
   --output-structure           Output structure file
 
 Assembly:
-  --reference-assembly TEXT    hg19 or hg38 (default: hg19)
+  --reference-assembly TEXT    hg19 or hg38 (default: hg38)
 
 Output:
   --out-dir PATH               Output directory (default: .)

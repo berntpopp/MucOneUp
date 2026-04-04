@@ -56,8 +56,8 @@ ls -lh output/my_first_simulation.001.simulated.fa
 
 # View FASTA headers
 grep ">" output/my_first_simulation.001.simulated.fa
-# >haplotype_1 length=60_repeats assembly=hg19
-# >haplotype_2 length=60_repeats assembly=hg19
+# >haplotype_1 length=60_repeats assembly=hg38
+# >haplotype_2 length=60_repeats assembly=hg38
 
 # Count sequences
 grep -c ">" output/my_first_simulation.001.simulated.fa

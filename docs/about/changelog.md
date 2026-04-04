@@ -71,7 +71,8 @@ See [GitHub Releases](https://github.com/berntpopp/MucOneUp/releases) for earlie
 
 ---
 
-[Unreleased]: https://github.com/berntpopp/MucOneUp/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/berntpopp/MucOneUp/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.40.0
 [0.19.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.19.0
 [0.15.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.15.0
 [0.14.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.14.0

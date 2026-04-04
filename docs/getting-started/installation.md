@@ -138,7 +138,7 @@ make init
 make check
 
 # Individual commands:
-make test      # Run 806 tests with coverage
+make test      # Run 1300+ tests with coverage
 make lint      # Check code quality (ruff + mypy)
 make format    # Auto-format code
 ```
@@ -149,7 +149,7 @@ make format    # Auto-format code
 |---------|--------|
 | `make install` | Install package for users |
 | `make init` | Setup complete dev environment |
-| `make test` | Run pytest with coverage (target: 77%+) |
+| `make test` | Run pytest with coverage (target: 80%+) |
 | `make lint` | Check code quality (ruff + mypy) |
 | `make format` | Auto-format code with ruff |
 | `make check` | Run all quality checks (test + lint) |
@@ -304,7 +304,7 @@ Update `config.json`:
 ```json
 {
   "read_simulation": {
-    "reference_genome": "/path/to/hg38.fa"
+    "human_reference": "/path/to/hg38.fa"
   }
 }
 ```

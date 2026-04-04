@@ -77,15 +77,15 @@ Unix-style composable commands:
 
 ```bash
 # Each command does one thing well
-muconeup simulate --out-base sample
-muconeup reads illumina sample.001.simulated.fa
-muconeup analyze orfs sample.001.simulated.fa
+muconeup --config config.json simulate --out-base sample
+muconeup --config config.json reads illumina sample.001.simulated.fa
+muconeup --config config.json analyze orfs sample.001.simulated.fa
 ```
 
 Pipeline multiple files efficiently:
 
 ```bash
-ls *.fa | parallel muconeup reads ont {} --coverage 50
+ls *.fa | parallel muconeup --config config.json reads ont {} --coverage 50
 ```
 
 ---

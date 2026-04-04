@@ -241,7 +241,11 @@ Options:
   --seed INT                 Random seed for reproducibility
   --out-dir PATH             Output directory (default: .)
   --out-base TEXT             Output base name
+  --track-read-source         Accepted but raises an error (not supported in amplicon mode)
 ```
+
+!!! warning "Read Source Tracking"
+    The `--track-read-source` option is accepted by the CLI parser but raises an error at runtime. Read source tracking is not supported in amplicon mode.
 
 ---
 
