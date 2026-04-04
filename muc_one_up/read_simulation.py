@@ -62,38 +62,41 @@ if TYPE_CHECKING:
     from muc_one_up.read_simulator.output_config import OutputConfig
 
 
-def _get_simulator_map() -> dict[str, Callable[..., str]]:
-    """Build simulator map with lazy imports to avoid import-time coupling.
+def _get_simulator(simulator_type: str) -> Callable[..., str]:
+    """Return the pipeline function for the given simulator type.
 
-    Pipeline modules depend on heavy external libraries (Bio, etc.) that should
-    only be loaded when a simulation is actually requested.
+    Imports only the selected backend to avoid loading heavy dependencies
+    (e.g., Biopython for amplicon) when they are not needed.
     """
-    from muc_one_up.read_simulator.amplicon_pipeline import (
-        simulate_amplicon_reads_pipeline,
-    )
-    from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
-    from muc_one_up.read_simulator.pacbio_pipeline import simulate_pacbio_hifi_reads
-    from muc_one_up.read_simulator.pipeline import (
-        simulate_reads_pipeline as simulate_illumina_reads,
-    )
+    if simulator_type == "illumina":
+        from muc_one_up.read_simulator.pipeline import (
+            simulate_reads_pipeline as simulate_illumina_reads,
+        )
 
-    return {
-        "illumina": lambda config, input_fa, _, **kw: simulate_illumina_reads(
-            config, input_fa, **kw
-        ),
-        "ont": lambda config, input_fa, human_reference, **kw: simulate_ont_reads_pipeline(
+        return lambda config, input_fa, _, **kw: simulate_illumina_reads(config, input_fa, **kw)
+    elif simulator_type == "ont":
+        from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
+
+        return lambda config, input_fa, human_reference, **kw: simulate_ont_reads_pipeline(
             config, input_fa, human_reference=human_reference, **kw
-        ),
-        "pacbio": lambda config, input_fa, human_reference, **kw: simulate_pacbio_hifi_reads(
+        )
+    elif simulator_type == "pacbio":
+        from muc_one_up.read_simulator.pacbio_pipeline import simulate_pacbio_hifi_reads
+
+        return lambda config, input_fa, human_reference, **kw: simulate_pacbio_hifi_reads(
             config, input_fa, human_reference=human_reference, **kw
-        ),
-        "amplicon": lambda config,
-        input_fa,
-        human_reference,
-        **kw: simulate_amplicon_reads_pipeline(
+        )
+    elif simulator_type == "amplicon":
+        from muc_one_up.read_simulator.amplicon_pipeline import (
+            simulate_amplicon_reads_pipeline,
+        )
+
+        return lambda config, input_fa, human_reference, **kw: simulate_amplicon_reads_pipeline(
             config, input_fa, human_reference=human_reference, **kw
-        ),
-    }
+        )
+    else:
+        valid = "amplicon, illumina, ont, pacbio"
+        raise ValueError(f"Unknown simulator: '{simulator_type}'. Valid options: {valid}. ")
 
 
 def simulate_reads(
@@ -110,7 +113,7 @@ def simulate_reads(
     and delegates to the modular implementation in the read_simulator package.
 
     The Strategy Pattern enables extensible simulator support without modifying this
-    function - new simulators can be added by registering them in _get_simulator_map().
+    function - new simulators can be added by registering them in _get_simulator().
 
     Args:
         config: Dictionary containing configuration sections:
@@ -130,7 +133,7 @@ def simulate_reads(
         Path to the final output BAM file (or FASTQ if alignment skipped).
 
     Raises:
-        ValueError: If simulator is unknown or not registered in _get_simulator_map().
+        ValueError: If simulator is unknown or not registered in _get_simulator().
 
     Example:
         Illumina simulation::
@@ -169,17 +172,8 @@ def simulate_reads(
     # Extract human reference from config (needed for ONT and PacBio alignment)
     human_reference = config.get("read_simulation", {}).get("human_reference")
 
-    # Build simulator map (lazy imports happen here, not at module load)
-    simulator_map = _get_simulator_map()
-
-    # Validate simulator is registered
-    if simulator not in simulator_map:
-        valid_simulators = ", ".join(sorted(simulator_map.keys()))
-        raise ValueError(
-            f"Unknown simulator: '{simulator}'. "
-            f"Valid options: {valid_simulators}. "
-            f"To add a new simulator, register it in _get_simulator_map()."
-        )
+    # Get the pipeline function for the selected simulator (lazy import)
+    simulator_func = _get_simulator(simulator)
 
     # Log which simulator is being used
     simulator_names = {
@@ -198,7 +192,6 @@ def simulate_reads(
         )
 
     # Dispatch to appropriate pipeline using Strategy Pattern
-    simulator_func = simulator_map[simulator]
     return simulator_func(
         config,
         input_fa,

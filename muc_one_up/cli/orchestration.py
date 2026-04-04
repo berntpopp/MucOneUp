@@ -133,61 +133,22 @@ def run_single_simulation_iteration(
     source_tracker = None
     source_tracker_mut = None
     if getattr(args, "track_read_source", False) and getattr(args, "simulate_reads", None):
-        from pathlib import Path
+        from .source_tracking_setup import build_source_trackers
 
-        from ..read_simulator.source_tracking import ReadSourceTracker
-
-        ref_assembly = getattr(args, "reference_assembly", None) or config.get(
-            "reference_assembly", "hg38"
+        source_tracker, source_tracker_mut = build_source_trackers(
+            config=config,
+            results=results,
+            mutated_results=mutated_results,
+            mutation_positions=mutation_positions,
+            mutation_name=getattr(args, "mutation_name", None),
+            applied_snp_info_normal=applied_snp_info_normal,
+            applied_snp_info_mut=applied_snp_info_mut,
+            reference_assembly=getattr(args, "reference_assembly", None),
+            out_dir=out_dir,
+            out_base=out_base,
+            sim_index=sim_index,
+            dual_mutation_mode=dual_mutation_mode,
         )
-        mutation_name_str = getattr(args, "mutation_name", None)
-
-        if dual_mutation_mode:
-            # Normal tracker: no mutations
-            source_tracker = ReadSourceTracker.from_simulation_results(
-                results=results,
-                config=config,
-                applied_snp_info=applied_snp_info_normal,
-                reference_assembly=ref_assembly,
-            )
-
-            # Mutated tracker: with mutations, using mutated chains
-            source_tracker_mut = ReadSourceTracker.from_simulation_results(
-                results=mutated_results if mutated_results else results,
-                config=config,
-                mutation_positions=mutation_positions,
-                mutation_name=mutation_name_str,
-                applied_snp_info=applied_snp_info_mut,
-                reference_assembly=ref_assembly,
-            )
-
-            # Write coordinate maps for both variants
-            normal_coord_path = str(
-                Path(out_dir) / f"{out_base}.{sim_index:03d}.normal.repeat_coordinates.tsv"
-            )
-            source_tracker.write_coordinate_map(normal_coord_path)
-            logging.info("Normal repeat coordinate map written: %s", normal_coord_path)
-
-            mut_coord_path = str(
-                Path(out_dir) / f"{out_base}.{sim_index:03d}.mut.repeat_coordinates.tsv"
-            )
-            source_tracker_mut.write_coordinate_map(mut_coord_path)
-            logging.info("Mutated repeat coordinate map written: %s", mut_coord_path)
-        else:
-            source_tracker = ReadSourceTracker.from_simulation_results(
-                results=results,
-                config=config,
-                mutation_positions=mutation_positions,
-                mutation_name=mutation_name_str,
-                applied_snp_info=applied_snp_info_normal,
-                reference_assembly=ref_assembly,
-            )
-
-            coord_map_path = str(
-                Path(out_dir) / f"{out_base}.{sim_index:03d}.repeat_coordinates.tsv"
-            )
-            source_tracker.write_coordinate_map(coord_map_path)
-            logging.info("Repeat coordinate map written: %s", coord_map_path)
 
     # Read simulation
     run_read_simulation(

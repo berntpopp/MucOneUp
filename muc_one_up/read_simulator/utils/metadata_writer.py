@@ -134,28 +134,32 @@ def write_metadata_file(
             f.write(f"Seed\t{config['seed']}\n")
 
         # Platform-specific parameters (skip if N/A)
+        from typing import cast
+
+        from ...type_defs import NanosimConfig, PacbioConfig, ReadSimulationConfig
+
         if platform == "Illumina":
-            read_cfg = config.get("read_simulation", {})
-            coverage = read_cfg.get("coverage")
-            if coverage is not None:
-                f.write(f"Coverage\t{coverage}\n")
+            read_cfg = cast(ReadSimulationConfig, config.get("read_simulation", {}))
+            coverage_val: int | float | None = read_cfg.get("coverage")
+            if coverage_val is not None:
+                f.write(f"Coverage\t{coverage_val}\n")
         elif platform == "ONT":
-            ont_cfg = config.get("nanosim_params", {})
-            coverage = ont_cfg.get("coverage")
+            ont_cfg = cast(NanosimConfig, config.get("nanosim_params", {}))
+            coverage_val = ont_cfg.get("coverage")
             min_len = ont_cfg.get("min_read_length")
             max_len = ont_cfg.get("max_read_length")
-            if coverage is not None:
-                f.write(f"Coverage\t{coverage}\n")
+            if coverage_val is not None:
+                f.write(f"Coverage\t{coverage_val}\n")
             if min_len is not None:
                 f.write(f"Min_read_length\t{min_len}\n")
             if max_len is not None:
                 f.write(f"Max_read_length\t{max_len}\n")
         elif platform == "PacBio":
-            pb_cfg = config.get("pacbio_params", {})
-            coverage = pb_cfg.get("coverage")
+            pb_cfg = cast(PacbioConfig, config.get("pacbio_params", {}))
+            coverage_val = pb_cfg.get("coverage")
             pass_num = pb_cfg.get("pass_num")
-            if coverage is not None:
-                f.write(f"Coverage\t{coverage}\n")
+            if coverage_val is not None:
+                f.write(f"Coverage\t{coverage_val}\n")
             if pass_num is not None:
                 f.write(f"Pass_num\t{pass_num}\n")
 
