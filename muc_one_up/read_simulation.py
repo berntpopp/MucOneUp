@@ -67,6 +67,9 @@ def _get_simulator_map() -> dict[str, Callable[..., str]]:
     Pipeline modules depend on heavy external libraries (Bio, etc.) that should
     only be loaded when a simulation is actually requested.
     """
+    from muc_one_up.read_simulator.amplicon_pipeline import (
+        simulate_amplicon_reads_pipeline,
+    )
     from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
     from muc_one_up.read_simulator.pacbio_pipeline import simulate_pacbio_hifi_reads
     from muc_one_up.read_simulator.pipeline import (
@@ -81,6 +84,9 @@ def _get_simulator_map() -> dict[str, Callable[..., str]]:
             config, input_fa, human_reference=human_reference, **kw
         ),
         "pacbio": lambda config, input_fa, human_reference, **kw: simulate_pacbio_hifi_reads(
+            config, input_fa, human_reference=human_reference, **kw
+        ),
+        "amplicon": lambda config, input_fa, human_reference, **kw: simulate_amplicon_reads_pipeline(
             config, input_fa, human_reference=human_reference, **kw
         ),
     }
@@ -176,11 +182,12 @@ def simulate_reads(
         "illumina": "Illumina read simulation pipeline with reseq/WeSSim",
         "ont": "Oxford Nanopore (ONT) read simulation pipeline with NanoSim",
         "pacbio": "PacBio HiFi read simulation pipeline with pbsim3/CCS",
+        "amplicon": "PacBio amplicon read simulation pipeline with pbsim3/CCS (template mode)",
     }
     logging.info(f"Using {simulator_names.get(simulator, f'{simulator} simulator')}")
 
     # Warn if human reference is missing (for alignment-based pipelines)
-    if simulator in ["ont", "pacbio"] and not human_reference:
+    if simulator in ["ont", "pacbio", "amplicon"] and not human_reference:
         logging.warning(
             f"No human_reference specified in config for {simulator.upper()} alignment. "
             "Alignment step will be skipped (FASTQ output only)."
