@@ -49,7 +49,7 @@ class TestExtractSubsetReference:
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mock_run = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -79,7 +79,7 @@ class TestExtractSubsetReference:
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -105,7 +105,7 @@ class TestExtractSubsetReference:
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -131,7 +131,7 @@ class TestCalculateVNTRCoverage:
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mock_run = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_coverage.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -171,7 +171,7 @@ class TestCalculateVNTRCoverage:
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_coverage.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -206,7 +206,7 @@ class TestCalculateTargetCoverage:
             return RunResult(returncode=0, stdout=None, stderr=None, command=" ".join(cmd))
 
         mock_run = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_coverage.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -341,7 +341,7 @@ class TestConvertSamToBam:
             output_bam.write_bytes(b"BAM data")
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_convert.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -351,7 +351,7 @@ class TestConvertSamToBam:
         )
 
         # Assert: Verify command construction
-        from muc_one_up.read_simulator.wrappers.samtools_wrapper import run_command
+        from muc_one_up.read_simulator.wrappers.samtools_convert import run_command
 
         cmd = run_command.call_args[0][0]
         assert "samtools" in cmd
@@ -383,7 +383,7 @@ class TestConvertSamToBam:
         input_sam.write_text("SAM data")
 
         # Mock run_command but don't create output
-        mocker.patch("muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command")
+        mocker.patch("muc_one_up.read_simulator.wrappers.samtools_convert.run_command")
 
         # Act & Assert
         with pytest.raises(FileOperationError, match=r"Output BAM.*missing or empty"):
@@ -401,7 +401,7 @@ class TestConvertSamToBam:
             output_bam.write_text("")  # Empty!
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_convert.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -425,7 +425,7 @@ class TestConvertBamToFastq:
             output_fastq.write_text("@read1\nACGT\n+\nIIII\n")
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_convert.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -438,7 +438,7 @@ class TestConvertBamToFastq:
         )
 
         # Assert: Verify command construction
-        from muc_one_up.read_simulator.wrappers.samtools_wrapper import run_command
+        from muc_one_up.read_simulator.wrappers.samtools_convert import run_command
 
         cmd = run_command.call_args[0][0]
         assert "samtools" in cmd
@@ -470,7 +470,7 @@ class TestConvertBamToFastq:
         input_bam.write_bytes(b"BAM data")
 
         # Mock run_command but don't create output
-        mocker.patch("muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command")
+        mocker.patch("muc_one_up.read_simulator.wrappers.samtools_convert.run_command")
 
         # Act & Assert
         with pytest.raises(FileOperationError, match=r"Output FASTQ.*missing or empty"):
@@ -488,7 +488,7 @@ class TestConvertBamToFastq:
             output_fastq.write_text("")  # Empty!
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_convert.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -564,7 +564,7 @@ class TestSortAndIndexBam:
                 (tmp_path / "output.bam.bai").write_bytes(b"INDEX")
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -603,7 +603,7 @@ class TestSortAndIndexBam:
                 temp_bam.write_bytes(b"SORTED BAM")
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -643,7 +643,7 @@ class TestSortAndIndexBam:
                 (tmp_path / "output.bam.bai").write_bytes(b"INDEX")
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
             side_effect=mock_run_cmd,
         )
 
@@ -677,7 +677,7 @@ class TestSortAndIndexBam:
                 (tmp_path / "input.bam.bai").write_bytes(b"INDEX")
 
         mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_wrapper.run_command",
+            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
             side_effect=mock_run_cmd,
         )
 
