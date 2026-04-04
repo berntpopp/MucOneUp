@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.40.0] - 2026-04-04
+
+### Added
+- PacBio amplicon read simulation using PBSIM3 template mode (`reads amplicon` command)
+- PCR length bias model with exponential decay, calibrated to Madritsch et al. 2026 empirical data
+- Deterministic and stochastic (Galton-Watson) PCR bias modes
+- Preset profiles (`default`, `no_bias`) for PCR bias configuration
+- Primer-based amplicon extraction from diploid VNTR references
+- Shared primer binding site utility (refactored from snapshot validator)
+- `amplicon_params` configuration section with primer sequences and PCR bias settings
+- 69 new tests covering all amplicon simulation components
+
+### Changed
+- Updated GitHub Actions to Node.js 24 compatible versions (checkout v6, setup-python v6, setup-uv v7)
+- Extended config schema to accept `"amplicon"` and `"pacbio"` as simulator types
+
+---
+
 ## [0.19.0] - 2025-10-20
 
 ### Added

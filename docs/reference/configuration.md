@@ -32,7 +32,8 @@ MucOneUp requires a JSON configuration file specifying:
   "tools": { ... },
   "read_simulation": { ... },
   "nanosim_params": { ... },
-  "pacbio_params": { ... }
+  "pacbio_params": { ... },
+  "amplicon_params": { ... }
 }
 ```
 
@@ -477,7 +478,7 @@ Parameters for Illumina read simulation (w-Wessim2 pipeline).
 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
-| `simulator` | string | "illumina", "ont", or "pacbio" | "illumina" |
+| `simulator` | string | "illumina", "ont", "pacbio", or "amplicon" | "illumina" |
 | `read_length` | integer | Read length (bp) | 150 |
 | `fragment_size` | integer | Mean insert size (bp) | 350 |
 | `fragment_sd` | integer | Insert size std dev (bp) | 50 |
@@ -567,6 +568,66 @@ Parameters for PacBio HiFi read simulation.
 | `min_pass` | integer | Minimum CCS passes | 3 |
 | `max_pass` | integer | Maximum CCS passes | 15 |
 | `seed` | integer | Random seed (null = random) | null |
+
+---
+
+## Amplicon Parameters Section
+
+### Purpose
+
+Parameters for PacBio amplicon read simulation with PCR length bias modeling.
+
+### Structure
+
+```json
+{
+  "amplicon_params": {
+    "forward_primer": "GGAGAAAAGGAGACTTCGGCTACCCAG",
+    "reverse_primer": "GCCGTTGTGCACCAGAGTAGAAGCTGA",
+    "primer_source": "Wenzel et al. 2018 (PMID: 29520014)",
+    "expected_product_range": [1500, 6000],
+    "pcr_bias": {
+      "preset": "default"
+    }
+  }
+}
+```
+
+### Fields
+
+| Field | Type | Description | Required |
+|-------|------|-------------|----------|
+| `forward_primer` | string | Forward primer sequence (5'->3') | Yes |
+| `reverse_primer` | string | Reverse primer sequence (5'->3') | Yes |
+| `primer_source` | string | Citation for primer sequences | No |
+| `expected_product_range` | array | [min, max] amplicon size in bp (inclusive) | No |
+| `pcr_bias` | object | PCR bias model configuration | No |
+
+### PCR Bias Configuration
+
+```json
+"pcr_bias": {
+  "preset": "default",
+  "e_max": 0.95,
+  "alpha": 0.00005,
+  "cycles": 25,
+  "denaturation_time": 10.0,
+  "stochastic": false
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `preset` | string | "default" or "no_bias" | "default" |
+| `e_max` | float | Max per-cycle efficiency (0-1) | 0.95 |
+| `alpha` | float | Length decay rate (bp^-1) | 0.00005 |
+| `cycles` | integer | Number of PCR cycles | 25 |
+| `denaturation_time` | float | Denaturation duration (seconds) | 10.0 |
+| `stochastic` | boolean | Enable stochastic bias mode | false |
+
+When `preset` is specified, its values are used as defaults and individual fields override them.
+
+See the [Amplicon Simulation Guide](../guides/amplicon-simulation.md) for details.
 
 ---
 
