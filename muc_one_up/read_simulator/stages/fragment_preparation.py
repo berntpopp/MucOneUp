@@ -79,9 +79,7 @@ def prepare_fragments(
     # Stage 2: Validate reseq_model
     reseq_model = rs_config.get("reseq_model")
     if not reseq_model:
-        raise ConfigurationError(
-            "reseq_model not specified in config 'read_simulation' section"
-        )
+        raise ConfigurationError("reseq_model not specified in config 'read_simulation' section")
 
     # Stage 3: Generate systematic errors
     syser_fq = str(Path(output_dir) / f"_{output_base}_syser.fq")

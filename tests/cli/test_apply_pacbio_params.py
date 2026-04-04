@@ -24,9 +24,7 @@ class TestApplyPacbioParams:
         from muc_one_up.cli.commands.reads import _apply_pacbio_params
 
         config = {"pacbio_params": {"model_type": "errhmm", "threads": 8}}
-        _apply_pacbio_params(
-            config, model_type=None, model_file="/model", seed=None, threads=None
-        )
+        _apply_pacbio_params(config, model_type=None, model_file="/model", seed=None, threads=None)
         assert config["pacbio_params"]["model_type"] == "errhmm"  # not overwritten
         assert config["pacbio_params"]["model_file"] == "/model"
         assert config["pacbio_params"]["threads"] == 8  # not overwritten
@@ -45,9 +43,7 @@ class TestApplyPacbioParams:
 
         config: dict = {}
         with caplog.at_level(logging.INFO):
-            _apply_pacbio_params(
-                config, model_type="qshmm", model_file="/m", seed=42
-            )
+            _apply_pacbio_params(config, model_type="qshmm", model_file="/m", seed=42)
         assert "42" in caplog.text
         assert config["pacbio_params"]["seed"] == 42
 
@@ -57,8 +53,14 @@ class TestApplyPacbioParams:
 
         config: dict = {}
         _apply_pacbio_params(
-            config, model_type="qshmm", model_file="/m", seed=None,
-            threads=8, pass_num=5, min_passes=3, min_rq=0.999,
+            config,
+            model_type="qshmm",
+            model_file="/m",
+            seed=None,
+            threads=8,
+            pass_num=5,
+            min_passes=3,
+            min_rq=0.999,
         )
         assert config["pacbio_params"]["threads"] == 8
         assert config["pacbio_params"]["pass_num"] == 5

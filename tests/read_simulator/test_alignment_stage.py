@@ -103,9 +103,7 @@ class TestAlignAndRefine:
         assert call_args[3].endswith(f"{output_base}.bam")
         assert call_args[4] == tools
 
-    def test_vntr_bias_produces_intermediate_bam(
-        self, mocker, tmp_path, tools, assembly_ctx
-    ):
+    def test_vntr_bias_produces_intermediate_bam(self, mocker, tmp_path, tools, assembly_ctx):
         """VNTR enabled: final_bam contains 'vntr_biased', original BAM is intermediate."""
         mocker.patch(f"{MODULE}.align_reads")
         mocker.patch("shutil.rmtree")
@@ -146,9 +144,7 @@ class TestAlignAndRefine:
         # The original aligned BAM should be the intermediate
         assert result.intermediate_bams[0].endswith(f"{output_base}.bam")
 
-    def test_vntr_failure_falls_back_to_original_bam(
-        self, mocker, tmp_path, tools, assembly_ctx
-    ):
+    def test_vntr_failure_falls_back_to_original_bam(self, mocker, tmp_path, tools, assembly_ctx):
         """If VNTR model raises, continue with the original aligned BAM."""
         mocker.patch(f"{MODULE}.align_reads")
 
@@ -178,9 +174,7 @@ class TestAlignAndRefine:
         assert result.final_bam.endswith(f"{output_base}.bam")
         assert result.intermediate_bams == []
 
-    def test_downsampling_vntr_mode_adds_depth_file(
-        self, mocker, tmp_path, tools, assembly_ctx
-    ):
+    def test_downsampling_vntr_mode_adds_depth_file(self, mocker, tmp_path, tools, assembly_ctx):
         """Downsampling in 'vntr' mode adds depth file to intermediate_files."""
         mocker.patch(f"{MODULE}.align_reads")
 
@@ -247,9 +241,7 @@ class TestAlignAndRefine:
         mock_downsample.assert_not_called()
         assert result.final_bam.endswith(f"{output_base}.bam")
 
-    def test_downsampling_non_vntr_mode(
-        self, mocker, tmp_path, tools, assembly_ctx
-    ):
+    def test_downsampling_non_vntr_mode(self, mocker, tmp_path, tools, assembly_ctx):
         """Downsampling in 'non_vntr' mode calls downsample_entire_bam."""
         mocker.patch(f"{MODULE}.align_reads")
 
@@ -307,9 +299,7 @@ class TestAlignAndRefine:
                 assembly_ctx=assembly_ctx,
             )
 
-    def test_raises_configuration_error_vntr_mode_no_vntr_region(
-        self, mocker, tmp_path, tools
-    ):
+    def test_raises_configuration_error_vntr_mode_no_vntr_region(self, mocker, tmp_path, tools):
         """ConfigurationError raised when vntr mode selected but no vntr_region in context."""
         mocker.patch(f"{MODULE}.align_reads")
 

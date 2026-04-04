@@ -67,15 +67,20 @@ class TestCoverageDownsamplingIntegration:
             patch("muc_one_up.read_simulator.pipeline.generate_read_manifest"),
             patch(
                 "muc_one_up.read_simulator.pipeline.prepare_fragments",
-                return_value=FragmentResult(r1_fastq="/r1.fq.gz", r2_fastq="/r2.fq.gz", intermediate_files=[]),
+                return_value=FragmentResult(
+                    r1_fastq="/r1.fq.gz", r2_fastq="/r2.fq.gz", intermediate_files=[]
+                ),
             ),
             patch(
                 "muc_one_up.read_simulator.pipeline.align_and_refine",
-                return_value=AlignmentResult(final_bam=final_bam, intermediate_bams=[], intermediate_files=[]),
+                return_value=AlignmentResult(
+                    final_bam=final_bam, intermediate_bams=[], intermediate_files=[]
+                ),
             ) as mock_align,
         ):
             with contextlib.suppress(Exception):
                 from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
+
                 simulate_reads_pipeline(config, str(input_fa))
 
             # align_and_refine should have been called
@@ -143,15 +148,20 @@ class TestCoverageDownsamplingIntegration:
             patch("muc_one_up.read_simulator.pipeline.generate_read_manifest"),
             patch(
                 "muc_one_up.read_simulator.pipeline.prepare_fragments",
-                return_value=FragmentResult(r1_fastq="/r1.fq.gz", r2_fastq="/r2.fq.gz", intermediate_files=[]),
+                return_value=FragmentResult(
+                    r1_fastq="/r1.fq.gz", r2_fastq="/r2.fq.gz", intermediate_files=[]
+                ),
             ),
             patch(
                 "muc_one_up.read_simulator.pipeline.align_and_refine",
-                return_value=AlignmentResult(final_bam=final_bam, intermediate_bams=[], intermediate_files=[]),
+                return_value=AlignmentResult(
+                    final_bam=final_bam, intermediate_bams=[], intermediate_files=[]
+                ),
             ) as mock_align,
         ):
             with contextlib.suppress(Exception):
                 from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
+
                 simulate_reads_pipeline(config, str(input_fa))
 
             # align_and_refine should have been called

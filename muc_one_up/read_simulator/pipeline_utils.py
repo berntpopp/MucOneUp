@@ -17,7 +17,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..bioinformatics.reference_validation import get_reference_path_for_assembly
+from ..bioinformatics.reference_validation import (
+    get_reference_path_for_assembly,
+    validate_reference_for_assembly,
+)
 from ..exceptions import ConfigurationError
 from .assembly_context import AssemblyContext
 from .output_config import OutputConfig
@@ -95,10 +98,26 @@ def resolve_human_reference(
     # Tier 1: reference_genomes config section
     try:
         ref_path = get_reference_path_for_assembly(config, assembly_ctx.assembly_name)
-        logger.debug(
-            "Resolved human reference from reference_genomes: %s", ref_path
+        human_reference = str(ref_path)
+
+        logger.info(
+            "Using reference from config: %s (%s)",
+            human_reference,
+            assembly_ctx.assembly_name,
         )
-        return str(ref_path)
+
+        # Validate reference indices — non-fatal, only log warnings
+        try:
+            warnings = validate_reference_for_assembly(
+                config, assembly_ctx.assembly_name, aligner=aligner
+            )
+            if warnings:
+                for warning in warnings:
+                    logger.warning("%s", warning)
+        except Exception as val_err:
+            logger.debug("Reference validation failed (non-fatal): %s", val_err)
+
+        return human_reference
     except Exception:
         logger.debug(
             "reference_genomes lookup failed for '%s', trying fallbacks",

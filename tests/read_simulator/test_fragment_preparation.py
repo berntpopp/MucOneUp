@@ -139,9 +139,7 @@ class TestPrepareFragments:
         )
 
         # All intermediate files with names derived from output_base should use underscore prefix
-        named_intermediates = [
-            f for f in result.intermediate_files if output_base in Path(f).name
-        ]
+        named_intermediates = [f for f in result.intermediate_files if output_base in Path(f).name]
         for f in named_intermediates:
             assert Path(f).name.startswith("_"), (
                 f"Expected underscore prefix for intermediate file: {f}"

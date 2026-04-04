@@ -18,6 +18,7 @@ from muc_one_up.read_simulator.stages import AlignmentResult, FragmentResult
 # Helper: build a minimal Illumina config that passes all validation
 # ---------------------------------------------------------------------------
 
+
 def _illumina_config(tmp_path):
     """Minimal Illumina config with real reference file + index stubs."""
     ref_file = tmp_path / "hg38.fa"
@@ -52,9 +53,7 @@ def _illumina_config(tmp_path):
 def _patch_illumina(mocker, tmp_path, final_bam: str):
     """Patch all Illumina pipeline dependencies."""
     mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
-    mocker.patch(
-        "muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={}
-    )
+    mocker.patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={})
     mocker.patch("muc_one_up.read_simulator.pipeline.log_tool_versions")
     mocker.patch("muc_one_up.read_simulator.pipeline.cleanup_intermediates")
     mocker.patch("muc_one_up.read_simulator.pipeline.create_pipeline_metadata")
@@ -165,16 +164,12 @@ class TestONTOutputNaming:
             "muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation",
             return_value=reads_fq,
         )
-        mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
-        )
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
         mocker.patch(
             "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference",
             return_value=False,
         )
-        mock_meta = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.create_pipeline_metadata"
-        )
+        mock_meta = mocker.patch("muc_one_up.read_simulator.ont_pipeline.create_pipeline_metadata")
 
         input_fa = tmp_path / "original_name.fa"
         input_fa.write_text(">seq1\nACGT\n")
@@ -205,9 +200,7 @@ class TestONTOutputNaming:
             "muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation",
             return_value=reads_fq,
         )
-        mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
-        )
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
         mocker.patch(
             "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference",
             return_value=False,

@@ -16,9 +16,7 @@ class TestIlluminaPipelineReferenceIntegration:
             final_bam = str(tmp_path / "out.bam")
 
         mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
-        mocker.patch(
-            "muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={}
-        )
+        mocker.patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={})
         mocker.patch("muc_one_up.read_simulator.pipeline.log_tool_versions")
         mocker.patch("muc_one_up.read_simulator.pipeline.cleanup_intermediates")
         mocker.patch("muc_one_up.read_simulator.pipeline.create_pipeline_metadata")
@@ -142,9 +140,7 @@ class TestIlluminaPipelineReferenceIntegration:
 
         # Still need prepare_fragments mocked (runs before reference resolution)
         mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
-        mocker.patch(
-            "muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={}
-        )
+        mocker.patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={})
         mocker.patch("muc_one_up.read_simulator.pipeline.log_tool_versions")
 
         from muc_one_up.read_simulator.stages import FragmentResult

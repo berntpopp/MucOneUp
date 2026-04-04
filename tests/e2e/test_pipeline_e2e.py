@@ -118,9 +118,7 @@ class TestONTE2E:
 class TestPacBioE2E:
     """Full PacBio HiFi pipeline: FASTA -> CLR -> CCS -> BAM."""
 
-    def test_pacbio_produces_valid_bam(
-        self, tmp_path, e2e_config_base, e2e_diploid_fasta
-    ):
+    def test_pacbio_produces_valid_bam(self, tmp_path, e2e_config_base, e2e_diploid_fasta):
         from muc_one_up.read_simulator.pacbio_pipeline import simulate_pacbio_hifi_reads
 
         pbsim3_model = _get_env_path("MUCONEUP_PBSIM3_MODEL", "pbsim3 model")

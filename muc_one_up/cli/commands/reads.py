@@ -292,7 +292,7 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
 
     if "nanosim_params" not in config:
         config["nanosim_params"] = {}
-    config["nanosim_params"]["min_len"] = min_read_length
+    config["nanosim_params"]["min_read_length"] = min_read_length
 
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_ont_reads", "ONT", track_read_source
@@ -410,9 +410,14 @@ def pacbio(
 
     _setup_read_config(config, "pacbio", coverage, seed, seed_config_key="pacbio_params")
     _apply_pacbio_params(
-        config, model_type, model_file, seed,
+        config,
+        model_type,
+        model_file,
+        seed,
         threads=threads if threads != 4 else None,
-        pass_num=pass_num, min_passes=min_passes, min_rq=min_rq,
+        pass_num=pass_num,
+        min_passes=min_passes,
+        min_rq=min_rq,
     )
 
     _run_batch_simulation(

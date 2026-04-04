@@ -38,18 +38,16 @@ from .wrappers.nanosim_wrapper import (
 )
 
 
-def _resolve_simulation_mode(
-    input_fa: str, ns_params: dict[str, Any]
-) -> tuple[bool, float]:
+def _resolve_simulation_mode(input_fa: str, ns_params: dict[str, Any]) -> tuple[bool, float, bool]:
     """Decide simulation mode and effective correction factor.
 
     Returns:
-        (use_split_simulation, correction_factor)
+        (use_split_simulation, correction_factor, is_diploid)
     """
     is_diploid = is_diploid_reference(input_fa)
     enable_split = ns_params.get("enable_split_simulation", True)
     correction_factor = ns_params.get("correction_factor", 0.325)
-    return (is_diploid and enable_split, correction_factor)
+    return (is_diploid and enable_split, correction_factor, is_diploid)
 
 
 def simulate_ont_reads_pipeline(
@@ -174,9 +172,11 @@ def simulate_ont_reads_pipeline(
     output_prefix = str(output_dir_path / output_base)
 
     # Determine simulation mode
-    use_split_simulation, correction_factor = _resolve_simulation_mode(input_fa, ns_params)
+    use_split_simulation, correction_factor, is_diploid = _resolve_simulation_mode(
+        input_fa, ns_params
+    )
 
-    if is_diploid_reference(input_fa):
+    if is_diploid:
         logging.info("=" * 70)
         logging.info("DIPLOID REFERENCE DETECTED")
         logging.info("=" * 70)
