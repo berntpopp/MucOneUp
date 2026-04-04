@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "muc_one_up"
-version = "0.38.0"
+version = "0.39.0"
 description = "MucOneUp: a tool to simulate MUC1 VNTR diploid references"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -163,6 +163,10 @@ disallow_untyped_defs = false
 module = "muc_one_up.bioinformatics.validation"
 warn_unreachable = false  # False positive with regex pattern matching
 
+[[tool.mypy.overrides]]
+module = "rfc8785.*"
+ignore_missing_imports = true
+
 # ==================== PYTEST ====================
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -180,15 +184,16 @@ addopts = [
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",
     "integration: marks tests as integration tests (slower, multiple components)",
-    "slow: marks tests as slow (> 1 second)",
+    "slow: marks tests as slow-running (> 1 second)",
     "cli: marks tests as CLI interface tests",
     "bioinformatics: marks tests as bioinformatics-specific (sequence validation, etc.)",
-    "requires_tools: marks tests requiring external tools (samtools, bwa, etc.)",
+    "requires_tools: marks tests that require specific external tools to be available",
 ]
 
 # ==================== COVERAGE ====================
 [tool.coverage.run]
 source = ["muc_one_up"]
+branch = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",

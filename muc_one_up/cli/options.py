@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
+
+import click
 
 
 @dataclass
@@ -80,3 +83,55 @@ class SimulationOptions:
             random_snp_haplotypes=kwargs["random_snp_haplotypes"],
             track_read_source=kwargs.get("track_read_source", False),
         )
+
+
+def shared_read_options(func: Any) -> Any:
+    """Apply common Click options shared across all read simulation subcommands.
+
+    Adds: input_fastas argument, --out-dir, --out-base, --coverage, --seed,
+    --track-read-source.
+
+    Options are applied in reverse display order so that after Click's
+    internal reversal the help text shows them as:
+    --out-dir, --out-base, --coverage, --seed, --track-read-source.
+
+    Command-specific options stacked above this decorator will appear
+    before the shared options in ``--help`` output.
+    """
+    func = click.option(
+        "--track-read-source",
+        is_flag=True,
+        default=False,
+        help="Generate read source tracking manifest and coordinate map alongside simulated reads.",
+    )(func)
+    func = click.option(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for reproducibility (same seed = identical reads).",
+    )(func)
+    func = click.option(
+        "--coverage",
+        type=int,
+        default=None,
+        help="Target sequencing coverage (overrides config if provided, defaults to config value or 30x).",
+    )(func)
+    func = click.option(
+        "--out-base",
+        default=None,
+        help="Base name for output files (auto-generated if processing multiple files).",
+    )(func)
+    func = click.option(
+        "--out-dir",
+        default=".",
+        show_default=True,
+        type=click.Path(file_okay=False),
+        help="Output folder.",
+    )(func)
+    func = click.argument(
+        "input_fastas",
+        nargs=-1,
+        required=True,
+        type=click.Path(exists=True, dir_okay=False),
+    )(func)
+    return func
