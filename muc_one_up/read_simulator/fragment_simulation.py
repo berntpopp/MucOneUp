@@ -204,12 +204,14 @@ def read_psl_file(psl_file: str) -> list[tuple[str, int, int, str]]:
 
 def pick_on_match(
     matches: list[tuple[str, int, int, str]],
+    rng: random.Random | None = None,
 ) -> tuple[str, int, int, str]:
     """
     Randomly pick one match from the provided list.
 
     Args:
         matches: List of match tuples.
+        rng: Optional Random instance for reproducibility.
 
     Returns:
         A single match tuple.
@@ -220,10 +222,12 @@ def pick_on_match(
     if not matches:
         raise ValueError("No matches provided to pick from")
 
-    return random.choice(matches)
+    return (rng or random).choice(matches)
 
 
-def get_insert_length(mu: float, sigma: float, lower: int) -> int:
+def get_insert_length(
+    mu: float, sigma: float, lower: int, rng: random.Random | None = None
+) -> int:
     """
     Return an insert length sampled from a Gaussian distribution (>= lower).
 
@@ -231,18 +235,23 @@ def get_insert_length(mu: float, sigma: float, lower: int) -> int:
         mu: Mean insert length.
         sigma: Standard deviation.
         lower: Minimum allowed length.
+        rng: Optional Random instance for reproducibility.
 
     Returns:
         Integer insert length.
     """
+    _rng = rng or random
     while True:
-        length = int(random.gauss(mu, sigma))
+        length = int(_rng.gauss(mu, sigma))
         if length >= lower:
             return length
 
 
 def pick_fragment(
-    match: tuple[str, int, int, str], ins: int, bind: float
+    match: tuple[str, int, int, str],
+    ins: int,
+    bind: float,
+    rng: random.Random | None = None,
 ) -> tuple[str, int, int, str]:
     """
     Randomly pick a fragment based on a match and desired insert length.
@@ -251,6 +260,7 @@ def pick_fragment(
         match: Tuple (chrom, probe_start, probe_end, strand).
         ins: Desired insert length.
         bind: Minimum fraction (%) for overlap.
+        rng: Optional Random instance for reproducibility.
 
     Returns:
         Tuple (chrom, fragment_start, fragment_end, strand).
@@ -265,7 +275,7 @@ def pick_fragment(
     space = ins + plen - min_overlap
 
     # Pick a random offset within the available space
-    offset = random.randint(0, space)
+    offset = (rng or random).randint(0, space)
 
     # Calculate fragment boundaries
     f_start = mstart - offset
@@ -325,9 +335,9 @@ def simulate_fragments(
     Raises:
         SystemExit: If the simulation fails or produces invalid output.
     """
-    # Initialize random seed for reproducibility if provided
+    # Create local RNG for reproducibility if seed provided
+    rng = random.Random(seed) if seed is not None else None
     if seed is not None:
-        random.seed(seed)
         logging.info(f"Fragment simulation using random seed: {seed}")
 
     logging.info("Starting fragment simulation (ported w-Wessim2 logic)...")
@@ -377,13 +387,13 @@ def simulate_fragments(
         with Path(output_fragments).open("w") as fout:
             for i in range(read_number):
                 # Pick a random match from the PSL file
-                match = pick_on_match(matches)
+                match = pick_on_match(matches, rng=rng)
 
                 # Determine fragment length from Gaussian distribution
-                ins = get_insert_length(fragment_size, fragment_sd, min_fragment)
+                ins = get_insert_length(fragment_size, fragment_sd, min_fragment, rng=rng)
 
                 # Pick a fragment location
-                fragment = pick_fragment(match, ins, bind)
+                fragment = pick_fragment(match, ins, bind, rng=rng)
 
                 chrom, fstart, fend, strand = fragment
 
