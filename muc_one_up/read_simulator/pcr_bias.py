@@ -25,7 +25,7 @@ from .constants import DEFAULT_PCR_PRESET, VALID_PCR_PRESETS
 _PRESETS: dict[str, dict[str, Any]] = {
     "default": {
         "e_max": 0.95,
-        "alpha": 0.00035,
+        "alpha": 0.00005,
         "cycles": 25,
         "denaturation_time": 10.0,
         "stochastic": False,

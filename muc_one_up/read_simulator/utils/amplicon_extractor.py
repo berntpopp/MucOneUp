@@ -117,6 +117,14 @@ class AmpliconExtractor:
 
         # Extract amplicon: from forward primer start to reverse primer end (inclusive)
         amplicon_end = rev_pos + len(self._reverse_primer_rc)
+
+        # Validate primer orientation
+        if fwd_pos >= amplicon_end:
+            raise AmpliconExtractionError(
+                f"Forward primer at position {fwd_pos} is downstream of reverse primer "
+                f"at position {rev_pos} in {seq_id}. Check primer orientation."
+            )
+
         amplicon_seq = template[fwd_pos:amplicon_end]
         amplicon_len = len(amplicon_seq)
 
