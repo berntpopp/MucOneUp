@@ -326,6 +326,140 @@ def run_pbsim3_simulation(
     return output_bams
 
 
+def run_pbsim3_template_simulation(
+    pbsim3_cmd: str,
+    samtools_cmd: str,
+    template_fasta: str,
+    model_type: str,
+    model_file: str,
+    output_prefix: str,
+    pass_num: int = DEFAULT_PBSIM3_PASS_NUM,
+    accuracy_mean: float = DEFAULT_PBSIM3_ACCURACY_MEAN,
+    seed: int | None = None,
+    timeout: int = DEFAULT_PBSIM3_TIMEOUT,
+) -> list[str]:
+    """Simulate reads using PBSIM3 template mode.
+
+    In template mode, PBSIM3 produces one read per FASTA record in the
+    template file. Reads span the full length of each template sequence
+    with realistic error profiles applied.
+
+    Args:
+        pbsim3_cmd: Path to the pbsim3 executable.
+        samtools_cmd: Path to samtools executable (for SAM->BAM conversion).
+        template_fasta: Path to template FASTA (N records = N reads).
+        model_type: Simulation model type ("qshmm" or "errhmm").
+        model_file: Path to pbsim3 model file.
+        output_prefix: Prefix for output files.
+        pass_num: Number of passes per molecule (>=2 for HiFi).
+        accuracy_mean: Mean per-base accuracy before consensus.
+        seed: Random seed for reproducibility.
+        timeout: Timeout in seconds.
+
+    Returns:
+        List of paths to output BAM files.
+
+    Raises:
+        FileOperationError: If model file or template doesn't exist,
+            or if model type is invalid.
+    """
+    # Validate model type
+    if model_type not in VALID_PBSIM3_MODEL_TYPES:
+        valid_types = ", ".join(sorted(VALID_PBSIM3_MODEL_TYPES))
+        raise FileOperationError(
+            f"Invalid pbsim3 model type: '{model_type}'. Valid options: {valid_types}"
+        )
+
+    # Validate files exist
+    model_file_path = Path(model_file)
+    if not model_file_path.exists():
+        raise FileOperationError(f"pbsim3 model file not found: {model_file}")
+
+    template_path = Path(template_fasta)
+    if not template_path.exists():
+        raise FileOperationError(f"Template FASTA file not found: {template_fasta}")
+
+    # Build command — template mode uses different flags than WGS
+    cmd_args = [
+        "--strategy",
+        "templ",
+        "--method",
+        model_type,
+        "--qshmm" if model_type == "qshmm" else "--errhmm",
+        model_file,
+        "--template",
+        template_fasta,
+        "--pass-num",
+        pass_num,
+        "--accuracy-mean",
+        accuracy_mean,
+        "--prefix",
+        output_prefix,
+    ]
+
+    if seed is not None:
+        cmd_args.extend(["--seed", seed])
+
+    cmd = build_tool_command(pbsim3_cmd, *cmd_args)
+
+    logging.info("Running pbsim3 template mode simulation:")
+    logging.info("  Template: %s", template_fasta)
+    logging.info("  Model: %s (%s)", model_type, model_file)
+    logging.info("  Pass number: %d", pass_num)
+    logging.info("  Accuracy mean: %.2f", accuracy_mean)
+    if seed is not None:
+        logging.info("  Seed: %d", seed)
+
+    run_command(cmd, timeout=timeout, stderr_prefix="[pbsim3-templ] ", stderr_log_level=logging.INFO)
+
+    # Handle output files (same logic as WGS mode)
+    output_prefix_path = Path(output_prefix)
+    multi_bam_pattern = f"{output_prefix_path.name}_*.bam"
+    multi_bam_files = sorted(
+        str(p) for p in output_prefix_path.parent.glob(multi_bam_pattern)
+    )
+
+    output_bams: list[str] = []
+
+    if multi_bam_files:
+        for bam_file in multi_bam_files:
+            bam_path = Path(bam_file)
+            if not bam_path.exists():
+                raise FileOperationError(f"pbsim3 output BAM {bam_file} not found")
+            if bam_path.stat().st_size == 0:
+                raise FileOperationError(f"pbsim3 produced empty BAM: {bam_file}")
+            output_bams.append(bam_file)
+    else:
+        output_bam = f"{output_prefix}.bam"
+        output_sam = f"{output_prefix}.sam"
+
+        if Path(output_sam).exists() and not Path(output_bam).exists():
+            convert_sam_to_bam(
+                samtools_cmd=samtools_cmd,
+                input_sam=output_sam,
+                output_bam=output_bam,
+                threads=4,
+                timeout=timeout,
+            )
+            try:
+                Path(output_sam).unlink()
+            except Exception as e:
+                logging.warning("Could not remove SAM file %s: %s", output_sam, e)
+
+        if not Path(output_bam).exists():
+            raise FileOperationError(
+                f"pbsim3 template simulation failed: Expected output {output_bam} not found."
+            )
+        if Path(output_bam).stat().st_size == 0:
+            raise FileOperationError(f"pbsim3 produced empty BAM: {output_bam}")
+        output_bams.append(output_bam)
+
+    logging.info(
+        "pbsim3 template simulation complete: %d BAM file(s)", len(output_bams)
+    )
+    return output_bams
+
+
 def validate_pbsim3_parameters(
     coverage: float,
     pass_num: int,
