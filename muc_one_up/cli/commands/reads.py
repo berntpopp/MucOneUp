@@ -10,6 +10,7 @@ import click
 
 from .._common import require_config
 from ..error_handling import cli_error_handler
+from ..options import shared_read_options
 
 # ============================================================================
 # Shared batch helper
@@ -103,6 +104,38 @@ def _run_batch_simulation(
     logging.info("%s read simulation completed for all %d file(s).", simulator_label, total_files)
 
 
+def _setup_read_config(
+    config: dict[str, Any],
+    simulator_type: str,
+    coverage: int | None,
+    seed: int | None,
+    seed_config_key: str = "read_simulation",
+) -> None:
+    """Initialize read_simulation config section with shared defaults.
+
+    Args:
+        config: Full configuration dict (mutated in place)
+        simulator_type: One of "illumina", "ont", "pacbio"
+        coverage: CLI --coverage value (None if not provided)
+        seed: CLI --seed value (None if not provided)
+        seed_config_key: Config section to store seed in
+    """
+    if "read_simulation" not in config:
+        config["read_simulation"] = {}
+    config["read_simulation"]["simulator"] = simulator_type
+
+    if coverage is not None:
+        config["read_simulation"]["coverage"] = coverage
+    elif "coverage" not in config.get("read_simulation", {}):
+        config["read_simulation"]["coverage"] = 30
+
+    if seed is not None:
+        if seed_config_key not in config:
+            config[seed_config_key] = {}
+        config[seed_config_key]["seed"] = seed
+        logging.info(f"Using random seed: {seed} (results will be reproducible)")
+
+
 # ============================================================================
 # READS Command Group - Pure Read Simulation Utilities
 # ============================================================================
@@ -120,27 +153,6 @@ def reads():
 
 
 @reads.command()
-@click.argument(
-    "input_fastas", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False)
-)
-@click.option(
-    "--out-dir",
-    default=".",
-    show_default=True,
-    type=click.Path(file_okay=False),
-    help="Output folder.",
-)
-@click.option(
-    "--out-base",
-    default=None,
-    help="Base name for output files (auto-generated if processing multiple files).",
-)
-@click.option(
-    "--coverage",
-    type=int,
-    default=None,
-    help="Target sequencing coverage (overrides config if provided, defaults to config value or 30x).",
-)
 @click.option(
     "--threads",
     type=int,
@@ -148,18 +160,7 @@ def reads():
     show_default=True,
     help="Number of threads.",
 )
-@click.option(
-    "--seed",
-    type=int,
-    default=None,
-    help="Random seed for reproducibility (same seed = identical reads).",
-)
-@click.option(
-    "--track-read-source",
-    is_flag=True,
-    default=False,
-    help="Generate read source tracking manifest and coordinate map alongside simulated reads.",
-)
+@shared_read_options
 @click.pass_context
 @cli_error_handler
 def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, track_read_source):
@@ -192,22 +193,8 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
     from ...config import load_config_raw
 
     config = load_config_raw(str(ctx.obj["config_path"]))
-
-    # Configure Illumina simulation
-    if "read_simulation" not in config:
-        config["read_simulation"] = {}
-    config["read_simulation"]["simulator"] = "illumina"
-
-    if coverage is not None:
-        config["read_simulation"]["coverage"] = coverage
-    elif "coverage" not in config.get("read_simulation", {}):
-        config["read_simulation"]["coverage"] = 30
-
+    _setup_read_config(config, "illumina", coverage, seed)
     config["read_simulation"]["threads"] = threads
-
-    if seed is not None:
-        config["read_simulation"]["seed"] = seed
-        logging.info(f"Using random seed: {seed} (results will be reproducible)")
 
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_reads", "Illumina", track_read_source
@@ -215,27 +202,6 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
 
 
 @reads.command()
-@click.argument(
-    "input_fastas", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False)
-)
-@click.option(
-    "--out-dir",
-    default=".",
-    show_default=True,
-    type=click.Path(file_okay=False),
-    help="Output folder.",
-)
-@click.option(
-    "--out-base",
-    default=None,
-    help="Base name for output files (auto-generated if processing multiple files).",
-)
-@click.option(
-    "--coverage",
-    type=int,
-    default=None,
-    help="Target coverage (overrides config if provided, defaults to config value or 30x).",
-)
 @click.option(
     "--min-read-length",
     type=int,
@@ -243,18 +209,7 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
     show_default=True,
     help="Minimum read length.",
 )
-@click.option(
-    "--seed",
-    type=int,
-    default=None,
-    help="Random seed for reproducibility (same seed = identical reads).",
-)
-@click.option(
-    "--track-read-source",
-    is_flag=True,
-    default=False,
-    help="Generate read source tracking manifest and coordinate map alongside simulated reads.",
-)
+@shared_read_options
 @click.pass_context
 @cli_error_handler
 def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, track_read_source):
@@ -284,24 +239,11 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     from ...config import load_config_raw
 
     config = load_config_raw(str(ctx.obj["config_path"]))
-
-    # Configure ONT simulation
-    if "read_simulation" not in config:
-        config["read_simulation"] = {}
-    config["read_simulation"]["simulator"] = "ont"
-
-    if coverage is not None:
-        config["read_simulation"]["coverage"] = coverage
-    elif "coverage" not in config.get("read_simulation", {}):
-        config["read_simulation"]["coverage"] = 30
+    _setup_read_config(config, "ont", coverage, seed, seed_config_key="nanosim_params")
 
     if "nanosim_params" not in config:
         config["nanosim_params"] = {}
     config["nanosim_params"]["min_len"] = min_read_length
-
-    if seed is not None:
-        config["nanosim_params"]["seed"] = seed
-        logging.info(f"Using random seed: {seed} (results will be reproducible)")
 
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_ont_reads", "ONT", track_read_source
@@ -309,57 +251,6 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
 
 
 @reads.command()
-@click.argument(
-    "input_fastas", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False)
-)
-@click.option(
-    "--out-dir",
-    default=".",
-    show_default=True,
-    type=click.Path(file_okay=False),
-    help="Output folder.",
-)
-@click.option(
-    "--out-base",
-    default=None,
-    help="Base name for output files (auto-generated if processing multiple files).",
-)
-@click.option(
-    "--coverage",
-    type=int,
-    default=None,
-    help="Target coverage (overrides config if provided).",
-)
-@click.option(
-    "--pass-num",
-    type=int,
-    default=None,
-    help="Number of passes per molecule for multi-pass CLR simulation (>=2, overrides config if provided).",
-)
-@click.option(
-    "--min-passes",
-    type=int,
-    default=None,
-    help="Minimum passes required for CCS HiFi consensus (>=1, overrides config if provided).",
-)
-@click.option(
-    "--min-rq",
-    type=float,
-    default=None,
-    help="Minimum predicted read quality (RQ) score (0.0-1.0). 0.99=Q20 (standard HiFi), 0.999=Q30.",
-)
-@click.option(
-    "--model-type",
-    type=click.Choice(["qshmm", "errhmm"]),
-    default=None,
-    help="pbsim3 model type (overrides config if provided).",
-)
-@click.option(
-    "--model-file",
-    type=click.Path(exists=True, dir_okay=False),
-    default=None,
-    help="Path to pbsim3 model file (overrides config if provided).",
-)
 @click.option(
     "--threads",
     type=int,
@@ -368,17 +259,36 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     help="Number of threads.",
 )
 @click.option(
-    "--seed",
-    type=int,
+    "--model-file",
+    type=click.Path(exists=True, dir_okay=False),
     default=None,
-    help="Random seed for reproducibility (same seed = identical reads).",
+    help="Path to pbsim3 model file (overrides config if provided).",
 )
 @click.option(
-    "--track-read-source",
-    is_flag=True,
-    default=False,
-    help="Generate read source tracking manifest and coordinate map alongside simulated reads.",
+    "--model-type",
+    type=click.Choice(["qshmm", "errhmm"]),
+    default=None,
+    help="pbsim3 model type (overrides config if provided).",
 )
+@click.option(
+    "--min-rq",
+    type=float,
+    default=None,
+    help="Minimum predicted read quality (RQ) score (0.0-1.0). 0.99=Q20 (standard HiFi), 0.999=Q30.",
+)
+@click.option(
+    "--min-passes",
+    type=int,
+    default=None,
+    help="Minimum passes required for CCS HiFi consensus (>=1, overrides config if provided).",
+)
+@click.option(
+    "--pass-num",
+    type=int,
+    default=None,
+    help="Number of passes per molecule for multi-pass CLR simulation (>=2, overrides config if provided).",
+)
+@shared_read_options
 @click.pass_context
 @cli_error_handler
 def pacbio(
