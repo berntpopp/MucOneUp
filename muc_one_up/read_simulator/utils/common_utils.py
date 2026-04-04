@@ -226,9 +226,11 @@ def run_command(
     stdout_thread.start()
     stderr_thread.start()
 
+    timed_out = False
     try:
         popen_proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
+        timed_out = True
         logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
         try:
             os.killpg(os.getpgid(popen_proc.pid), signal.SIGTERM)  # Unix only
@@ -238,20 +240,21 @@ def run_command(
     stdout_thread.join()
     stderr_thread.join()
 
-    if popen_proc.returncode != 0:
-        # Check if this is a timeout-related exit code (-15 is typical for SIGTERM)
-        if timeout is not None and popen_proc.returncode == -15:
+    if timed_out or popen_proc.returncode != 0:
+        if timed_out:
             logging.info("Command terminated due to timeout (%d seconds): %s", timeout, cmd_str)
+            stderr_msg = f"Command timed out after {timeout}s"
         else:
             logging.error(
                 "Command exited with non-zero exit code %d: %s",
                 popen_proc.returncode,
                 cmd_str,
             )
+            stderr_msg = f"Command failed with exit code {popen_proc.returncode}"
         raise ExternalToolError(
             tool="command",
             exit_code=popen_proc.returncode,
-            stderr="Command failed",
+            stderr=stderr_msg,
             cmd=cmd_str,
         )
     return RunResult(
