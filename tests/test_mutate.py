@@ -339,3 +339,62 @@ class TestMutateErrorConditions:
         # Third repeat should be marked
         assert hr.chain[2].symbol == "B"
         assert hr.chain[2].mutated is True
+
+
+class TestMutationAliasing:
+    """Prove that apply_mutations does not mutate caller-owned data."""
+
+    def test_original_results_not_mutated(self, mutation_config):
+        """Caller's results list and HaplotypeResult objects must be untouched."""
+        original_chain = [RepeatUnit("X")]
+        original_seq = "TTTTXXXXXGGGG"
+        results = [HaplotypeResult(sequence=original_seq, chain=original_chain)]
+
+        # Snapshot before mutation
+        chain_before = [RepeatUnit(ru.symbol, ru.mutated) for ru in original_chain]
+        seq_before = original_seq
+
+        _updated, _ = apply_mutations(
+            config=mutation_config,
+            results=results,
+            mutation_name="testMut",
+            targets=[MutationTarget(1, 1)],
+        )
+
+        # Caller's objects must be completely unchanged
+        assert results[0].sequence == seq_before
+        assert len(results[0].chain) == len(chain_before)
+        for orig, before in zip(results[0].chain, chain_before, strict=True):
+            assert orig.symbol == before.symbol
+            assert orig.mutated == before.mutated
+
+    def test_chain_objects_not_shared(self, mutation_config):
+        """Updated chain list must be a different object from the original."""
+        original_chain = [RepeatUnit("X")]
+        results = [HaplotypeResult(sequence="TTTTXXXXXGGGG", chain=original_chain)]
+
+        updated, _ = apply_mutations(
+            config=mutation_config,
+            results=results,
+            mutation_name="testMut",
+            targets=[MutationTarget(1, 1)],
+        )
+
+        # The chain list in updated must be a different object
+        assert updated[0].chain is not results[0].chain
+
+    def test_forced_change_does_not_alias(self, mutation_config):
+        """Even the forced-change path (non-strict, wrong symbol) must not alias."""
+        original_chain = [RepeatUnit("C")]
+        results = [HaplotypeResult(sequence="TTTTCCCCC", chain=original_chain)]
+
+        _updated, _ = apply_mutations(
+            config=mutation_config,
+            results=results,
+            mutation_name="testMut",
+            targets=[MutationTarget(1, 1)],
+        )
+
+        # Original chain must still be "C", not mutated
+        assert results[0].chain[0].symbol == "C"
+        assert results[0].chain[0].mutated is False

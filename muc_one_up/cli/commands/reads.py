@@ -293,6 +293,12 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     if "nanosim_params" not in config:
         config["nanosim_params"] = {}
     config["nanosim_params"]["min_read_length"] = min_read_length
+    # Propagate CLI coverage to nanosim_params where the ONT backend reads it.
+    # Only overwrite if CLI provided a value or config lacks ONT-specific coverage.
+    if coverage is not None:
+        config["nanosim_params"]["coverage"] = coverage
+    elif "coverage" not in config["nanosim_params"]:
+        config["nanosim_params"]["coverage"] = config["read_simulation"]["coverage"]
 
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_ont_reads", "ONT", track_read_source

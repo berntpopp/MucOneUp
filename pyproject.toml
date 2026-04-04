@@ -164,7 +164,7 @@ module = "muc_one_up.bioinformatics.validation"
 warn_unreachable = false  # False positive with regex pattern matching
 
 [[tool.mypy.overrides]]
-module = "rfc8785.*"
+module = "rfc8785"
 ignore_missing_imports = true
 
 # ==================== PYTEST ====================

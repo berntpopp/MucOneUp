@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...exceptions import ExternalToolError, FileOperationError
+from ...exceptions import FileOperationError
 from ..command_utils import build_tool_command
 from ..utils import run_command, run_pipeline
 
@@ -258,19 +258,15 @@ def convert_bam_to_paired_fastq(
         samtools fastq: http://www.htslib.org/doc/samtools-fastq.html
     """
     import shlex
-    import subprocess
 
     opts = options or FastqConversionOptions()
 
-    # Normalize samtools_cmd into both string and list forms:
-    # - String form: used for conda wrapper detection and shell commands
-    # - List form: used for subprocess.Popen (preserves token boundaries)
+    # Normalize samtools_cmd into list form for subprocess.Popen.
+    # shlex.split handles multi-word commands (e.g., "mamba run -n env samtools").
     if isinstance(samtools_cmd, str):
-        samtools_cmd_str = samtools_cmd
         samtools_cmd_list = shlex.split(samtools_cmd)
     else:
         samtools_cmd_list = list(samtools_cmd)
-        samtools_cmd_str = shlex.join(samtools_cmd_list)
 
     # ========== VALIDATION: Input BAM ==========
     input_bam_path = Path(input_bam)
@@ -290,18 +286,15 @@ def convert_bam_to_paired_fastq(
     output_fq2_path.parent.mkdir(parents=True, exist_ok=True)
 
     # ========== COMMAND CONSTRUCTION ==========
-    # Detect if samtools_cmd uses conda/mamba wrapping
-    use_conda_wrapper = "mamba run" in samtools_cmd_str or "conda run" in samtools_cmd_str
-
-    # Build singleton handling option
-    singleton_opt = ""
+    # Build singleton handling option as a list to avoid shlex.quote/split roundtrip
+    singleton_args: list[str] = []
     if opts.discard_singletons:
         if opts.output_singleton:
-            singleton_opt = f"-s {shlex.quote(str(opts.output_singleton))}"
+            singleton_args = ["-s", str(opts.output_singleton)]
         else:
-            singleton_opt = "-s /dev/null"
+            singleton_args = ["-s", "/dev/null"]
     elif opts.output_singleton:
-        singleton_opt = f"-s {shlex.quote(str(opts.output_singleton))}"
+        singleton_args = ["-s", str(opts.output_singleton)]
 
     # Build read name formatting option
     read_name_opt = "-n" if opts.preserve_read_names else "-N"
@@ -314,107 +307,51 @@ def convert_bam_to_paired_fastq(
             f"{input_bam_path.name} → {output_fq1_path.name}, {output_fq2_path.name}"
         )
 
-        if use_conda_wrapper:
-            # Use shell=True with single conda/mamba environment for piping
-            # This is required because two separate conda/mamba processes
-            # cannot communicate via pipe
-            pipe_cmd = (
-                f"samtools collate -u -O -@ {opts.threads} {shlex.quote(str(input_bam))} | "
-                f"samtools fastq "
-                f"-1 {shlex.quote(str(output_fq1))} "
-                f"-2 {shlex.quote(str(output_fq2))} "
-                f"-F 0x900 "
-                f"{singleton_opt} "
-                f"-0 /dev/null "
-                f"{read_name_opt} "
-                f"-@ {opts.threads} -"
-            )
+        # Build collate | fastq pipeline using run_pipeline.
+        # Works for both plain and conda/mamba-wrapped commands because
+        # samtools_cmd_list already includes the wrapper prefix from shlex.split().
+        collate_cmd = [
+            *samtools_cmd_list,
+            "collate",
+            "-u",  # Uncompressed output for faster piping
+            "-O",  # Output to stdout
+            "-@",
+            str(opts.threads),
+            str(input_bam),
+        ]
 
-            # Extract the mamba/conda wrapper prefix (e.g., "mamba run -n env_wessim")
-            # and use bash to run the piped command inside the environment
-            wrapper_prefix = samtools_cmd_str.rsplit("samtools", 1)[0].strip()
-            shell_cmd = f"{wrapper_prefix} bash -c {shlex.quote(pipe_cmd)}"
+        fastq_cmd = [
+            *samtools_cmd_list,
+            "fastq",
+            "-1",
+            str(output_fq1),
+            "-2",
+            str(output_fq2),
+            "-F",
+            "0x900",
+        ]
 
-            logging.debug(f"  Shell command: {shell_cmd}")
+        # Add singleton handling
+        if singleton_args:
+            fastq_cmd.extend(singleton_args)
 
-            try:
-                # shell=True is required for piping within conda/mamba environment.
-                # All user inputs are properly quoted with shlex.quote() for safety.
-                result = subprocess.run(  # nosec B602
-                    shell_cmd,
-                    shell=True,
-                    check=True,
-                    timeout=opts.timeout,
-                    capture_output=True,
-                    text=True,
-                )
+        # Add other options
+        fastq_cmd.extend(["-0", "/dev/null", read_name_opt, "-@", str(opts.threads), "-"])
 
-                # Log any warnings from samtools
-                if result.stderr:
-                    stderr_text = result.stderr.strip()
-                    if stderr_text:
-                        logging.debug(f"  Samtools stderr: {stderr_text}")
+        logging.debug("  Collate command: %s", " ".join(collate_cmd))
+        logging.debug("  Fastq command: %s", " ".join(fastq_cmd))
 
-            except subprocess.TimeoutExpired as e:
-                raise ExternalToolError(
-                    tool="samtools collate|fastq",
-                    exit_code=-1,
-                    stderr=f"Command timed out after {opts.timeout}s",
-                    cmd=shell_cmd,
-                ) from e
-            except subprocess.CalledProcessError as e:
-                raise ExternalToolError(
-                    tool="samtools collate|fastq",
-                    exit_code=e.returncode,
-                    stderr=e.stderr if e.stderr else str(e),
-                    cmd=shell_cmd,
-                ) from e
+        pipeline_result = run_pipeline(
+            [collate_cmd, fastq_cmd],
+            capture=True,
+            timeout=opts.timeout,
+        )
 
-        else:
-            # Use run_pipeline for non-wrapped commands
-
-            collate_cmd = [
-                *samtools_cmd_list,
-                "collate",
-                "-u",  # Uncompressed output for faster piping
-                "-O",  # Output to stdout
-                "-@",
-                str(opts.threads),
-                str(input_bam),
-            ]
-
-            fastq_cmd = [
-                *samtools_cmd_list,
-                "fastq",
-                "-1",
-                str(output_fq1),
-                "-2",
-                str(output_fq2),
-                "-F",
-                "0x900",
-            ]
-
-            # Add singleton handling
-            if singleton_opt:
-                fastq_cmd.extend(singleton_opt.split())
-
-            # Add other options
-            fastq_cmd.extend(["-0", "/dev/null", read_name_opt, "-@", str(opts.threads), "-"])
-
-            logging.debug(f"  Collate command: {' '.join(collate_cmd)}")
-            logging.debug(f"  Fastq command: {' '.join(fastq_cmd)}")
-
-            pipeline_result = run_pipeline(
-                [collate_cmd, fastq_cmd],
-                capture=True,
-                timeout=opts.timeout,
-            )
-
-            # Log any warnings from samtools
-            if pipeline_result.stderr:
-                stderr_text = pipeline_result.stderr.strip()
-                if stderr_text:
-                    logging.debug(f"  Samtools stderr: {stderr_text}")
+        # Log any warnings from samtools
+        if pipeline_result.stderr:
+            stderr_text = pipeline_result.stderr.strip()
+            if stderr_text:
+                logging.debug("  Samtools stderr: %s", stderr_text)
 
     else:
         # Single-step: direct fastq conversion (no collation)
@@ -437,8 +374,8 @@ def convert_bam_to_paired_fastq(
         ]
 
         # Add singleton handling
-        if singleton_opt:
-            fastq_cmd.extend(singleton_opt.split())
+        if singleton_args:
+            fastq_cmd.extend(singleton_args)
 
         # Add other options
         fastq_cmd.extend(["-0", "/dev/null", read_name_opt, "-@", str(opts.threads)])
