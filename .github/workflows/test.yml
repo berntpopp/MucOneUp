@@ -103,4 +103,4 @@ jobs:
 
       - name: Check coverage threshold
         run: |
-          pytest --cov=muc_one_up --cov-fail-under=70
+          pytest --cov=muc_one_up --cov-fail-under=75
