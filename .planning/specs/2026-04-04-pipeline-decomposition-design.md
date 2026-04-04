@@ -26,13 +26,25 @@ Based on research into Python bioinformatics best practices (Snakemake, Biopytho
 | `resolve_pipeline_outputs(input_fa, rs_config, output_config, suffix) -> tuple[Path, str, Path]` | Output dir, base name, and path resolution | All 4 pipelines (~20 LOC each) |
 | `resolve_human_reference(config, assembly_ctx) -> str` | Reference resolution with 3-path fallback + validation | Illumina, ONT |
 | `create_pipeline_metadata(output_dir, base, config, start, end, platform, tools) -> None` | Timing capture + `write_metadata_file()` call | All 4 pipelines |
-| `track_and_cleanup(intermediate_files, intermediate_bams, final_bam, keep_intermediates) -> None` | Safe cleanup that never deletes final outputs | All 4 pipelines |
+| `cleanup_intermediates(file_list) -> None` | Delete a list of intermediate files, logging failures as warnings | All 4 pipelines |
+
+**Per-pipeline cleanup policy (not shared):**
+
+Cleanup semantics differ across pipelines in ways that prevent a single abstraction:
+
+- **PacBio:** Preserves MAF files until after source tracking manifest is written, then cleans them separately. Has `try/except/finally` cleanup that runs even on pipeline failure (`pacbio_pipeline.py:488`).
+- **Amplicon:** Final output is either FASTQ or BAM depending on whether `human_reference` is set — cleanup must not delete whichever is final. Also uses `tempfile.TemporaryDirectory` for simulation workspace. Has `finally` cleanup on failure (`amplicon_pipeline.py:329`).
+- **Illumina:** Tracks intermediate files and intermediate BAMs in separate lists; must never delete the final BAM which changes identity during VNTR bias and downsampling stages.
+- **ONT:** Minimal cleanup — NanoSim handles most temp files internally.
+
+Each pipeline retains its own cleanup orchestration logic. `cleanup_intermediates()` is only the shared leaf operation (delete a file list safely).
 
 **Not shared (intentionally):**
 
 - Source tracking — each pipeline's parser is genuinely different (Illumina: fragment origins sidecar + BAM filtering; ONT: split-sim haplotype parsing; PacBio: MAF file parsing; Amplicon: not supported).
 - Core simulation stages — no behavioral overlap.
 - Assembly context construction — only Illumina uses it fully.
+- Cleanup orchestration — per-pipeline policy (see above).
 
 ## Section 2: Illumina Pipeline Decomposition
 
@@ -97,9 +109,10 @@ Lighter decomposition — extract shared utilities and break up the single large
 ### `ont_pipeline.py` (382 LOC → ~250 LOC)
 
 - Extract output resolution and metadata to `pipeline_utils.py`.
-- Extract diploid split-simulation decision logic into helper: `_resolve_simulation_mode(input_fa, config) -> tuple[bool, list[str]]` — returns whether to split-sim and the haplotype FASTA paths.
+- Extract simulation mode decision into helper: `_resolve_simulation_mode(input_fa, ns_params) -> tuple[bool, float]` — returns `(use_split_simulation, effective_correction_factor)`. Does NOT manage haplotype FASTA paths — `run_split_simulation()` handles haplotype splitting internally and returns FASTQ outputs.
 - Keep the rest inline — only 2 core stages, not worth separate modules.
 - Move late imports to function top with clear feature guards.
+- **Bug fix:** `input_basename` is undefined when `output_config is not None` (`ont_pipeline.py:162,372`). The metadata call at line 372 uses `f"{input_basename}_ont"` but that variable is only assigned in the `else` branch. Fix during refactor by deriving `output_base` consistently from `output_config` or input path at the top.
 
 ### `pacbio_pipeline.py` (495 LOC → ~350 LOC)
 
@@ -186,6 +199,24 @@ True end-to-end tests that simulate a VNTR repeat and produce BAM files from all
 
 ~2-5 minutes total (small inputs, low coverage).
 
+### Unit-Level Contract Tests (No Real Tools Required)
+
+The refactor centralizes output resolution and metadata into `pipeline_utils.py`. To catch regressions in output naming, metadata paths, and return values, add contract tests that mock at the wrapper boundary:
+
+**New test file: `tests/read_simulator/test_pipeline_contracts.py`**
+
+| Test | What it validates |
+|------|------------------|
+| `test_illumina_output_naming` | Output BAM path, R1/R2 FASTQ paths, metadata JSON path all derive correctly from `output_config` and from legacy config path |
+| `test_ont_output_naming` | Output BAM and metadata paths are consistent whether `output_config` is provided or not (regression for the `input_basename` bug at `ont_pipeline.py:162,372`) |
+| `test_pacbio_output_naming` | HiFi BAM, FASTQ, and metadata paths for both single-haplotype and diploid modes |
+| `test_amplicon_output_naming` | Final output path is correct for both FASTQ-only (no `human_reference`) and BAM (with alignment) modes |
+| `test_resolve_pipeline_outputs_*` | Unit tests for the shared `resolve_pipeline_outputs()` helper covering: `output_config` provided, legacy config path, suffix variations |
+| `test_create_pipeline_metadata_*` | Unit tests for the shared `create_pipeline_metadata()` helper covering: correct basename, timing values, platform label |
+| `test_pipeline_return_values` | All 4 pipelines return the expected path type (BAM or FASTQ) matching their mode |
+
+These tests mock all external tool calls (subprocess) and validate only the Python-level orchestration logic. They run in CI on every push.
+
 ## Section 6: File Layout
 
 ### New Files
@@ -199,6 +230,7 @@ muc_one_up/read_simulator/stages/source_manifest.py       # Illumina stage 12a
 tests/e2e/__init__.py
 tests/e2e/conftest.py                                     # Shared E2E fixtures
 tests/e2e/test_pipeline_e2e.py                            # 4 E2E tests
+tests/read_simulator/test_pipeline_contracts.py            # Output naming & contract tests
 ```
 
 ### Modified Files
@@ -225,6 +257,7 @@ pyproject.toml                                # Add e2e marker config
 2. **Scattered late imports** — moved to function top with feature guards in all pipelines.
 3. **Triple-path reference resolution** — consolidated into `resolve_human_reference()` in `pipeline_utils.py`.
 4. **CLI param duplication** — PacBio/Amplicon share `_apply_pacbio_params()`.
+5. **ONT `input_basename` undefined on `output_config` path** — `ont_pipeline.py:372` uses `input_basename` which is only assigned in the legacy config branch. Fixed by deriving `output_base` consistently at function top.
 
 ## Out of Scope
 
