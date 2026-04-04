@@ -27,7 +27,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Extract version and normalize repository name
       - name: Get version
@@ -45,9 +45,9 @@ jobs:
           echo "📦 Repository (lowercase): $REPO_LC"
 
       # Docker setup
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
@@ -55,7 +55,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Metadata
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@v6
         id: meta
         with:
           images: ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup
@@ -67,7 +67,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.event_name == 'release' }}
 
       # Build
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         id: build
         with:
           context: .
@@ -83,7 +83,7 @@ jobs:
       # Vulnerabilities are visible in GitHub Security tab
       # Note: ignore-unfixed=true excludes unfixable base image vulnerabilities
       - name: Run Trivy security scan
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.35.0
         if: github.event_name != 'pull_request'
         with:
           image-ref: ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup:${{ steps.version.outputs.version }}
@@ -94,7 +94,7 @@ jobs:
           ignore-unfixed: true  # Ignore vulnerabilities with no available fixes
           exit-code: 0  # Don't fail build, just report to Security tab
 
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         if: always() && github.event_name != 'pull_request'
         with:
           sarif_file: 'trivy-results.sarif'
