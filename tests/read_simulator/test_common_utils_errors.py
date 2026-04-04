@@ -165,7 +165,7 @@ class TestRunPipelineErrors:
                 ],
                 capture=True,
             )
-        assert "stage 0" in exc_info.value.stderr.lower() or exc_info.value.exit_code != 0
+        assert exc_info.value.exit_code == 1
 
     def test_second_stage_failure(self):
         """Second command fails while the first succeeds."""

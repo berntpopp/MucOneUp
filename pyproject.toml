@@ -184,8 +184,10 @@ addopts = [
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",
     "integration: marks tests as integration tests (slower, multiple components)",
+    "slow: marks tests as slow-running (> 1 second)",
     "cli: marks tests as CLI interface tests",
     "bioinformatics: marks tests as bioinformatics-specific (sequence validation, etc.)",
+    "requires_tools: marks tests that require specific external tools to be available",
 ]
 
 # ==================== COVERAGE ====================
