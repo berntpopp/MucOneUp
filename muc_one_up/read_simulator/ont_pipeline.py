@@ -168,6 +168,9 @@ def simulate_ont_reads_pipeline(
 
     # Resolve output paths (fixes input_basename bug — was undefined when output_config set)
     output_dir_path, output_base = resolve_pipeline_outputs(input_fa, rs_config, output_config)
+    # Preserve _ont suffix convention when output_config is not provided
+    if output_config is None:
+        output_base = f"{output_base}_ont"
     output_prefix = str(output_dir_path / output_base)
 
     # Determine simulation mode
