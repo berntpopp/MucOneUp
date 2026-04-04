@@ -19,23 +19,37 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .output_config import OutputConfig
 
-from ..bioinformatics.reference_validation import (
-    get_reference_path_for_assembly,
-    validate_reference_for_assembly,
-)
-from ..exceptions import FileOperationError, ValidationError
+from ..exceptions import ConfigurationError
 from .assembly_context import AssemblyContext
-from .utils import is_diploid_reference, run_split_simulation, write_metadata_file
+from .pipeline_utils import (
+    create_pipeline_metadata,
+    resolve_human_reference,
+    resolve_pipeline_outputs,
+)
+from .utils import is_diploid_reference, run_split_simulation
 from .wrappers.nanosim_wrapper import (
     align_ont_reads_with_minimap2,
     run_nanosim_simulation,
 )
+
+
+def _resolve_simulation_mode(
+    input_fa: str, ns_params: dict[str, Any]
+) -> tuple[bool, float]:
+    """Decide simulation mode and effective correction factor.
+
+    Returns:
+        (use_split_simulation, correction_factor)
+    """
+    is_diploid = is_diploid_reference(input_fa)
+    enable_split = ns_params.get("enable_split_simulation", True)
+    correction_factor = ns_params.get("correction_factor", 0.325)
+    return (is_diploid and enable_split, correction_factor)
 
 
 def simulate_ont_reads_pipeline(
@@ -149,34 +163,17 @@ def simulate_ont_reads_pipeline(
     other_options = ns_params.get("other_options", "")
     seed = ns_params.get("seed")
 
-    # New diploid split-simulation parameters
-    correction_factor = ns_params.get("correction_factor", 0.325)
-    enable_split_simulation = ns_params.get("enable_split_simulation", True)
+    # Coverage correction parameter (used in standard simulation mode)
     enable_coverage_correction = ns_params.get("enable_coverage_correction", True)
 
-    # Setup output paths.
-    # When output_config is provided, both output_dir and output_prefix are
-    # derived from that configuration (e.g., user-specified --out-base).
-    # Otherwise, outputs default to "{input_basename}_ont.*" in the input directory.
-    input_path = Path(input_fa)
-    if output_config is not None:
-        output_dir = str(output_config.out_dir)
-        output_prefix = str(output_config.out_dir / output_config.out_base)
-    else:
-        input_basename = input_path.stem
-        output_dir = rs_config.get("output_dir", str(input_path.parent))
-        output_prefix = str(Path(output_dir) / f"{input_basename}_ont")
-
-    # Create output directory if it doesn't exist
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    # Check if reference is diploid
-    is_diploid = is_diploid_reference(input_fa)
+    # Resolve output paths (fixes input_basename bug — was undefined when output_config set)
+    output_dir_path, output_base = resolve_pipeline_outputs(input_fa, rs_config, output_config)
+    output_prefix = str(output_dir_path / output_base)
 
     # Determine simulation mode
-    use_split_simulation = is_diploid and enable_split_simulation
+    use_split_simulation, correction_factor = _resolve_simulation_mode(input_fa, ns_params)
 
-    if is_diploid:
+    if is_diploid_reference(input_fa):
         logging.info("=" * 70)
         logging.info("DIPLOID REFERENCE DETECTED")
         logging.info("=" * 70)
@@ -188,7 +185,6 @@ def simulate_ont_reads_pipeline(
         logging.info("=" * 70)
     else:
         logging.info("Haploid reference detected - using standard simulation")
-        use_split_simulation = False  # Ensure split mode off for haploid
 
     # 1. Run simulation (split or standard)
     fastq_file = None
@@ -281,30 +277,13 @@ def simulate_ont_reads_pipeline(
     logging.info("2. Starting read alignment with minimap2")
     output_bam = f"{output_prefix}.bam"
 
-    # Use human_reference if provided, otherwise get from config (Issue #28)
+    # Resolve reference for alignment
     if human_reference is None:
         try:
-            # Get reference path for assembly
-            ref_path = get_reference_path_for_assembly(config, assembly_ctx.assembly_name)
-            reference_for_alignment = str(ref_path)
-
-            # Validate reference and indices for minimap2 (logs warnings automatically)
-            warnings = validate_reference_for_assembly(
-                config, assembly_ctx.assembly_name, aligner="minimap2"
+            reference_for_alignment = resolve_human_reference(
+                config, assembly_ctx, aligner="minimap2"
             )
-
-            logging.info(
-                "Using reference from config: %s (%s)",
-                reference_for_alignment,
-                assembly_ctx.assembly_name,
-            )
-
-            # Log index warnings if any
-            if warnings:
-                for warning in warnings:
-                    logging.warning("%s", warning)
-        except (ValidationError, FileOperationError) as e:
-            logging.warning("Could not load reference from config: %s", e)
+        except ConfigurationError:
             logging.warning("Falling back to aligning against simulated reference")
             reference_for_alignment = input_fa
     else:
@@ -367,10 +346,10 @@ def simulate_ont_reads_pipeline(
         source_tracker.write_manifest(annotated, manifest_path)
         logging.info("Read source manifest written: %s (%d reads)", manifest_path, len(annotated))
 
-    # Write metadata file with tool versions and provenance
-    metadata_file = write_metadata_file(
-        output_dir=output_dir,
-        output_base=f"{input_basename}_ont",
+    # Write metadata file
+    metadata_file = create_pipeline_metadata(
+        output_dir=output_dir_path,
+        output_base=output_base,
         config=config,
         start_time=start_time,
         end_time=end_time,
