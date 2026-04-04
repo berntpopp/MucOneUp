@@ -184,6 +184,13 @@ def simulate_diploid(
     Generates the specified number of haplotypes, either with fixed repeat lengths
     or by sampling from the configured length distribution.
 
+    Config sections accessed:
+        - config["length_model"]: repeat count distribution parameters
+        - config["probabilities"]: state transition weights
+        - config["repeats"]: repeat symbol to DNA sequence mapping
+        - config["constants"][assembly]: flanking constant sequences
+        - config["reference_assembly"]: assembly name (default: "hg38")
+
     Args:
         config: Configuration dictionary with repeats, probabilities, and length model
         num_haplotypes: Number of haplotypes to simulate (default: 2 for diploid)
@@ -226,6 +233,12 @@ def simulate_single_haplotype(
 
     Chains repeats according to configured probabilities to reach target length.
     Enforces canonical terminal block: 6/6p -> 7 -> 8 -> 9 at the end.
+
+    Config sections accessed:
+        - config["probabilities"]: state transition weights
+        - config["repeats"]: repeat symbol to DNA sequence mapping
+        - config["constants"][assembly]: flanking constant sequences
+        - config["reference_assembly"]: assembly name (default: "hg38")
 
     Args:
         config: Configuration with repeats, probabilities, and constants
