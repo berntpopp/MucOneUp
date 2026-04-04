@@ -189,6 +189,7 @@ markers = [
 # ==================== COVERAGE ====================
 [tool.coverage.run]
 source = ["muc_one_up"]
+branch = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
