@@ -12,6 +12,7 @@ Amplicon pipeline entry-points:
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -164,7 +165,7 @@ def create_pipeline_metadata(
     )
 
 
-def cleanup_intermediates(file_list: list[str | None]) -> None:
+def cleanup_intermediates(file_list: Sequence[str | None]) -> None:
     """Remove intermediate files, silently skipping missing or null entries.
 
     Entries that are ``None`` or the empty string are skipped without logging.

@@ -102,7 +102,7 @@ class TestPacBioHiFiPipeline:
         mock_align.side_effect = create_aligned_bam
 
         # Mock cleanup
-        mock_cleanup = mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_files")
+        mock_cleanup = mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
 
         # Act
         result = simulate_pacbio_hifi_reads(
@@ -201,7 +201,7 @@ class TestPacBioHiFiPipeline:
             "muc_one_up.read_simulator.pacbio_pipeline.align_reads_with_minimap2"
         )
 
-        mock_cleanup = mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_files")
+        mock_cleanup = mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
 
         # Act - No human_reference provided
         result = simulate_pacbio_hifi_reads(
@@ -325,7 +325,7 @@ class TestPacBioHiFiPipeline:
 
         mock_convert_fastq.side_effect = create_hifi_fastq
 
-        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_files")
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
 
         # Act
         simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
@@ -406,7 +406,7 @@ class TestPacBioHiFiPipeline:
 
         mock_convert_fastq.side_effect = create_hifi_fastq
 
-        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_files")
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
 
         # Act
         simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
