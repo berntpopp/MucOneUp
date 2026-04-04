@@ -142,7 +142,13 @@ def apply_mutations(
 
     _rng = rng if rng is not None else _random_module
 
-    updated_results = list(results)
+    updated_results = [
+        HaplotypeResult(
+            sequence=hr.sequence,
+            chain=[RepeatUnit(ru.symbol, ru.mutated) for ru in hr.chain],
+        )
+        for hr in results
+    ]
     mutated_units: dict[
         int, list[tuple[int, str]]
     ] = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
