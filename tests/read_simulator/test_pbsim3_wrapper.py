@@ -14,12 +14,14 @@ These tests verify that our wrapper correctly:
 """
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from muc_one_up.exceptions import FileOperationError
 from muc_one_up.read_simulator.wrappers.pbsim3_wrapper import (
     run_pbsim3_simulation,
+    run_pbsim3_template_simulation,
     validate_pbsim3_parameters,
 )
 
@@ -316,3 +318,93 @@ class TestValidatePbsim3Parameters:
                 length_min=20000,  # min > max!
                 length_max=10000,
             )
+
+
+class TestRunPbsim3TemplateSimulation:
+    """Tests for run_pbsim3_template_simulation()."""
+
+    def test_builds_templ_strategy_command(self, tmp_path):
+        """Verify command uses --strategy templ and --template."""
+        template_fa = tmp_path / "template.fa"
+        template_fa.write_text(">copy_001\nACGT\n>copy_002\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model data")
+
+        output_bam = tmp_path / "out.bam"
+        output_bam.write_bytes(b"BAM\x01FAKE")
+
+        with patch("muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+
+            run_pbsim3_template_simulation(
+                pbsim3_cmd="pbsim",
+                samtools_cmd="samtools",
+                template_fasta=str(template_fa),
+                model_type="qshmm",
+                model_file=str(model_file),
+                output_prefix=str(tmp_path / "out"),
+            )
+
+            cmd = mock_run.call_args[0][0]
+            assert "--strategy" in cmd
+            idx = cmd.index("--strategy")
+            assert cmd[idx + 1] == "templ"
+            assert "--template" in cmd
+            assert "--genome" not in cmd
+            assert "--depth" not in cmd
+
+    def test_rejects_invalid_model_type(self, tmp_path):
+        template_fa = tmp_path / "template.fa"
+        template_fa.write_text(">copy\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model")
+
+        with pytest.raises(FileOperationError, match="Invalid pbsim3 model type"):
+            run_pbsim3_template_simulation(
+                pbsim3_cmd="pbsim",
+                samtools_cmd="samtools",
+                template_fasta=str(template_fa),
+                model_type="invalid",
+                model_file=str(model_file),
+                output_prefix=str(tmp_path / "out"),
+            )
+
+    def test_rejects_missing_template(self, tmp_path):
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model")
+
+        with pytest.raises(FileOperationError, match=r"Template FASTA.*not found"):
+            run_pbsim3_template_simulation(
+                pbsim3_cmd="pbsim",
+                samtools_cmd="samtools",
+                template_fasta=str(tmp_path / "nonexistent.fa"),
+                model_type="qshmm",
+                model_file=str(model_file),
+                output_prefix=str(tmp_path / "out"),
+            )
+
+    def test_includes_seed_when_provided(self, tmp_path):
+        template_fa = tmp_path / "template.fa"
+        template_fa.write_text(">copy\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model")
+        output_bam = tmp_path / "out.bam"
+        output_bam.write_bytes(b"BAM\x01FAKE")
+
+        with patch("muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+
+            run_pbsim3_template_simulation(
+                pbsim3_cmd="pbsim",
+                samtools_cmd="samtools",
+                template_fasta=str(template_fa),
+                model_type="qshmm",
+                model_file=str(model_file),
+                output_prefix=str(tmp_path / "out"),
+                seed=42,
+            )
+
+            cmd = mock_run.call_args[0][0]
+            assert "--seed" in cmd
+            idx = cmd.index("--seed")
+            assert str(cmd[idx + 1]) == "42"

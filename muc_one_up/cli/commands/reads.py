@@ -398,3 +398,141 @@ def pacbio(
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_pacbio_hifi", "PacBio HiFi", track_read_source
     )
+
+
+@reads.command()
+@click.option(
+    "--model-file",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Path to pbsim3 model file (overrides config if provided).",
+)
+@click.option(
+    "--model-type",
+    type=click.Choice(["qshmm", "errhmm"]),
+    default=None,
+    help="pbsim3 model type (overrides config if provided).",
+)
+@click.option(
+    "--pcr-preset",
+    type=click.Choice(["default", "no_bias"]),
+    default=None,
+    help="PCR bias preset profile (default: from config or 'default').",
+)
+@click.option(
+    "--stochastic-pcr",
+    is_flag=True,
+    default=False,
+    help="Enable stochastic PCR bias (Galton-Watson branching process).",
+)
+@shared_read_options
+@click.pass_context
+@cli_error_handler
+def amplicon(
+    ctx,
+    input_fastas,
+    out_dir,
+    out_base,
+    coverage,
+    model_type,
+    model_file,
+    pcr_preset,
+    stochastic_pcr,
+    seed,
+    track_read_source,
+):
+    """Simulate PacBio amplicon reads from one or more FASTA files.
+
+    Produces full-length amplicon reads using PBSIM3 template mode with
+    realistic PCR length bias modeling. Extracts amplicon regions using
+    primer binding sites from config.
+
+    \b
+    Note: --coverage specifies the total number of template molecules
+    (before CCS filtering). Final HiFi read count may be lower due to
+    CCS quality filtering (min-rq, min-passes). For diploid inputs the
+    total is split between alleles by the PCR bias model.
+
+    \b
+    Pipeline:
+      1. Extract amplicon region per haplotype (primer-based)
+      2. Apply PCR length bias to determine per-allele coverage
+      3. Simulate full-length reads (pbsim3 --strategy templ)
+      4. Generate HiFi consensus (CCS)
+      5. Align to reference (minimap2 map-hifi preset)
+
+    \b
+    Examples:
+      # Basic amplicon simulation
+      muconeup --config X reads amplicon sample.simulated.fa \\
+        --model-file /models/QSHMM-SEQUEL.model
+
+      # High coverage with stochastic PCR bias
+      muconeup --config X reads amplicon sample.fa \\
+        --model-file /models/QSHMM-SEQUEL.model \\
+        --coverage 1000 --stochastic-pcr --seed 42
+
+      # No PCR bias (equal coverage per allele)
+      muconeup --config X reads amplicon sample.fa \\
+        --model-file /models/QSHMM-SEQUEL.model \\
+        --pcr-preset no_bias
+    """
+    require_config(ctx)
+
+    # Reject --track-read-source early
+    if track_read_source:
+        raise click.ClickException(
+            "Read source tracking is not yet supported for amplicon simulation. "
+            "Remove --track-read-source to proceed."
+        )
+
+    from ...config import load_config_raw
+
+    config = load_config_raw(str(ctx.obj["config_path"]))
+    _setup_read_config(config, "amplicon", coverage, seed)
+
+    # Ensure amplicon_params exists
+    if "amplicon_params" not in config:
+        raise click.ClickException(
+            "Missing amplicon_params section in config. "
+            "Add forward_primer and reverse_primer to config.json."
+        )
+
+    # Ensure pacbio_params exists
+    if "pacbio_params" not in config:
+        config["pacbio_params"] = {}
+
+    # Override PacBio params from CLI
+    if model_type is not None:
+        config["pacbio_params"]["model_type"] = model_type
+    if model_file is not None:
+        config["pacbio_params"]["model_file"] = model_file
+    if seed is not None:
+        config["pacbio_params"]["seed"] = seed
+
+    # Validate required PacBio params
+    required_params = ["model_type", "model_file"]
+    missing = [p for p in required_params if p not in config["pacbio_params"]]
+    if missing:
+        raise click.ClickException(
+            f"Missing required PacBio parameters: {', '.join(missing)}. "
+            f"Provide via CLI options or config.json pacbio_params section."
+        )
+
+    # Apply PCR bias overrides
+    if "pcr_bias" not in config["amplicon_params"]:
+        config["amplicon_params"]["pcr_bias"] = {}
+    if pcr_preset is not None:
+        config["amplicon_params"]["pcr_bias"]["preset"] = pcr_preset
+    if stochastic_pcr:
+        config["amplicon_params"]["pcr_bias"]["stochastic"] = True
+
+    _run_batch_simulation(
+        config,
+        input_fastas,
+        out_dir,
+        out_base,
+        "_amplicon",
+        "Amplicon",
+        track_read_source=False,
+    )

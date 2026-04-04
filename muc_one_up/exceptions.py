@@ -144,3 +144,13 @@ class ReadSimulationError(MucOneUpError):
         - Pipeline step failure
         - Missing required tools
     """
+
+
+class AmpliconExtractionError(MucOneUpError):
+    """Raised when amplicon extraction from a reference fails.
+
+    Examples:
+        - Primer binding site not found in haplotype
+        - Multiple ambiguous primer binding sites
+        - Extracted amplicon outside expected size range
+    """

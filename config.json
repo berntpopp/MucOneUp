@@ -530,6 +530,15 @@
     "min_rq": 0.99,
     "threads": 8
   },
+  "amplicon_params": {
+    "forward_primer": "GGAGAAAAGGAGACTTCGGCTACCCAG",
+    "reverse_primer": "GCCGTTGTGCACCAGAGTAGAAGCTGA",
+    "primer_source": "Wenzel et al. 2018 (PMID: 29520014)",
+    "expected_product_range": [1500, 6000],
+    "pcr_bias": {
+      "preset": "default"
+    }
+  },
   "read_simulation": {
     "simulator": "illumina",
     "keep_intermediate_files": false,
