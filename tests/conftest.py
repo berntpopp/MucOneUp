@@ -5,6 +5,7 @@ following DRY principles to avoid test code duplication.
 """
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -381,3 +382,22 @@ def cleanup_logging():
     for handler in root_logger.handlers[:]:
         handler.close()
         root_logger.removeHandler(handler)
+
+
+# ============================================================================
+# Marker-based tool skipping
+# ============================================================================
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip tests marked with @pytest.mark.requires_tools when tools are absent.
+
+    Usage: @pytest.mark.requires_tools("samtools", "bwa")
+    Skips the test if any named binary is not found on PATH.
+    """
+    for item in items:
+        for marker in item.iter_markers("requires_tools"):
+            for tool in marker.args:
+                if not shutil.which(tool):
+                    item.add_marker(pytest.mark.skip(reason=f"requires external tool: {tool}"))
+                    break
