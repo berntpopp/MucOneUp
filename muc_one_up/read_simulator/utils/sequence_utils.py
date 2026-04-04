@@ -22,7 +22,7 @@ def reverse_complement(seq: str) -> str:
 def find_primer_binding_sites(
     template: str,
     primer: str,
-    reverse_complement: bool = False,
+    search_reverse_complement: bool = False,
 ) -> list[int]:
     """Find all binding sites for a primer in a template sequence.
 
@@ -32,7 +32,7 @@ def find_primer_binding_sites(
     Args:
         template: Template DNA sequence.
         primer: Primer sequence (5'->3').
-        reverse_complement: If True, search for the reverse complement
+        search_reverse_complement: If True, search for the reverse complement
             of the primer instead of the primer itself.
 
     Returns:
@@ -41,8 +41,8 @@ def find_primer_binding_sites(
     template_upper = template.upper()
     search_seq = primer.upper()
 
-    if reverse_complement:
-        search_seq = search_seq.translate(_COMPLEMENT)[::-1]
+    if search_reverse_complement:
+        search_seq = reverse_complement(search_seq)
 
     sites: list[int] = []
     start = 0

@@ -170,8 +170,8 @@ class PCRSimulator:
         )
 
         # Primer is already in correct orientation (RC'd in __init__ if needed)
-        # so we search directly without reverse_complement flag
-        return find_primer_binding_sites(template, primer, reverse_complement=False)
+        # so we search directly without search_reverse_complement flag
+        return find_primer_binding_sites(template, primer, search_reverse_complement=False)
 
 
 class DigestSimulator:

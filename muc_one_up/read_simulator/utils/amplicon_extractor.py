@@ -97,7 +97,7 @@ class AmpliconExtractor:
 
         # Find reverse primer binding sites (search for RC on forward strand)
         rev_sites = find_primer_binding_sites(
-            template, self.reverse_primer, reverse_complement=True
+            template, self.reverse_primer, search_reverse_complement=True
         )
         if not rev_sites:
             raise AmpliconExtractionError(

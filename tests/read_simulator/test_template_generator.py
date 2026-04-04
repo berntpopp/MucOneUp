@@ -58,3 +58,8 @@ class TestGenerateTemplateFasta:
         output = tmp_path / "template.fa"
         with pytest.raises(ValueError, match="num_copies must be"):
             generate_template_fasta(str(amplicon_fasta), 0, str(output))
+
+    def test_negative_copies_raises(self, amplicon_fasta, tmp_path):
+        output = tmp_path / "template.fa"
+        with pytest.raises(ValueError, match="num_copies must be"):
+            generate_template_fasta(str(amplicon_fasta), -1, str(output))

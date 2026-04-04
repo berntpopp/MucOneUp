@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .output_config import OutputConfig
 
-from ..exceptions import ExternalToolError, FileOperationError
+from ..exceptions import ExternalToolError, FileOperationError, ReadSimulationError
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
 from .pcr_bias import PCRBiasModel
 from .utils import cleanup_files, write_metadata_file
@@ -65,7 +65,7 @@ def simulate_amplicon_reads_pipeline(
     """
     # Reject read-source tracking for v1
     if source_tracker is not None:
-        raise RuntimeError(
+        raise ReadSimulationError(
             "Read source tracking is not yet supported for amplicon simulation. "
             "Remove --track-read-source to proceed."
         )
@@ -181,8 +181,7 @@ def simulate_amplicon_reads_pipeline(
             for i, (amp_result, count) in enumerate(
                 zip(amplicon_results, allele_counts, strict=False), 1
             ):
-                # Write template FASTAs to output_dir so they survive the temp dir
-                template_out = str(output_dir / f"{output_base}_template_hap{i}.fa")
+                template_out = str(temp_path / f"template_hap{i}.fa")
                 generate_template_fasta(amp_result.fasta_path, count, template_out)
                 template_fastas.append(template_out)
                 logging.info(
@@ -265,24 +264,26 @@ def simulate_amplicon_reads_pipeline(
                 logging.info("Amplicon simulation complete (no alignment)")
                 logging.info("Final output: %s", hifi_fastq)
                 cleanup_files(intermediate_files)
-                return hifi_fastq
+                final_output = hifi_fastq
+            else:
+                intermediate_files.append(hifi_fastq)
 
-            intermediate_files.append(hifi_fastq)
+                logging.info("STAGE 8: Aligning with minimap2 (map-hifi)")
+                aligned_bam = str(output_dir / f"{output_base}_amplicon_aligned.bam")
+                aligned_bam = align_reads_with_minimap2(
+                    minimap2_cmd=minimap2_cmd,
+                    samtools_cmd=samtools_cmd,
+                    reference=human_reference,
+                    reads_fastq=hifi_fastq,
+                    output_bam=aligned_bam,
+                    preset=MINIMAP2_PRESET_PACBIO_HIFI,
+                    threads=threads,
+                )
 
-            logging.info("STAGE 8: Aligning with minimap2 (map-hifi)")
-            aligned_bam = str(output_dir / f"{output_base}_amplicon_aligned.bam")
-            aligned_bam = align_reads_with_minimap2(
-                minimap2_cmd=minimap2_cmd,
-                samtools_cmd=samtools_cmd,
-                reference=human_reference,
-                reads_fastq=hifi_fastq,
-                output_bam=aligned_bam,
-                preset=MINIMAP2_PRESET_PACBIO_HIFI,
-                threads=threads,
-            )
+                cleanup_files(intermediate_files)
+                final_output = aligned_bam
 
-            cleanup_files(intermediate_files)
-
+            # Write metadata and log completion for both paths
             end_time = datetime.now()
             duration = end_time - start_time
             logging.info("=" * 80)
@@ -290,7 +291,7 @@ def simulate_amplicon_reads_pipeline(
                 "Amplicon simulation complete (duration: %s)",
                 str(duration).split(".")[0],
             )
-            logging.info("Final output: %s", aligned_bam)
+            logging.info("Final output: %s", final_output)
             logging.info("=" * 80)
 
             write_metadata_file(
@@ -303,7 +304,7 @@ def simulate_amplicon_reads_pipeline(
                 tools_used=["pbsim3", "ccs", "minimap2", "samtools"],
             )
 
-            return aligned_bam
+            return final_output
 
     except (ExternalToolError, FileOperationError) as e:
         logging.error("Amplicon pipeline failed: %s", e)

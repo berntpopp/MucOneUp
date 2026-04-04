@@ -43,14 +43,14 @@ class TestFindPrimerBindingSites:
         # Primer is ACGT, RC is ACGT (palindrome)
         template = "TTTACGTAAA"
         primer = "ACGT"
-        sites = find_primer_binding_sites(template, primer, reverse_complement=True)
+        sites = find_primer_binding_sites(template, primer, search_reverse_complement=True)
         assert sites == [3]
 
     def test_reverse_complement_non_palindrome(self):
         # Primer is AAACCC, RC is GGGTTT
         template = "TTTGGGTTTAAA"
         primer = "AAACCC"
-        sites = find_primer_binding_sites(template, primer, reverse_complement=True)
+        sites = find_primer_binding_sites(template, primer, search_reverse_complement=True)
         assert sites == [3]
 
     def test_empty_template(self):

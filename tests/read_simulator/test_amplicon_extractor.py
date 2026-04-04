@@ -130,6 +130,59 @@ class TestAmpliconExtractor:
         with pytest.raises(AmpliconExtractionError, match="outside expected"):
             extractor.extract(str(fasta), str(output))
 
+    def test_multiple_reverse_sites_raises(self, tmp_path, muc1_primers):
+        """Multiple reverse primer binding sites should raise."""
+        from Bio.Seq import Seq
+
+        fwd = muc1_primers["forward"]
+        rev_rc = str(Seq(muc1_primers["reverse"]).reverse_complement())
+        sequence = fwd + "ACGT" * 100 + rev_rc + "ACGT" * 100 + rev_rc
+        fasta = tmp_path / "multi_rev.fa"
+        fasta.write_text(f">hap1\n{sequence}\n")
+        output = tmp_path / "amplicon.fa"
+
+        extractor = AmpliconExtractor(
+            forward_primer=muc1_primers["forward"],
+            reverse_primer=muc1_primers["reverse"],
+        )
+
+        with pytest.raises(AmpliconExtractionError, match="Multiple reverse primer"):
+            extractor.extract(str(fasta), str(output))
+
+    def test_reversed_primer_orientation_raises(self, tmp_path, muc1_primers):
+        """Forward primer downstream of reverse primer should raise."""
+        from Bio.Seq import Seq
+
+        # Place reverse primer RC BEFORE forward primer
+        fwd = muc1_primers["forward"]
+        rev_rc = str(Seq(muc1_primers["reverse"]).reverse_complement())
+        sequence = "NNNN" + rev_rc + "ACGT" * 100 + fwd + "NNNN"
+        fasta = tmp_path / "reversed.fa"
+        fasta.write_text(f">hap1\n{sequence}\n")
+        output = tmp_path / "amplicon.fa"
+
+        extractor = AmpliconExtractor(
+            forward_primer=muc1_primers["forward"],
+            reverse_primer=muc1_primers["reverse"],
+        )
+
+        with pytest.raises(AmpliconExtractionError, match="downstream of reverse"):
+            extractor.extract(str(fasta), str(output))
+
+    def test_empty_fasta_raises(self, tmp_path, muc1_primers):
+        """Empty FASTA should raise."""
+        fasta = tmp_path / "empty.fa"
+        fasta.write_text("")
+        output = tmp_path / "amplicon.fa"
+
+        extractor = AmpliconExtractor(
+            forward_primer=muc1_primers["forward"],
+            reverse_primer=muc1_primers["reverse"],
+        )
+
+        with pytest.raises(AmpliconExtractionError, match="No sequences found"):
+            extractor.extract(str(fasta), str(output))
+
     def test_case_insensitive_matching(self, tmp_path, muc1_primers):
         """Primers should match regardless of case in the template."""
         from Bio.Seq import Seq

@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from muc_one_up.exceptions import ReadSimulationError
 from muc_one_up.read_simulator.amplicon_pipeline import simulate_amplicon_reads_pipeline
 
 
@@ -137,10 +138,15 @@ class TestAmpliconPipelineDiploid:
         tmp_path,
     ):
         """PCR bias should give shorter allele more template copies."""
-        template_fastas = []
+        from Bio import SeqIO
+
+        template_record_counts = []
 
         def capture_template(**kwargs):
-            template_fastas.append(kwargs["template_fasta"])
+            # Read template FASTA record count during mock call
+            # (before temp dir is cleaned up)
+            count = len(list(SeqIO.parse(kwargs["template_fasta"], "fasta")))
+            template_record_counts.append(count)
             return [kwargs["output_prefix"] + ".bam"]
 
         mock_pbsim3.side_effect = capture_template
@@ -158,11 +164,9 @@ class TestAmpliconPipelineDiploid:
             human_reference=str(tmp_path / "ref.fa"),
         )
 
-        from Bio import SeqIO
-
-        counts = [len(list(SeqIO.parse(f, "fasta"))) for f in template_fastas]
-        assert counts[0] > counts[1]
-        assert sum(counts) == 100
+        # Shorter allele (hap1) should get more copies than longer (hap2)
+        assert template_record_counts[0] > template_record_counts[1]
+        assert sum(template_record_counts) == 100
 
 
 class TestAmpliconPipelineHaploid:
@@ -211,7 +215,7 @@ class TestAmpliconPipelineTrackingRejection:
         """--track-read-source should raise for amplicon mode."""
         tracker = MagicMock()
 
-        with pytest.raises(RuntimeError, match="not yet supported"):
+        with pytest.raises(ReadSimulationError, match="not yet supported"):
             simulate_amplicon_reads_pipeline(
                 config=amplicon_config,
                 input_fa=str(haploid_fasta_with_primers),
