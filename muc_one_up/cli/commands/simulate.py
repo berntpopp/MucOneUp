@@ -147,7 +147,7 @@ def simulate(ctx, **kwargs):
     # Convert Click kwargs to typed options (replaces _make_args_namespace)
     args = SimulationOptions.from_click_kwargs(ctx.obj["config_path"], kwargs)
 
-    # IMPORTANT: Disable pipeline options (simulate is PURE)
+    # simulate command generates haplotypes only — no read simulation or ORF output
     args.simulate_reads = None
     args.output_orfs = False
 
