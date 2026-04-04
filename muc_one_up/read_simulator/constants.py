@@ -180,3 +180,16 @@ MIN_ACCURACY: Final[float] = 0.0
 
 #: Maximum valid accuracy value.
 MAX_ACCURACY: Final[float] = 1.0
+
+# =============================================================================
+# Amplicon Simulation Constants
+# =============================================================================
+
+#: Default timeout for amplicon simulation pipeline (1 hour).
+DEFAULT_AMPLICON_TIMEOUT: Final[int] = 3600
+
+#: Valid PCR bias preset names.
+VALID_PCR_PRESETS: Final[set[str]] = {"default", "no_bias"}
+
+#: Default PCR bias preset.
+DEFAULT_PCR_PRESET: Final[str] = "default"
