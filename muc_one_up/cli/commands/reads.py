@@ -448,6 +448,12 @@ def amplicon(
     primer binding sites from config.
 
     \b
+    Note: --coverage specifies the total number of template molecules
+    (before CCS filtering). Final HiFi read count may be lower due to
+    CCS quality filtering (min-rq, min-passes). For diploid inputs the
+    total is split between alleles by the PCR bias model.
+
+    \b
     Pipeline:
       1. Extract amplicon region per haplotype (primer-based)
       2. Apply PCR length bias to determine per-allele coverage

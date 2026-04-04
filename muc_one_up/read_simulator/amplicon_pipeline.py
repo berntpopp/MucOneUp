@@ -163,11 +163,19 @@ def simulate_amplicon_reads_pipeline(
                     amplicon_results[1].length,
                     seed=seed,
                 )
-                allele_counts = [n1, n2]
+                # Ensure each allele gets at least 1 read
+                allele_counts = [max(1, n1), max(1, n2)]
+                # Adjust to preserve total if we bumped a zero
+                if n1 == 0 or n2 == 0:
+                    logging.warning(
+                        "PCR bias produced 0 reads for one allele at coverage=%d. "
+                        "Each allele will receive at least 1 read.",
+                        total_coverage,
+                    )
                 logging.info(
                     "  Coverage split: allele1=%d, allele2=%d (total=%d)",
-                    n1,
-                    n2,
+                    allele_counts[0],
+                    allele_counts[1],
                     total_coverage,
                 )
             else:

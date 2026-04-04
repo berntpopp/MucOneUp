@@ -29,13 +29,19 @@ def generate_template_fasta(
         Path to the output template FASTA file.
 
     Raises:
-        ValueError: If num_copies < 1.
+        ValueError: If num_copies < 1 or input FASTA doesn't contain
+            exactly one record.
     """
     if num_copies < 1:
         raise ValueError(f"num_copies must be >= 1, got {num_copies}")
 
-    # Read the amplicon sequence
+    # Read the amplicon sequence — must contain exactly one record
     records = list(SeqIO.parse(amplicon_fasta, "fasta"))
+    if len(records) != 1:
+        raise ValueError(
+            f"amplicon_fasta must contain exactly one FASTA record, "
+            f"found {len(records)}: {amplicon_fasta}"
+        )
     amplicon_seq = str(records[0].seq)
 
     # Create output directory if needed

@@ -63,3 +63,17 @@ class TestGenerateTemplateFasta:
         output = tmp_path / "template.fa"
         with pytest.raises(ValueError, match="num_copies must be"):
             generate_template_fasta(str(amplicon_fasta), -1, str(output))
+
+    def test_empty_input_fasta_raises(self, tmp_path):
+        empty_fasta = tmp_path / "empty.fa"
+        empty_fasta.write_text("")
+        output = tmp_path / "template.fa"
+        with pytest.raises(ValueError, match="exactly one FASTA record"):
+            generate_template_fasta(str(empty_fasta), 5, str(output))
+
+    def test_multi_record_input_fasta_raises(self, tmp_path):
+        multi_fasta = tmp_path / "multi.fa"
+        multi_fasta.write_text(">seq1\nACGT\n>seq2\nTGCA\n")
+        output = tmp_path / "template.fa"
+        with pytest.raises(ValueError, match="exactly one FASTA record"):
+            generate_template_fasta(str(multi_fasta), 5, str(output))
