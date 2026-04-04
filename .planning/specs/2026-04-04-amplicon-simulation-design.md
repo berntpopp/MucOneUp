@@ -12,6 +12,16 @@ The pipeline extracts amplicon regions using primer binding site detection, appl
 
 ONT support is deferred to a follow-up issue.
 
+## Config Contract
+
+The amplicon pipeline reads from two config sections with clear ownership:
+
+- **`amplicon_params`** — Owns amplicon-specific settings only: primer sequences, expected product range, PCR bias configuration. Does not contain any PBSIM3/CCS/minimap2 settings.
+- **`pacbio_params`** — Continues to own all PBSIM3, CCS, and minimap2 settings (model_type, model_file, pass_num, min_passes, min_rq, threads, etc.). The amplicon pipeline reads these exactly as the existing PacBio pipeline does.
+- **`read_simulation.simulator`** — Must be extended to accept `"amplicon"` in addition to `"illumina"`, `"ont"`, and `"pacbio"`. The config schema in `muc_one_up/config.py` must be updated accordingly.
+
+This means the amplicon CLI command writes to `amplicon_params` for amplicon-specific overrides and to `pacbio_params` for PBSIM3/CCS overrides, following the same pattern as the existing `pacbio` command.
+
 ## Pipeline Stages
 
 1. **Haplotype extraction** — Split diploid FASTA into hap1/hap2 using existing `reference_utils.extract_haplotypes()`
@@ -23,7 +33,11 @@ ONT support is deferred to a follow-up issue.
 7. **BAM merge** — Merge per-allele HiFi BAMs (existing `samtools_wrapper.merge_bam_files()`).
 8. **Alignment** — Align merged reads to human reference with minimap2 map-hifi preset (optional, skipped if no human reference).
 
-For haploid input (single sequence), stages 1 and 3 are skipped — full coverage goes to the single allele.
+**Haploid/diploid branching:** Before any extraction, the pipeline calls `is_diploid_reference()` (from `reference_utils`) to inspect sequence count. This avoids calling `extract_haplotypes()` on haploid input, which would fail by design. For diploid input (2 sequences), the full pipeline runs. For haploid input (1 sequence), stages 1 and 3 are skipped — full coverage goes to the single allele, amplicon extraction runs directly on the input FASTA.
+
+**Coverage semantics:** `--coverage` targets template molecules before CCS filtering. The pipeline generates N template copies and PBSIM3 produces N multi-pass CLR reads, but CCS filtering (min_rq, min_passes) may reduce the final HiFi read count below N. This is the honest approach — CCS yield is model-dependent and cannot be reliably predicted for oversampling. Users who need a specific final HiFi count should oversample by adjusting `--coverage` upward.
+
+**Read-source tracking:** `--track-read-source` is not supported in amplicon mode (v1). Amplicon reads are simulated from extracted subregions, so template-space coordinates do not map directly to original haplotype coordinates without remapping via primer positions. If `--track-read-source` is passed with `reads amplicon`, the CLI raises a clear error: "Read source tracking is not yet supported for amplicon simulation."
 
 ## PCR Bias Model (`pcr_bias.py`)
 
@@ -178,7 +192,8 @@ def find_primer_binding_sites(
 ) -> list[int]:
     """
     Find all binding sites for a primer in template sequence.
-    Exact string matching, case-sensitive.
+    Both template and primer are normalized to uppercase before matching.
+    Exact string matching after normalization.
     Returns list of 0-based positions.
     If reverse_complement=True, searches for RC of primer.
     """
@@ -217,7 +232,8 @@ class AmpliconExtractor:
         - Forward primer not found
         - Reverse primer not found
         - Multiple binding sites for either primer (ambiguous)
-        - Extracted region outside expected_product_range (if configured)
+        - Extracted region outside expected_product_range (if configured;
+          bounds are inclusive, e.g. [1500, 6000] means 1500 <= length <= 6000)
         """
 ```
 
@@ -249,6 +265,8 @@ def generate_template_fasta(
 
 ### Config.json Addition
 
+The amplicon pipeline requires both `amplicon_params` (amplicon-specific) and `pacbio_params` (PBSIM3/CCS settings, shared with the existing PacBio pipeline):
+
 ```json
 "amplicon_params": {
     "forward_primer": "GGAGAAAAGGAGACTTCGGCTACCCAG",
@@ -260,6 +278,8 @@ def generate_template_fasta(
     }
 }
 ```
+
+`expected_product_range` is optional. When omitted, no size validation is performed on extracted amplicons. When present, bounds are inclusive: `[min, max]` means `min <= length <= max`.
 
 PCR bias parameters can be overridden individually:
 
@@ -299,7 +319,7 @@ muconeup --config config.json reads amplicon sample.simulated.fa \
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `INPUT_FASTAS` | argument | required | One or more FASTA files |
-| `--coverage` | int | 30 | Total coverage (split by PCR bias) |
+| `--coverage` | int | 30 | Total template molecules before CCS (split by PCR bias) |
 | `--model-file` | path | from config | PBSIM3 model file |
 | `--model-type` | choice | from config | qshmm or errhmm |
 | `--pcr-preset` | choice | default | PCR bias preset name |
@@ -307,17 +327,15 @@ muconeup --config config.json reads amplicon sample.simulated.fa \
 | `--seed` | int | None | Random seed for reproducibility |
 | `--out-dir` | path | input dir | Output directory |
 | `--out-base` | str | auto | Output base name |
-| `--track-read-source` | flag | off | Enable read source tracking |
+| `--track-read-source` | flag | off | **Not supported in v1** — raises error if used |
 
-Options inherited via `@shared_read_options` decorator: `INPUT_FASTAS`, `--out-dir`, `--out-base`, `--coverage`, `--seed`, `--track-read-source`.
+Options inherited via `@shared_read_options` decorator: `INPUT_FASTAS`, `--out-dir`, `--out-base`, `--coverage`, `--seed`, `--track-read-source`. Note: `--track-read-source` is accepted by the decorator but rejected at runtime for amplicon mode with a clear error message.
 
 ### Haploid Handling
 
-If input contains a single sequence:
-- Skip haplotype extraction
-- Skip PCR bias computation (no allelic competition)
-- Full coverage allocated to the single amplicon
-- Pipeline proceeds from stage 2 (amplicon extraction)
+Detected via `is_diploid_reference()` before any extraction attempt:
+- **Haploid (1 sequence):** Skip haplotype extraction and PCR bias computation. Full coverage allocated to the single amplicon. Pipeline proceeds directly to amplicon extraction.
+- **Diploid (2 sequences):** Full pipeline with haplotype extraction, per-allele amplicon extraction, PCR bias split, and per-allele simulation.
 
 ## File Organization
 
@@ -348,6 +366,7 @@ muc_one_up/read_simulation.py                 # Add "amplicon" to simulator map
 muc_one_up/read_simulator/constants.py        # Add amplicon constants
 muc_one_up/read_simulator/wrappers/pbsim3_wrapper.py  # Add template mode function
 muc_one_up/analysis/snapshot_validator.py      # Refactor to use sequence_utils
+muc_one_up/config.py                          # Add "amplicon" to config schema
 config.json                                   # Add amplicon_params section
 ```
 
@@ -371,6 +390,7 @@ DEFAULT_PCR_PRESET: Final[str] = "default"
 ## Out of Scope
 
 - ONT amplicon simulation (follow-up issue)
+- Read-source tracking for amplicon mode (requires coordinate remapping from template-space to original-haplotype-space; follow-up)
 - Fuzzy/mismatch-tolerant primer matching
 - Multiple amplicon regions per run
 - GC-content bias modeling
