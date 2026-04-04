@@ -165,19 +165,13 @@ class PCRSimulator:
         Returns:
             List of binding site positions
         """
-        sites = []
-        start = 0
+        from muc_one_up.read_simulator.utils.sequence_utils import (
+            find_primer_binding_sites,
+        )
 
-        # Primer is already in the correct orientation (forward or RC'd)
-        # Just search for it directly in template
-        while True:
-            pos = template.find(primer, start)
-            if pos == -1:
-                break
-            sites.append(pos)
-            start = pos + 1
-
-        return sites
+        # Primer is already in correct orientation (RC'd in __init__ if needed)
+        # so we search directly without reverse_complement flag
+        return find_primer_binding_sites(template, primer, reverse_complement=False)
 
 
 class DigestSimulator:
