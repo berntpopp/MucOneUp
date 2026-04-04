@@ -2,9 +2,11 @@
 """
 Fragment simulation module.
 
-This module contains the ported w-Wessim2 logic for simulating read fragments
-from a FASTA file with systematic errors. It handles fragment picking based on
-PSL alignments and produces fragment pairs for later sequencing.
+This module contains Wessim2-inspired fragment simulation logic, ported and
+adapted from the Wessim2 approach (not calling the Wessim2 binary). It simulates
+read fragments from a FASTA file with systematic errors, handling fragment
+picking based on PSL alignments and producing fragment pairs for later
+sequencing via ReSeq.
 """
 
 import logging
@@ -316,7 +318,7 @@ def simulate_fragments(
     fragment_origins_path: str | None = None,
 ) -> None:
     """
-    Simulate fragments (port of w-Wessim2) and write paired fragment sequences to a FASTA file.
+    Simulate fragments (Wessim2-inspired, ported logic) and write paired fragment sequences to a FASTA file.
 
     Args:
         ref_fa: Reference FASTA file.
@@ -338,7 +340,7 @@ def simulate_fragments(
     if seed is not None:
         logging.info(f"Fragment simulation using random seed: {seed}")
 
-    logging.info("Starting fragment simulation (ported w-Wessim2 logic)...")
+    logging.info("Starting fragment simulation (Wessim2-style, ported logic)...")
 
     # Load reference sequences
     try:

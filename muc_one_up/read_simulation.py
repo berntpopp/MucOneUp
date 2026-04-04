@@ -6,8 +6,9 @@ Command-line entry point for the MUC1 read simulation pipeline.
 
 This module provides a standardized interface to the read simulation pipeline,
 which creates realistic sequencing reads from a simulated MUC1 haplotype FASTA.
-It supports Illumina short reads (via reseq/WeSSim), Oxford Nanopore long reads
-(via NanoSim), and PacBio HiFi reads (via pbsim3/CCS).
+It supports Illumina short reads (via a hybrid pipeline combining Wessim2-style
+fragment simulation with ReSeq error modeling and BWA alignment), Oxford Nanopore
+long reads (via NanoSim), and PacBio HiFi reads (via pbsim3/CCS).
 
 It serves as a compatibility layer for the refactored modular implementations
 in the muc_one_up.read_simulator package.
@@ -182,7 +183,7 @@ def simulate_reads(
 
     # Log which simulator is being used
     simulator_names = {
-        "illumina": "Illumina read simulation pipeline with reseq/WeSSim",
+        "illumina": "Illumina read simulation pipeline (Wessim2-style fragments + ReSeq error modeling)",
         "ont": "Oxford Nanopore (ONT) read simulation pipeline with NanoSim",
         "pacbio": "PacBio HiFi read simulation pipeline with pbsim3/CCS",
         "amplicon": "PacBio amplicon read simulation pipeline with pbsim3/CCS (template mode)",

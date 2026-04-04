@@ -163,7 +163,7 @@ External tools required for platform-specific read simulation.
 
 ### Illumina Read Simulation
 
-Uses w-Wessim2 pipeline (reseq, bwa, samtools, UCSC tools).
+Uses a hybrid Illumina pipeline combining Wessim2-style fragment simulation with ReSeq error modeling, BWA alignment, and UCSC tools (reseq, bwa, samtools, faToTwoBit, pblat).
 
 #### Install via Conda
 

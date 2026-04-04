@@ -74,7 +74,7 @@ Use this template when describing MucOneUp in your methods:
 
 ### Example (Filled)
 
-> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.40.0 (Popp, 2025; https://github.com/berntpopp/MucOneUp). Diploid haplotypes were simulated with fixed VNTR repeat counts of 60 repeats per haplotype using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). The dupC mutation was applied at haplotype 1, position 25, to generate a mutated reference for variant caller benchmarking. Illumina paired-end reads (150 bp) were simulated with 100× coverage using the w-Wessim2 pipeline integrated in MucOneUp. All simulations used seed 42 for reproducibility.
+> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.40.0 (Popp, 2025; https://github.com/berntpopp/MucOneUp). Diploid haplotypes were simulated with fixed VNTR repeat counts of 60 repeats per haplotype using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). The dupC mutation was applied at haplotype 1, position 25, to generate a mutated reference for variant caller benchmarking. Illumina paired-end reads (150 bp) were simulated with 100× coverage using the Illumina read simulation pipeline integrated in MucOneUp, which combines Wessim2-style fragment simulation with ReSeq error modeling and BWA alignment. All simulations used seed 42 for reproducibility.
 
 ---
 
@@ -90,9 +90,9 @@ If you use the included example dataset (`data/examples/vntr_database.tsv`), cit
 
 MucOneUp integrates several external tools. If you use read simulation features, acknowledge the relevant tools:
 
-### Illumina Read Simulation (w-Wessim2)
+### Illumina Read Simulation
 
-> Illumina read simulation was performed using the w-Wessim2 pipeline integrated in MucOneUp, which utilizes ReSeq (Schmeing & Robinson, 2021) for error modeling and BWA (Li & Durbin, 2009) for read alignment.
+> Illumina read simulation was performed using the hybrid pipeline integrated in MucOneUp, which combines Wessim2-inspired fragment simulation (ported local code, not the Wessim2 binary), ReSeq (Schmeing & Robinson, 2021) for N-base replacement, systematic-error generation, and read synthesis, UCSC faToTwoBit/pblat for alignment, and BWA (Li & Durbin, 2009) for final read alignment.
 
 **ReSeq Citation:**
 
@@ -214,7 +214,7 @@ Simulation Parameters:
 - VNTR length: Fixed at 60 repeats
 - Reference assembly: hg38
 - Mutation: dupC at haplotype 1, position 25
-- Read simulator: Illumina (w-Wessim2)
+- Read simulator: Illumina (Wessim2-style fragment simulation + ReSeq error modeling)
 - Coverage: 100×
 - Read length: 150 bp paired-end
 - Fragment size: 350 ± 50 bp

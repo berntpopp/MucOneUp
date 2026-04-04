@@ -80,7 +80,7 @@ docker run --rm \
   simulate --out-base /data/sample
 ```
 
-**Includes:** MucOneUp + Illumina (w-Wessim2) + ONT (NanoSim) + PacBio (pbsim3) - pre-configured environment.
+**Includes:** MucOneUp + Illumina (Wessim2-style + ReSeq) + ONT (NanoSim) + PacBio (pbsim3) - pre-configured environment.
 
 ### Option 3: Development Setup
 

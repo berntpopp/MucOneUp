@@ -472,7 +472,7 @@ which reseq
 
 ### Purpose
 
-Parameters for Illumina read simulation (w-Wessim2 pipeline).
+Parameters for Illumina read simulation (Wessim2-style fragment simulation with ReSeq error modeling).
 
 ### Structure
 

@@ -88,7 +88,7 @@ def simulate_reads_pipeline(
     3. Convert FASTA to 2bit format using faToTwoBit
     4. Extract a subset reference from a sample BAM using samtools
     5. Align the 2bit file to the subset reference using pblat
-    6. Simulate fragments using a ported version of w-Wessim2
+    6. Simulate fragments using Wessim2-style logic (ported, not the Wessim2 binary)
     7. Create reads from fragments using reseq seqToIllumina
     8. Split the interleaved FASTQ into paired FASTQ files
     9. Align the reads to a human reference using BWA MEM
@@ -270,7 +270,7 @@ def simulate_reads_pipeline(
     min_fragment = rs_config.get("min_fragment", 200)
     bind = rs_config.get("binding_min", 0.5)
     seed = rs_config.get("seed")
-    logging.info("6. Simulating fragments (w-Wessim2)")
+    logging.info("6. Simulating fragments (Wessim2-style, ported logic)")
     fragment_origins_path = (
         str(Path(output_dir) / f"{output_base}_fragment_origins.tsv")
         if source_tracker is not None

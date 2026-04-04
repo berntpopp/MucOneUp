@@ -1,6 +1,6 @@
 # Data Folder
 
-This folder contains anonymized BAM files for the MUC1 region generated for various exome designs used as templates for read simulation with [wessim](https://github.com/bioinformatics-centre/wessim). These files have been processed to include only the MUC1 region and have been anonymized for data privacy.
+This folder contains anonymized BAM files for the MUC1 region generated for various exome designs used as templates for the Illumina read simulation pipeline (which uses Wessim2-style fragment simulation). These files have been processed to include only the MUC1 region and have been anonymized for data privacy.
 
 **Reference Assemblies**: All BAM files in this directory are currently mapped to the GRCh38/hg38 reference genome. Files for the GRCh37/hg19 reference assembly will be added in the future.
 
@@ -21,13 +21,13 @@ _Coming soon. hg19 versions will be added in the future._
 
 ## Usage
 
-These files are intended to be used as input templates for read simulation with wessim. They provide a realistic representation of the MUC1 region as captured by different exome designs:
+These files are intended to be used as input templates for the Illumina read simulation pipeline. They provide a realistic representation of the MUC1 region as captured by different exome designs:
 
 - **Twist v2**: Represents a widely used exome capture design capturing the MUC1 VNTR region.
 - **IDT v1**: Represents one alternative exome capture design capturing the MUC1 VNTR region.
 - **Agilent SureSelect v8**: Represents one alternative exome capture design commonly used in different versions. Agilent SureSelct designs typically do not capture the MUC1-VNTR region to sufficient coverage.
 
-To use these files in your read simulation pipeline, point your simulation tool (e.g., wessim) to the desired BAM file and its index.
+To use these files in your read simulation pipeline, point your simulation tool to the desired BAM file and its index.
 
 ## Additional Information
 

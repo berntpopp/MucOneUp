@@ -1,11 +1,11 @@
-"""Tests for fragment_simulation module - focuses on OUR logic (w-Wessim2 port).
+"""Tests for fragment_simulation module - focuses on OUR logic (Wessim2-style, ported).
 
 Following Phase 2/3 testing principles:
 - Mock ONLY at system boundary (subprocess.Popen for run_command in simulate_fragments)
 - Test OUR code's logic (fragment picking, file parsing, sequence operations)
 - NOT testing external tools (reseq, pblat)
 
-These tests verify that our ported w-Wessim2 logic correctly:
+These tests verify that our Wessim2-inspired ported logic correctly:
 1. Parses FASTA files into dictionaries
 2. Parses systematic error files (syser format)
 3. Parses PSL alignment files

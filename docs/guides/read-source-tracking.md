@@ -115,7 +115,7 @@ Read origin extraction varies by platform but produces the same manifest format:
 
 | Platform | Source of read positions |
 |----------|------------------------|
-| **Illumina** | Fragment coordinates captured during Wessim2 simulation |
+| **Illumina** | Fragment coordinates captured during Wessim2-style fragment simulation |
 | **ONT** | NanoSim encodes haplotype and position in read names |
 | **PacBio** | pbsim3 MAF alignment files parsed before cleanup |
 
