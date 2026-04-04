@@ -26,7 +26,11 @@ if TYPE_CHECKING:
 from ..exceptions import ExternalToolError, FileOperationError, ReadSimulationError
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
 from .pcr_bias import PCRBiasModel
-from .utils import cleanup_files, write_metadata_file
+from .pipeline_utils import (
+    cleanup_intermediates,
+    create_pipeline_metadata,
+    resolve_pipeline_outputs,
+)
 from .utils.amplicon_extractor import AmpliconExtractor
 from .utils.reference_utils import extract_haplotypes, is_diploid_reference
 from .utils.template_generator import generate_template_fasta
@@ -34,6 +38,45 @@ from .wrappers.ccs_wrapper import run_ccs_consensus
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 from .wrappers.pbsim3_wrapper import run_pbsim3_template_simulation
 from .wrappers.samtools_wrapper import convert_bam_to_fastq, merge_bam_files
+
+
+def _simulate_haplotype_amplicon(
+    clr_bam: str,
+    ccs_cmd: str,
+    output_path: str,
+    min_passes: int,
+    min_rq: float,
+    threads: int,
+    seed: int | None,
+    hap_idx: int,
+    bam_idx: int,
+) -> str:
+    """Run CCS consensus on a single amplicon CLR BAM.
+
+    Args:
+        clr_bam: Path to CLR BAM.
+        ccs_cmd: CCS command path.
+        output_path: Output HiFi BAM path.
+        min_passes: Minimum CCS passes.
+        min_rq: Minimum read quality.
+        threads: Thread count.
+        seed: Base seed (hap_idx*100 + bam_idx added for uniqueness).
+        hap_idx: 1-based haplotype index.
+        bam_idx: 1-based BAM index within haplotype.
+
+    Returns:
+        Path to HiFi BAM.
+    """
+    hifi_seed = (seed + hap_idx * 100 + bam_idx) if seed is not None else None
+    return run_ccs_consensus(
+        ccs_cmd=ccs_cmd,
+        input_bam=clr_bam,
+        output_bam=output_path,
+        min_passes=min_passes,
+        min_rq=min_rq,
+        threads=threads,
+        seed=hifi_seed,
+    )
 
 
 def simulate_amplicon_reads_pipeline(
@@ -106,15 +149,7 @@ def simulate_amplicon_reads_pipeline(
     pcr_model = PCRBiasModel.from_config(pcr_bias_config)
 
     # Output paths
-    input_path = Path(input_fa)
-    if output_config is not None:
-        output_dir = output_config.out_dir
-        output_base = output_config.out_base
-    else:
-        output_dir = input_path.parent
-        output_base = input_path.stem
-
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir, output_base = resolve_pipeline_outputs(input_fa, rs_config, output_config)
 
     start_time = datetime.now()
     intermediate_files: list[str] = []
@@ -229,15 +264,16 @@ def simulate_amplicon_reads_pipeline(
             for i, clr_bams in enumerate(clr_bam_groups, 1):
                 for j, clr_bam in enumerate(clr_bams, 1):
                     hifi_out = str(temp_path / f"hifi_hap{i}_{j:04d}.bam")
-                    hap_seed = (seed + i * 100 + j) if seed is not None else None
-                    hifi_bam = run_ccs_consensus(
+                    hifi_bam = _simulate_haplotype_amplicon(
+                        clr_bam=clr_bam,
                         ccs_cmd=ccs_cmd,
-                        input_bam=clr_bam,
-                        output_bam=hifi_out,
+                        output_path=hifi_out,
                         min_passes=min_passes,
                         min_rq=min_rq,
                         threads=threads,
-                        seed=hap_seed,
+                        seed=seed,
+                        hap_idx=i,
+                        bam_idx=j,
                     )
                     hifi_bams.append(hifi_bam)
                     intermediate_files.append(hifi_bam)
@@ -271,7 +307,7 @@ def simulate_amplicon_reads_pipeline(
             if human_reference is None:
                 logging.info("Amplicon simulation complete (no alignment)")
                 logging.info("Final output: %s", hifi_fastq)
-                cleanup_files(intermediate_files)
+                cleanup_intermediates(intermediate_files)
                 final_output = hifi_fastq
             else:
                 intermediate_files.append(hifi_fastq)
@@ -288,7 +324,7 @@ def simulate_amplicon_reads_pipeline(
                     threads=threads,
                 )
 
-                cleanup_files(intermediate_files)
+                cleanup_intermediates(intermediate_files)
                 final_output = aligned_bam
 
             # Write metadata and log completion for both paths
@@ -302,8 +338,8 @@ def simulate_amplicon_reads_pipeline(
             logging.info("Final output: %s", final_output)
             logging.info("=" * 80)
 
-            write_metadata_file(
-                output_dir=str(output_dir),
+            create_pipeline_metadata(
+                output_dir=output_dir,
                 output_base=output_base,
                 config=config,
                 start_time=start_time,
@@ -329,6 +365,6 @@ def simulate_amplicon_reads_pipeline(
     finally:
         try:
             if intermediate_files:
-                cleanup_files(intermediate_files)
+                cleanup_intermediates(intermediate_files)
         except Exception as cleanup_err:
             logging.warning("Cleanup failed (non-fatal): %s", cleanup_err)
