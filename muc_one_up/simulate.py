@@ -102,7 +102,8 @@ def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNA
         Assembled haplotype DNA sequence
     """
     typed_chain = [RepeatUnit.from_str(s) for s in chain]
-    return assemble_sequence(typed_chain, config)
+    ref_assembly = config.get("reference_assembly", "hg38")
+    return assemble_sequence(typed_chain, config["repeats"], config["constants"][ref_assembly])
 
 
 def simulate_from_chains(
@@ -129,6 +130,10 @@ def simulate_from_chains(
     Note:
         mutation_targets use 1-based indexing for both haplotype and repeat positions
     """
+    ref_assembly = config.get("reference_assembly", "hg38")
+    constants: AssemblyConstants = config["constants"][ref_assembly]
+    repeats_dict = config["repeats"]
+
     haplotypes: list[HaplotypeResult] = []
 
     for i, chain in enumerate(predefined_chains):
@@ -161,7 +166,7 @@ def simulate_from_chains(
         logging.info(
             f"Assembling haplotype {i + 1} from predefined chain with {len(working_chain)} repeats"
         )
-        seq = assemble_sequence(working_chain, config)
+        seq = assemble_sequence(working_chain, repeats_dict, constants)
         haplotypes.append(HaplotypeResult(sequence=seq, chain=working_chain))
 
     return haplotypes

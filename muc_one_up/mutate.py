@@ -57,12 +57,12 @@ from .type_defs import (
 )
 
 
-def validate_allowed_repeats(mutation_def: MutationDefinition, config: ConfigDict) -> set[str]:
+def validate_allowed_repeats(mutation_def: MutationDefinition, valid_symbols: set[str]) -> set[str]:
     """Validate that allowed_repeats contains only valid repeat symbols.
 
     Args:
         mutation_def: Mutation definition from config["mutations"][name]
-        config: Configuration dict containing the "repeats" section
+        valid_symbols: Set of valid repeat symbol strings
 
     Returns:
         Set of validated allowed repeat symbols
@@ -71,11 +71,10 @@ def validate_allowed_repeats(mutation_def: MutationDefinition, config: ConfigDic
         ValueError: If any allowed repeat is not a valid repeat symbol
     """
     allowed_repeats = set(mutation_def.get("allowed_repeats", []))
-    valid_repeats = set(config["repeats"].keys())
 
-    invalid_repeats = allowed_repeats - valid_repeats
+    invalid_repeats = allowed_repeats - valid_symbols
     if invalid_repeats:
-        valid_repeats_str = ", ".join(sorted(valid_repeats))
+        valid_repeats_str = ", ".join(sorted(valid_symbols))
         invalid_repeats_str = ", ".join(sorted(invalid_repeats))
         raise ValueError(
             f"Invalid repeats in allowed_repeats: {invalid_repeats_str}. "
@@ -125,10 +124,14 @@ def apply_mutations(
         raise ValueError(f"Mutation '{mutation_name}' not found in config['mutations'].")
 
     mutation_def = config["mutations"][mutation_name]
+    ref_assembly = config.get("reference_assembly", "hg38")
+    constants: AssemblyConstants = config["constants"][ref_assembly]
+    repeats_dict = config["repeats"]
+    valid_symbols = set(repeats_dict.keys())
 
     # Validate that allowed_repeats only contains valid repeat symbols
     try:
-        allowed_repeats = validate_allowed_repeats(mutation_def, config)
+        allowed_repeats = validate_allowed_repeats(mutation_def, valid_symbols)
     except ValueError as e:
         logging.error(f"In mutation '{mutation_name}': {e}")
         raise
@@ -188,7 +191,7 @@ def apply_mutations(
                 mutation_name,
             )
             hr.chain[repeat_index] = RepeatUnit(new_symbol)
-            seq = assemble_sequence(hr.chain, config)
+            seq = assemble_sequence(hr.chain, repeats_dict, constants)
             updated_results[hap_index] = HaplotypeResult(sequence=seq, chain=hr.chain)
             hr = updated_results[hap_index]
 
@@ -227,7 +230,8 @@ def rebuild_haplotype_sequence(chain: RepeatChain, config: ConfigDict) -> DNASeq
         Reassembled haplotype DNA sequence
     """
     typed_chain = [RepeatUnit.from_str(s) for s in chain]
-    return assemble_sequence(typed_chain, config)
+    ref_assembly = config.get("reference_assembly", "hg38")
+    return assemble_sequence(typed_chain, config["repeats"], config["constants"][ref_assembly])
 
 
 def apply_changes_to_repeat(

@@ -122,17 +122,17 @@ def test_validate_allowed_repeats():
     """
     Test that validate_allowed_repeats correctly identifies invalid repeat symbols.
     """
-    config = {"repeats": {"X": "XXXXX", "C": "CCCCC"}}
+    valid_symbols = {"X", "C"}
 
     # Valid repeats should not raise an error
     mutation_def = {"allowed_repeats": ["X", "C"]}
-    valid_repeats = validate_allowed_repeats(mutation_def, config)
+    valid_repeats = validate_allowed_repeats(mutation_def, valid_symbols)
     assert valid_repeats == {"X", "C"}
 
     # Invalid repeats should raise an error
     mutation_def = {"allowed_repeats": ["X", "Y", "Z"]}
     with pytest.raises(ValueError) as exc:
-        validate_allowed_repeats(mutation_def, config)
+        validate_allowed_repeats(mutation_def, valid_symbols)
     assert "Invalid repeats in allowed_repeats" in str(exc.value)
     assert "Y, Z" in str(exc.value)
     assert "Valid repeats are: C, X" in str(exc.value)
