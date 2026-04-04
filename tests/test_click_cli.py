@@ -510,7 +510,7 @@ class TestReadsCommand:
         # Verify parameters were passed correctly
         assert mock_simulate.called
         called_config = mock_simulate.call_args[0][0]
-        assert called_config["pacbio_params"]["coverage"] == 25
+        assert called_config["read_simulation"]["coverage"] == 25
         assert called_config["pacbio_params"]["pass_num"] == 15
         assert called_config["pacbio_params"]["min_passes"] == 5
         assert called_config["pacbio_params"]["min_rq"] == 0.995

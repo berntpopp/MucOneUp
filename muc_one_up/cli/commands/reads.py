@@ -136,6 +136,55 @@ def _setup_read_config(
         logging.info(f"Using random seed: {seed} (results will be reproducible)")
 
 
+def _apply_pacbio_params(
+    config: dict[str, Any],
+    model_type: str | None,
+    model_file: str | None,
+    seed: int | None,
+    threads: int | None = None,
+    pass_num: int | None = None,
+    min_passes: int | None = None,
+    min_rq: float | None = None,
+) -> None:
+    """Apply PacBio CLI overrides and validate required params.
+
+    Used by both pacbio() and amplicon() commands.
+    Mutates config in place.
+
+    Raises:
+        click.ClickException: If required params are missing after merge.
+    """
+    if "pacbio_params" not in config:
+        config["pacbio_params"] = {}
+
+    params = config["pacbio_params"]
+    overrides = {
+        "model_type": model_type,
+        "model_file": model_file,
+        "pass_num": pass_num,
+        "min_passes": min_passes,
+        "min_rq": min_rq,
+    }
+    if threads is not None:
+        overrides["threads"] = threads
+
+    for key, value in overrides.items():
+        if value is not None:
+            params[key] = value
+
+    if seed is not None:
+        params["seed"] = seed
+        logging.info("Using random seed: %d (results will be reproducible)", seed)
+
+    required = ["model_type", "model_file"]
+    missing = [p for p in required if p not in params]
+    if missing:
+        raise click.ClickException(
+            f"Missing required PacBio parameters: {', '.join(missing)}. "
+            f"Provide via CLI options or config.json pacbio_params section."
+        )
+
+
 # ============================================================================
 # READS Command Group - Pure Read Simulation Utilities
 # ============================================================================
@@ -359,41 +408,12 @@ def pacbio(
 
     config = load_config_raw(str(ctx.obj["config_path"]))
 
-    # Configure PacBio simulation
-    if "read_simulation" not in config:
-        config["read_simulation"] = {}
-    config["read_simulation"]["simulator"] = "pacbio"
-
-    if "pacbio_params" not in config:
-        config["pacbio_params"] = {}
-
-    # Override config with CLI params only if provided
-    if model_type is not None:
-        config["pacbio_params"]["model_type"] = model_type
-    if model_file is not None:
-        config["pacbio_params"]["model_file"] = model_file
-    if coverage is not None:
-        config["pacbio_params"]["coverage"] = coverage
-    if pass_num is not None:
-        config["pacbio_params"]["pass_num"] = pass_num
-    if min_passes is not None:
-        config["pacbio_params"]["min_passes"] = min_passes
-    if min_rq is not None:
-        config["pacbio_params"]["min_rq"] = min_rq
-    if threads != 4:
-        config["pacbio_params"]["threads"] = threads
-    if seed is not None:
-        config["pacbio_params"]["seed"] = seed
-        logging.info(f"Using random seed: {seed} (results will be reproducible)")
-
-    # Validate required config parameters exist
-    required_params = ["model_type", "model_file"]
-    missing_params = [p for p in required_params if p not in config["pacbio_params"]]
-    if missing_params:
-        raise click.ClickException(
-            f"Missing required PacBio parameters in config: {', '.join(missing_params)}. "
-            f"Either add them to config.json pacbio_params section or provide via CLI options."
-        )
+    _setup_read_config(config, "pacbio", coverage, seed, seed_config_key="pacbio_params")
+    _apply_pacbio_params(
+        config, model_type, model_file, seed,
+        threads=threads if threads != 4 else None,
+        pass_num=pass_num, min_passes=min_passes, min_rq=min_rq,
+    )
 
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_pacbio_hifi", "PacBio HiFi", track_read_source
@@ -498,26 +518,7 @@ def amplicon(
             "Add forward_primer and reverse_primer to config.json."
         )
 
-    # Ensure pacbio_params exists
-    if "pacbio_params" not in config:
-        config["pacbio_params"] = {}
-
-    # Override PacBio params from CLI
-    if model_type is not None:
-        config["pacbio_params"]["model_type"] = model_type
-    if model_file is not None:
-        config["pacbio_params"]["model_file"] = model_file
-    if seed is not None:
-        config["pacbio_params"]["seed"] = seed
-
-    # Validate required PacBio params
-    required_params = ["model_type", "model_file"]
-    missing = [p for p in required_params if p not in config["pacbio_params"]]
-    if missing:
-        raise click.ClickException(
-            f"Missing required PacBio parameters: {', '.join(missing)}. "
-            f"Provide via CLI options or config.json pacbio_params section."
-        )
+    _apply_pacbio_params(config, model_type, model_file, seed)
 
     # Apply PCR bias overrides
     if "pcr_bias" not in config["amplicon_params"]:
