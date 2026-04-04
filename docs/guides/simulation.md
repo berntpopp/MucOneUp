@@ -717,6 +717,22 @@ muconeup --config config.json simulate \
 
 ---
 
+## Known Limitations
+
+### Illumina Duplicate Model
+
+The Illumina fragment simulation uses independent random sampling (ported from Wessim2). Any duplicates in the output arise from coincidental coordinate collisions, not from PCR amplification modeling. The duplicate family-size distribution follows a Poisson collision model (mostly pairs) rather than the power-law distribution characteristic of real PCR duplicates.
+
+This means:
+
+- At typical MUC1 VNTR coverage levels, sampling duplicate rates are low
+- Duplicate families are almost exclusively pairs (size 2), not larger clonal families
+- Tools that rely on PCR duplicate patterns for quality assessment or consensus calling should be benchmarked with awareness of this limitation
+
+If realistic PCR duplicate profiles are needed, apply external tools post-hoc (e.g., inject duplicates with known family-size distributions).
+
+---
+
 ## Next Steps
 
 **Learn More:**
