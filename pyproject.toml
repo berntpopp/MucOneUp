@@ -188,6 +188,7 @@ markers = [
     "cli: marks tests as CLI interface tests",
     "bioinformatics: marks tests as bioinformatics-specific (sequence validation, etc.)",
     "requires_tools: marks tests that require specific external tools to be available",
+    "e2e: marks end-to-end tests requiring real bioinformatics tools (not run in CI)",
 ]
 
 # ==================== COVERAGE ====================

@@ -8,6 +8,38 @@ from muc_one_up.exceptions import ConfigurationError
 class TestIlluminaPipelineReferenceIntegration:
     """Test reference assembly management in Illumina pipeline."""
 
+    def _patch_pipeline(self, mocker, tmp_path, final_bam: str | None = None):
+        """Patch all heavy pipeline dependencies; return mock_align."""
+        from muc_one_up.read_simulator.stages import AlignmentResult, FragmentResult
+
+        if final_bam is None:
+            final_bam = str(tmp_path / "out.bam")
+
+        mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
+        mocker.patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={})
+        mocker.patch("muc_one_up.read_simulator.pipeline.log_tool_versions")
+        mocker.patch("muc_one_up.read_simulator.pipeline.cleanup_intermediates")
+        mocker.patch("muc_one_up.read_simulator.pipeline.create_pipeline_metadata")
+        mocker.patch("muc_one_up.read_simulator.pipeline.generate_read_manifest")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pipeline.prepare_fragments",
+            return_value=FragmentResult(
+                r1_fastq="/r1.fq.gz",
+                r2_fastq="/r2.fq.gz",
+                intermediate_files=[],
+            ),
+        )
+        mock_align = mocker.patch(
+            "muc_one_up.read_simulator.pipeline.align_and_refine",
+            return_value=AlignmentResult(
+                final_bam=final_bam,
+                intermediate_bams=[],
+                intermediate_files=[],
+            ),
+        )
+        return mock_align
+
     def test_uses_reference_from_reference_genomes(self, tmp_path, mocker):
         """Test pipeline uses reference_genomes section when available."""
         ref_file = tmp_path / "hg38.fa"
@@ -39,24 +71,8 @@ class TestIlluminaPipelineReferenceIntegration:
             },
         }
 
-        # Mock all the pipeline steps
-        mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
-        mocker.patch("muc_one_up.read_simulator.pipeline.replace_Ns")
-        mocker.patch("muc_one_up.read_simulator.pipeline.generate_systematic_errors")
-        mocker.patch("muc_one_up.read_simulator.pipeline.fa_to_twobit")
-        mocker.patch("muc_one_up.read_simulator.pipeline.extract_subset_reference")
-        mocker.patch("muc_one_up.read_simulator.pipeline.run_pblat")
-        mocker.patch("muc_one_up.read_simulator.pipeline.simulate_fragments")
-        mocker.patch("muc_one_up.read_simulator.pipeline.create_reads")
-        mocker.patch("muc_one_up.read_simulator.pipeline.split_reads")
+        mock_align = self._patch_pipeline(mocker, tmp_path)
 
-        # Mock align_reads to capture the reference used
-        mock_align = mocker.patch("muc_one_up.read_simulator.pipeline.align_reads")
-
-        # Mock cleanup
-        mocker.patch("muc_one_up.read_simulator.pipeline.cleanup_files")
-
-        # Import after mocking to avoid import-time side effects
         from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
 
         input_fa = tmp_path / "test.fa"
@@ -64,10 +80,10 @@ class TestIlluminaPipelineReferenceIntegration:
 
         simulate_reads_pipeline(config, str(input_fa))
 
-        # Verify align_reads was called with reference from reference_genomes
+        # Verify align_and_refine was called with reference from reference_genomes
         assert mock_align.called
-        call_args = mock_align.call_args
-        assert call_args[0][2] == str(ref_file)  # human_reference argument
+        call_kwargs = mock_align.call_args
+        assert call_kwargs[1]["human_ref"] == str(ref_file)
 
     def test_fallback_to_old_human_reference(self, tmp_path, mocker):
         """Test pipeline falls back to old human_reference config."""
@@ -90,18 +106,7 @@ class TestIlluminaPipelineReferenceIntegration:
             },
         }
 
-        # Mock all pipeline steps
-        mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
-        mocker.patch("muc_one_up.read_simulator.pipeline.replace_Ns")
-        mocker.patch("muc_one_up.read_simulator.pipeline.generate_systematic_errors")
-        mocker.patch("muc_one_up.read_simulator.pipeline.fa_to_twobit")
-        mocker.patch("muc_one_up.read_simulator.pipeline.extract_subset_reference")
-        mocker.patch("muc_one_up.read_simulator.pipeline.run_pblat")
-        mocker.patch("muc_one_up.read_simulator.pipeline.simulate_fragments")
-        mocker.patch("muc_one_up.read_simulator.pipeline.create_reads")
-        mocker.patch("muc_one_up.read_simulator.pipeline.split_reads")
-        mock_align = mocker.patch("muc_one_up.read_simulator.pipeline.align_reads")
-        mocker.patch("muc_one_up.read_simulator.pipeline.cleanup_files")
+        mock_align = self._patch_pipeline(mocker, tmp_path)
 
         from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
 
@@ -112,8 +117,8 @@ class TestIlluminaPipelineReferenceIntegration:
 
         # Verify fallback to old human_reference
         assert mock_align.called
-        call_args = mock_align.call_args
-        assert call_args[0][2] == str(ref_file)
+        call_kwargs = mock_align.call_args
+        assert call_kwargs[1]["human_ref"] == str(ref_file)
 
     def test_raises_error_when_no_reference_configured(self, tmp_path, mocker):
         """Test pipeline raises error when no reference configured."""
@@ -133,15 +138,21 @@ class TestIlluminaPipelineReferenceIntegration:
             },
         }
 
+        # Still need prepare_fragments mocked (runs before reference resolution)
         mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
-        mocker.patch("muc_one_up.read_simulator.pipeline.replace_Ns")
-        mocker.patch("muc_one_up.read_simulator.pipeline.generate_systematic_errors")
-        mocker.patch("muc_one_up.read_simulator.pipeline.fa_to_twobit")
-        mocker.patch("muc_one_up.read_simulator.pipeline.extract_subset_reference")
-        mocker.patch("muc_one_up.read_simulator.pipeline.run_pblat")
-        mocker.patch("muc_one_up.read_simulator.pipeline.simulate_fragments")
-        mocker.patch("muc_one_up.read_simulator.pipeline.create_reads")
-        mocker.patch("muc_one_up.read_simulator.pipeline.split_reads")
+        mocker.patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={})
+        mocker.patch("muc_one_up.read_simulator.pipeline.log_tool_versions")
+
+        from muc_one_up.read_simulator.stages import FragmentResult
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pipeline.prepare_fragments",
+            return_value=FragmentResult(
+                r1_fastq="/r1.fq.gz",
+                r2_fastq="/r2.fq.gz",
+                intermediate_files=[],
+            ),
+        )
 
         from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
 

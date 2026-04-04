@@ -69,11 +69,54 @@ if TYPE_CHECKING:
 
 from ..exceptions import ExternalToolError, FileOperationError
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
-from .utils import cleanup_files, write_metadata_file
+from .pipeline_utils import (
+    cleanup_intermediates,
+    create_pipeline_metadata,
+    resolve_pipeline_outputs,
+)
 from .wrappers.ccs_wrapper import run_ccs_consensus, validate_ccs_parameters
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 from .wrappers.pbsim3_wrapper import run_pbsim3_simulation, validate_pbsim3_parameters
 from .wrappers.samtools_wrapper import convert_bam_to_fastq, merge_bam_files
+
+
+def _simulate_haplotype_hifi(
+    clr_bam: str,
+    ccs_cmd: str,
+    output_path: str,
+    min_passes: int,
+    min_rq: float,
+    threads: int,
+    seed: int | None,
+    hap_idx: int,
+) -> str:
+    """Run CCS consensus on a single haplotype's CLR BAM.
+
+    Args:
+        clr_bam: Path to CLR BAM for this haplotype.
+        ccs_cmd: CCS command path.
+        output_path: Output HiFi BAM path.
+        min_passes: Minimum CCS passes.
+        min_rq: Minimum read quality.
+        threads: Thread count.
+        seed: Base seed (hap_idx added for uniqueness).
+        hap_idx: 1-based haplotype index.
+
+    Returns:
+        Path to HiFi BAM.
+    """
+    hifi_seed = seed + hap_idx if seed is not None else None
+    hifi_bam = run_ccs_consensus(
+        ccs_cmd=ccs_cmd,
+        input_bam=clr_bam,
+        output_bam=output_path,
+        min_passes=min_passes,
+        min_rq=min_rq,
+        threads=threads,
+        seed=hifi_seed,
+    )
+    logging.info("Haplotype %d CCS complete: %s", hap_idx, hifi_bam)
+    return hifi_bam
 
 
 def simulate_pacbio_hifi_reads(
@@ -242,16 +285,7 @@ def simulate_pacbio_hifi_reads(
         raise RuntimeError(f"Invalid PacBio parameters: {e}") from e
 
     # Derive output directory and base name
-    input_path = Path(input_fa)
-    if output_config is not None:
-        output_dir_path = output_config.out_dir
-        output_base = output_config.out_base
-    else:
-        output_dir_path = input_path.parent
-        output_base = input_path.stem
-
-    # Create output directory (in case it doesn't exist)
-    output_dir_path.mkdir(parents=True, exist_ok=True)
+    output_dir_path, output_base = resolve_pipeline_outputs(input_fa, {}, output_config)
 
     # Define intermediate and final file paths
     clr_prefix = str(output_dir_path / f"{output_base}_clr")
@@ -262,7 +296,7 @@ def simulate_pacbio_hifi_reads(
     aligned_bam = str(output_dir_path / f"{output_base}_aligned.bam")
 
     # Track intermediate files for cleanup
-    intermediate_files = []
+    intermediate_files: list[str | None] = []
 
     # Start time for metadata
     start_time = datetime.now()
@@ -323,26 +357,23 @@ def simulate_pacbio_hifi_reads(
         # broken when merging CLR BAMs from diploid simulations
         hifi_bams = []
         for i, clr_bam in enumerate(clr_bams, 1):
-            # Generate unique output path for each haplotype's HiFi BAM
             if len(clr_bams) > 1:
                 hifi_bam_individual = str(output_dir_path / f"{output_base}_hifi_{i:04d}.bam")
-                logging.info(f"Processing haplotype {i}/{len(clr_bams)}: {clr_bam}")
+                logging.info("Processing haplotype %d/%d: %s", i, len(clr_bams), clr_bam)
             else:
-                # Single haploid reference - use standard naming
                 hifi_bam_individual = hifi_bam
 
-            hifi_bam_result = run_ccs_consensus(
+            hifi_bam_result = _simulate_haplotype_hifi(
+                clr_bam=clr_bam,
                 ccs_cmd=ccs_cmd,
-                input_bam=clr_bam,
-                output_bam=hifi_bam_individual,
+                output_path=hifi_bam_individual,
                 min_passes=min_passes,
                 min_rq=min_rq,
                 threads=threads,
-                seed=seed + i if seed is not None else None,  # Unique seed per haplotype
+                seed=seed,
+                hap_idx=i,
             )
-
             hifi_bams.append(hifi_bam_result)
-            logging.info(f"Haplotype {i} CCS complete: {hifi_bam_result}")
 
         # Merge HiFi BAMs if multiple haplotypes (diploid/polyploid)
         if len(hifi_bams) > 1:
@@ -384,7 +415,7 @@ def simulate_pacbio_hifi_reads(
             logging.info("=" * 80)
 
             # Clean up intermediate files (keep HiFi FASTQ as final output)
-            cleanup_files(intermediate_files)
+            cleanup_intermediates(intermediate_files)
 
             return hifi_fastq
 
@@ -414,7 +445,7 @@ def simulate_pacbio_hifi_reads(
         logging.info("STAGE 5: Cleaning up intermediate files")
         logging.info("=" * 80)
 
-        cleanup_files(intermediate_files)
+        cleanup_intermediates(intermediate_files)
 
         # Calculate elapsed time and write metadata
         end_time = datetime.now()
@@ -451,11 +482,11 @@ def simulate_pacbio_hifi_reads(
 
             # Now clean up MAF files
             for maf_paths in maf_files_by_haplotype.values():
-                cleanup_files(maf_paths)
+                cleanup_intermediates(maf_paths)
 
         # Write metadata file with tool versions and provenance
-        metadata_file = write_metadata_file(
-            output_dir=str(output_dir_path),
+        metadata_file = create_pipeline_metadata(
+            output_dir=output_dir_path,
             output_base=output_base,
             config=config,
             start_time=start_time,
@@ -463,7 +494,7 @@ def simulate_pacbio_hifi_reads(
             platform="PacBio",
             tools_used=["pbsim3", "ccs", "minimap2", "samtools"],
         )
-        logging.info(f"Metadata file: {metadata_file}")
+        logging.info("Metadata file: %s", metadata_file)
         logging.info("=" * 80)
 
         return aligned_bam
@@ -486,10 +517,8 @@ def simulate_pacbio_hifi_reads(
         logging.error(f"Unexpected error in PacBio pipeline: {e}")
         raise RuntimeError(f"PacBio HiFi simulation pipeline failed: {e}") from e
     finally:
-        # Always attempt cleanup, even if pipeline fails
-        # (Don't let cleanup errors mask the original error)
         try:
             if "intermediate_files" in locals():
-                cleanup_files(intermediate_files)
+                cleanup_intermediates(intermediate_files)
         except Exception as cleanup_error:
-            logging.warning(f"Cleanup failed (non-fatal): {cleanup_error}")
+            logging.warning("Cleanup failed (non-fatal): %s", cleanup_error)

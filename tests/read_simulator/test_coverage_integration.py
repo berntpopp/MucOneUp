@@ -37,47 +37,60 @@ class TestCoverageDownsamplingIntegration:
         assert rs_config.get("downsample_coverage") is None
 
     def test_missing_coverage_skips_downsampling(self, minimal_config, tmp_path):
-        """Verify that omitting coverage key skips downsampling."""
-        from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
+        """Verify that omitting coverage key skips downsampling.
+
+        Downsampling now lives inside stages.alignment.align_and_refine, so we
+        verify the behaviour by checking that align_and_refine receives a config
+        without a coverage key (which causes it to skip the downsampling branch).
+        We test the stage module's own coverage logic separately in
+        test_alignment_stage.py; here we confirm the orchestrator passes config
+        through correctly.
+        """
+        from muc_one_up.read_simulator.stages import AlignmentResult, FragmentResult
 
         # Arrange: Config WITHOUT coverage key
         config = minimal_config.copy()
-        # Explicitly remove coverage if present
         if "coverage" in config.get("read_simulation", {}):
             del config["read_simulation"]["coverage"]
 
-        config["read_simulation"]["read_number"] = 1000
-        config["read_simulation"]["fragment_size"] = 250
-        config["read_simulation"]["fragment_sd"] = 35
-        config["read_simulation"]["min_fragment"] = 20
-
-        # Create dummy input FASTA
         input_fa = tmp_path / "input.fa"
         input_fa.write_text(">chr1\nATCGATCGATCGATCG\n")
 
-        # Mock all external dependencies
+        final_bam = str(tmp_path / "out.bam")
+
         with (
             patch("muc_one_up.read_simulator.pipeline.check_external_tools"),
-            patch("muc_one_up.read_simulator.pipeline.replace_Ns", return_value=str(input_fa)),
-            patch("muc_one_up.read_simulator.pipeline.simulate_fragments"),
-            patch("muc_one_up.read_simulator.pipeline.create_reads"),
-            patch("muc_one_up.read_simulator.pipeline.split_reads"),
-            patch("muc_one_up.read_simulator.pipeline.align_reads"),
-            patch("muc_one_up.read_simulator.pipeline.calculate_target_coverage") as mock_calc_cov,
-            patch("muc_one_up.read_simulator.pipeline.downsample_entire_bam") as mock_downsample,
+            patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={}),
+            patch("muc_one_up.read_simulator.pipeline.log_tool_versions"),
+            patch("muc_one_up.read_simulator.pipeline.cleanup_intermediates"),
+            patch("muc_one_up.read_simulator.pipeline.create_pipeline_metadata"),
+            patch("muc_one_up.read_simulator.pipeline.generate_read_manifest"),
+            patch(
+                "muc_one_up.read_simulator.pipeline.prepare_fragments",
+                return_value=FragmentResult(
+                    r1_fastq="/r1.fq.gz", r2_fastq="/r2.fq.gz", intermediate_files=[]
+                ),
+            ),
+            patch(
+                "muc_one_up.read_simulator.pipeline.align_and_refine",
+                return_value=AlignmentResult(
+                    final_bam=final_bam, intermediate_bams=[], intermediate_files=[]
+                ),
+            ) as mock_align,
         ):
-            # Act - suppress any exceptions during execution
             with contextlib.suppress(Exception):
+                from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
+
                 simulate_reads_pipeline(config, str(input_fa))
 
-            # Assert: Coverage calculation NOT called
-            assert not mock_calc_cov.called, (
-                "Coverage calculation should be skipped when coverage not set"
-            )
+            # align_and_refine should have been called
+            assert mock_align.called
 
-            # Assert: Downsampling NOT called
-            assert not mock_downsample.called, (
-                "Downsampling should be skipped when coverage not set"
+            # The rs_config passed to align_and_refine must not contain "coverage"
+            call_kwargs = mock_align.call_args
+            passed_rs_config = call_kwargs[1]["rs_config"]
+            assert "coverage" not in passed_rs_config, (
+                "Coverage key should not be present in rs_config when not configured"
             )
 
     def test_vntr_mode_downsampling_integration(self):
@@ -104,18 +117,19 @@ class TestCoverageDownsamplingIntegration:
         assert vntr_region == "chr1:1000-2000", "VNTR region should be retrieved correctly"
 
     def test_low_coverage_skips_downsampling(self, minimal_config, tmp_path):
-        """Verify downsampling skipped when current coverage below target."""
-        from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
+        """Verify downsampling skipped when current coverage below target.
+
+        Downsampling is now handled inside stages.alignment.align_and_refine.
+        We verify the orchestrator passes the coverage config through correctly
+        to the stage; the stage-level behaviour is tested in test_alignment_stage.py.
+        """
+        from muc_one_up.read_simulator.stages import AlignmentResult, FragmentResult
 
         # Arrange: Target coverage higher than current
         config = minimal_config.copy()
         config["read_simulation"]["coverage"] = 100  # Target: 100x
         config["read_simulation"]["downsample_mode"] = "non_vntr"
         config["read_simulation"]["sample_target_bed"] = str(tmp_path / "targets.bed")
-        config["read_simulation"]["read_number"] = 1000
-        config["read_simulation"]["fragment_size"] = 250
-        config["read_simulation"]["fragment_sd"] = 35
-        config["read_simulation"]["min_fragment"] = 20
 
         bed_file = tmp_path / "targets.bed"
         bed_file.write_text("chr1\t1000\t2000\n")
@@ -123,31 +137,43 @@ class TestCoverageDownsamplingIntegration:
         input_fa = tmp_path / "input.fa"
         input_fa.write_text(">chr1\nATCGATCGATCGATCG\n")
 
-        # Mock dependencies
+        final_bam = str(tmp_path / "out.bam")
+
         with (
             patch("muc_one_up.read_simulator.pipeline.check_external_tools"),
-            patch("muc_one_up.read_simulator.pipeline.replace_Ns", return_value=str(input_fa)),
-            patch("muc_one_up.read_simulator.pipeline.simulate_fragments"),
-            patch("muc_one_up.read_simulator.pipeline.create_reads"),
-            patch("muc_one_up.read_simulator.pipeline.split_reads"),
-            patch("muc_one_up.read_simulator.pipeline.align_reads"),
+            patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={}),
+            patch("muc_one_up.read_simulator.pipeline.log_tool_versions"),
+            patch("muc_one_up.read_simulator.pipeline.cleanup_intermediates"),
+            patch("muc_one_up.read_simulator.pipeline.create_pipeline_metadata"),
+            patch("muc_one_up.read_simulator.pipeline.generate_read_manifest"),
             patch(
-                "muc_one_up.read_simulator.pipeline.calculate_target_coverage",
-                return_value=(
-                    30.0,
-                    str(tmp_path / "fake_depth.txt"),
-                ),  # Current: 30x < Target: 100x
+                "muc_one_up.read_simulator.pipeline.prepare_fragments",
+                return_value=FragmentResult(
+                    r1_fastq="/r1.fq.gz", r2_fastq="/r2.fq.gz", intermediate_files=[]
+                ),
             ),
-            patch("muc_one_up.read_simulator.pipeline.downsample_entire_bam") as mock_downsample,
+            patch(
+                "muc_one_up.read_simulator.pipeline.align_and_refine",
+                return_value=AlignmentResult(
+                    final_bam=final_bam, intermediate_bams=[], intermediate_files=[]
+                ),
+            ) as mock_align,
         ):
-            # Act - suppress any exceptions during execution
             with contextlib.suppress(Exception):
+                from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
+
                 simulate_reads_pipeline(config, str(input_fa))
 
-            # Assert: Downsampling NOT called (current < target)
-            assert not mock_downsample.called, (
-                "Downsampling should be skipped when current_cov < target_cov"
+            # align_and_refine should have been called
+            assert mock_align.called
+
+            # The rs_config passed to align_and_refine must carry the coverage config
+            call_kwargs = mock_align.call_args
+            passed_rs_config = call_kwargs[1]["rs_config"]
+            assert passed_rs_config.get("coverage") == 100, (
+                "Coverage target should be forwarded to align_and_refine"
             )
+            assert passed_rs_config.get("downsample_mode") == "non_vntr"
 
 
 class TestCoverageConfigFlowIntegration:
