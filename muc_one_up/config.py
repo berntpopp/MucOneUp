@@ -282,7 +282,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
         "read_simulation": {
             "type": "object",
             "properties": {
-                "simulator": {"type": "string", "enum": ["illumina", "ont"]},
+                "simulator": {"type": "string", "enum": ["illumina", "ont", "pacbio", "amplicon"]},
                 "reseq_model": {"type": "string"},
                 "sample_bam": {"type": "string"},
                 "sample_bam_hg19": {"type": "string"},
@@ -457,6 +457,33 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "weights",
                 "toxic_cutoff",
             ],
+            "additionalProperties": False,
+        },
+        "amplicon_params": {
+            "type": "object",
+            "properties": {
+                "forward_primer": {"type": "string"},
+                "reverse_primer": {"type": "string"},
+                "primer_source": {"type": "string"},
+                "expected_product_range": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 2,
+                    "maxItems": 2,
+                },
+                "pcr_bias": {
+                    "type": "object",
+                    "properties": {
+                        "preset": {"type": "string"},
+                        "e_max": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                        "alpha": {"type": "number", "minimum": 0.0},
+                        "cycles": {"type": "integer", "minimum": 1},
+                        "denaturation_time": {"type": "number", "minimum": 0.0},
+                        "stochastic": {"type": "boolean"},
+                    },
+                },
+            },
+            "required": ["forward_primer", "reverse_primer"],
             "additionalProperties": False,
         },
     },
