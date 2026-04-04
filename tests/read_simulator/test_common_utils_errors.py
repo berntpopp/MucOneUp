@@ -7,20 +7,19 @@ stdout-to-file) plus multi-stage pipelines.
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from muc_one_up.exceptions import ExternalToolError
 from muc_one_up.read_simulator.utils.common_utils import run_command, run_pipeline
 
-
 # ---------------------------------------------------------------------------
 # run_command — capture mode
 # ---------------------------------------------------------------------------
+
 
 class TestRunCommandCaptureErrors:
     """Error paths when capture=True."""
@@ -36,8 +35,7 @@ class TestRunCommandCaptureErrors:
     def test_nonzero_exit_preserves_stderr(self):
         with pytest.raises(ExternalToolError) as exc_info:
             run_command(
-                [sys.executable, "-c",
-                 "import sys; sys.stderr.write('boom\\n'); sys.exit(1)"],
+                [sys.executable, "-c", "import sys; sys.stderr.write('boom\\n'); sys.exit(1)"],
                 capture=True,
             )
         assert "boom" in exc_info.value.stderr
@@ -78,6 +76,7 @@ class TestRunCommandCaptureErrors:
 # run_command — streaming mode (capture=False, no stdout_path)
 # ---------------------------------------------------------------------------
 
+
 class TestRunCommandStreamingErrors:
     """Error paths in the default streaming (Popen) mode."""
 
@@ -107,6 +106,7 @@ class TestRunCommandStreamingErrors:
 # ---------------------------------------------------------------------------
 # run_command — stdout-to-file mode
 # ---------------------------------------------------------------------------
+
 
 class TestRunCommandStdoutPathErrors:
     """Error paths when stdout_path is provided."""
@@ -142,6 +142,7 @@ class TestRunCommandStdoutPathErrors:
 # ---------------------------------------------------------------------------
 # run_pipeline errors
 # ---------------------------------------------------------------------------
+
 
 class TestRunPipelineErrors:
     """Error paths for run_pipeline."""

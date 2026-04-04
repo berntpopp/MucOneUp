@@ -225,9 +225,7 @@ def pick_on_match(
     return (rng or random).choice(matches)
 
 
-def get_insert_length(
-    mu: float, sigma: float, lower: int, rng: random.Random | None = None
-) -> int:
+def get_insert_length(mu: float, sigma: float, lower: int, rng: random.Random | None = None) -> int:
     """
     Return an insert length sampled from a Gaussian distribution (>= lower).
 
