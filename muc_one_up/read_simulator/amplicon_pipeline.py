@@ -114,10 +114,17 @@ def simulate_amplicon_reads_pipeline(
         )
 
     # Extract configuration
-    amplicon_params = config.get("amplicon_params", {})
-    pacbio_params = config.get("pacbio_params", {})
+    from typing import cast
+
+    from ..type_defs import AmpliconConfig, PacbioConfig, ReadSimulationConfig
+
+    _amplicon_raw = config.get("amplicon_params", {})
+    _pacbio_raw = config.get("pacbio_params", {})
+    _rs_raw = config.get("read_simulation", {})
+    amplicon_params = cast(AmpliconConfig, _amplicon_raw)
+    pacbio_params = cast(PacbioConfig, _pacbio_raw)
     tools = config.get("tools", {})
-    rs_config = config.get("read_simulation", {})
+    rs_config = cast(ReadSimulationConfig, _rs_raw)
 
     # Tool paths
     pbsim3_cmd = tools.get("pbsim3", "pbsim")
@@ -139,17 +146,30 @@ def simulate_amplicon_reads_pipeline(
     forward_primer = amplicon_params["forward_primer"]
     reverse_primer = amplicon_params["reverse_primer"]
     expected_range = amplicon_params.get("expected_product_range")
-    expected_range_tuple = tuple(expected_range) if expected_range else None
+    expected_range_tuple: tuple[int, int] | None = None
+    if expected_range is not None:
+        if len(expected_range) != 2:
+            raise ValueError(
+                "amplicon_params.expected_product_range must contain exactly "
+                "2 values: [min_product_size, max_product_size]"
+            )
+        expected_range_tuple = (int(expected_range[0]), int(expected_range[1]))
 
     # Coverage
-    total_coverage = rs_config.get("coverage", pacbio_params.get("coverage", 30))
+    # Prefer read_simulation coverage, fall back to pacbio_params, then default 30.
+    # Use explicit None checks to preserve coverage=0 if ever set intentionally.
+    _rs_cov = rs_config.get("coverage")
+    _pb_cov = pacbio_params.get("coverage")
+    total_coverage: int = int(
+        _rs_cov if _rs_cov is not None else (_pb_cov if _pb_cov is not None else 30)
+    )
 
     # PCR bias model
     pcr_bias_config = amplicon_params.get("pcr_bias", {})
     pcr_model = PCRBiasModel.from_config(pcr_bias_config)
 
     # Output paths
-    output_dir, output_base = resolve_pipeline_outputs(input_fa, rs_config, output_config)
+    output_dir, output_base = resolve_pipeline_outputs(input_fa, _rs_raw, output_config)
 
     start_time = datetime.now()
     intermediate_files: list[str] = []

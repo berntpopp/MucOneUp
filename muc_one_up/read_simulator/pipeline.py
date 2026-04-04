@@ -73,9 +73,14 @@ def simulate_reads_pipeline(
         start_time.strftime("%Y-%m-%d %H:%M:%S"),
     )
 
+    from typing import cast
+
+    from ..type_defs import ReadSimulationConfig
+
     tools = config.get("tools", {})
-    rs_config = config.get("read_simulation", {})
-    assembly_ctx = AssemblyContext.from_configs(config, rs_config)
+    _rs_raw = config.get("read_simulation", {})
+    rs_config = cast(ReadSimulationConfig, _rs_raw)
+    assembly_ctx = AssemblyContext.from_configs(config, _rs_raw)
 
     # Validate and log tools
     check_external_tools(tools)
@@ -89,15 +94,15 @@ def simulate_reads_pipeline(
     logger.info("=" * 60)
 
     # Resolve output paths
-    output_dir, output_base = resolve_pipeline_outputs(input_fa, rs_config, output_config)
+    output_dir, output_base = resolve_pipeline_outputs(input_fa, _rs_raw, output_config)
 
     # Legacy FASTQ path overrides (only when no output_config)
     if output_config is not None:
         reads_fq1 = str(output_dir / f"{output_base}_R1.fastq.gz")
         reads_fq2 = str(output_dir / f"{output_base}_R2.fastq.gz")
     else:
-        reads_fq1 = rs_config.get("output_fastq1", str(output_dir / f"{output_base}_R1.fastq.gz"))
-        reads_fq2 = rs_config.get("output_fastq2", str(output_dir / f"{output_base}_R2.fastq.gz"))
+        reads_fq1 = _rs_raw.get("output_fastq1", str(output_dir / f"{output_base}_R1.fastq.gz"))
+        reads_fq2 = _rs_raw.get("output_fastq2", str(output_dir / f"{output_base}_R2.fastq.gz"))
 
     logger.info("Output filenames:")
     logger.info("  FASTQ pair: %s, %s", reads_fq1, reads_fq2)
@@ -105,7 +110,7 @@ def simulate_reads_pipeline(
     # Stages 1-8: Fragment preparation
     frag_result = prepare_fragments(
         tools=tools,
-        rs_config=rs_config,
+        rs_config=_rs_raw,
         input_fa=input_fa,
         output_dir=output_dir,
         output_base=output_base,
@@ -119,7 +124,7 @@ def simulate_reads_pipeline(
     # Stages 9-11: Alignment and refinement
     align_result = align_and_refine(
         tools=tools,
-        rs_config=rs_config,
+        rs_config=_rs_raw,
         r1=frag_result.r1_fastq,
         r2=frag_result.r2_fastq,
         human_ref=human_ref,

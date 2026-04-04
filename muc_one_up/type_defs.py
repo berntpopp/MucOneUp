@@ -183,7 +183,19 @@ class NanosimConfig(TypedDict, total=False):
     min_read_length: int | None
     max_read_length: int | None
     seed: int | None
-    min_len: int
+    other_options: str
+    correction_factor: float
+    enable_split_simulation: bool
+    enable_coverage_correction: bool
+
+
+class AmpliconConfig(TypedDict, total=False):
+    """Amplicon simulation parameters."""
+
+    forward_primer: str
+    reverse_primer: str
+    expected_product_range: list[int] | None
+    pcr_bias: dict[str, Any]
 
 
 class PacbioConfig(TypedDict, total=False):
@@ -199,6 +211,13 @@ class PacbioConfig(TypedDict, total=False):
     seed: int | None
     pbsim3_cmd: str
     ccs_cmd: str
+    accuracy_mean: float
+    accuracy_sd: float
+    accuracy_min: float
+    length_mean: int
+    length_sd: int
+    length_min: int
+    length_max: int
 
 
 # ---------------------------------------------------------------------------

@@ -210,7 +210,11 @@ def simulate_pacbio_hifi_reads(
         - Pipeline is optimized for VNTR and complex genomic regions
     """
     # Extract configuration
-    pacbio_params = config.get("pacbio_params", {})
+    from typing import cast
+
+    from ..type_defs import PacbioConfig
+
+    pacbio_params = cast(PacbioConfig, config.get("pacbio_params", {}))
     tools = config.get("tools", {})
 
     # Extract tool commands
@@ -263,6 +267,14 @@ def simulate_pacbio_hifi_reads(
         raise RuntimeError(
             f"Missing required PacBio parameters in config: {', '.join(missing_params)}"
         )
+
+    # Narrow types for mypy — the raise above guarantees these are not None,
+    # but mypy cannot infer that. Using explicit checks instead of assert
+    # so they are not stripped by python -O.
+    if model_type is None or model_file is None or coverage is None:
+        raise RuntimeError("Required PacBio parameters missing")  # unreachable
+    if pass_num is None or min_passes is None or min_rq is None:
+        raise RuntimeError("Required PacBio parameters missing")  # unreachable
 
     # Validate parameter ranges
     try:

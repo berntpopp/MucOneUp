@@ -126,12 +126,18 @@ def simulate_ont_reads_pipeline(
     )
 
     # Extract tool commands and simulation parameters
+    from typing import cast
+
+    from ..type_defs import NanosimConfig, ReadSimulationConfig
+
     tools = config.get("tools", {})
-    ns_params = config.get("nanosim_params", {})
-    rs_config = config.get("read_simulation", {})
+    _ns_raw = config.get("nanosim_params", {})
+    _rs_raw = config.get("read_simulation", {})
+    ns_params = cast(NanosimConfig, _ns_raw)
+    rs_config = cast(ReadSimulationConfig, _rs_raw)
 
     # Resolve assembly context once for the entire pipeline run
-    assembly_ctx = AssemblyContext.from_configs(config, rs_config)
+    assembly_ctx = AssemblyContext.from_configs(config, _rs_raw)
 
     # Validate required tools
     nanosim_cmd = tools.get("nanosim")
@@ -155,7 +161,7 @@ def simulate_ont_reads_pipeline(
         raise ValueError("Missing 'coverage' in nanosim_params configuration.")
 
     # Optional parameters with defaults
-    threads = ns_params.get("num_threads", rs_config.get("threads", 4))
+    threads: int = ns_params.get("num_threads") or rs_config.get("threads") or 4
     min_read_length = ns_params.get("min_read_length")
     max_read_length = ns_params.get("max_read_length")
     other_options = ns_params.get("other_options", "")
@@ -165,7 +171,7 @@ def simulate_ont_reads_pipeline(
     enable_coverage_correction = ns_params.get("enable_coverage_correction", True)
 
     # Resolve output paths (fixes input_basename bug — was undefined when output_config set)
-    output_dir_path, output_base = resolve_pipeline_outputs(input_fa, rs_config, output_config)
+    output_dir_path, output_base = resolve_pipeline_outputs(input_fa, _rs_raw, output_config)
     # Preserve _ont suffix convention when output_config is not provided
     if output_config is None:
         output_base = f"{output_base}_ont"
@@ -173,7 +179,7 @@ def simulate_ont_reads_pipeline(
 
     # Determine simulation mode
     use_split_simulation, correction_factor, is_diploid = _resolve_simulation_mode(
-        input_fa, ns_params
+        input_fa, _ns_raw
     )
 
     if is_diploid:
