@@ -72,7 +72,9 @@ class TestPCRBiasModelFromParams:
 
     def test_from_params(self):
         model = PCRBiasModel.from_params(
-            e_max=0.90, alpha=0.0002, cycles=20,
+            e_max=0.90,
+            alpha=0.0002,
+            cycles=20,
         )
         assert model.e_max == pytest.approx(0.90)
         assert model.alpha == pytest.approx(0.0002)
@@ -80,7 +82,10 @@ class TestPCRBiasModelFromParams:
 
     def test_stochastic_flag(self):
         model = PCRBiasModel.from_params(
-            e_max=0.95, alpha=0.0001, cycles=25, stochastic=True,
+            e_max=0.95,
+            alpha=0.0001,
+            cycles=25,
+            stochastic=True,
         )
         assert model.stochastic is True
 
@@ -90,7 +95,10 @@ class TestPCRBiasModelStochastic:
 
     def test_stochastic_reproducible_with_seed(self):
         model = PCRBiasModel.from_params(
-            e_max=0.95, alpha=0.0001, cycles=25, stochastic=True,
+            e_max=0.95,
+            alpha=0.0001,
+            cycles=25,
+            stochastic=True,
         )
         r1 = model.compute_coverage_split(1000, 2000, 5000, seed=42)
         r2 = model.compute_coverage_split(1000, 2000, 5000, seed=42)
@@ -98,7 +106,10 @@ class TestPCRBiasModelStochastic:
 
     def test_stochastic_different_seeds_differ(self):
         model = PCRBiasModel.from_params(
-            e_max=0.95, alpha=0.0001, cycles=25, stochastic=True,
+            e_max=0.95,
+            alpha=0.0001,
+            cycles=25,
+            stochastic=True,
         )
         r1 = model.compute_coverage_split(1000, 2000, 5000, seed=42)
         r2 = model.compute_coverage_split(1000, 2000, 5000, seed=99)
@@ -106,7 +117,10 @@ class TestPCRBiasModelStochastic:
 
     def test_stochastic_preserves_total(self):
         model = PCRBiasModel.from_params(
-            e_max=0.95, alpha=0.0001, cycles=25, stochastic=True,
+            e_max=0.95,
+            alpha=0.0001,
+            cycles=25,
+            stochastic=True,
         )
         n1, n2 = model.compute_coverage_split(1000, 2000, 5000, seed=42)
         assert n1 + n2 == 1000
@@ -114,7 +128,10 @@ class TestPCRBiasModelStochastic:
     def test_stochastic_shorter_allele_tends_higher(self):
         """Over many runs, shorter allele should average more reads."""
         model = PCRBiasModel.from_params(
-            e_max=0.95, alpha=0.0003, cycles=25, stochastic=True,
+            e_max=0.95,
+            alpha=0.0003,
+            cycles=25,
+            stochastic=True,
         )
         ratios = []
         for seed in range(50):

@@ -333,9 +333,7 @@ class TestRunPbsim3TemplateSimulation:
         output_bam = tmp_path / "out.bam"
         output_bam.write_bytes(b"BAM\x01FAKE")
 
-        with patch(
-            "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command"
-        ) as mock_run:
+        with patch("muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
 
             run_pbsim3_template_simulation(
@@ -393,9 +391,7 @@ class TestRunPbsim3TemplateSimulation:
         output_bam = tmp_path / "out.bam"
         output_bam.write_bytes(b"BAM\x01FAKE")
 
-        with patch(
-            "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command"
-        ) as mock_run:
+        with patch("muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
 
             run_pbsim3_template_simulation(

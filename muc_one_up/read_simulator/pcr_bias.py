@@ -108,9 +108,7 @@ class PCRBiasModel:
             e_max=config.get("e_max", defaults["e_max"]),
             alpha=config.get("alpha", defaults["alpha"]),
             cycles=config.get("cycles", defaults["cycles"]),
-            denaturation_time=config.get(
-                "denaturation_time", defaults["denaturation_time"]
-            ),
+            denaturation_time=config.get("denaturation_time", defaults["denaturation_time"]),
             stochastic=config.get("stochastic", defaults["stochastic"]),
         )
 
@@ -143,9 +141,7 @@ class PCRBiasModel:
             return self._stochastic_split(total_coverage, e1, e2, seed)
         return self._deterministic_split(total_coverage, e1, e2)
 
-    def _deterministic_split(
-        self, total: int, e1: float, e2: float
-    ) -> tuple[int, int]:
+    def _deterministic_split(self, total: int, e1: float, e2: float) -> tuple[int, int]:
         """Deterministic coverage split based on yield ratio."""
         yield1 = (1 + e1) ** self.cycles
         yield2 = (1 + e2) ** self.cycles

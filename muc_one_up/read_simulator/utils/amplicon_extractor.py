@@ -74,9 +74,7 @@ class AmpliconExtractor:
 
         records = list(SeqIO.parse(haplotype_fasta, "fasta"))
         if not records:
-            raise AmpliconExtractionError(
-                f"No sequences found in {haplotype_fasta}"
-            )
+            raise AmpliconExtractionError(f"No sequences found in {haplotype_fasta}")
 
         record = records[0]
         template = str(record.seq)

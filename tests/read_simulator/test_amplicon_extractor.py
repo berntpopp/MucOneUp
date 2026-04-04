@@ -102,7 +102,9 @@ class TestAmpliconExtractor:
         with pytest.raises(AmpliconExtractionError, match="Multiple forward primer"):
             extractor.extract(str(fasta), str(output))
 
-    def test_product_range_validation_pass(self, haplotype_fasta_with_primers, muc1_primers, tmp_path):
+    def test_product_range_validation_pass(
+        self, haplotype_fasta_with_primers, muc1_primers, tmp_path
+    ):
         extractor = AmpliconExtractor(
             forward_primer=muc1_primers["forward"],
             reverse_primer=muc1_primers["reverse"],
@@ -114,7 +116,9 @@ class TestAmpliconExtractor:
         result = extractor.extract(str(fasta), str(output))
         assert result.length > 0
 
-    def test_product_range_validation_fail(self, haplotype_fasta_with_primers, muc1_primers, tmp_path):
+    def test_product_range_validation_fail(
+        self, haplotype_fasta_with_primers, muc1_primers, tmp_path
+    ):
         extractor = AmpliconExtractor(
             forward_primer=muc1_primers["forward"],
             reverse_primer=muc1_primers["reverse"],

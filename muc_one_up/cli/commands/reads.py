@@ -522,6 +522,11 @@ def amplicon(
         config["amplicon_params"]["pcr_bias"]["stochastic"] = True
 
     _run_batch_simulation(
-        config, input_fastas, out_dir, out_base, "_amplicon", "Amplicon",
+        config,
+        input_fastas,
+        out_dir,
+        out_base,
+        "_amplicon",
+        "Amplicon",
         track_read_source=False,
     )

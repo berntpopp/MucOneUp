@@ -410,14 +410,14 @@ def run_pbsim3_template_simulation(
     if seed is not None:
         logging.info("  Seed: %d", seed)
 
-    run_command(cmd, timeout=timeout, stderr_prefix="[pbsim3-templ] ", stderr_log_level=logging.INFO)
+    run_command(
+        cmd, timeout=timeout, stderr_prefix="[pbsim3-templ] ", stderr_log_level=logging.INFO
+    )
 
     # Handle output files (same logic as WGS mode)
     output_prefix_path = Path(output_prefix)
     multi_bam_pattern = f"{output_prefix_path.name}_*.bam"
-    multi_bam_files = sorted(
-        str(p) for p in output_prefix_path.parent.glob(multi_bam_pattern)
-    )
+    multi_bam_files = sorted(str(p) for p in output_prefix_path.parent.glob(multi_bam_pattern))
 
     output_bams: list[str] = []
 
@@ -454,9 +454,7 @@ def run_pbsim3_template_simulation(
             raise FileOperationError(f"pbsim3 produced empty BAM: {output_bam}")
         output_bams.append(output_bam)
 
-    logging.info(
-        "pbsim3 template simulation complete: %d BAM file(s)", len(output_bams)
-    )
+    logging.info("pbsim3 template simulation complete: %d BAM file(s)", len(output_bams))
     return output_bams
 
 

@@ -86,7 +86,10 @@ def _get_simulator_map() -> dict[str, Callable[..., str]]:
         "pacbio": lambda config, input_fa, human_reference, **kw: simulate_pacbio_hifi_reads(
             config, input_fa, human_reference=human_reference, **kw
         ),
-        "amplicon": lambda config, input_fa, human_reference, **kw: simulate_amplicon_reads_pipeline(
+        "amplicon": lambda config,
+        input_fa,
+        human_reference,
+        **kw: simulate_amplicon_reads_pipeline(
             config, input_fa, human_reference=human_reference, **kw
         ),
     }
