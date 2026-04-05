@@ -232,6 +232,58 @@ class TestPlatformSpecificMetadata:
         assert "Pass_num\t10" in content
 
 
+class TestAssayType:
+    """Test assay_type metadata field."""
+
+    @patch("muc_one_up.read_simulator.utils.metadata_writer.capture_tool_versions")
+    @patch("muc_one_up.read_simulator.utils.metadata_writer.log_tool_versions")
+    def test_assay_type_written_when_present(
+        self, mock_log_versions, mock_capture_versions, tmp_path
+    ):
+        """Assay_type field from config is written to metadata."""
+        mock_capture_versions.return_value = {}
+
+        config = {
+            "tools": {"samtools": "samtools"},
+            "read_simulation": {"coverage": 30, "assay_type": "amplicon"},
+        }
+        path = write_metadata_file(
+            output_dir=str(tmp_path),
+            output_base="test",
+            config=config,
+            start_time=datetime(2025, 1, 1, 12, 0, 0),
+            end_time=datetime(2025, 1, 1, 13, 0, 0),
+            platform="PacBio",
+            tools_used=["samtools"],
+        )
+        content = Path(path).read_text()
+        assert "Assay_type\tamplicon" in content
+
+    @patch("muc_one_up.read_simulator.utils.metadata_writer.capture_tool_versions")
+    @patch("muc_one_up.read_simulator.utils.metadata_writer.log_tool_versions")
+    def test_assay_type_omitted_when_absent(
+        self, mock_log_versions, mock_capture_versions, tmp_path
+    ):
+        """Assay_type field is not written when not in config."""
+        mock_capture_versions.return_value = {}
+
+        config = {
+            "tools": {"samtools": "samtools"},
+            "read_simulation": {"coverage": 30},
+        }
+        path = write_metadata_file(
+            output_dir=str(tmp_path),
+            output_base="test",
+            config=config,
+            start_time=datetime(2025, 1, 1, 12, 0, 0),
+            end_time=datetime(2025, 1, 1, 13, 0, 0),
+            platform="Illumina",
+            tools_used=["samtools"],
+        )
+        content = Path(path).read_text()
+        assert "Assay_type" not in content
+
+
 class TestToolVersions:
     """Test tool version integration."""
 
