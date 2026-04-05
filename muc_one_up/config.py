@@ -282,7 +282,10 @@ CONFIG_SCHEMA: dict[str, Any] = {
         "read_simulation": {
             "type": "object",
             "properties": {
-                "simulator": {"type": "string", "enum": ["illumina", "ont", "pacbio", "amplicon"]},
+                "simulator": {
+                    "type": "string",
+                    "enum": ["illumina", "ont", "pacbio", "amplicon", "ont-amplicon"],
+                },
                 "reseq_model": {"type": "string"},
                 "sample_bam": {"type": "string"},
                 "sample_bam_hg19": {"type": "string"},
@@ -303,6 +306,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "aligner": {"type": "string", "enum": ["bwa", "minimap2"]},
                 "seed": {"type": ["number", "null"]},
                 "keep_intermediate_files": {"type": "boolean"},
+                "assay_type": {"type": "string"},
                 "vntr_capture_efficiency": {
                     "type": "object",
                     "properties": {

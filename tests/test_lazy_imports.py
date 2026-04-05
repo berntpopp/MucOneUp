@@ -62,7 +62,7 @@ def test_amplicon_selection_loads_amplicon_module():
 class TestGetSimulatorDispatch:
     """Verify _get_simulator returns a callable for each valid backend."""
 
-    @pytest.mark.parametrize("sim_type", ["illumina", "ont", "pacbio", "amplicon"])
+    @pytest.mark.parametrize("sim_type", ["illumina", "ont", "pacbio", "amplicon", "ont-amplicon"])
     def test_valid_simulator_returns_callable(self, sim_type):
         from muc_one_up.read_simulation import _get_simulator
 

@@ -365,23 +365,23 @@ def _amplicon_config(tmp_path):
 
 def _patch_amplicon(mocker, tmp_path):
     """Patch all Amplicon pipeline dependencies."""
+    from muc_one_up.read_simulator.amplicon_common import AmpliconPrep
+
+    template_fa = tmp_path / "template.fa"
+    template_fa.write_text(">copy\nACGT\n")
+
     mocker.patch(
-        "muc_one_up.read_simulator.amplicon_pipeline.is_diploid_reference",
-        return_value=False,
+        "muc_one_up.read_simulator.amplicon_pipeline.extract_and_prepare_amplicons",
+        return_value=AmpliconPrep(
+            allele_templates=[template_fa],
+            allele_coverages=[30],
+            output_dir=tmp_path,
+            output_base="amplicon",
+            intermediate_files=[],
+            is_diploid=False,
+        ),
     )
 
-    # Mock AmpliconExtractor as a class returning an object with extract()
-    mock_extractor = mocker.MagicMock()
-    amp_result = mocker.MagicMock()
-    amp_result.length = 500
-    amp_result.fasta_path = str(tmp_path / "amp.fa")
-    mock_extractor.extract.return_value = amp_result
-    mocker.patch(
-        "muc_one_up.read_simulator.amplicon_pipeline.AmpliconExtractor",
-        return_value=mock_extractor,
-    )
-
-    mocker.patch("muc_one_up.read_simulator.amplicon_pipeline.generate_template_fasta")
     mocker.patch(
         "muc_one_up.read_simulator.amplicon_pipeline.run_pbsim3_template_simulation",
         return_value=[str(tmp_path / "clr.bam")],

@@ -163,6 +163,11 @@ def write_metadata_file(
             if pass_num is not None:
                 f.write(f"Pass_num\t{pass_num}\n")
 
+        # Assay type (e.g., "amplicon") — written when present in config
+        assay = config.get("read_simulation", {}).get("assay_type")
+        if assay:
+            f.write(f"Assay_type\t{assay}\n")
+
         # Tool versions (namespaced with "tool." prefix, sorted alphabetically, skip N/A)
         for tool_name, version in sorted(tool_versions.items()):
             if version != "N/A":  # Only write if version was successfully captured

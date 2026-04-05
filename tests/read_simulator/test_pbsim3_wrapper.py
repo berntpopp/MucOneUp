@@ -408,3 +408,44 @@ class TestRunPbsim3TemplateSimulation:
             assert "--seed" in cmd
             idx = cmd.index("--seed")
             assert str(cmd[idx + 1]) == "42"
+
+    def test_pass_num_1_accepted(self, tmp_path):
+        """pass_num=1 must be accepted for ONT single-pass simulation."""
+        model = tmp_path / "test.model"
+        model.write_text("model")
+        template = tmp_path / "template.fa"
+        template.write_text(">seq\nACGT\n")
+
+        # Should not raise FileOperationError for pass_num validation.
+        # It WILL raise for missing pbsim3 executable — that's expected.
+        with pytest.raises(Exception) as exc_info:
+            run_pbsim3_template_simulation(
+                pbsim3_cmd="nonexistent_pbsim3",
+                samtools_cmd="samtools",
+                template_fasta=str(template),
+                model_type="errhmm",
+                model_file=str(model),
+                output_prefix=str(tmp_path / "out"),
+                pass_num=1,
+            )
+        # The error should NOT be the pass_num validation message
+        assert "invalid pass_num" not in str(exc_info.value).lower()
+        assert "requires pass_num >=" not in str(exc_info.value).lower()
+
+    def test_pass_num_0_rejected(self, tmp_path):
+        """pass_num=0 must still be rejected."""
+        model = tmp_path / "test.model"
+        model.write_text("model")
+        template = tmp_path / "template.fa"
+        template.write_text(">seq\nACGT\n")
+
+        with pytest.raises(FileOperationError, match="pass_num"):
+            run_pbsim3_template_simulation(
+                pbsim3_cmd="pbsim",
+                samtools_cmd="samtools",
+                template_fasta=str(template),
+                model_type="errhmm",
+                model_file=str(model),
+                output_prefix=str(tmp_path / "out"),
+                pass_num=0,
+            )

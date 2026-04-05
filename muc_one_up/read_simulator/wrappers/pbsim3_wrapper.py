@@ -379,10 +379,10 @@ def run_pbsim3_template_simulation(
     if not template_path.exists():
         raise FileOperationError(f"Template FASTA file not found: {template_fasta}")
 
-    # Validate pass_num (same constraint as WGS mode)
-    if pass_num < 2:
+    # Validate pass_num (>=1 for template mode; ONT uses pass_num=1)
+    if pass_num < 1:
         raise FileOperationError(
-            f"Invalid pass_num: {pass_num}. Multi-pass simulation requires pass_num >= 2"
+            f"Invalid pass_num: {pass_num}. Template simulation requires pass_num >= 1"
         )
 
     # Build command — template mode uses different flags than WGS
