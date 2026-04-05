@@ -497,7 +497,7 @@ Parameters for Illumina read simulation (Wessim2-style fragment simulation with 
 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
-| `simulator` | string | "illumina", "ont", "pacbio", or "amplicon" | "illumina" |
+| `simulator` | string | "illumina", "ont", "pacbio", "amplicon", or "ont-amplicon" | "illumina" |
 | `human_reference` | string | Path to reference FASTA | Required |
 | `reseq_model` | string | Path to ReSeq error model | - |
 | `read_number` | integer | Number of reads to generate | - |

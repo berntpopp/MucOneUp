@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.43.0] - 2026-04-05
+
+### Added
+- ONT amplicon simulation via `reads amplicon --platform ont`
+- `--platform` option for `reads amplicon` command (choices: `pacbio`, `ont`)
+- Shared amplicon preparation module (`amplicon_common.py`) used by both platforms
+- `Assay_type` field in simulation metadata TSV
+- `assay_type` and `ont-amplicon` to config schema
+- `keep_intermediate_files` support in ONT amplicon pipeline
+- 13 new tests for ONT amplicon pipeline, shared helpers, CLI routing, and metadata
+
+### Changed
+- Relaxed pbsim3 `pass_num` validation from `>= 2` to `>= 1` (ONT single-pass)
+- Refactored PacBio amplicon pipeline to use shared extraction stages
+- Metadata platform field changed from `PacBio-Amplicon` to `PacBio` with separate `assay_type`
+
+---
+
 ## [0.40.0] - 2026-04-04
 
 ### Added

@@ -1,6 +1,6 @@
 # Amplicon Read Simulation Guide
 
-Simulate PacBio amplicon reads with realistic PCR length bias from MucOneUp diploid references.
+Simulate PacBio or ONT amplicon reads with realistic PCR length bias from MucOneUp diploid references.
 
 ---
 
@@ -13,7 +13,7 @@ The `reads amplicon` command produces full-length amplicon reads that mimic targ
 - Primer-based amplicon extraction from simulated haplotypes
 - PCR length bias modeling (shorter alleles amplify preferentially)
 - PBSIM3 template mode for full-length reads with realistic error profiles
-- CCS consensus for HiFi-quality output
+- PacBio (multi-pass CCS) and ONT (single-pass) platform support
 - Diploid and haploid input support
 
 **How it differs from `reads pacbio`:**
@@ -35,14 +35,20 @@ muconeup --config config.json simulate \
   --fixed-lengths 40 --fixed-lengths 70 \
   --seed 42 --out-base output/sample
 
-# 2. Simulate amplicon reads
+# 2a. PacBio amplicon reads (default)
 muconeup --config config.json reads amplicon \
   output/sample.001.simulated.fa \
   --model-file /path/to/QSHMM-RSII.model \
   --coverage 500 --seed 42
+
+# 2b. ONT amplicon reads
+muconeup --config config.json reads amplicon --platform ont \
+  output/sample.001.simulated.fa \
+  --model-file /path/to/ERRHMM-ONT-HQ.model \
+  --coverage 500 --seed 42
 ```
 
-**Output:** Aligned BAM with ~500 HiFi reads, biased toward the shorter (40-repeat) allele.
+**Output:** Aligned BAM with ~500 reads, biased toward the shorter (40-repeat) allele.
 
 ---
 
@@ -81,6 +87,36 @@ Input FASTA (diploid)
 ```
 
 For **haploid** input (single sequence), stages 1 and 3 are skipped.
+
+---
+
+## Platform Selection
+
+Use `--platform` to choose between PacBio and ONT amplicon simulation:
+
+```bash
+# PacBio HiFi (default)
+muconeup --config config.json reads amplicon sample.fa \
+  --model-file /path/to/QSHMM-SEQUEL.model
+
+# Oxford Nanopore
+muconeup --config config.json reads amplicon --platform ont sample.fa \
+  --model-file /path/to/ERRHMM-ONT-HQ.model
+```
+
+Stages 1-4 (extraction, PCR bias, template generation) are shared. The platforms differ in read generation and alignment:
+
+| Stage | PacBio (`--platform pacbio`) | ONT (`--platform ont`) |
+|-------|------------------------------|------------------------|
+| pbsim3 pass_num | 3+ (multi-pass CLR) | 1 (single-pass) |
+| Consensus | CCS (multi-pass -> HiFi) | None (skip) |
+| minimap2 preset | `map-hifi` | `map-ont` |
+| Error model | `QSHMM-SEQUEL.model` etc. | `ERRHMM-ONT-HQ.model` etc. |
+| Output suffix | `*_amplicon_hifi.bam` | `*_amplicon_ont.bam` |
+| Tool dependencies | pbsim3, ccs, samtools, minimap2 | pbsim3, samtools, minimap2 |
+
+!!! note "ONT does not require CCS"
+    The ONT pipeline skips CCS consensus entirely. Each pbsim3 template produces one single-pass read, which is converted directly to FASTQ and aligned. This means `--coverage` maps directly to the number of output reads (before alignment filtering).
 
 ---
 
@@ -210,7 +246,7 @@ This means 1500 <= amplicon_length <= 6000 bp. Amplicons outside this range rais
 
 ## Coverage Semantics
 
-`--coverage` specifies the total number of **template molecules before CCS filtering**. The actual HiFi read count may be lower due to CCS quality filtering (`min_rq`, `min_passes`).
+`--coverage` specifies the total number of **template molecules**. For PacBio, the actual HiFi read count may be lower due to CCS quality filtering (`min_rq`, `min_passes`). For ONT, each template produces one output read (no CCS filtering).
 
 For diploid inputs, the total is split between alleles by the PCR bias model:
 
@@ -233,6 +269,7 @@ Required:
   INPUT_FASTAS              One or more FASTA files
 
 Options:
+  --platform [pacbio|ont]    Sequencing platform (default: pacbio)
   --model-file PATH         pbsim3 model file (overrides config)
   --model-type [qshmm|errhmm]  pbsim3 model type (overrides config)
   --pcr-preset [default|no_bias]  PCR bias preset
@@ -249,9 +286,8 @@ Options:
 
 ---
 
-## Limitations (v1)
+## Limitations
 
-- **PacBio only** -- ONT amplicon support is planned for a follow-up release
 - **Read source tracking** (`--track-read-source`) is not supported in amplicon mode
 - Primer matching is exact (no mismatch tolerance)
 - Single amplicon region per run
