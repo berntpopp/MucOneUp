@@ -24,16 +24,13 @@ if TYPE_CHECKING:
     from .output_config import OutputConfig
 
 from ..exceptions import ExternalToolError, FileOperationError, ReadSimulationError
+from .amplicon_common import extract_and_prepare_amplicons
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
-from .pcr_bias import PCRBiasModel
 from .pipeline_utils import (
     cleanup_intermediates,
     create_pipeline_metadata,
     resolve_pipeline_outputs,
 )
-from .utils.amplicon_extractor import AmpliconExtractor
-from .utils.reference_utils import extract_haplotypes, is_diploid_reference
-from .utils.template_generator import generate_template_fasta
 from .wrappers.ccs_wrapper import run_ccs_consensus
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 from .wrappers.pbsim3_wrapper import run_pbsim3_template_simulation
@@ -164,9 +161,8 @@ def simulate_amplicon_reads_pipeline(
         _rs_cov if _rs_cov is not None else (_pb_cov if _pb_cov is not None else 30)
     )
 
-    # PCR bias model
+    # PCR bias config
     pcr_bias_config = amplicon_params.get("pcr_bias", {})
-    pcr_model = PCRBiasModel.from_config(pcr_bias_config)
 
     # Output paths
     output_dir, output_base = resolve_pipeline_outputs(input_fa, _rs_raw, output_config)
@@ -182,77 +178,22 @@ def simulate_amplicon_reads_pipeline(
             logging.info("AMPLICON SIMULATION PIPELINE")
             logging.info("=" * 80)
 
-            # STAGE 1: Haplotype detection and extraction
-            diploid = is_diploid_reference(input_fa)
-
-            if diploid:
-                logging.info("STAGE 1: Extracting haplotypes from diploid reference")
-                hap1_fa, hap2_fa = extract_haplotypes(input_fa, temp_path, base_name="amplicon_sim")
-                haplotype_fastas = [hap1_fa, hap2_fa]
-            else:
-                logging.info("STAGE 1: Haploid reference — skipping extraction")
-                haplotype_fastas = [input_fa]
-
-            # STAGE 2: Amplicon extraction per haplotype
-            logging.info("STAGE 2: Extracting amplicons via primer binding sites")
-
-            extractor = AmpliconExtractor(
+            # STAGES 1-4: Shared amplicon extraction and preparation
+            prep = extract_and_prepare_amplicons(
+                input_fa=input_fa,
                 forward_primer=forward_primer,
                 reverse_primer=reverse_primer,
+                total_coverage=total_coverage,
+                work_dir=temp_path,
                 expected_product_range=expected_range_tuple,
+                pcr_bias_config=pcr_bias_config,
+                seed=seed,
             )
 
-            amplicon_results = []
-            for i, hap_fa in enumerate(haplotype_fastas, 1):
-                amp_out = str(temp_path / f"amplicon_hap{i}.fa")
-                result = extractor.extract(hap_fa, amp_out)
-                amplicon_results.append(result)
-                logging.info("  Haplotype %d amplicon: %d bp", i, result.length)
-
-            # STAGE 3: PCR bias coverage split
-            if diploid:
-                logging.info("STAGE 3: Computing PCR bias coverage split")
-                n1, n2 = pcr_model.compute_coverage_split(
-                    total_coverage,
-                    amplicon_results[0].length,
-                    amplicon_results[1].length,
-                    seed=seed,
-                )
-                # Ensure each allele gets at least 1 read
-                allele_counts = [max(1, n1), max(1, n2)]
-                # Adjust to preserve total if we bumped a zero
-                if n1 == 0 or n2 == 0:
-                    logging.warning(
-                        "PCR bias produced 0 reads for one allele at coverage=%d. "
-                        "Each allele will receive at least 1 read.",
-                        total_coverage,
-                    )
-                logging.info(
-                    "  Coverage split: allele1=%d, allele2=%d (total=%d)",
-                    allele_counts[0],
-                    allele_counts[1],
-                    total_coverage,
-                )
-            else:
-                logging.info("STAGE 3: Haploid — full coverage to single allele")
-                allele_counts = [total_coverage]
-
-            # STAGE 4: Template FASTA generation
-            logging.info("STAGE 4: Generating template FASTAs")
-
-            template_fastas = []
-            for i, (amp_result, count) in enumerate(
-                zip(amplicon_results, allele_counts, strict=False), 1
-            ):
-                template_out = str(temp_path / f"template_hap{i}.fa")
-                generate_template_fasta(amp_result.fasta_path, count, template_out)
-                template_fastas.append(template_out)
-                logging.info(
-                    "  Haplotype %d: %d copies of %d bp amplicon",
-                    i,
-                    count,
-                    amp_result.length,
-                )
+            intermediate_files.extend(prep.intermediate_files)
+            template_fastas = [str(t) for t in prep.allele_templates]
+            allele_counts = prep.allele_coverages
+            diploid = prep.is_diploid
 
             # STAGE 5: PBSIM3 template mode simulation
             logging.info("STAGE 5: Running PBSIM3 template mode simulation")
@@ -358,13 +299,14 @@ def simulate_amplicon_reads_pipeline(
             logging.info("Final output: %s", final_output)
             logging.info("=" * 80)
 
+            config.setdefault("read_simulation", {})["assay_type"] = "amplicon"
             create_pipeline_metadata(
                 output_dir=output_dir,
                 output_base=output_base,
                 config=config,
                 start_time=start_time,
                 end_time=end_time,
-                platform="PacBio-Amplicon",
+                platform="PacBio",
                 tools_used=["pbsim3", "ccs", "minimap2", "samtools"],
             )
 
