@@ -306,6 +306,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "aligner": {"type": "string", "enum": ["bwa", "minimap2"]},
                 "seed": {"type": ["number", "null"]},
                 "keep_intermediate_files": {"type": "boolean"},
+                "assay_type": {"type": "string"},
                 "vntr_capture_efficiency": {
                     "type": "object",
                     "properties": {

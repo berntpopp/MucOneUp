@@ -188,6 +188,7 @@ def simulate_ont_amplicon_pipeline(
                 logging.info("Final output: %s", merged_fastq)
                 final_output = merged_fastq
             else:
+                intermediate_files.append(merged_fastq)
                 logging.info("STAGE 7: Aligning with minimap2 (map-ont)")
                 aligned_bam = str(output_dir / f"{output_base}_amplicon_ont.bam")
                 aligned_bam = align_reads_with_minimap2(
@@ -237,8 +238,12 @@ def simulate_ont_amplicon_pipeline(
         logging.error("Unexpected error in ONT amplicon pipeline: %s", e)
         raise RuntimeError(f"ONT amplicon pipeline failed: {e}") from e
     finally:
-        try:
-            if intermediate_files:
-                cleanup_intermediates(intermediate_files)
-        except Exception as cleanup_err:
-            logging.warning("Cleanup failed (non-fatal): %s", cleanup_err)
+        keep = config.get("read_simulation", {}).get("keep_intermediate_files", False)
+        if keep:
+            logging.info("Keeping intermediate files (keep_intermediate_files=true)")
+        else:
+            try:
+                if intermediate_files:
+                    cleanup_intermediates(intermediate_files)
+            except Exception as cleanup_err:
+                logging.warning("Cleanup failed (non-fatal): %s", cleanup_err)

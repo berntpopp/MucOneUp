@@ -514,7 +514,7 @@ def amplicon(
     \b
     Examples:
       # Basic PacBio amplicon simulation
-      muconeup --config X reads amplicon sample.simulated.fa \\
+      muconeup --config X reads amplicon sample.fa \\
         --model-file /models/QSHMM-SEQUEL.model
 
       # ONT amplicon simulation
