@@ -87,7 +87,7 @@ def simulate_ont_amplicon_pipeline(
     model_file = pacbio_params["model_file"]
     threads = pacbio_params.get("threads", 4)
     seed = pacbio_params.get("seed")
-    accuracy_mean = pacbio_params.get("accuracy_mean", 0.85)
+    accuracy_mean = pacbio_params.get("accuracy_mean", 0.95)
 
     forward_primer = amplicon_params["forward_primer"]
     reverse_primer = amplicon_params["reverse_primer"]
@@ -212,7 +212,6 @@ def simulate_ont_amplicon_pipeline(
             logging.info("Final output: %s", final_output)
             logging.info("=" * 80)
 
-            config.setdefault("read_simulation", {})["assay_type"] = "amplicon"
             create_pipeline_metadata(
                 output_dir=output_dir,
                 output_base=f"{output_base}_amplicon_ont",

@@ -297,7 +297,6 @@ def simulate_amplicon_reads_pipeline(
             logging.info("Final output: %s", final_output)
             logging.info("=" * 80)
 
-            config.setdefault("read_simulation", {})["assay_type"] = "amplicon"
             create_pipeline_metadata(
                 output_dir=output_dir,
                 output_base=output_base,

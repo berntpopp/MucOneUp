@@ -73,6 +73,7 @@ def extract_and_prepare_amplicons(
         logging.info("STAGE 1: Extracting haplotypes from diploid reference")
         hap1_fa, hap2_fa = extract_haplotypes(input_fa, work_dir, base_name="amplicon_sim")
         haplotype_fastas = [hap1_fa, hap2_fa]
+        intermediate_files.extend([hap1_fa, hap2_fa])
     else:
         logging.info("STAGE 1: Haploid reference — skipping extraction")
         haplotype_fastas = [input_fa]

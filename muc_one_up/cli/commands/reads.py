@@ -525,6 +525,11 @@ def amplicon(
       muconeup --config X reads amplicon sample.fa \\
         --model-file /models/QSHMM-SEQUEL.model \\
         --coverage 1000 --stochastic-pcr --seed 42
+
+      # No PCR bias (equal coverage per allele)
+      muconeup --config X reads amplicon sample.fa \\
+        --model-file /models/QSHMM-SEQUEL.model \\
+        --pcr-preset no_bias
     """
     require_config(ctx)
 
