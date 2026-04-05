@@ -17,7 +17,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from muc_one_up.exceptions import FileOperationError
+from muc_one_up.exceptions import ExternalToolError, FileOperationError
 from muc_one_up.read_simulator.wrappers.reseq_wrapper import (
     create_reads,
     generate_systematic_errors,
@@ -138,7 +138,7 @@ class TestGenerateSystematicErrors:
 
 
 class TestCreateReads:
-    """Test create_reads command construction and timeout handling."""
+    """Test create_reads command construction and output validation."""
 
     def test_constructs_correct_seqToIllumina_command(self, mocker, tmp_path, tools_dict):
         """Test that seqToIllumina command includes threads and paths."""
@@ -184,66 +184,57 @@ class TestCreateReads:
         assert "-i" in cmd
         assert "-o" in cmd
 
-    def test_handles_timeout_with_valid_output(self, mocker, tmp_path, tools_dict):
-        """Test that timeout with existing output logs warning and continues."""
-        # Arrange
+    def test_raises_error_on_empty_output(self, mocker, tmp_path, tools_dict):
+        """Test that empty output after successful run raises FileOperationError."""
         fragments = tmp_path / "fragments.fa"
         model_file = tmp_path / "model.txt"
         output_fq = tmp_path / "output.fq"
 
         fragments.write_text(">frag1\nACGT\n")
         model_file.write_text("MODEL_DATA")
-        # Pre-create output file (simulates timeout after file was created)
-        output_fq.write_text("@read1\nACGT\n+\nIIII\n")
 
-        # Mock subprocess.Popen to simulate timeout
         def mock_popen_side_effect(cmd, **kwargs):
+            # Command succeeds but produces empty output
+            output_fq.write_text("")
             mock_proc = Mock()
-            mock_proc.returncode = -15  # SIGTERM (timeout)
+            mock_proc.returncode = 0
             mock_proc.stdout = Mock()
             mock_proc.stderr = Mock()
             mock_proc.stdout.readline = Mock(return_value=b"")
             mock_proc.stderr.readline = Mock(return_value=b"")
-            mock_proc.wait = Mock(return_value=-15)
+            mock_proc.wait = Mock(return_value=0)
             mock_proc.pid = 12345
             return mock_proc
 
         mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
 
-        # Act: Should log warning but NOT raise error
-        create_reads(str(fragments), str(model_file), str(output_fq), 4, tools_dict, timeout=1)
-
-        # Assert: No exception raised, output exists
-        assert output_fq.exists()
-
-    def test_raises_error_on_timeout_without_output(self, mocker, tmp_path, tools_dict):
-        """Test that timeout without output raises FileOperationError."""
-        # Arrange
-        fragments = tmp_path / "fragments.fa"
-        model_file = tmp_path / "model.txt"
-        output_fq = tmp_path / "output.fq"
-
-        fragments.write_text(">frag1\nACGT\n")
-        model_file.write_text("MODEL_DATA")
-        # DON'T create output file
-
-        # Mock subprocess.Popen to simulate timeout
-        def mock_popen_side_effect(cmd, **kwargs):
-            mock_proc = Mock()
-            mock_proc.returncode = -15  # SIGTERM (timeout)
-            mock_proc.stdout = Mock()
-            mock_proc.stderr = Mock()
-            mock_proc.stdout.readline = Mock(return_value=b"")
-            mock_proc.stderr.readline = Mock(return_value=b"")
-            mock_proc.wait = Mock(return_value=-15)
-            mock_proc.pid = 12345
-            return mock_proc
-
-        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
-
-        # Act & Assert
         with pytest.raises(FileOperationError, match="missing or empty"):
-            create_reads(str(fragments), str(model_file), str(output_fq), 4, tools_dict, timeout=1)
+            create_reads(str(fragments), str(model_file), str(output_fq), 4, tools_dict)
+
+    def test_raises_error_on_command_failure(self, mocker, tmp_path, tools_dict):
+        """Test that command failure raises ExternalToolError."""
+        fragments = tmp_path / "fragments.fa"
+        model_file = tmp_path / "model.txt"
+        output_fq = tmp_path / "output.fq"
+
+        fragments.write_text(">frag1\nACGT\n")
+        model_file.write_text("MODEL_DATA")
+
+        def mock_popen_side_effect(cmd, **kwargs):
+            mock_proc = Mock()
+            mock_proc.returncode = 1
+            mock_proc.stdout = Mock()
+            mock_proc.stderr = Mock()
+            mock_proc.stdout.readline = Mock(return_value=b"")
+            mock_proc.stderr.readline = Mock(return_value=b"")
+            mock_proc.wait = Mock(return_value=1)
+            mock_proc.pid = 12345
+            return mock_proc
+
+        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
+
+        with pytest.raises(ExternalToolError):
+            create_reads(str(fragments), str(model_file), str(output_fq), 4, tools_dict)
 
 
 class TestSplitReads:

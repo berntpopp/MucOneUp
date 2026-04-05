@@ -165,14 +165,12 @@ def prepare_fragments(
     # Stage 9: Create reads from fragments
     reads_fq = str(Path(output_dir) / f"_{output_base}_reads.fq")
     logger.info("7. Creating reads from fragments")
-    seqtoillumina_timeout = rs_config.get("seqtoillumina_timeout", 120)
     create_reads(
         fragments_fa,
         reseq_model,
         reads_fq,
         threads,
         tools,
-        timeout=seqtoillumina_timeout,
     )
 
     # Stage 10: Split reads into paired FASTQ files

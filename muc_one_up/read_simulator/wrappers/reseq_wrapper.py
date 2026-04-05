@@ -11,7 +11,7 @@ This module provides wrapper functions for the reseq toolkit operations:
 import logging
 from pathlib import Path
 
-from ...exceptions import ExternalToolError, FileOperationError
+from ...exceptions import FileOperationError
 from ..command_utils import build_tool_command
 from ..utils import run_command
 
@@ -79,13 +79,10 @@ def create_reads(
     output_reads: str,
     threads: int,
     tools: dict[str, str],
-    timeout: int | None = 120,
+    timeout: int | None = 600,
 ) -> None:
     """
-    Create reads from fragments using reseq seqToIllumina.
-
-    If the command times out but the output file exists and is non-empty,
-    a warning is logged and the process continues.
+    Create reads from fragments using reseq/reseq2 seqToIllumina.
 
     Args:
         input_fragments: Input fragments FASTA.
@@ -93,52 +90,35 @@ def create_reads(
         output_reads: Output reads FASTQ.
         threads: Number of threads.
         tools: Dictionary of tool commands.
-        timeout: Timeout in seconds (default: 1 hour)
+        timeout: Timeout in seconds (default: 10 minutes).
 
     Raises:
-        SystemExit: If the command fails and the output file is not created.
+        FileOperationError: If the command fails or the output file is not created.
     """
-    # Based on the original code, these must be the exact parameters
-    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     cmd = build_tool_command(
         tools["reseq"],
         "seqToIllumina",
         "-j",
-        threads,  # Number of threads (build_tool_command handles conversion)
+        threads,
         "-s",
-        reseq_model,  # Reseq model file
+        reseq_model,
         "-i",
-        input_fragments,  # Input fragments file
+        input_fragments,
         "-o",
-        output_reads,  # Output file
+        output_reads,
     )
 
-    try:
-        # Execute with a short timeout - reseq seqToIllumina tends to keep running
-        # indefinitely even after it has produced useful output
-        run_command(
-            cmd,
-            timeout=timeout,
-            stderr_log_level=logging.INFO,
-            stderr_prefix="[reseq] ",
-        )
-    except ExternalToolError as e:
-        # Check if the output file exists and is non-empty despite timeout
-        output_path = Path(output_reads)
-        if output_path.exists() and output_path.stat().st_size > 0:
-            logging.warning(
-                (
-                    "reseq seqToIllumina timed out after %s seconds, but valid output "
-                    "exists. This is EXPECTED BEHAVIOR as seqToIllumina often "
-                    "produces complete output before finishing execution. Process was "
-                    "terminated but simulation will continue normally."
-                ),
-                timeout,
-            )
-        else:
-            raise FileOperationError(
-                f"Failed to create reads: Output {output_reads} missing or empty after {timeout} seconds"
-            ) from e
+    run_command(
+        cmd,
+        timeout=timeout,
+        stderr_log_level=logging.INFO,
+        stderr_prefix="[reseq] ",
+    )
+
+    # Verify output exists and is non-empty
+    output_path = Path(output_reads)
+    if not output_path.exists() or output_path.stat().st_size == 0:
+        raise FileOperationError(f"Failed to create reads: Output {output_reads} missing or empty")
 
 
 def split_reads(interleaved_fastq: str, output_fastq1: str, output_fastq2: str) -> None:
