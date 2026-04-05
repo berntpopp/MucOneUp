@@ -461,6 +461,13 @@ def pacbio(
     default=False,
     help="Enable stochastic PCR bias (Galton-Watson branching process).",
 )
+@click.option(
+    "--platform",
+    type=click.Choice(["pacbio", "ont"]),
+    default="pacbio",
+    show_default=True,
+    help="Sequencing platform for amplicon simulation.",
+)
 @shared_read_options
 @click.pass_context
 @cli_error_handler
@@ -474,23 +481,23 @@ def amplicon(
     model_file,
     pcr_preset,
     stochastic_pcr,
+    platform,
     seed,
     track_read_source,
 ):
-    """Simulate PacBio amplicon reads from one or more FASTA files.
+    """Simulate amplicon reads from one or more FASTA files.
 
-    Produces full-length amplicon reads using PBSIM3 template mode with
-    realistic PCR length bias modeling. Extracts amplicon regions using
-    primer binding sites from config.
+    Supports PacBio (default) and ONT platforms. PacBio uses multi-pass
+    CCS consensus; ONT uses single-pass pbsim3 with map-ont alignment.
 
     \b
     Note: --coverage specifies the total number of template molecules
-    (before CCS filtering). Final HiFi read count may be lower due to
-    CCS quality filtering (min-rq, min-passes). For diploid inputs the
-    total is split between alleles by the PCR bias model.
+    (before CCS filtering for PacBio). Final HiFi read count may be
+    lower due to CCS quality filtering (min-rq, min-passes). For diploid
+    inputs the total is split between alleles by the PCR bias model.
 
     \b
-    Pipeline:
+    Pipeline (PacBio):
       1. Extract amplicon region per haplotype (primer-based)
       2. Apply PCR length bias to determine per-allele coverage
       3. Simulate full-length reads (pbsim3 --strategy templ)
@@ -498,20 +505,26 @@ def amplicon(
       5. Align to reference (minimap2 map-hifi preset)
 
     \b
+    Pipeline (ONT):
+      1-3. Same extraction and PCR bias stages
+      4. Simulate single-pass reads (pbsim3 --strategy templ, pass_num=1)
+      5. BAM to FASTQ (no CCS)
+      6. Align to reference (minimap2 map-ont preset)
+
+    \b
     Examples:
-      # Basic amplicon simulation
+      # Basic PacBio amplicon simulation
       muconeup --config X reads amplicon sample.simulated.fa \\
         --model-file /models/QSHMM-SEQUEL.model
+
+      # ONT amplicon simulation
+      muconeup --config X reads amplicon --platform ont sample.fa \\
+        --model-file /models/ERRHMM-ONT.model
 
       # High coverage with stochastic PCR bias
       muconeup --config X reads amplicon sample.fa \\
         --model-file /models/QSHMM-SEQUEL.model \\
         --coverage 1000 --stochastic-pcr --seed 42
-
-      # No PCR bias (equal coverage per allele)
-      muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
-        --pcr-preset no_bias
     """
     require_config(ctx)
 
@@ -526,6 +539,10 @@ def amplicon(
 
     config = load_config_raw(str(ctx.obj["config_path"]))
     _setup_read_config(config, "amplicon", coverage, seed)
+
+    if platform == "ont":
+        config["read_simulation"]["simulator"] = "ont-amplicon"
+    config["read_simulation"]["assay_type"] = "amplicon"
 
     # Ensure amplicon_params exists
     if "amplicon_params" not in config:

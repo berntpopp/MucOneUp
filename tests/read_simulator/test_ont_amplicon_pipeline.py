@@ -51,7 +51,7 @@ def _make_prep(tmp_path, diploid=True):
     count = 2 if diploid else 1
     for i in range(1, count + 1):
         t = tmp_path / f"template_hap{i}.fa"
-        t.write_text(f">copy\nACGT\n")
+        t.write_text(">copy\nACGT\n")
         templates.append(t)
         coverages.append(25)
     return AmpliconPrep(

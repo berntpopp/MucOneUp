@@ -282,7 +282,10 @@ CONFIG_SCHEMA: dict[str, Any] = {
         "read_simulation": {
             "type": "object",
             "properties": {
-                "simulator": {"type": "string", "enum": ["illumina", "ont", "pacbio", "amplicon"]},
+                "simulator": {
+                    "type": "string",
+                    "enum": ["illumina", "ont", "pacbio", "amplicon", "ont-amplicon"],
+                },
                 "reseq_model": {"type": "string"},
                 "sample_bam": {"type": "string"},
                 "sample_bam_hg19": {"type": "string"},

@@ -71,9 +71,7 @@ def extract_and_prepare_amplicons(
 
     if diploid:
         logging.info("STAGE 1: Extracting haplotypes from diploid reference")
-        hap1_fa, hap2_fa = extract_haplotypes(
-            input_fa, work_dir, base_name="amplicon_sim"
-        )
+        hap1_fa, hap2_fa = extract_haplotypes(input_fa, work_dir, base_name="amplicon_sim")
         haplotype_fastas = [hap1_fa, hap2_fa]
     else:
         logging.info("STAGE 1: Haploid reference — skipping extraction")
@@ -127,9 +125,7 @@ def extract_and_prepare_amplicons(
     logging.info("STAGE 4: Generating template FASTAs")
 
     template_fastas: list[Path] = []
-    for i, (amp_result, count) in enumerate(
-        zip(amplicon_results, allele_counts, strict=False), 1
-    ):
+    for i, (amp_result, count) in enumerate(zip(amplicon_results, allele_counts, strict=False), 1):
         template_out = work_dir / f"template_hap{i}.fa"
         generate_template_fasta(amp_result.fasta_path, count, str(template_out))
         template_fastas.append(template_out)

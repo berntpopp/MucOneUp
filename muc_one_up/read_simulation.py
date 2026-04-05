@@ -94,8 +94,16 @@ def _get_simulator(simulator_type: str) -> Callable[..., str]:
         return lambda config, input_fa, human_reference, **kw: simulate_amplicon_reads_pipeline(
             config, input_fa, human_reference=human_reference, **kw
         )
+    elif simulator_type == "ont-amplicon":
+        from muc_one_up.read_simulator.ont_amplicon_pipeline import (
+            simulate_ont_amplicon_pipeline,
+        )
+
+        return lambda config, input_fa, human_reference, **kw: simulate_ont_amplicon_pipeline(
+            config, input_fa, human_reference=human_reference, **kw
+        )
     else:
-        valid = "amplicon, illumina, ont, pacbio"
+        valid = "amplicon, illumina, ont, ont-amplicon, pacbio"
         raise ValueError(f"Unknown simulator: '{simulator_type}'. Valid options: {valid}. ")
 
 

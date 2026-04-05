@@ -192,8 +192,6 @@ def simulate_amplicon_reads_pipeline(
 
             intermediate_files.extend(prep.intermediate_files)
             template_fastas = [str(t) for t in prep.allele_templates]
-            allele_counts = prep.allele_coverages
-            diploid = prep.is_diploid
 
             # STAGE 5: PBSIM3 template mode simulation
             logging.info("STAGE 5: Running PBSIM3 template mode simulation")
