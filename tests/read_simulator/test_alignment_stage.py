@@ -435,3 +435,38 @@ class TestAlignAndRefine:
             )
 
         assert any("deviates" in record.message for record in caplog.records)
+
+    def test_post_downsampling_validation_non_vntr_mode(
+        self, mocker, tmp_path, tools, assembly_ctx
+    ):
+        """Post-downsampling validation also works in non_vntr mode."""
+        mocker.patch(f"{MODULE}.align_reads")
+
+        mock_calc_target = mocker.patch(
+            f"{MODULE}.calculate_target_coverage",
+            side_effect=[(200.0, "/tmp/depth1.txt"), (105.0, "/tmp/depth2.txt")],
+        )
+        mocker.patch(f"{MODULE}.downsample_entire_bam")
+
+        rs_config = {
+            "threads": 4,
+            "coverage": 100,
+            "downsample_mode": "non_vntr",
+            "downsample_seed": 42,
+            "sample_target_bed": "/path/to/targets.bed",
+            "vntr_capture_efficiency": {"enabled": False},
+        }
+
+        align_and_refine(
+            tools=tools,
+            rs_config=rs_config,
+            r1=str(tmp_path / "r1.fastq.gz"),
+            r2=str(tmp_path / "r2.fastq.gz"),
+            human_ref="/ref/hg38.fa",
+            output_dir=tmp_path,
+            output_base="test_sample",
+            assembly_ctx=assembly_ctx,
+        )
+
+        # calculate_target_coverage called twice: pre-downsample + post-validation
+        assert mock_calc_target.call_count == 2

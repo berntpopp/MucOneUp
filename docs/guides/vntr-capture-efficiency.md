@@ -271,7 +271,7 @@ muconeup --config config.json reads illumina sample.fa
 |--------|---------|-------------------|
 | VNTR coverage | 200x | 78x |
 | Flanking coverage | 200x | 200x |
-| Coverage ratio | 1.0 | ~2.6 |
+| VNTR:Flanking ratio | 1.0 | ~2.6 |
 | Reads retained | 100% | ~52% |
 
 ### Coverage Ratio Ranges

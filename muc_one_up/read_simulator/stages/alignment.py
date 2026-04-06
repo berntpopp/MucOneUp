@@ -263,7 +263,7 @@ def align_and_refine(
 
             # Post-downsampling validation: re-measure and log actual coverage
             if mode == "vntr":
-                actual_cov, _ = calculate_vntr_coverage(
+                actual_cov, post_depth_file = calculate_vntr_coverage(
                     tools["samtools"],
                     downsampled_bam,
                     vntr_region,
@@ -272,7 +272,7 @@ def align_and_refine(
                     f"{output_base}_post_downsample",
                 )
             else:
-                actual_cov, _ = calculate_target_coverage(
+                actual_cov, post_depth_file = calculate_target_coverage(
                     tools["samtools"],
                     downsampled_bam,
                     rs_config.get("sample_target_bed", ""),
@@ -280,6 +280,7 @@ def align_and_refine(
                     str(output_dir),
                     f"{output_base}_post_downsample",
                 )
+            intermediate_files.append(post_depth_file)
             deviation_pct = ((actual_cov - target_coverage) / target_coverage) * 100
             logger.info(
                 "Post-downsampling coverage: %.1fx (target: %.1fx, deviation: %+.1f%%)",
