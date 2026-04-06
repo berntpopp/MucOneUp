@@ -360,6 +360,32 @@ class TestAlignAndRefine:
                 assembly_ctx=assembly_ctx_no_vntr,
             )
 
+    def test_raises_configuration_error_vntr_mode_no_sample_target_bed(
+        self, mocker, tmp_path, tools, assembly_ctx
+    ):
+        """ConfigurationError raised when vntr mode but no sample_target_bed."""
+        mocker.patch(f"{MODULE}.align_reads")
+
+        rs_config_ds = {
+            "threads": 4,
+            "vntr_capture_efficiency": {"enabled": False},
+            "coverage": 100,
+            "downsample_mode": "vntr",
+            # no sample_target_bed
+        }
+
+        with pytest.raises(ConfigurationError, match=r"sample_target_bed"):
+            align_and_refine(
+                tools=tools,
+                rs_config=rs_config_ds,
+                r1=str(tmp_path / "r1.fastq.gz"),
+                r2=str(tmp_path / "r2.fastq.gz"),
+                human_ref="/ref/hg38.fa",
+                output_dir=tmp_path,
+                output_base="test_sample",
+                assembly_ctx=assembly_ctx,
+            )
+
     def test_raises_configuration_error_non_vntr_mode_no_bed(
         self, mocker, tmp_path, tools, assembly_ctx
     ):

@@ -18,8 +18,8 @@ All coverage measurements use `samtools depth -a` (includes zero-coverage positi
 
 - VNTR region: chr1:155,188,487-155,192,239 (hg38, 3,753 bp)
 - Non-VNTR BED: `data/bed/twist_v2_muc1_no_vntr_targets.bed` (765 bp, 7 Twist probe regions)
-- Real exome BAMs: `/home/bernt-popp/development/vntyper-analyses/results/screening/Bernt/data/cerkid-exome-chr1/`
-- Simulated BAMs: `/tmp/sim_batch/len_{30..90}/sim_{len}.001.simulated_reads_downsampled.bam`
+- Real exome BAMs: CerKiD Berlin cohort, pre-sliced chr1 MUC1 region extracts (vntyper-analyses)
+- Simulated BAMs: 50 MucOneUp runs with VNTR lengths 30-90
 
 ---
 
@@ -140,7 +140,7 @@ R = Real exomes (n=1,043), S = Simulated (n=50)
 
 ### Simulation outputs
 
-Each simulation is in `/tmp/sim_batch/len_{N}/` containing:
+Each simulation output directory (`len_{N}/`) contains:
 
 ```
 sim_{N}.001.simulated.fa                              # Input haplotype FASTA
@@ -159,12 +159,11 @@ Total: 50 simulations, 658 MB disk.
 
 ### Real exome BAMs
 
-`/home/bernt-popp/development/vntyper-analyses/results/screening/Bernt/data/cerkid-exome-chr1/*.chr1_155184000_155194000.bam`
+CerKiD Berlin cohort, pre-sliced to chr1:155184000-155194000 (from vntyper-analyses screening data).
 
 ### Raw data files
 
-- `/tmp/real_exome_stats.json` -- per-sample metrics for all 1,043 real exomes
-- `/tmp/sim_batch_results.json` -- per-simulation metrics for all 50 simulations
+Per-sample and per-simulation metrics were saved as JSON during analysis (not committed to repo).
 
 ---
 

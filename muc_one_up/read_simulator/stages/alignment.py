@@ -269,7 +269,12 @@ def align_and_refine(
             # Use the empirical VNTR:non-VNTR ratio from real data to set VNTR target.
             # Default 1.4 derived from median of 20 CerKiD Berlin Twist v2 exomes
             # (VNTR mean / non-VNTR BED mean, samtools depth -a).
-            vntr_to_flanking_ratio: float = rs_config.get("vntr_to_flanking_ratio", 1.4)
+            raw_ratio = rs_config.get("vntr_to_flanking_ratio", 1.4)
+            vntr_to_flanking_ratio = float(raw_ratio)
+            if vntr_to_flanking_ratio <= 0:
+                raise ConfigurationError(
+                    f"vntr_to_flanking_ratio must be > 0, got {vntr_to_flanking_ratio}"
+                )
             vntr_target = actual_non_vntr * vntr_to_flanking_ratio
 
             if vntr_cov > vntr_target and actual_non_vntr > 0:

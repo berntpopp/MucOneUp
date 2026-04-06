@@ -326,6 +326,105 @@ class TestDownsampleBAM:
         assert view_cmd[at_index + 1] == "8"
 
 
+class TestDownsampleBamRegion:
+    """Test downsample_bam region-specific two-pass downsampling."""
+
+    def test_two_pass_approach_constructs_correct_commands(self, mocker, tmp_path):
+        """Test that downsample_bam uses -L/-U pass then -L/-s pass."""
+        from muc_one_up.read_simulator.wrappers.samtools_coverage import downsample_bam
+
+        input_bam = tmp_path / "input.bam"
+        output_bam = tmp_path / "output.bam"
+        input_bam.write_bytes(b"BAM_DATA")
+
+        commands_called = []
+
+        def mock_popen_side_effect(cmd, **kwargs):
+            commands_called.append(cmd)
+            mock_proc = Mock()
+            mock_proc.returncode = 0
+            mock_proc.stdout = Mock()
+            mock_proc.stderr = Mock()
+            mock_proc.stdout.readline = Mock(return_value=b"")
+            mock_proc.stderr.readline = Mock(return_value=b"")
+            mock_proc.wait = Mock(return_value=0)
+            mock_proc.pid = 12345
+
+            # Create expected intermediate/output files
+            for c in cmd:
+                if str(c).endswith(".bam") and cmd[0] != "samtools":
+                    pass
+            # Create region_only, other_regions, and output BAMs
+            region_only = str(output_bam).replace(".bam", "_region_only.bam")
+            other_regions = str(output_bam).replace(".bam", "_other_regions.bam")
+            Path(region_only).write_bytes(b"REGION")
+            Path(other_regions).write_bytes(b"OTHER")
+            output_bam.write_bytes(b"MERGED")
+            Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
+
+            return mock_proc
+
+        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
+
+        downsample_bam("samtools", str(input_bam), str(output_bam), "chr1:100-200", 0.5, 42, 4)
+
+        # Should have 4 commands: pass1 (view -L -U), pass2 (view -s -L), merge, index
+        assert len(commands_called) == 4
+
+        # Pass 1: -L and -U present, no -s
+        pass1 = commands_called[0]
+        assert "-L" in pass1
+        assert "-U" in pass1
+        assert "-s" not in pass1
+
+        # Pass 2: -s and -L present, no -U
+        pass2 = commands_called[1]
+        assert "-s" in pass2
+        assert "-L" in pass2
+        assert "-U" not in pass2
+        s_idx = pass2.index("-s")
+        assert pass2[s_idx + 1] == "42.5000"
+
+        # BED file created and cleaned up (verified in test_creates_and_cleans_up_temp_files)
+
+    def test_creates_and_cleans_up_temp_files(self, mocker, tmp_path):
+        """Test that BED and intermediate BAMs are cleaned up."""
+        from muc_one_up.read_simulator.wrappers.samtools_coverage import downsample_bam
+
+        input_bam = tmp_path / "input.bam"
+        output_bam = tmp_path / "output.bam"
+        input_bam.write_bytes(b"BAM_DATA")
+
+        def mock_popen_side_effect(cmd, **kwargs):
+            mock_proc = Mock()
+            mock_proc.returncode = 0
+            mock_proc.stdout = Mock()
+            mock_proc.stderr = Mock()
+            mock_proc.stdout.readline = Mock(return_value=b"")
+            mock_proc.stderr.readline = Mock(return_value=b"")
+            mock_proc.wait = Mock(return_value=0)
+            mock_proc.pid = 12345
+
+            # Create all intermediate files that the function expects
+            for suffix in ["_region_only.bam", "_other_regions.bam"]:
+                Path(str(output_bam).replace(".bam", suffix)).write_bytes(b"DATA")
+            output_bam.write_bytes(b"MERGED")
+            Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
+
+            return mock_proc
+
+        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
+
+        downsample_bam("samtools", str(input_bam), str(output_bam), "chr1:100-200", 0.3, 42, 4)
+
+        # Intermediate files should be cleaned up
+        assert not Path(str(output_bam).replace(".bam", "_region_only.bam")).exists()
+        assert not Path(str(output_bam).replace(".bam", "_other_regions.bam")).exists()
+        assert not Path(str(output_bam).replace(".bam", "_region.bed")).exists()
+        # Output should exist
+        assert output_bam.exists()
+
+
 class TestConvertSamToBam:
     """Test convert_sam_to_bam SAM→BAM conversion."""
 
