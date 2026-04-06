@@ -148,12 +148,12 @@ def simulate_ont_amplicon_pipeline(
             # STAGE 4: PBSIM3 template mode — ONT, single-pass
             logging.info("STAGE 4: Running PBSIM3 template mode (ONT, pass_num=1)")
 
-            allele_bams: list[list[str]] = []
+            allele_outputs: list[list[str]] = []
             for i, template_fa in enumerate(prep.allele_templates, 1):
                 prefix = str(temp_path / f"ont_hap{i}")
                 hap_seed = (seed + i) if seed is not None else None
 
-                bams = run_pbsim3_template_simulation(
+                outputs = run_pbsim3_template_simulation(
                     pbsim3_cmd=pbsim3_cmd,
                     samtools_cmd=samtools_cmd,
                     template_fasta=str(template_fa),
@@ -164,33 +164,44 @@ def simulate_ont_amplicon_pipeline(
                     accuracy_mean=accuracy_mean,
                     seed=hap_seed,
                 )
-                allele_bams.append(bams)
-                intermediate_files.extend(bams)
-                logging.info("  Haplotype %d: %d BAMs", i, len(bams))
+                allele_outputs.append(outputs)
+                intermediate_files.extend(outputs)
+                logging.info("  Haplotype %d: %d output file(s)", i, len(outputs))
 
-            # STAGE 5: BAM → FASTQ conversion (no CCS for ONT)
-            logging.info("STAGE 5: Converting BAMs to FASTQ (no CCS)")
+            # STAGE 5: Collect FASTQ reads
+            # pbsim3 with pass_num=1 outputs FASTQ directly (.fq.gz);
+            # with pass_num>=2 it outputs BAM (needs conversion).
+            logging.info("STAGE 5: Collecting reads as FASTQ")
 
             allele_fastqs: list[str] = []
-            for i, bam_group in enumerate(allele_bams, 1):
-                for j, bam in enumerate(bam_group, 1):
-                    fq_out = str(temp_path / f"ont_hap{i}_{j:04d}.fastq")
-                    convert_bam_to_fastq(
-                        samtools_cmd=samtools_cmd,
-                        input_bam=bam,
-                        output_fastq=fq_out,
-                        threads=threads,
-                    )
-                    allele_fastqs.append(fq_out)
+            for i, output_group in enumerate(allele_outputs, 1):
+                for j, output_file in enumerate(output_group, 1):
+                    if output_file.endswith((".fq", ".fq.gz", ".fastq", ".fastq.gz")):
+                        allele_fastqs.append(output_file)
+                    else:
+                        fq_out = str(temp_path / f"ont_hap{i}_{j:04d}.fastq")
+                        convert_bam_to_fastq(
+                            samtools_cmd=samtools_cmd,
+                            input_bam=output_file,
+                            output_fastq=fq_out,
+                            threads=threads,
+                        )
+                        allele_fastqs.append(fq_out)
 
             # STAGE 6: Merge FASTQs
             merged_fastq = str(output_dir / f"{output_base}_amplicon_ont.fastq")
             logging.info("STAGE 6: Merging %d FASTQs", len(allele_fastqs))
 
+            import gzip
+
             with open(merged_fastq, "w") as outf:
                 for fq in allele_fastqs:
-                    with open(fq) as inf:
-                        shutil.copyfileobj(inf, outf)
+                    if fq.endswith(".gz"):
+                        with gzip.open(fq, "rt") as inf:
+                            shutil.copyfileobj(inf, outf)
+                    else:
+                        with open(fq) as inf:
+                            shutil.copyfileobj(inf, outf)
 
             # STAGE 7: Alignment (optional)
             if human_reference is None:
