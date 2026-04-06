@@ -260,6 +260,39 @@ def align_and_refine(
                     threads,
                 )
             current_bam = downsampled_bam
+
+            # Post-downsampling validation: re-measure and log actual coverage
+            if mode == "vntr":
+                actual_cov, _ = calculate_vntr_coverage(
+                    tools["samtools"],
+                    downsampled_bam,
+                    vntr_region,
+                    threads,
+                    str(output_dir),
+                    f"{output_base}_post_downsample",
+                )
+            else:
+                actual_cov, _ = calculate_target_coverage(
+                    tools["samtools"],
+                    downsampled_bam,
+                    rs_config.get("sample_target_bed", ""),
+                    threads,
+                    str(output_dir),
+                    f"{output_base}_post_downsample",
+                )
+            deviation_pct = ((actual_cov - target_coverage) / target_coverage) * 100
+            logger.info(
+                "Post-downsampling coverage: %.1fx (target: %.1fx, deviation: %+.1f%%)",
+                actual_cov,
+                target_coverage,
+                deviation_pct,
+            )
+            if abs(deviation_pct) > 20:
+                logger.warning(
+                    "Post-downsampling coverage %.1fx deviates >20%% from target %.1fx",
+                    actual_cov,
+                    target_coverage,
+                )
         else:
             logger.info(
                 "Current coverage (%.2fx) is below the target; no downsampling performed.",

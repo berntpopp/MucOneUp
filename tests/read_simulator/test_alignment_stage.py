@@ -181,7 +181,10 @@ class TestAlignAndRefine:
         depth_file = str(tmp_path / "depth.txt")
         mocker.patch(
             f"{MODULE}.calculate_vntr_coverage",
-            return_value=(150.0, depth_file),
+            side_effect=[
+                (150.0, depth_file),          # Pre-downsampling measurement
+                (100.0, "/tmp/depth_post.txt"),  # Post-downsampling validation
+            ],
         )
         mocker.patch(f"{MODULE}.downsample_bam")
 
@@ -248,7 +251,10 @@ class TestAlignAndRefine:
         depth_file = str(tmp_path / "depth.txt")
         mocker.patch(
             f"{MODULE}.calculate_target_coverage",
-            return_value=(200.0, depth_file),
+            side_effect=[
+                (200.0, depth_file),             # Pre-downsampling measurement
+                (100.0, "/tmp/depth_post.txt"),   # Post-downsampling validation
+            ],
         )
         mock_downsample_entire = mocker.patch(f"{MODULE}.downsample_entire_bam")
 
@@ -354,3 +360,78 @@ class TestAlignAndRefine:
                 output_base="test_sample",
                 assembly_ctx=assembly_ctx,
             )
+
+    def test_post_downsampling_validation_logged(self, mocker, tmp_path, tools, assembly_ctx):
+        """After downsampling, VNTR coverage is re-measured and logged."""
+        mocker.patch(f"{MODULE}.align_reads")
+
+        # Return coverages: first call = pre-downsample (200x), second call = post-downsample (155x)
+        mock_calc_vntr = mocker.patch(
+            f"{MODULE}.calculate_vntr_coverage",
+            side_effect=[(200.0, "/tmp/depth1.txt"), (155.0, "/tmp/depth2.txt")],
+        )
+        mocker.patch(f"{MODULE}.downsample_bam")
+
+        rs_config = {
+            "threads": 4,
+            "coverage": 150,
+            "downsample_mode": "vntr",
+            "downsample_seed": 42,
+            "vntr_capture_efficiency": {"enabled": False},
+        }
+        assembly_ctx_with_vntr = mocker.MagicMock()
+        assembly_ctx_with_vntr.vntr_region = "chr1:155188487-155192239"
+        assembly_ctx_with_vntr.assembly_name = "hg38"
+
+        result = align_and_refine(
+            tools=tools,
+            rs_config=rs_config,
+            r1=str(tmp_path / "r1.fastq.gz"),
+            r2=str(tmp_path / "r2.fastq.gz"),
+            human_ref="/ref/hg38.fa",
+            output_dir=tmp_path,
+            output_base="test_sample",
+            assembly_ctx=assembly_ctx_with_vntr,
+        )
+
+        # calculate_vntr_coverage called twice: pre-downsample + post-validation
+        assert mock_calc_vntr.call_count == 2
+
+    def test_post_downsampling_validation_warns_on_deviation(
+        self, mocker, tmp_path, tools, assembly_ctx, caplog
+    ):
+        """Warning logged when post-downsampling coverage deviates >20% from target."""
+        import logging
+
+        mocker.patch(f"{MODULE}.align_reads")
+        # Pre-downsample: 500x, Post-downsample: 250x (67% deviation from target 150)
+        mocker.patch(
+            f"{MODULE}.calculate_vntr_coverage",
+            side_effect=[(500.0, "/tmp/d1.txt"), (250.0, "/tmp/d2.txt")],
+        )
+        mocker.patch(f"{MODULE}.downsample_bam")
+
+        rs_config = {
+            "threads": 4,
+            "coverage": 150,
+            "downsample_mode": "vntr",
+            "downsample_seed": 42,
+            "vntr_capture_efficiency": {"enabled": False},
+        }
+        assembly_ctx_with_vntr = mocker.MagicMock()
+        assembly_ctx_with_vntr.vntr_region = "chr1:155188487-155192239"
+        assembly_ctx_with_vntr.assembly_name = "hg38"
+
+        with caplog.at_level(logging.WARNING):
+            align_and_refine(
+                tools=tools,
+                rs_config=rs_config,
+                r1=str(tmp_path / "r1.fastq.gz"),
+                r2=str(tmp_path / "r2.fastq.gz"),
+                human_ref="/ref/hg38.fa",
+                output_dir=tmp_path,
+                output_base="test_sample",
+                assembly_ctx=assembly_ctx_with_vntr,
+            )
+
+        assert any("deviates" in record.message for record in caplog.records)
