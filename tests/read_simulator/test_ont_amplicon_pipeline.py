@@ -220,3 +220,48 @@ class TestOntAmpliconPipeline:
             )
 
         assert any("does not appear to be an ONT model" in r.message for r in caplog.records)
+
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.run_pbsim3_template_simulation")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.convert_bam_to_fastq")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.align_reads_with_minimap2")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_intermediates")
+    def test_fastq_passthrough_skips_bam_conversion(
+        self,
+        mock_cleanup,
+        mock_metadata,
+        mock_align,
+        mock_convert,
+        mock_pbsim3,
+        mock_prep,
+        ont_amplicon_config,
+        tmp_path,
+    ):
+        """When pbsim3 returns .fq.gz, BAM→FASTQ conversion is skipped."""
+        mock_prep.return_value = _make_prep(tmp_path, diploid=False)
+
+        # pbsim3 returns a .fq.gz file (single-pass ONT output)
+        fq_gz = tmp_path / "ont_hap1.fq.gz"
+        import gzip
+
+        with gzip.open(fq_gz, "wt") as f:
+            f.write("@read1\nACGT\n+\nIIII\n")
+        mock_pbsim3.return_value = [str(fq_gz)]
+        mock_align.return_value = str(tmp_path / "aligned.bam")
+
+        fasta = tmp_path / "input.fa"
+        fasta.write_text(">seq\nACGT\n")
+
+        from muc_one_up.read_simulator.ont_amplicon_pipeline import (
+            simulate_ont_amplicon_pipeline,
+        )
+
+        simulate_ont_amplicon_pipeline(
+            ont_amplicon_config,
+            str(fasta),
+            human_reference=str(fasta),
+        )
+
+        # convert_bam_to_fastq should NOT have been called
+        mock_convert.assert_not_called()

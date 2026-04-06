@@ -420,13 +420,24 @@ def run_pbsim3_template_simulation(
         cmd, timeout=timeout, stderr_prefix="[pbsim3-templ] ", stderr_log_level=logging.INFO
     )
 
-    # Handle output files — pbsim3 may produce:
-    # 1. {prefix}_0001.bam, {prefix}_0002.bam, ... (multi-sequence BAM)
-    # 2. {prefix}_0001.sam, {prefix}_0002.sam, ... (multi-sequence SAM, needs conversion)
-    # 3. {prefix}.bam (single-sequence BAM)
-    # 4. {prefix}.sam (single-sequence SAM, needs conversion)
+    # Handle output files — pbsim3 output format depends on pass_num:
+    # pass_num >= 2: BAM/SAM (multi-pass CLR for CCS)
+    #   - {prefix}.bam or {prefix}_0001.bam (single/multi-sequence)
+    #   - {prefix}.sam or {prefix}_0001.sam (needs conversion)
+    # pass_num == 1: FASTQ (single-pass, e.g., ONT)
+    #   - {prefix}.fq.gz
     output_prefix_path = Path(output_prefix)
     parent_dir = output_prefix_path.parent
+
+    # Check for FASTQ output only in single-pass mode (pass_num=1).
+    # For pass_num >= 2, ignore any pre-existing/stale FASTQ and continue
+    # with BAM/SAM handling for the current multi-pass simulation.
+    fq_gz = Path(f"{output_prefix}.fq.gz")
+    if pass_num == 1 and fq_gz.exists():
+        if fq_gz.stat().st_size == 0:
+            raise FileOperationError(f"pbsim3 produced empty FASTQ: {fq_gz}")
+        logging.info("pbsim3 template simulation complete: 1 FASTQ file (single-pass)")
+        return [str(fq_gz)]
 
     # Convert any numbered SAM files to BAM first
     multi_sam_pattern = f"{output_prefix_path.name}_*.sam"
@@ -445,7 +456,7 @@ def run_pbsim3_template_simulation(
         except Exception as e:
             logging.warning("Could not remove SAM file %s: %s", sam_path, e)
 
-    # Now collect all BAM files
+    # Collect all BAM files
     multi_bam_pattern = f"{output_prefix_path.name}_*.bam"
     multi_bam_files = sorted(str(p) for p in parent_dir.glob(multi_bam_pattern))
 

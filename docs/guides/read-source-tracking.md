@@ -23,6 +23,9 @@ muconeup --config config.json reads illumina sample.001.simulated.fa \
 
 Works identically with `reads ont` and `reads pacbio`.
 
+!!! note "Amplicon pipelines"
+    Read source tracking is not supported for `reads amplicon` (PacBio or ONT). Passing `--track-read-source` with amplicon mode raises an error.
+
 ---
 
 ## Output Files

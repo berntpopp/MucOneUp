@@ -57,9 +57,10 @@ Insert, delete, replace, or delete-insert operations:
 
 Generate sequencing reads with platform-specific error profiles:
 
-- **Illumina** - Wessim2-style fragment simulation with ReSeq error modeling for paired-end reads
+- **Illumina** - Wessim2-style fragment simulation with ReSeq2 error modeling for paired-end reads
 - **Oxford Nanopore** - NanoSim with diploid split-simulation
 - **PacBio HiFi** - pbsim3 with CCS consensus accuracy
+- **Amplicon** - pbsim3 template mode with PCR length bias modeling (PacBio and ONT platforms)
 - Seed-based reproducibility across all platforms
 
 ### Comprehensive Analysis
