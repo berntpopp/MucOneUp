@@ -209,33 +209,39 @@ def reads():
     show_default=True,
     help="Number of threads.",
 )
+@click.option(
+    "--read-number",
+    type=int,
+    default=None,
+    help="Number of fragment pairs to generate (overrides config read_number). "
+    "More fragments allow higher coverage. Default: 100000 from config.",
+)
 @shared_read_options
 @click.pass_context
 @cli_error_handler
-def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, track_read_source):
+def illumina(
+    ctx, input_fastas, out_dir, out_base, coverage, threads, read_number, seed, track_read_source
+):
     """Simulate Illumina short reads from one or more FASTA files.
 
-    Supports batch processing following Unix philosophy:
-    - Single file: muconeup reads illumina file.fa --out-base reads
-    - Multiple files: muconeup reads illumina file1.fa file2.fa file3.fa
-    - Glob pattern: muconeup reads illumina *.simulated.fa
-
-    When processing multiple files, --out-base is auto-generated from input
-    filenames unless explicitly provided (which applies to all files).
+    \b
+    The --read-number flag controls how many fragment pairs are generated
+    before error modeling and alignment. This is the upper bound on output
+    reads (2x read-number for paired-end). The --coverage flag then
+    downsamples the aligned reads to the target depth. If --coverage
+    exceeds what read-number can deliver, all reads are kept.
 
     \b
     Examples:
-      # Single file with custom output name
-      muconeup --config X reads illumina sample.001.fa --out-base my_reads
+      # Standard simulation (100k fragments from config default)
+      muconeup --config X reads illumina sample.fa
 
-      # Multiple files (auto-generated output names)
-      muconeup --config X reads illumina sample.001.fa sample.002.fa
+      # High-coverage simulation (500k fragments)
+      muconeup --config X reads illumina sample.fa \\
+        --read-number 500000 --coverage 2000
 
-      # Glob pattern (shell expands)
+      # Batch processing
       muconeup --config X reads illumina sample.*.simulated.fa
-
-      # Compose with shell (Unix philosophy)
-      for f in *.fa; do muconeup --config X reads illumina "$f"; done
     """
     require_config(ctx)
 
@@ -244,6 +250,8 @@ def illumina(ctx, input_fastas, out_dir, out_base, coverage, threads, seed, trac
     config = load_config_raw(str(ctx.obj["config_path"]))
     _setup_read_config(config, "illumina", coverage, seed)
     config["read_simulation"]["threads"] = threads
+    if read_number is not None:
+        config["read_simulation"]["read_number"] = read_number
 
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_reads", "Illumina", track_read_source

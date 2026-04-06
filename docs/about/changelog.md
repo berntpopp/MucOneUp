@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.43.2] - 2026-04-06
+
+### Added
+- `--read-number` CLI option for `reads illumina` to control fragment generation count
+- 3 new CLI tests for `--read-number` option
+
+### Changed
+- Default `read_number` raised from 10,000 to 100,000 in config.json (was limited by original ReSeq deadlock bug, now resolved by ReSeq2)
+
+---
+
 ## [0.43.1] - 2026-04-05
 
 ### Changed

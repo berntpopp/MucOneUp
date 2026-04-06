@@ -500,7 +500,7 @@ Parameters for Illumina read simulation (Wessim2-style fragment simulation with 
 | `simulator` | string | "illumina", "ont", "pacbio", "amplicon", or "ont-amplicon" | "illumina" |
 | `human_reference` | string | Path to reference FASTA | Required |
 | `reseq_model` | string | Path to ReSeq2 error model (`.reseq` file) | - |
-| `read_number` | integer | Number of reads to generate | - |
+| `read_number` | integer | Number of fragment pairs to simulate (more = higher achievable coverage). CLI: `--read-number` | 100000 |
 | `fragment_size` | integer | Mean insert size (bp) | 350 |
 | `fragment_sd` | integer | Insert size std dev (bp) | 50 |
 | `min_fragment` | integer | Minimum fragment size (bp) | - |
