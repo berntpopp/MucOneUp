@@ -186,12 +186,14 @@ def downsample_bam(
     # Format the fraction string for samtools view -s option (seed.fraction)
     fraction_str = f"{seed}.{int(fraction * 10000):04d}"
 
-    # Create a temporary BED file for the target region
+    # Create a temporary BED file for the target region.
+    # Region string is 1-based inclusive (samtools format); BED is 0-based half-open.
     region_bed = output_bam.replace(".bam", "_region.bed")
     chrom, coords = region.split(":")
     start, end = coords.split("-")
+    bed_start = int(start) - 1  # Convert 1-based inclusive → 0-based
     with Path(region_bed).open("w") as f:
-        f.write(f"{chrom}\t{start}\t{end}\n")
+        f.write(f"{chrom}\t{bed_start}\t{end}\n")
 
     # Two-pass approach: extract non-region reads (full) then region reads (downsampled).
     # Cannot use -L/-U/-s together because -U captures reads failing ANY filter,

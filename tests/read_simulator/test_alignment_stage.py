@@ -174,25 +174,37 @@ class TestAlignAndRefine:
         assert result.final_bam.endswith(f"{output_base}.bam")
         assert result.intermediate_bams == []
 
-    def test_downsampling_vntr_mode_adds_depth_file(self, mocker, tmp_path, tools, assembly_ctx):
-        """Downsampling in 'vntr' mode adds depth file to intermediate_files."""
+    def test_downsampling_vntr_mode_two_step(self, mocker, tmp_path, tools, assembly_ctx):
+        """VNTR mode uses two-step: downsample entire BAM then VNTR region."""
         mocker.patch(f"{MODULE}.align_reads")
 
-        depth_file = str(tmp_path / "depth.txt")
+        # Step 1: non-VNTR BED coverage (200x → fraction to hit 100x target)
+        # Step 2: VNTR coverage after step 1, then post-validation
+        target_depth = str(tmp_path / "target_depth.txt")
+        mocker.patch(
+            f"{MODULE}.calculate_target_coverage",
+            side_effect=[
+                (200.0, target_depth),  # Step 1: measure non-VNTR BED
+                (100.0, "/tmp/non_vntr_post1.txt"),  # Step 1: re-measure after downsample
+                (99.0, "/tmp/post_flank.txt"),  # Post-validation: final non-VNTR
+            ],
+        )
         mocker.patch(
             f"{MODULE}.calculate_vntr_coverage",
             side_effect=[
-                (150.0, depth_file),  # Pre-downsampling measurement
-                (100.0, "/tmp/depth_post.txt"),  # Post-downsampling validation
+                (500.0, "/tmp/vntr_post1.txt"),  # Step 2: measure VNTR after step 1
+                (140.0, "/tmp/post_vntr.txt"),  # Post-validation: final VNTR
             ],
         )
-        mocker.patch(f"{MODULE}.downsample_bam")
+        mocker.patch(f"{MODULE}.downsample_entire_bam")  # Step 1
+        mocker.patch(f"{MODULE}.downsample_bam")  # Step 2
 
         rs_config_ds = {
             "threads": 4,
             "vntr_capture_efficiency": {"enabled": False},
             "coverage": 100,
             "downsample_mode": "vntr",
+            "sample_target_bed": "/path/to/targets.bed",
         }
 
         result = align_and_refine(
@@ -206,31 +218,44 @@ class TestAlignAndRefine:
             assembly_ctx=assembly_ctx,
         )
 
-        assert depth_file in result.intermediate_files
+        assert target_depth in result.intermediate_files
         assert "downsampled" in result.final_bam
 
-    def test_downsampling_no_downsample_when_coverage_below_target(
+    def test_downsampling_vntr_mode_skips_when_below_target(
         self, mocker, tmp_path, tools, assembly_ctx
     ):
-        """No downsampling when current coverage is already below target."""
+        """No downsampling when non-VNTR BED coverage is already below target."""
         mocker.patch(f"{MODULE}.align_reads")
 
         depth_file = str(tmp_path / "depth.txt")
         mocker.patch(
-            f"{MODULE}.calculate_vntr_coverage",
-            return_value=(50.0, depth_file),  # below target of 100
+            f"{MODULE}.calculate_target_coverage",
+            side_effect=[
+                (50.0, depth_file),  # Step 1: non-VNTR BED below target (skip)
+                (50.0, "/tmp/re_flank.txt"),  # Re-measure non-VNTR for ratio calc
+                (50.0, "/tmp/post_flank.txt"),  # Post-validation non-VNTR
+            ],
         )
-        mock_downsample = mocker.patch(f"{MODULE}.downsample_bam")
+        mocker.patch(
+            f"{MODULE}.calculate_vntr_coverage",
+            side_effect=[
+                (60.0, "/tmp/vntr.txt"),  # Step 2: VNTR measurement (60 < 50*1.4=70, skip)
+                (60.0, "/tmp/post_vntr.txt"),  # Post-validation VNTR
+            ],
+        )
+        mock_ds_entire = mocker.patch(f"{MODULE}.downsample_entire_bam")
+        mock_ds_bam = mocker.patch(f"{MODULE}.downsample_bam")
 
         rs_config_ds = {
             "threads": 4,
             "vntr_capture_efficiency": {"enabled": False},
             "coverage": 100,
             "downsample_mode": "vntr",
+            "sample_target_bed": "/path/to/targets.bed",
         }
 
         output_base = "test_sample"
-        result = align_and_refine(
+        align_and_refine(
             tools=tools,
             rs_config=rs_config_ds,
             r1=str(tmp_path / "r1.fastq.gz"),
@@ -241,8 +266,8 @@ class TestAlignAndRefine:
             assembly_ctx=assembly_ctx,
         )
 
-        mock_downsample.assert_not_called()
-        assert result.final_bam.endswith(f"{output_base}.bam")
+        mock_ds_entire.assert_not_called()
+        mock_ds_bam.assert_not_called()
 
     def test_downsampling_non_vntr_mode(self, mocker, tmp_path, tools, assembly_ctx):
         """Downsampling in 'non_vntr' mode calls downsample_entire_bam."""
@@ -335,6 +360,32 @@ class TestAlignAndRefine:
                 assembly_ctx=assembly_ctx_no_vntr,
             )
 
+    def test_raises_configuration_error_vntr_mode_no_sample_target_bed(
+        self, mocker, tmp_path, tools, assembly_ctx
+    ):
+        """ConfigurationError raised when vntr mode but no sample_target_bed."""
+        mocker.patch(f"{MODULE}.align_reads")
+
+        rs_config_ds = {
+            "threads": 4,
+            "vntr_capture_efficiency": {"enabled": False},
+            "coverage": 100,
+            "downsample_mode": "vntr",
+            # no sample_target_bed
+        }
+
+        with pytest.raises(ConfigurationError, match=r"sample_target_bed"):
+            align_and_refine(
+                tools=tools,
+                rs_config=rs_config_ds,
+                r1=str(tmp_path / "r1.fastq.gz"),
+                r2=str(tmp_path / "r2.fastq.gz"),
+                human_ref="/ref/hg38.fa",
+                output_dir=tmp_path,
+                output_base="test_sample",
+                assembly_ctx=assembly_ctx,
+            )
+
     def test_raises_configuration_error_non_vntr_mode_no_bed(
         self, mocker, tmp_path, tools, assembly_ctx
     ):
@@ -361,15 +412,29 @@ class TestAlignAndRefine:
                 assembly_ctx=assembly_ctx,
             )
 
-    def test_post_downsampling_validation_logged(self, mocker, tmp_path, tools, assembly_ctx):
-        """After downsampling, VNTR coverage is re-measured and logged."""
+    def test_post_downsampling_vntr_mode_logs_ratio(self, mocker, tmp_path, tools, assembly_ctx):
+        """VNTR mode logs final VNTR and non-VNTR coverage after both steps."""
         mocker.patch(f"{MODULE}.align_reads")
 
-        # Return coverages: first call = pre-downsample (200x), second call = post-downsample (155x)
+        # Step 1: non-VNTR BED 300x → downsample entire BAM
+        # Step 2: VNTR 400x after step 1 → downsample VNTR region
+        # Post-validation: measure both
+        mocker.patch(
+            f"{MODULE}.calculate_target_coverage",
+            side_effect=[
+                (300.0, "/tmp/t1.txt"),  # Step 1: measure non-VNTR
+                (150.0, "/tmp/t2.txt"),  # Step 2: re-measure non-VNTR after step 1
+                (149.0, "/tmp/t3.txt"),  # Post-validation: final non-VNTR
+            ],
+        )
         mock_calc_vntr = mocker.patch(
             f"{MODULE}.calculate_vntr_coverage",
-            side_effect=[(200.0, "/tmp/depth1.txt"), (155.0, "/tmp/depth2.txt")],
+            side_effect=[
+                (400.0, "/tmp/v1.txt"),  # Step 2: VNTR after step 1
+                (200.0, "/tmp/v2.txt"),  # Post-validation: final VNTR
+            ],
         )
+        mocker.patch(f"{MODULE}.downsample_entire_bam")
         mocker.patch(f"{MODULE}.downsample_bam")
 
         rs_config = {
@@ -377,6 +442,7 @@ class TestAlignAndRefine:
             "coverage": 150,
             "downsample_mode": "vntr",
             "downsample_seed": 42,
+            "sample_target_bed": "/path/to/targets.bed",
             "vntr_capture_efficiency": {"enabled": False},
         }
         assembly_ctx_with_vntr = mocker.MagicMock()
@@ -394,33 +460,30 @@ class TestAlignAndRefine:
             assembly_ctx=assembly_ctx_with_vntr,
         )
 
-        # calculate_vntr_coverage called twice: pre-downsample + post-validation
+        # calculate_vntr_coverage called: step 2 measure + post-validation
         assert mock_calc_vntr.call_count == 2
 
     def test_post_downsampling_validation_warns_on_deviation(
         self, mocker, tmp_path, tools, assembly_ctx, caplog
     ):
-        """Warning logged when post-downsampling coverage deviates >20% from target."""
+        """Warning logged when post-downsampling coverage deviates >20% from target (non_vntr mode)."""
         import logging
 
         mocker.patch(f"{MODULE}.align_reads")
-        # Pre-downsample: 500x, Post-downsample: 250x (67% deviation from target 150)
         mocker.patch(
-            f"{MODULE}.calculate_vntr_coverage",
+            f"{MODULE}.calculate_target_coverage",
             side_effect=[(500.0, "/tmp/d1.txt"), (250.0, "/tmp/d2.txt")],
         )
-        mocker.patch(f"{MODULE}.downsample_bam")
+        mocker.patch(f"{MODULE}.downsample_entire_bam")
 
         rs_config = {
             "threads": 4,
             "coverage": 150,
-            "downsample_mode": "vntr",
+            "downsample_mode": "non_vntr",
             "downsample_seed": 42,
+            "sample_target_bed": "/path/to/targets.bed",
             "vntr_capture_efficiency": {"enabled": False},
         }
-        assembly_ctx_with_vntr = mocker.MagicMock()
-        assembly_ctx_with_vntr.vntr_region = "chr1:155188487-155192239"
-        assembly_ctx_with_vntr.assembly_name = "hg38"
 
         with caplog.at_level(logging.WARNING):
             align_and_refine(
@@ -431,7 +494,7 @@ class TestAlignAndRefine:
                 human_ref="/ref/hg38.fa",
                 output_dir=tmp_path,
                 output_base="test_sample",
-                assembly_ctx=assembly_ctx_with_vntr,
+                assembly_ctx=assembly_ctx,
             )
 
         assert any("deviates" in record.message for record in caplog.records)

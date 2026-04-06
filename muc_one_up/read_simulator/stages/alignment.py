@@ -191,21 +191,151 @@ def align_and_refine(
         mode: str = rs_config.get("downsample_mode", "vntr").strip().lower()
 
         if mode == "vntr":
+            # Two-step VNTR downsampling:
+            #   Step 1: Downsample entire BAM so non-VNTR BED = target coverage
+            #   Step 2: Downsample VNTR region to match expected VNTR:flanking ratio
             vntr_region = assembly_ctx.vntr_region
             if not vntr_region:
                 raise ConfigurationError(
                     f"VNTR region not specified in config for {assembly_ctx.assembly_name}. "
                     f"Add 'vntr_region_{assembly_ctx.assembly_name}' to config"
                 )
-            current_cov, depth_file = calculate_vntr_coverage(
+            bed_file = rs_config.get("sample_target_bed")
+            if not bed_file:
+                raise ConfigurationError(
+                    "For VNTR downsampling, 'sample_target_bed' (non-VNTR targets) "
+                    "must be provided in config"
+                )
+
+            # --- Step 1: Downsample entire BAM so non-VNTR BED = target ---
+            non_vntr_cov, depth_file = calculate_target_coverage(
+                tools["samtools"],
+                current_bam,
+                bed_file,
+                threads,
+                str(output_dir),
+                f"{output_base}_non_vntr",
+            )
+            intermediate_files.append(depth_file)
+
+            if non_vntr_cov > target_coverage:
+                fraction1 = min(max(target_coverage / non_vntr_cov, 0.0), 1.0)
+                logger.info(
+                    "Step 1: Downsampling entire BAM from %.2fx to %.2fx "
+                    "(fraction: %.4f) based on non-VNTR BED",
+                    non_vntr_cov,
+                    target_coverage,
+                    fraction1,
+                )
+                intermediate_bams.append(current_bam)
+                step1_bam = str(output_dir / f"{output_base}_step1.bam")
+                downsample_entire_bam(
+                    tools["samtools"],
+                    current_bam,
+                    step1_bam,
+                    fraction1,
+                    rs_config.get("downsample_seed", 42),
+                    threads,
+                )
+                current_bam = step1_bam
+            else:
+                logger.info(
+                    "Step 1: Non-VNTR coverage (%.2fx) already below target; skipping.",
+                    non_vntr_cov,
+                )
+
+            # --- Step 2: Downsample VNTR region to match expected ratio ---
+            vntr_cov, vntr_depth_file = calculate_vntr_coverage(
                 tools["samtools"],
                 current_bam,
                 vntr_region,
                 threads,
                 str(output_dir),
-                output_base,
+                f"{output_base}_vntr_post_step1",
             )
-            region_info = vntr_region
+            intermediate_files.append(vntr_depth_file)
+
+            # Re-measure non-VNTR after step 1 for accurate ratio calculation
+            actual_non_vntr, non_vntr_depth2 = calculate_target_coverage(
+                tools["samtools"],
+                current_bam,
+                bed_file,
+                threads,
+                str(output_dir),
+                f"{output_base}_non_vntr_post_step1",
+            )
+            intermediate_files.append(non_vntr_depth2)
+
+            # Use the empirical VNTR:non-VNTR ratio from real data to set VNTR target.
+            # Default 1.4 derived from median of 20 CerKiD Berlin Twist v2 exomes
+            # (VNTR mean / non-VNTR BED mean, samtools depth -a).
+            raw_ratio = rs_config.get("vntr_to_flanking_ratio", 1.4)
+            vntr_to_flanking_ratio = float(raw_ratio)
+            if vntr_to_flanking_ratio <= 0:
+                raise ConfigurationError(
+                    f"vntr_to_flanking_ratio must be > 0, got {vntr_to_flanking_ratio}"
+                )
+            vntr_target = actual_non_vntr * vntr_to_flanking_ratio
+
+            if vntr_cov > vntr_target and actual_non_vntr > 0:
+                fraction2 = min(max(vntr_target / vntr_cov, 0.0), 1.0)
+                logger.info(
+                    "Step 2: Downsampling VNTR from %.2fx to %.2fx "
+                    "(fraction: %.4f, target ratio: %.1f)",
+                    vntr_cov,
+                    vntr_target,
+                    fraction2,
+                    vntr_target / actual_non_vntr,
+                )
+                intermediate_bams.append(current_bam)
+                downsampled_bam = str(output_dir / f"{output_base}_downsampled.bam")
+                # Use a different seed than step 1 — samtools -s uses hash-based
+                # subsampling, so reads passing at seed X with a lower fraction
+                # will always pass at the same seed with a higher fraction.
+                step2_seed = rs_config.get("downsample_seed", 42) + 1
+                downsample_bam(
+                    tools["samtools"],
+                    current_bam,
+                    downsampled_bam,
+                    vntr_region,
+                    fraction2,
+                    step2_seed,
+                    threads,
+                )
+                current_bam = downsampled_bam
+            else:
+                logger.info(
+                    "Step 2: VNTR coverage (%.2fx) already at/below target (%.2fx); skipping.",
+                    vntr_cov,
+                    vntr_target,
+                )
+
+            # Post-downsampling validation
+            actual_vntr, post_vntr_depth = calculate_vntr_coverage(
+                tools["samtools"],
+                current_bam,
+                vntr_region,
+                threads,
+                str(output_dir),
+                f"{output_base}_post_downsample",
+            )
+            actual_flank, post_flank_depth = calculate_target_coverage(
+                tools["samtools"],
+                current_bam,
+                bed_file,
+                threads,
+                str(output_dir),
+                f"{output_base}_post_downsample_non_vntr",
+            )
+            intermediate_files.extend([post_vntr_depth, post_flank_depth])
+            final_ratio = actual_vntr / actual_flank if actual_flank > 0 else 0.0
+            logger.info(
+                "Post-downsampling: VNTR=%.1fx, non-VNTR=%.1fx, ratio=%.1f",
+                actual_vntr,
+                actual_flank,
+                final_ratio,
+            )
+
         elif mode == "non_vntr":
             bed_file = rs_config.get("sample_target_bed")
             if not bed_file:
@@ -220,37 +350,19 @@ def align_and_refine(
                 str(output_dir),
                 output_base,
             )
-            region_info = f"BED file: {bed_file}"
-        else:
-            raise ConfigurationError(
-                f"Invalid downsample_mode '{mode}' in config; use 'vntr' or 'non_vntr'"
-            )
+            intermediate_files.append(depth_file)
 
-        intermediate_files.append(depth_file)
-
-        if current_cov > target_coverage:
-            fraction = min(max(target_coverage / current_cov, 0.0), 1.0)
-            logger.info(
-                "Downsampling BAM from %.2fx to %.2fx (fraction: %.4f) based on %s",
-                current_cov,
-                target_coverage,
-                fraction,
-                region_info,
-            )
-            intermediate_bams.append(current_bam)
-            downsampled_bam = str(output_dir / f"{output_base}_downsampled.bam")
-
-            if mode == "vntr":
-                downsample_bam(
-                    tools["samtools"],
-                    current_bam,
-                    downsampled_bam,
-                    vntr_region,
+            if current_cov > target_coverage:
+                fraction = min(max(target_coverage / current_cov, 0.0), 1.0)
+                logger.info(
+                    "Downsampling BAM from %.2fx to %.2fx (fraction: %.4f) based on %s",
+                    current_cov,
+                    target_coverage,
                     fraction,
-                    rs_config.get("downsample_seed", 42),
-                    threads,
+                    f"BED file: {bed_file}",
                 )
-            else:
+                intermediate_bams.append(current_bam)
+                downsampled_bam = str(output_dir / f"{output_base}_downsampled.bam")
                 downsample_entire_bam(
                     tools["samtools"],
                     current_bam,
@@ -259,45 +371,39 @@ def align_and_refine(
                     rs_config.get("downsample_seed", 42),
                     threads,
                 )
-            current_bam = downsampled_bam
+                current_bam = downsampled_bam
 
-            # Post-downsampling validation: re-measure and log actual coverage
-            if mode == "vntr":
-                actual_cov, post_depth_file = calculate_vntr_coverage(
-                    tools["samtools"],
-                    downsampled_bam,
-                    vntr_region,
-                    threads,
-                    str(output_dir),
-                    f"{output_base}_post_downsample",
-                )
-            else:
+                # Post-downsampling validation
                 actual_cov, post_depth_file = calculate_target_coverage(
                     tools["samtools"],
                     downsampled_bam,
-                    rs_config.get("sample_target_bed", ""),
+                    bed_file,
                     threads,
                     str(output_dir),
                     f"{output_base}_post_downsample",
                 )
-            intermediate_files.append(post_depth_file)
-            deviation_pct = ((actual_cov - target_coverage) / target_coverage) * 100
-            logger.info(
-                "Post-downsampling coverage: %.1fx (target: %.1fx, deviation: %+.1f%%)",
-                actual_cov,
-                target_coverage,
-                deviation_pct,
-            )
-            if abs(deviation_pct) > 20:
-                logger.warning(
-                    "Post-downsampling coverage %.1fx deviates >20%% from target %.1fx",
+                intermediate_files.append(post_depth_file)
+                deviation_pct = ((actual_cov - target_coverage) / target_coverage) * 100
+                logger.info(
+                    "Post-downsampling coverage: %.1fx (target: %.1fx, deviation: %+.1f%%)",
                     actual_cov,
                     target_coverage,
+                    deviation_pct,
+                )
+                if abs(deviation_pct) > 20:
+                    logger.warning(
+                        "Post-downsampling coverage %.1fx deviates >20%% from target %.1fx",
+                        actual_cov,
+                        target_coverage,
+                    )
+            else:
+                logger.info(
+                    "Current coverage (%.2fx) is below the target; no downsampling performed.",
+                    current_cov,
                 )
         else:
-            logger.info(
-                "Current coverage (%.2fx) is below the target; no downsampling performed.",
-                current_cov,
+            raise ConfigurationError(
+                f"Invalid downsample_mode '{mode}' in config; use 'vntr' or 'non_vntr'"
             )
     else:
         logger.info("11. Skipping downsampling (no target coverage specified)")
