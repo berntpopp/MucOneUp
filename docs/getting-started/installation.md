@@ -163,12 +163,15 @@ External tools required for platform-specific read simulation.
 
 ### Illumina Read Simulation
 
-Uses a hybrid Illumina pipeline combining Wessim2-style fragment simulation with ReSeq error modeling, BWA alignment, and UCSC tools (reseq, bwa, samtools, faToTwoBit, pblat).
+Uses a hybrid Illumina pipeline combining Wessim2-style fragment simulation with ReSeq2 error modeling, BWA alignment, and UCSC tools (reseq2, bwa, samtools, faToTwoBit, pblat).
+
+!!! note "ReSeq2 replaces original ReSeq"
+    MucOneUp uses [ReSeq2](https://github.com/berntpopp/ReSeq2), a maintained fork of the original [ReSeq](https://github.com/schmeing/ReSeq) (Schmeing & Robinson, Genome Biology 2021). ReSeq2 fixes a critical deadlock bug in `seqToIllumina` that limited the original to ~10,000 reads per run. With ReSeq2, all requested reads are generated correctly. The original ReSeq is no longer maintained. ReSeq2 uses the same `.reseq` profile format and is a drop-in replacement.
 
 #### Install via Conda
 
 ```bash
-# Create environment from file
+# Create environment from file (uses original reseq until bioconda approves reseq2)
 mamba env create -f conda/env_wessim.yaml
 
 # Activate environment
@@ -178,21 +181,42 @@ conda activate wessim
 which reseq bwa samtools faToTwoBit pblat
 ```
 
-#### Manual Installation
+#### Build ReSeq2 from Source (Recommended)
 
-Install each tool separately:
+ReSeq2 can be built from source in three commands:
 
-1. **reseq** - [https://github.com/schmeing/ReSeq](https://github.com/schmeing/ReSeq)
-2. **bwa** - `conda install -c bioconda bwa`
-3. **samtools** - `conda install -c bioconda samtools`
-4. **UCSC tools** - `conda install -c bioconda ucsc-fatotwobit ucsc-pblat`
+```bash
+git clone https://github.com/berntpopp/ReSeq2.git
+cd ReSeq2
+cmake -S . -B build && cmake --build build -j$(nproc)
+```
+
+The binary is at `build/bin/reseq2`. Point MucOneUp's config at it:
+
+```json
+{
+  "tools": {
+    "reseq": "/path/to/ReSeq2/build/bin/reseq2"
+  }
+}
+```
+
+**Requirements:** CMake 3.16+, C++20 compiler (GCC 10+ or Clang 12+), Boost 1.48+, zlib, bzip2.
+
+#### Other Tools
+
+Install the remaining Illumina tools separately:
+
+1. **bwa** - `conda install -c bioconda bwa`
+2. **samtools** - `conda install -c bioconda samtools`
+3. **UCSC tools** - `conda install -c bioconda ucsc-fatotwobit ucsc-pblat`
 
 Update `config.json` with tool paths:
 
 ```json
 {
   "tools": {
-    "reseq": "/path/to/reseq",
+    "reseq": "/path/to/reseq2",
     "bwa": "/path/to/bwa",
     "samtools": "/path/to/samtools",
     "faToTwoBit": "/path/to/faToTwoBit",
@@ -402,18 +426,18 @@ pip install --force-reinstall -e .
 
 ---
 
-**Issue:** External tool not found (reseq, bwa, etc.)
+**Issue:** External tool not found (reseq2, bwa, etc.)
 
-**Solution:** Install via conda or update `config.json` with correct paths:
+**Solution:** Install the tool or update `config.json` with the correct path:
 
 ```bash
 # Check tool location
-which reseq
+which reseq2
 
 # Update config.json
 {
   "tools": {
-    "reseq": "/actual/path/to/reseq"
+    "reseq": "/actual/path/to/reseq2"
   }
 }
 ```

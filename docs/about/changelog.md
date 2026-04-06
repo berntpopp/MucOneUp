@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.43.1] - 2026-04-05
+
+### Changed
+- Replaced ReSeq with [ReSeq2](https://github.com/berntpopp/ReSeq2) as the recommended Illumina error modeling tool
+- Removed `seqToIllumina` timeout workaround — ReSeq2 v2.0.3 fixes the upstream deadlock bug that limited the original ReSeq to ~10,000 reads
+- Default `seqToIllumina` timeout raised from 120s to 600s (safety net only)
+
+### Removed
+- `seqtoillumina_timeout` config parameter (no longer needed)
+
+---
+
 ## [0.43.0] - 2026-04-05
 
 ### Added

@@ -422,7 +422,7 @@ Paths to external tools for read simulation.
 ```json
 {
   "tools": {
-    "reseq": "/path/to/reseq",
+    "reseq": "/path/to/reseq2",
     "bwa": "/usr/bin/bwa",
     "samtools": "/usr/bin/samtools",
     "faToTwoBit": "/usr/bin/faToTwoBit",
@@ -455,13 +455,13 @@ When using conda environments, specify full paths:
 ```bash
 # Find tool path in conda env
 conda activate wessim
-which reseq
-# /home/user/miniconda3/envs/wessim/bin/reseq
+which reseq2
+# /home/user/miniconda3/envs/wessim/bin/reseq2
 
 # Update config.json
 {
   "tools": {
-    "reseq": "/home/user/miniconda3/envs/wessim/bin/reseq"
+    "reseq": "/home/user/miniconda3/envs/wessim/bin/reseq2"
   }
 }
 ```
@@ -472,7 +472,7 @@ which reseq
 
 ### Purpose
 
-Parameters for Illumina read simulation (Wessim2-style fragment simulation with ReSeq error modeling).
+Parameters for Illumina read simulation (Wessim2-style fragment simulation with [ReSeq2](https://github.com/berntpopp/ReSeq2) error modeling).
 
 ### Structure
 
@@ -499,7 +499,7 @@ Parameters for Illumina read simulation (Wessim2-style fragment simulation with 
 |-------|------|-------------|---------|
 | `simulator` | string | "illumina", "ont", "pacbio", "amplicon", or "ont-amplicon" | "illumina" |
 | `human_reference` | string | Path to reference FASTA | Required |
-| `reseq_model` | string | Path to ReSeq error model | - |
+| `reseq_model` | string | Path to ReSeq2 error model (`.reseq` file) | - |
 | `read_number` | integer | Number of reads to generate | - |
 | `fragment_size` | integer | Mean insert size (bp) | 350 |
 | `fragment_sd` | integer | Insert size std dev (bp) | 50 |
@@ -712,7 +712,7 @@ See the [Amplicon Simulation Guide](../guides/amplicon-simulation.md) for detail
   },
 
   "tools": {
-    "reseq": "/usr/bin/reseq",
+    "reseq": "/usr/bin/reseq2",
     "bwa": "/usr/bin/bwa",
     "samtools": "/usr/bin/samtools"
   },
