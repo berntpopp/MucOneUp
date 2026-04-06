@@ -92,7 +92,7 @@ def align_and_refine(
     if vntr_enabled:
         logger.info("10. Applying VNTR capture efficiency bias")
         try:
-            penalty_factor: float = vntr_config.get("penalty_factor", 0.375)
+            penalty_factor: float = vntr_config.get("penalty_factor", 0.39)
             vntr_seed: int = vntr_config.get("seed", rs_config.get("seed", 42))
             vntr_region = vntr_config.get("vntr_region")
             capture_bed = vntr_config.get("capture_bed")
@@ -260,6 +260,40 @@ def align_and_refine(
                     threads,
                 )
             current_bam = downsampled_bam
+
+            # Post-downsampling validation: re-measure and log actual coverage
+            if mode == "vntr":
+                actual_cov, post_depth_file = calculate_vntr_coverage(
+                    tools["samtools"],
+                    downsampled_bam,
+                    vntr_region,
+                    threads,
+                    str(output_dir),
+                    f"{output_base}_post_downsample",
+                )
+            else:
+                actual_cov, post_depth_file = calculate_target_coverage(
+                    tools["samtools"],
+                    downsampled_bam,
+                    rs_config.get("sample_target_bed", ""),
+                    threads,
+                    str(output_dir),
+                    f"{output_base}_post_downsample",
+                )
+            intermediate_files.append(post_depth_file)
+            deviation_pct = ((actual_cov - target_coverage) / target_coverage) * 100
+            logger.info(
+                "Post-downsampling coverage: %.1fx (target: %.1fx, deviation: %+.1f%%)",
+                actual_cov,
+                target_coverage,
+                deviation_pct,
+            )
+            if abs(deviation_pct) > 20:
+                logger.warning(
+                    "Post-downsampling coverage %.1fx deviates >20%% from target %.1fx",
+                    actual_cov,
+                    target_coverage,
+                )
         else:
             logger.info(
                 "Current coverage (%.2fx) is below the target; no downsampling performed.",

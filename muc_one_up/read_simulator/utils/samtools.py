@@ -238,7 +238,7 @@ def calculate_mean_coverage(bam_file: Path, region_bed: Path) -> float:
 
     try:
         result = run_command(
-            ["samtools", "depth", "-b", str(region_bed), str(bam_file)],
+            ["samtools", "depth", "-a", "-b", str(region_bed), str(bam_file)],
             capture=True,
         )
 
@@ -247,10 +247,14 @@ def calculate_mean_coverage(bam_file: Path, region_bed: Path) -> float:
             logger.warning(f"No coverage data for {region_bed}")
             return 0.0
 
-        # Parse depth output (chr, pos, depth)
-        depths = [int(line.split()[2]) for line in stdout.strip().split("\n")]
+        # Stream depth output with running totals to avoid materializing large lists
+        total_depth = 0
+        num_positions = 0
+        for line in stdout.strip().split("\n"):
+            total_depth += int(line.split()[2])
+            num_positions += 1
 
-        mean_cov = sum(depths) / len(depths) if depths else 0.0
+        mean_cov = total_depth / num_positions if num_positions else 0.0
         logger.debug(f"Mean coverage: {mean_cov:.2f}x")
 
         return mean_cov

@@ -347,6 +347,22 @@ class TestCalculateMeanCoverage:
         assert coverage == 0.0
 
     @patch(MOCK_TARGET)
+    def test_includes_all_positions_flag(self, mock_run, mock_bam_file, mock_bed_file):
+        """Verify samtools depth is called with -a to include zero-coverage positions."""
+        mock_run.return_value = _ok(stdout="chr1\t100\t10\nchr1\t101\t0\nchr1\t102\t5\n")
+
+        result = calculate_mean_coverage(mock_bam_file, mock_bed_file)
+
+        # Verify -a flag is present in the command
+        cmd = mock_run.call_args[0][0]
+        assert "-a" in cmd, (
+            "samtools depth must be called with -a to include zero-coverage positions"
+        )
+
+        # Verify mean includes the zero-coverage position: (10 + 0 + 5) / 3 = 5.0
+        assert result == 5.0
+
+    @patch(MOCK_TARGET)
     def test_coverage_failure(self, mock_run, mock_bam_file, mock_bed_file):
         """Test handling of coverage calculation failure."""
         mock_run.side_effect = ExternalToolError(

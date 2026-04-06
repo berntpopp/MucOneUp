@@ -60,7 +60,7 @@ class TestVNTREfficiencyModelInit:
 
         model = VNTREfficiencyModel()
 
-        assert model.penalty_factor == 0.375
+        assert model.penalty_factor == 0.39
         assert model.seed == 42
         assert model.threads == 8
         assert model.vntr_region == DEFAULT_VNTR_REGION
@@ -205,7 +205,7 @@ class TestVNTREfficiencyModelOperations:
         input_bam = temp_dir / "input.bam"
         output_bam = temp_dir / "output.bam"
 
-        model = VNTREfficiencyModel(penalty_factor=0.375, seed=42)
+        model = VNTREfficiencyModel(penalty_factor=0.39, seed=42)
         model._downsample_reads(input_bam, output_bam, 0.5)
 
         mock_downsample.assert_called_once_with(input_bam, output_bam, 0.5, 42)
@@ -245,13 +245,13 @@ class TestVNTREfficiencyModelStatistics:
         vntr_bed = temp_dir / "vntr.bed"
         non_vntr_bed = temp_dir / "non_vntr.bed"
 
-        model = VNTREfficiencyModel(penalty_factor=0.375, seed=42)
+        model = VNTREfficiencyModel(penalty_factor=0.39, seed=42)
         stats = model._calculate_statistics(input_bam, output_bam, vntr_bed, non_vntr_bed)
 
         assert stats["vntr_coverage"] == 100.0
         assert stats["non_vntr_coverage"] == 50.0
         assert stats["coverage_ratio"] == 2.0
-        assert stats["penalty_factor"] == 0.375
+        assert stats["penalty_factor"] == 0.39
         assert stats["seed"] == 42
         assert stats["input_reads"] == 10000
         assert stats["output_reads"] == 6000
@@ -380,7 +380,7 @@ class TestVNTREfficiencyModelApplyBias:
         temp_work_dir = temp_dir / "_temp"
 
         # Run workflow
-        model = VNTREfficiencyModel(penalty_factor=0.375, seed=42)
+        model = VNTREfficiencyModel(penalty_factor=0.39, seed=42)
         stats = model.apply_efficiency_bias(input_bam, output_bam, temp_work_dir)
 
         # Verify all steps called
@@ -397,7 +397,7 @@ class TestVNTREfficiencyModelApplyBias:
         assert stats["vntr_coverage"] == 150.0
         assert stats["non_vntr_coverage"] == 75.0
         assert stats["coverage_ratio"] == 2.0
-        assert stats["penalty_factor"] == 0.375
+        assert stats["penalty_factor"] == 0.39
         assert stats["input_reads"] == 10000
         assert stats["output_reads"] == 6000
 
@@ -451,7 +451,7 @@ class TestVNTREfficiencyIntegration:
         mock_check.return_value = True
 
         # Test empirically validated range
-        for penalty in [0.357, 0.375, 0.395, 0.4, 0.5, 1.0]:
+        for penalty in [0.357, 0.39, 0.395, 0.4, 0.5, 1.0]:
             model = VNTREfficiencyModel(penalty_factor=penalty)
             assert model.penalty_factor == penalty
 

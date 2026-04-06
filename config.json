@@ -560,7 +560,7 @@
     "vntr_region_hg38": "chr1:155188487-155192239",
     "vntr_capture_efficiency": {
       "enabled": true,
-      "penalty_factor": 0.375,
+      "penalty_factor": 0.39,
       "seed": 42,
       "vntr_region": {
         "chr": "chr1",
