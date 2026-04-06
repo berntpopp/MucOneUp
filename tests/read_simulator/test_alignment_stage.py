@@ -255,7 +255,7 @@ class TestAlignAndRefine:
         }
 
         output_base = "test_sample"
-        result = align_and_refine(
+        align_and_refine(
             tools=tools,
             rs_config=rs_config_ds,
             r1=str(tmp_path / "r1.fastq.gz"),

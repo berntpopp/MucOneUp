@@ -378,9 +378,7 @@ def align_and_refine(
                     f"{output_base}_post_downsample",
                 )
                 intermediate_files.append(post_depth_file)
-                deviation_pct = (
-                    (actual_cov - target_coverage) / target_coverage
-                ) * 100
+                deviation_pct = ((actual_cov - target_coverage) / target_coverage) * 100
                 logger.info(
                     "Post-downsampling coverage: %.1fx (target: %.1fx, deviation: %+.1f%%)",
                     actual_cov,
