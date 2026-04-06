@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.43.4] - 2026-04-06
+
+### Fixed
+- Race condition in VNTR efficiency temp directory — replaced deterministic path with `tempfile.TemporaryDirectory` for process-safe isolation in parallel runs (#82)
+
+---
+
+## [0.43.3] - 2026-04-06
+
+### Fixed
+- ONT amplicon: warn when model file does not appear to be an ONT model (#79)
+- pbsim3 wrapper: detect and convert numbered SAM files (`prefix_0001.sam`) produced with template mode (#79)
+- Config paths (model_file, reseq_model, human_reference) now resolved relative to config file directory, not working directory (#80)
+- Default `expected_product_range` widened from `[1500, 6000]` to `[1500, 15000]` to support VNTRs with >99 repeats (#81)
+
+### Added
+- 5 new tests for config path resolution, ONT model warning, and numbered SAM detection
+
+---
+
 ## [0.43.2] - 2026-04-06
 
 ### Added
