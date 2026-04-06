@@ -92,7 +92,7 @@ def align_and_refine(
     if vntr_enabled:
         logger.info("10. Applying VNTR capture efficiency bias")
         try:
-            penalty_factor: float = vntr_config.get("penalty_factor", 0.375)
+            penalty_factor: float = vntr_config.get("penalty_factor", 0.39)
             vntr_seed: int = vntr_config.get("seed", rs_config.get("seed", 42))
             vntr_region = vntr_config.get("vntr_region")
             capture_bed = vntr_config.get("capture_bed")

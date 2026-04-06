@@ -315,7 +315,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                             "type": "number",
                             "minimum": 0.1,
                             "maximum": 1.0,
-                            "default": 0.375,
+                            "default": 0.39,
                         },
                         "seed": {"type": "integer", "minimum": 0, "default": 42},
                         "vntr_region": {

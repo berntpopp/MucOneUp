@@ -4,9 +4,8 @@ VNTR Capture Efficiency Modeling.
 Models probe capture bias in VNTR regions by selectively downsampling
 reads to reflect real-world targeted sequencing behavior.
 
-This module implements the empirically validated approach (October 2024)
-using penalty factor 0.375 derived from comparison of 277 real Twist v2
-samples vs 59 simulated samples.
+This module implements the empirically validated approach using
+penalty factor 0.39 derived from 1,043 CerKiD Berlin Twist v2 exomes.
 """
 
 import logging
@@ -40,7 +39,7 @@ class VNTREfficiencyModel:
     capture efficiency of probe-based sequencing in VNTR regions.
 
     Attributes:
-        penalty_factor: Fraction of VNTR reads to retain (default: 0.375)
+        penalty_factor: Fraction of VNTR reads to retain (default: 0.39)
         seed: Random seed for reproducible downsampling
         threads: Number of threads for samtools operations
         vntr_region: Dict defining VNTR coordinates
@@ -50,7 +49,7 @@ class VNTREfficiencyModel:
 
     def __init__(
         self,
-        penalty_factor: float = 0.375,
+        penalty_factor: float = 0.39,
         seed: int = 42,
         threads: int = 8,
         vntr_region: dict | None = None,

@@ -119,7 +119,7 @@ class TestAlignAndRefine:
             "threads": 4,
             "vntr_capture_efficiency": {
                 "enabled": True,
-                "penalty_factor": 0.375,
+                "penalty_factor": 0.39,
                 "seed": 42,
                 "output_fastq": {"enabled": False},
                 "validation": {"report_statistics": False},
@@ -383,7 +383,7 @@ class TestAlignAndRefine:
         assembly_ctx_with_vntr.vntr_region = "chr1:155188487-155192239"
         assembly_ctx_with_vntr.assembly_name = "hg38"
 
-        result = align_and_refine(
+        align_and_refine(
             tools=tools,
             rs_config=rs_config,
             r1=str(tmp_path / "r1.fastq.gz"),
