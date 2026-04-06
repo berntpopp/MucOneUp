@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -111,13 +111,17 @@ def align_and_refine(
             intermediate_bams.append(current_bam)
 
             vntr_biased_bam = str(output_dir / f"{output_base}_vntr_biased.bam")
-            temp_dir = output_dir / "_vntr_efficiency_temp"
 
-            vntr_stats = vntr_model.apply_efficiency_bias(
-                input_bam=Path(current_bam),
-                output_bam=Path(vntr_biased_bam),
-                temp_dir=temp_dir,
-            )
+            with tempfile.TemporaryDirectory(
+                prefix=f"_vntr_efficiency_{output_base}_", dir=str(output_dir)
+            ) as temp_dir_str:
+                temp_dir = Path(temp_dir_str)
+
+                vntr_stats = vntr_model.apply_efficiency_bias(
+                    input_bam=Path(current_bam),
+                    output_bam=Path(vntr_biased_bam),
+                    temp_dir=temp_dir,
+                )
 
             # Optionally save statistics JSON
             if vntr_config.get("validation", {}).get("report_statistics", True):
@@ -167,10 +171,6 @@ def align_and_refine(
                     logger.warning("  Continuing with BAM output only")
             else:
                 logger.info("  Skipping VNTR-biased FASTQ generation (disabled in config)")
-
-            # Clean up temporary directory
-            if temp_dir.exists():
-                shutil.rmtree(temp_dir)
 
         except Exception as exc:
             logger.error("VNTR efficiency modeling failed: %s", exc)
