@@ -182,7 +182,7 @@ class TestAlignAndRefine:
         mocker.patch(
             f"{MODULE}.calculate_vntr_coverage",
             side_effect=[
-                (150.0, depth_file),          # Pre-downsampling measurement
+                (150.0, depth_file),  # Pre-downsampling measurement
                 (100.0, "/tmp/depth_post.txt"),  # Post-downsampling validation
             ],
         )
@@ -252,8 +252,8 @@ class TestAlignAndRefine:
         mocker.patch(
             f"{MODULE}.calculate_target_coverage",
             side_effect=[
-                (200.0, depth_file),             # Pre-downsampling measurement
-                (100.0, "/tmp/depth_post.txt"),   # Post-downsampling validation
+                (200.0, depth_file),  # Pre-downsampling measurement
+                (100.0, "/tmp/depth_post.txt"),  # Post-downsampling validation
             ],
         )
         mock_downsample_entire = mocker.patch(f"{MODULE}.downsample_entire_bam")

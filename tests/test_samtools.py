@@ -349,9 +349,7 @@ class TestCalculateMeanCoverage:
     @patch(MOCK_TARGET)
     def test_includes_all_positions_flag(self, mock_run, mock_bam_file, mock_bed_file):
         """Verify samtools depth is called with -a to include zero-coverage positions."""
-        mock_run.return_value = _ok(
-            stdout="chr1\t100\t10\nchr1\t101\t0\nchr1\t102\t5\n"
-        )
+        mock_run.return_value = _ok(stdout="chr1\t100\t10\nchr1\t101\t0\nchr1\t102\t5\n")
 
         result = calculate_mean_coverage(mock_bam_file, mock_bed_file)
 
