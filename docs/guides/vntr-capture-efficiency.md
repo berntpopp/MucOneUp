@@ -43,10 +43,12 @@ We empirically derived a **penalty factor of 0.39** from 1,043 CerKiD Berlin Twi
 
 | Metric | Value | 95% CI |
 |--------|-------|--------|
-| **Penalty factor** | **0.39** | [0.20, 1.28] |
+| **Penalty factor** | **0.39** | — |
 | **Cohort size** | 1,043 samples | All Twist Bioscience v2 |
-| **Implied penalty (median)** | 0.392 | From observed ratio / simulated base ratio |
+| **Implied penalty (median)** | 0.392 | [0.20, 0.72] (5th-95th percentile) |
 | **Effect size** | ~2.6x coverage reduction | VNTR reads retained |
+
+> **Note on implied penalty range:** The per-sample implied penalty is computed as (observed VNTR/flanking ratio) / (simulated base ratio of 9.32). The 5th-95th percentile range [0.20, 0.72] reflects natural inter-sample variation. A small number of outlier samples yield implied values >1.0, indicating VNTR enrichment exceeding the simulated baseline; these are excluded when computing the bounded penalty factor (constrained to [0.1, 1.0] by the config schema).
 
 ### Cohort Coverage Profile
 
@@ -269,10 +271,12 @@ muconeup --config config.json reads illumina sample.fa
 
 | Metric | No Bias | With Bias (0.39) |
 |--------|---------|-------------------|
-| VNTR coverage | 200x | 78x |
-| Flanking coverage | 200x | 200x |
-| VNTR:Flanking ratio | 1.0 | ~2.6 |
-| Reads retained | 100% | ~52% |
+| VNTR coverage | ~465x | ~182x |
+| Flanking coverage | ~50x | ~50x |
+| VNTR:Flanking ratio | ~9.3 | ~3.6 |
+| VNTR reads retained | 100% | 39% |
+
+*Example assumes flanking coverage of 50x (close to real cohort median of 46.4x).*
 
 ### Coverage Ratio Ranges
 
