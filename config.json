@@ -500,7 +500,7 @@
     }
   },
   "tools": {
-    "reseq": "mamba run -n env_wessim reseq",
+    "reseq": "/home/bernt-popp/development/ReSeq2/build/bin/reseq2",
     "faToTwoBit": "mamba run -n env_wessim faToTwoBit",
     "samtools": "mamba run -n env_wessim samtools",
     "pblat": "mamba run -n env_wessim pblat",
@@ -547,7 +547,7 @@
     "sample_bam_hg38": "data/twist_v2_hg38.bam",
     "sample_bam_hg19": "data/twist_v2_hg19.bam",
     "human_reference": "reference/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna",
-    "read_number": 10000,
+    "read_number": 100000,
     "fragment_size": 250,
     "fragment_sd": 35,
     "min_fragment": 20,
