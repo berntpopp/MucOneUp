@@ -8,6 +8,7 @@ including merging files from split-simulation workflows.
 
 import gzip
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
 from ...exceptions import ValidationError
@@ -172,7 +173,7 @@ def count_fastq_reads(fastq_path: str | Path) -> int:
 
 
 def merge_fastq_files(
-    input_files: list[str | Path],
+    input_files: Sequence[str | Path],
     output_file: str | Path,
     validate_inputs: bool = True,
 ) -> str:

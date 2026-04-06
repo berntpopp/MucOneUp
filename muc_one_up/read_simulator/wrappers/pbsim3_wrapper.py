@@ -429,9 +429,11 @@ def run_pbsim3_template_simulation(
     output_prefix_path = Path(output_prefix)
     parent_dir = output_prefix_path.parent
 
-    # Check for FASTQ output first (pass_num=1 / ONT mode)
+    # Check for FASTQ output only in single-pass mode (pass_num=1).
+    # For pass_num >= 2, ignore any pre-existing/stale FASTQ and continue
+    # with BAM/SAM handling for the current multi-pass simulation.
     fq_gz = Path(f"{output_prefix}.fq.gz")
-    if fq_gz.exists():
+    if pass_num == 1 and fq_gz.exists():
         if fq_gz.stat().st_size == 0:
             raise FileOperationError(f"pbsim3 produced empty FASTQ: {fq_gz}")
         logging.info("pbsim3 template simulation complete: 1 FASTQ file (single-pass)")

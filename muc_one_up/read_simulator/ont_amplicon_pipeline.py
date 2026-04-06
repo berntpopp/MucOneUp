@@ -16,7 +16,6 @@ Pipeline stages:
 from __future__ import annotations
 
 import logging
-import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -192,16 +191,9 @@ def simulate_ont_amplicon_pipeline(
             merged_fastq = str(output_dir / f"{output_base}_amplicon_ont.fastq")
             logging.info("STAGE 6: Merging %d FASTQs", len(allele_fastqs))
 
-            import gzip
+            from .utils.fastq_utils import merge_fastq_files
 
-            with open(merged_fastq, "w") as outf:
-                for fq in allele_fastqs:
-                    if fq.endswith(".gz"):
-                        with gzip.open(fq, "rt") as inf:
-                            shutil.copyfileobj(inf, outf)
-                    else:
-                        with open(fq) as inf:
-                            shutil.copyfileobj(inf, outf)
+            merge_fastq_files(allele_fastqs, merged_fastq, validate_inputs=False)
 
             # STAGE 7: Alignment (optional)
             if human_reference is None:
