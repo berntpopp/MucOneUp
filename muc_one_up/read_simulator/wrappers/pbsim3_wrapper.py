@@ -420,10 +420,34 @@ def run_pbsim3_template_simulation(
         cmd, timeout=timeout, stderr_prefix="[pbsim3-templ] ", stderr_log_level=logging.INFO
     )
 
-    # Handle output files (same logic as WGS mode)
+    # Handle output files — pbsim3 may produce:
+    # 1. {prefix}_0001.bam, {prefix}_0002.bam, ... (multi-sequence BAM)
+    # 2. {prefix}_0001.sam, {prefix}_0002.sam, ... (multi-sequence SAM, needs conversion)
+    # 3. {prefix}.bam (single-sequence BAM)
+    # 4. {prefix}.sam (single-sequence SAM, needs conversion)
     output_prefix_path = Path(output_prefix)
+    parent_dir = output_prefix_path.parent
+
+    # Convert any numbered SAM files to BAM first
+    multi_sam_pattern = f"{output_prefix_path.name}_*.sam"
+    for sam_path in sorted(parent_dir.glob(multi_sam_pattern)):
+        bam_target = sam_path.with_suffix(".bam")
+        if not bam_target.exists():
+            convert_sam_to_bam(
+                samtools_cmd=samtools_cmd,
+                input_sam=str(sam_path),
+                output_bam=str(bam_target),
+                threads=4,
+                timeout=timeout,
+            )
+        try:
+            sam_path.unlink()
+        except Exception as e:
+            logging.warning("Could not remove SAM file %s: %s", sam_path, e)
+
+    # Now collect all BAM files
     multi_bam_pattern = f"{output_prefix_path.name}_*.bam"
-    multi_bam_files = sorted(str(p) for p in output_prefix_path.parent.glob(multi_bam_pattern))
+    multi_bam_files = sorted(str(p) for p in parent_dir.glob(multi_bam_pattern))
 
     output_bams: list[str] = []
 

@@ -169,3 +169,54 @@ class TestOntAmpliconPipeline:
                 str(fasta),
                 source_tracker="not_none",
             )
+
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.run_pbsim3_template_simulation")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.convert_bam_to_fastq")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.align_reads_with_minimap2")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_intermediates")
+    def test_warns_on_non_ont_model(
+        self,
+        mock_cleanup,
+        mock_metadata,
+        mock_align,
+        mock_convert,
+        mock_pbsim3,
+        mock_prep,
+        ont_amplicon_config,
+        tmp_path,
+        caplog,
+    ):
+        """Should warn when model file doesn't look like an ONT model."""
+        import logging
+
+        # Use a PacBio model name to trigger warning
+        ont_amplicon_config["pacbio_params"]["model_file"] = str(tmp_path / "ERRHMM-SEQUEL.model")
+        (tmp_path / "ERRHMM-SEQUEL.model").write_text("model")
+
+        mock_prep.return_value = _make_prep(tmp_path)
+        mock_pbsim3.side_effect = lambda **kw: [kw["output_prefix"] + ".bam"]
+
+        def convert_side_effect(**kw):
+            Path(kw["output_fastq"]).write_text("@read\nACGT\n+\nIIII\n")
+            return kw["output_fastq"]
+
+        mock_convert.side_effect = convert_side_effect
+        mock_align.return_value = str(tmp_path / "aligned.bam")
+
+        fasta = tmp_path / "input.fa"
+        fasta.write_text(">seq\nACGT\n")
+
+        from muc_one_up.read_simulator.ont_amplicon_pipeline import (
+            simulate_ont_amplicon_pipeline,
+        )
+
+        with caplog.at_level(logging.WARNING):
+            simulate_ont_amplicon_pipeline(
+                ont_amplicon_config,
+                str(fasta),
+                human_reference=str(fasta),
+            )
+
+        assert any("does not appear to be an ONT model" in r.message for r in caplog.records)

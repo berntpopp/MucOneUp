@@ -89,6 +89,16 @@ def simulate_ont_amplicon_pipeline(
     seed = pacbio_params.get("seed")
     accuracy_mean = pacbio_params.get("accuracy_mean", 0.95)
 
+    # Warn if model file doesn't look like an ONT model
+    model_name = Path(model_file).name.upper()
+    if "ONT" not in model_name and "NANOPORE" not in model_name:
+        logging.warning(
+            "ONT amplicon mode is using model file '%s' which does not appear "
+            "to be an ONT model. Consider using --model-file with an ONT model "
+            "(e.g., ERRHMM-ONT.model or QSHMM-ONT-HQ.model).",
+            model_file,
+        )
+
     forward_primer = amplicon_params["forward_primer"]
     reverse_primer = amplicon_params["reverse_primer"]
     expected_range = amplicon_params.get("expected_product_range")

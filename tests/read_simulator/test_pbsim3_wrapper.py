@@ -449,3 +449,44 @@ class TestRunPbsim3TemplateSimulation:
                 output_prefix=str(tmp_path / "out"),
                 pass_num=0,
             )
+
+    def test_converts_numbered_sam_files(self, tmp_path):
+        """Numbered SAM files (e.g., prefix_0001.sam) should be converted to BAM."""
+        template_fa = tmp_path / "template.fa"
+        template_fa.write_text(">copy\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model")
+        prefix = str(tmp_path / "out")
+
+        # Simulate pbsim3 producing numbered SAM files
+        (tmp_path / "out_0001.sam").write_text("@HD\tVN:1.6\n")
+
+        with (
+            patch("muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command") as mock_run,
+            patch(
+                "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.convert_sam_to_bam"
+            ) as mock_convert,
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+
+            # convert_sam_to_bam should create the BAM
+            def create_bam(samtools_cmd, input_sam, output_bam, threads, timeout):
+                Path(output_bam).write_bytes(b"BAM\x01FAKE")
+                return output_bam
+
+            mock_convert.side_effect = create_bam
+
+            result = run_pbsim3_template_simulation(
+                pbsim3_cmd="pbsim",
+                samtools_cmd="samtools",
+                template_fasta=str(template_fa),
+                model_type="errhmm",
+                model_file=str(model_file),
+                output_prefix=prefix,
+            )
+
+            # Should have converted the numbered SAM
+            mock_convert.assert_called_once()
+            assert "out_0001.sam" in mock_convert.call_args[1]["input_sam"]
+            assert len(result) == 1
+            assert result[0].endswith("out_0001.bam")

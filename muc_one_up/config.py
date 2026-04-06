@@ -633,4 +633,55 @@ def load_config_raw(config_path: str) -> dict[str, Any]:
         config["constants"] = {ref_assembly: old_constants}
         logging.debug("Normalized flat constants format to nested format")
 
+    # Resolve relative paths relative to config file directory
+    _resolve_config_paths(config, Path(config_path).parent.resolve())
+
     return config  # type: ignore[no-any-return]
+
+
+# Known path fields organized by config section
+_PATH_FIELDS: dict[str | None, list[str]] = {
+    None: [
+        "human_reference",
+        "reseq_model",
+        "sample_bam_hg38",
+        "sample_bam_hg19",
+        "sample_target_bed",
+    ],
+    "pacbio_params": ["model_file"],
+}
+
+
+def _resolve_config_paths(config: dict[str, Any], config_dir: Path) -> None:
+    """Resolve relative file paths in config relative to config file directory.
+
+    Only resolves paths that are relative and don't exist from the current
+    working directory but do exist relative to the config directory.
+    """
+    # Top-level and read_simulation paths
+    for key in _PATH_FIELDS.get(None, []):
+        for section_key in (None, "read_simulation"):
+            section = config if section_key is None else config.get(section_key, {})
+            if key in section and isinstance(section[key], str):
+                _try_resolve(section, key, config_dir)
+
+    # Nested section paths
+    for section_key, keys in _PATH_FIELDS.items():
+        if section_key is None:
+            continue
+        section = config.get(section_key, {})
+        for key in keys:
+            if key in section and isinstance(section[key], str):
+                _try_resolve(section, key, config_dir)
+
+
+def _try_resolve(section: dict[str, Any], key: str, config_dir: Path) -> None:
+    """Resolve a single path field if it's relative and exists from config_dir."""
+    value = section[key]
+    path = Path(value)
+    if path.is_absolute() or path.exists():
+        return
+    resolved = config_dir / path
+    if resolved.exists():
+        section[key] = str(resolved)
+        logging.debug("Resolved config path %s: %s -> %s", key, value, resolved)
