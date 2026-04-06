@@ -238,7 +238,7 @@ def calculate_mean_coverage(bam_file: Path, region_bed: Path) -> float:
 
     try:
         result = run_command(
-            ["samtools", "depth", "-b", str(region_bed), str(bam_file)],
+            ["samtools", "depth", "-a", "-b", str(region_bed), str(bam_file)],
             capture=True,
         )
 
