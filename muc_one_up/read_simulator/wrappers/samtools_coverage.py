@@ -186,39 +186,52 @@ def downsample_bam(
     # Format the fraction string for samtools view -s option (seed.fraction)
     fraction_str = f"{seed}.{int(fraction * 10000):04d}"
 
-    # Extract reads from the target region, downsample, and save to temporary BAM
-    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
+    # Create a temporary BED file for the target region
+    region_bed = output_bam.replace(".bam", "_region.bed")
+    chrom, coords = region.split(":")
+    start, end = coords.split("-")
+    with Path(region_bed).open("w") as f:
+        f.write(f"{chrom}\t{start}\t{end}\n")
+
+    # Two-pass approach: extract non-region reads (full) then region reads (downsampled).
+    # Cannot use -L/-U/-s together because -U captures reads failing ANY filter,
+    # so VNTR reads dropped by -s would end up in -U and get merged back.
     region_bam = output_bam.replace(".bam", "_region_only.bam")
+    other_bam = output_bam.replace(".bam", "_other_regions.bam")
+
+    # Pass 1: Extract non-region reads at full coverage using -L + -U
+    cmd = build_tool_command(
+        samtools_exe,
+        "view",
+        "-b",  # Output BAM
+        "-L",
+        region_bed,  # Target region BED
+        "-U",
+        other_bam,  # Non-region reads written here (full coverage)
+        "-@",
+        threads,
+        "-o",
+        "/dev/null",  # Discard the region reads from this pass
+        input_bam,
+    )
+    run_command(cmd, timeout=60)
+
+    # Pass 2: Extract and downsample region reads
     cmd = build_tool_command(
         samtools_exe,
         "view",
         "-b",  # Output BAM
         "-s",
         fraction_str,  # Downsampling fraction with seed
+        "-L",
+        region_bed,  # Target region BED
         "-@",
-        threads,  # Threads (build_tool_command handles conversion)
-        input_bam,
-        region,
+        threads,
         "-o",
         region_bam,
+        input_bam,
     )
     run_command(cmd, timeout=60)
-
-    # Extract reads from outside the target region (keep all)
-    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
-    other_bam = output_bam.replace(".bam", "_other_regions.bam")
-    cmd = build_tool_command(
-        samtools_exe,
-        "view",
-        "-b",  # Output BAM
-        "-@",
-        threads,  # Threads (build_tool_command handles conversion)
-        input_bam,
-        f"^{region}",  # Exclude target region
-        "-o",
-        other_bam,
-    )
-    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Merge the downsampled region BAM with the unchanged "other" BAM
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
@@ -240,7 +253,7 @@ def downsample_bam(
     run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
     # Clean up intermediate files
-    for tmp_file in [region_bam, other_bam]:
+    for tmp_file in [region_bam, other_bam, region_bed]:
         tmp_path = Path(tmp_file)
         if tmp_path.exists():
             try:
