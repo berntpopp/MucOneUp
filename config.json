@@ -531,8 +531,8 @@
     "threads": 8
   },
   "ont_amplicon_params": {
-    "model_type": "errhmm",
-    "model_file": "reference/pbsim3/ERRHMM-ONT.model",
+    "model_type": "qshmm",
+    "model_file": "reference/pbsim3/QSHMM-ONT-HQ.model",
     "threads": 8,
     "accuracy_mean": 0.95
   },
@@ -540,7 +540,10 @@
     "forward_primer": "GGAGAAAAGGAGACTTCGGCTACCCAG",
     "reverse_primer": "GCCGTTGTGCACCAGAGTAGAAGCTGA",
     "primer_source": "Wenzel et al. 2018 (PMID: 29520014)",
-    "expected_product_range": [500, 15000],
+    "expected_product_range": [
+      500,
+      15000
+    ],
     "pcr_bias": {
       "preset": "default"
     }
@@ -634,7 +637,11 @@
     "consensus_motif": "RCHLGPGHQAGPGLHR",
     "identity_threshold": 0.8,
     "expected_repeat_count": 10,
-    "key_residues": ["R", "C", "H"],
+    "key_residues": [
+      "R",
+      "C",
+      "H"
+    ],
     "weights": {
       "repeat": 0.6,
       "composition": 0.4

@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI routes `--model-file` overrides to `ont_amplicon_params` for ONT and `pacbio_params` for PacBio
 
 ### Added
-- `ont_amplicon_params` config section with ONT-specific defaults (ERRHMM-ONT.model)
+- `ont_amplicon_params` config section with ONT-specific defaults (QSHMM-ONT-HQ.model)
 - `OntAmpliconConfig` TypedDict for type-safe ONT parameter access
 - Config schema validation and path resolution for `ont_amplicon_params`
 - Test for ONT platform using `ont_amplicon_params` (not `pacbio_params`)

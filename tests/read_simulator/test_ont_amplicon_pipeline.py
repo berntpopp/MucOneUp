@@ -19,7 +19,7 @@ def muc1_primers():
 
 @pytest.fixture
 def ont_amplicon_config(tmp_path, muc1_primers):
-    model_file = tmp_path / "ERRHMM-ONT-HQ.model"
+    model_file = tmp_path / "QSHMM-ONT-HQ.model"
     model_file.write_text("model")
     return {
         "tools": {
@@ -33,7 +33,7 @@ def ont_amplicon_config(tmp_path, muc1_primers):
             "pcr_bias": {"preset": "default"},
         },
         "ont_amplicon_params": {
-            "model_type": "errhmm",
+            "model_type": "qshmm",
             "model_file": str(model_file),
             "threads": 4,
         },

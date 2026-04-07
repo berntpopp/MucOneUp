@@ -146,7 +146,7 @@ def _apply_ont_amplicon_params(
 
     Mutates config in place. Uses ont_amplicon_params section (separate
     from pacbio_params) so the ONT pipeline gets an ONT-specific model.
-    Falls back to sensible defaults (ERRHMM-ONT.model) when values are
+    Falls back to sensible defaults (QSHMM-ONT-HQ.model) when values are
     missing or explicitly null.
     """
     if "ont_amplicon_params" not in config:
@@ -161,12 +161,12 @@ def _apply_ont_amplicon_params(
         params["seed"] = seed
         logging.info("Using random seed: %d (results will be reproducible)", seed)
 
-    # Default to ERRHMM-ONT.model if missing or explicitly null
+    # Default to QSHMM-ONT-HQ.model if missing or explicitly null
     if not params.get("model_file"):
-        params["model_file"] = "reference/pbsim3/ERRHMM-ONT.model"
+        params["model_file"] = "reference/pbsim3/QSHMM-ONT-HQ.model"
         logging.info("Using default ONT model: %s", params["model_file"])
     if not params.get("model_type"):
-        params["model_type"] = "errhmm"
+        params["model_type"] = "qshmm"
 
 
 def _apply_pacbio_params(
@@ -560,7 +560,7 @@ def amplicon(
 
       # ONT amplicon simulation
       muconeup --config X reads amplicon --platform ont sample.fa \\
-        --model-file /models/ERRHMM-ONT.model
+        --model-file /models/QSHMM-ONT-HQ.model
 
       # High coverage with stochastic PCR bias
       muconeup --config X reads amplicon sample.fa \\
