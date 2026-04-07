@@ -33,6 +33,7 @@ MucOneUp requires a JSON configuration file specifying:
   "read_simulation": { ... },
   "nanosim_params": { ... },
   "pacbio_params": { ... },
+  "ont_amplicon_params": { ... },
   "amplicon_params": { ... }
 }
 ```
@@ -595,11 +596,44 @@ Parameters for PacBio HiFi read simulation.
 
 ---
 
+## ONT Amplicon Parameters Section
+
+### Purpose
+
+Parameters for ONT amplicon read simulation (pbsim3 single-pass mode). Separate from `pacbio_params` so each platform uses its own error model.
+
+### Structure
+
+```json
+{
+  "ont_amplicon_params": {
+    "model_type": "errhmm",
+    "model_file": "reference/pbsim3/ERRHMM-ONT.model",
+    "threads": 8,
+    "accuracy_mean": 0.95
+  }
+}
+```
+
+### Fields
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `model_type` | string | "qshmm" or "errhmm" | "errhmm" |
+| `model_file` | string | pbsim3 ONT error model file | ERRHMM-ONT.model |
+| `threads` | number | Parallel threads (minimum 1) | 8 |
+| `seed` | integer | Random seed (null = random) | null |
+| `accuracy_mean` | number | Mean read accuracy (0.0-1.0) | 0.95 |
+
+Available ONT models: `ERRHMM-ONT.model`, `QSHMM-ONT.model`, `QSHMM-ONT-HQ.model`.
+
+---
+
 ## Amplicon Parameters Section
 
 ### Purpose
 
-Parameters for PacBio amplicon read simulation with PCR length bias modeling.
+Parameters for amplicon read simulation (shared by PacBio and ONT) with PCR length bias modeling.
 
 ### Structure
 
@@ -747,6 +781,13 @@ See the [Amplicon Simulation Guide](../guides/amplicon-simulation.md) for detail
     "min_rq": 0.99,
     "threads": 4,
     "seed": 42
+  },
+
+  "ont_amplicon_params": {
+    "model_type": "errhmm",
+    "model_file": "/path/to/pbsim3/ERRHMM-ONT.model",
+    "threads": 8,
+    "accuracy_mean": 0.95
   }
 }
 ```
