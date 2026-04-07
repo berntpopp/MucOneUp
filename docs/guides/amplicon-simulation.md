@@ -44,7 +44,7 @@ muconeup --config config.json reads amplicon \
 # 2b. ONT amplicon reads
 muconeup --config config.json reads amplicon --platform ont \
   output/sample.001.simulated.fa \
-  --model-file /path/to/ERRHMM-ONT-HQ.model \
+  --model-file /path/to/QSHMM-ONT-HQ.model \
   --coverage 500 --seed 42
 ```
 
@@ -101,7 +101,7 @@ muconeup --config config.json reads amplicon sample.fa \
 
 # Oxford Nanopore
 muconeup --config config.json reads amplicon --platform ont sample.fa \
-  --model-file /path/to/ERRHMM-ONT-HQ.model
+  --model-file /path/to/QSHMM-ONT-HQ.model
 ```
 
 Stages 1-4 (extraction, PCR bias, template generation) are shared. The platforms differ in read generation and alignment:
@@ -112,7 +112,7 @@ Stages 1-4 (extraction, PCR bias, template generation) are shared. The platforms
 | pbsim3 pass_num | 3+ (multi-pass CLR) | 1 (single-pass) |
 | Consensus | CCS (multi-pass -> HiFi) | None (skip) |
 | minimap2 preset | `map-hifi` | `map-ont` |
-| Error model | `QSHMM-SEQUEL.model` etc. | `ERRHMM-ONT.model` etc. |
+| Error model | `QSHMM-SEQUEL.model` etc. | `QSHMM-ONT-HQ.model` etc. |
 | Output suffix | `*_amplicon_hifi.bam` | `*_amplicon_ont.bam` |
 | Tool dependencies | pbsim3, ccs, samtools, minimap2 | pbsim3, samtools, minimap2 |
 
@@ -125,8 +125,8 @@ The ONT amplicon pipeline reads from the `ont_amplicon_params` config section (s
 
 ```json
 "ont_amplicon_params": {
-    "model_type": "errhmm",
-    "model_file": "reference/pbsim3/ERRHMM-ONT.model",
+    "model_type": "qshmm",
+    "model_file": "reference/pbsim3/QSHMM-ONT-HQ.model",
     "threads": 8,
     "accuracy_mean": 0.95
 }
@@ -134,14 +134,14 @@ The ONT amplicon pipeline reads from the `ont_amplicon_params` config section (s
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_type` | string | `"errhmm"` | pbsim3 model type (`errhmm` or `qshmm`) |
-| `model_file` | string | `ERRHMM-ONT.model` | pbsim3 ONT error model file |
+| `model_type` | string | `"qshmm"` | pbsim3 model type (`errhmm` or `qshmm`) |
+| `model_file` | string | `QSHMM-ONT-HQ.model` | pbsim3 ONT error model file |
 | `threads` | int | `8` | Number of threads |
 | `accuracy_mean` | float | `0.95` | Mean read accuracy |
 
 Available ONT models in `reference/pbsim3/`:
 
-- `ERRHMM-ONT.model` -- standard ONT error profile
+- `QSHMM-ONT-HQ.model` -- standard ONT error profile
 - `QSHMM-ONT.model` -- quality score ONT model
 - `QSHMM-ONT-HQ.model` -- high-quality ONT model (e.g., Kit14/Dorado)
 

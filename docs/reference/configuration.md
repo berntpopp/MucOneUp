@@ -607,8 +607,8 @@ Parameters for ONT amplicon read simulation (pbsim3 single-pass mode). Separate 
 ```json
 {
   "ont_amplicon_params": {
-    "model_type": "errhmm",
-    "model_file": "reference/pbsim3/ERRHMM-ONT.model",
+    "model_type": "qshmm",
+    "model_file": "reference/pbsim3/QSHMM-ONT-HQ.model",
     "threads": 8,
     "accuracy_mean": 0.95
   }
@@ -619,13 +619,13 @@ Parameters for ONT amplicon read simulation (pbsim3 single-pass mode). Separate 
 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
-| `model_type` | string | "qshmm" or "errhmm" | "errhmm" |
-| `model_file` | string | pbsim3 ONT error model file | ERRHMM-ONT.model |
+| `model_type` | string | "qshmm" or "errhmm" | "qshmm" |
+| `model_file` | string | pbsim3 ONT error model file | QSHMM-ONT-HQ.model |
 | `threads` | number | Parallel threads (minimum 1) | 8 |
 | `seed` | integer | Random seed (null = random) | null |
 | `accuracy_mean` | number | Mean read accuracy (0.0-1.0) | 0.95 |
 
-Available ONT models: `ERRHMM-ONT.model`, `QSHMM-ONT.model`, `QSHMM-ONT-HQ.model`.
+Available ONT models: `QSHMM-ONT-HQ.model`, `QSHMM-ONT.model`, `QSHMM-ONT-HQ.model`.
 
 ---
 
@@ -784,8 +784,8 @@ See the [Amplicon Simulation Guide](../guides/amplicon-simulation.md) for detail
   },
 
   "ont_amplicon_params": {
-    "model_type": "errhmm",
-    "model_file": "/path/to/pbsim3/ERRHMM-ONT.model",
+    "model_type": "qshmm",
+    "model_file": "/path/to/pbsim3/QSHMM-ONT-HQ.model",
     "threads": 8,
     "accuracy_mean": 0.95
   }

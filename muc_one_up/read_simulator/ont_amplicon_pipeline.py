@@ -83,8 +83,8 @@ def simulate_ont_amplicon_pipeline(
 
     # ONT-specific params — uses ont_amplicon_params (NOT pacbio_params)
     # Treat None as missing (possible from partial configs with explicit nulls)
-    model_type = ont_params.get("model_type") or "errhmm"
-    model_file = ont_params.get("model_file") or "reference/pbsim3/ERRHMM-ONT.model"
+    model_type = ont_params.get("model_type") or "qshmm"
+    model_file = ont_params.get("model_file") or "reference/pbsim3/QSHMM-ONT-HQ.model"
     threads = ont_params.get("threads") or 8
     seed = ont_params.get("seed")  # None is valid here (random seed)
     accuracy_mean = ont_params.get("accuracy_mean") or 0.95
@@ -94,7 +94,7 @@ def simulate_ont_amplicon_pipeline(
     if "ONT" not in model_name and "NANOPORE" not in model_name:
         logging.warning(
             "ONT amplicon mode is using model file '%s' which does not appear "
-            "to be an ONT model. The default is ERRHMM-ONT.model. "
+            "to be an ONT model. The default is QSHMM-ONT-HQ.model. "
             "Check ont_amplicon_params.model_file in config or use --model-file.",
             model_file,
         )
