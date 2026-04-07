@@ -165,6 +165,7 @@ def _apply_ont_amplicon_params(
     # Default to ERRHMM-ONT.model if no model configured
     if "model_file" not in params:
         params["model_file"] = "reference/pbsim3/ERRHMM-ONT.model"
+        logging.info("Using default ONT model: %s", params["model_file"])
     if "model_type" not in params:
         params["model_type"] = "errhmm"
 

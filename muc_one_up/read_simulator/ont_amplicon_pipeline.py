@@ -84,7 +84,7 @@ def simulate_ont_amplicon_pipeline(
     # ONT-specific params — uses ont_amplicon_params (NOT pacbio_params)
     model_type = ont_params.get("model_type", "errhmm")
     model_file = ont_params.get("model_file", "reference/pbsim3/ERRHMM-ONT.model")
-    threads = ont_params.get("threads", 4)
+    threads = ont_params.get("threads", 8)
     seed = ont_params.get("seed")
     accuracy_mean = ont_params.get("accuracy_mean", 0.95)
 

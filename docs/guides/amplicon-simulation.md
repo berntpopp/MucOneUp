@@ -136,7 +136,7 @@ The ONT amplicon pipeline reads from the `ont_amplicon_params` config section (s
 |-----------|------|---------|-------------|
 | `model_type` | string | `"errhmm"` | pbsim3 model type (`errhmm` or `qshmm`) |
 | `model_file` | string | `ERRHMM-ONT.model` | pbsim3 ONT error model file |
-| `threads` | int | `4` | Number of threads |
+| `threads` | int | `8` | Number of threads |
 | `accuracy_mean` | float | `0.95` | Mean read accuracy |
 
 Available ONT models in `reference/pbsim3/`:
