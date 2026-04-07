@@ -609,7 +609,7 @@ Parameters for PacBio amplicon read simulation with PCR length bias modeling.
     "forward_primer": "GGAGAAAAGGAGACTTCGGCTACCCAG",
     "reverse_primer": "GCCGTTGTGCACCAGAGTAGAAGCTGA",
     "primer_source": "Wenzel et al. 2018 (PMID: 29520014)",
-    "expected_product_range": [1500, 15000],
+    "expected_product_range": [500, 15000],
     "pcr_bias": {
       "preset": "default"
     }
