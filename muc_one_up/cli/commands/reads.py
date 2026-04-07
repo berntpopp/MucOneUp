@@ -136,6 +136,39 @@ def _setup_read_config(
         logging.info(f"Using random seed: {seed} (results will be reproducible)")
 
 
+def _apply_ont_amplicon_params(
+    config: dict[str, Any],
+    model_type: str | None,
+    model_file: str | None,
+    seed: int | None,
+) -> None:
+    """Apply ONT amplicon CLI overrides to ont_amplicon_params.
+
+    Mutates config in place. Uses ont_amplicon_params section (separate
+    from pacbio_params) so the ONT pipeline gets an ONT-specific model.
+    Falls back to sensible defaults (ERRHMM-ONT.model) when values are
+    missing or explicitly null.
+    """
+    if "ont_amplicon_params" not in config:
+        config["ont_amplicon_params"] = {}
+
+    params = config["ont_amplicon_params"]
+    if model_type is not None:
+        params["model_type"] = model_type
+    if model_file is not None:
+        params["model_file"] = model_file
+    if seed is not None:
+        params["seed"] = seed
+        logging.info("Using random seed: %d (results will be reproducible)", seed)
+
+    # Default to ERRHMM-ONT.model if missing or explicitly null
+    if not params.get("model_file"):
+        params["model_file"] = "reference/pbsim3/ERRHMM-ONT.model"
+        logging.info("Using default ONT model: %s", params["model_file"])
+    if not params.get("model_type"):
+        params["model_type"] = "errhmm"
+
+
 def _apply_pacbio_params(
     config: dict[str, Any],
     model_type: str | None,
@@ -564,7 +597,10 @@ def amplicon(
             "Add forward_primer and reverse_primer to config.json."
         )
 
-    _apply_pacbio_params(config, model_type, model_file, seed)
+    if platform == "ont":
+        _apply_ont_amplicon_params(config, model_type, model_file, seed)
+    else:
+        _apply_pacbio_params(config, model_type, model_file, seed)
 
     # Apply PCR bias overrides
     if "pcr_bias" not in config["amplicon_params"]:

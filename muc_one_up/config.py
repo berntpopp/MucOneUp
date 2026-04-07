@@ -184,6 +184,21 @@ CONFIG_SCHEMA: dict[str, Any] = {
             ],
             "additionalProperties": False,
         },
+        "ont_amplicon_params": {
+            "type": "object",
+            "properties": {
+                "model_type": {"type": "string", "enum": ["qshmm", "errhmm"]},
+                "model_file": {"type": "string"},
+                "threads": {"type": "number", "minimum": 1},
+                "seed": {"type": ["number", "null"]},
+                "accuracy_mean": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                },
+            },
+            "additionalProperties": False,
+        },
         "constants": {
             "type": "object",
             # Allow either flat format (for backward compatibility with tests)
@@ -649,6 +664,7 @@ _PATH_FIELDS: dict[str | None, list[str]] = {
         "sample_target_bed",
     ],
     "pacbio_params": ["model_file"],
+    "ont_amplicon_params": ["model_file"],
 }
 
 

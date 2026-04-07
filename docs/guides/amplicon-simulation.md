@@ -108,15 +108,44 @@ Stages 1-4 (extraction, PCR bias, template generation) are shared. The platforms
 
 | Stage | PacBio (`--platform pacbio`) | ONT (`--platform ont`) |
 |-------|------------------------------|------------------------|
+| Config section | `pacbio_params` | `ont_amplicon_params` |
 | pbsim3 pass_num | 3+ (multi-pass CLR) | 1 (single-pass) |
 | Consensus | CCS (multi-pass -> HiFi) | None (skip) |
 | minimap2 preset | `map-hifi` | `map-ont` |
-| Error model | `QSHMM-SEQUEL.model` etc. | `ERRHMM-ONT-HQ.model` etc. |
+| Error model | `QSHMM-SEQUEL.model` etc. | `ERRHMM-ONT.model` etc. |
 | Output suffix | `*_amplicon_hifi.bam` | `*_amplicon_ont.bam` |
 | Tool dependencies | pbsim3, ccs, samtools, minimap2 | pbsim3, samtools, minimap2 |
 
 !!! note "ONT does not require CCS"
     The ONT pipeline skips CCS consensus entirely. Each pbsim3 template produces one single-pass read, which is converted directly to FASTQ and aligned. This means `--coverage` maps directly to the number of output reads (before alignment filtering).
+
+### ONT Configuration
+
+The ONT amplicon pipeline reads from the `ont_amplicon_params` config section (separate from `pacbio_params`):
+
+```json
+"ont_amplicon_params": {
+    "model_type": "errhmm",
+    "model_file": "reference/pbsim3/ERRHMM-ONT.model",
+    "threads": 8,
+    "accuracy_mean": 0.95
+}
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `model_type` | string | `"errhmm"` | pbsim3 model type (`errhmm` or `qshmm`) |
+| `model_file` | string | `ERRHMM-ONT.model` | pbsim3 ONT error model file |
+| `threads` | int | `8` | Number of threads |
+| `accuracy_mean` | float | `0.95` | Mean read accuracy |
+
+Available ONT models in `reference/pbsim3/`:
+
+- `ERRHMM-ONT.model` -- standard ONT error profile
+- `QSHMM-ONT.model` -- quality score ONT model
+- `QSHMM-ONT-HQ.model` -- high-quality ONT model (e.g., Kit14/Dorado)
+
+The `--model-file` CLI flag overrides `ont_amplicon_params.model_file` for ONT, and `pacbio_params.model_file` for PacBio.
 
 ---
 

@@ -69,6 +69,14 @@ def test_platform_ont_sets_ont_amplicon(tmp_path):
     assert config["read_simulation"]["simulator"] == "ont-amplicon"
 
 
+def test_ont_platform_uses_ont_amplicon_params(tmp_path):
+    """--platform ont should populate ont_amplicon_params, not pacbio_params."""
+    config = _invoke_amplicon(tmp_path, platform="ont")
+    assert "ont_amplicon_params" in config
+    # Default ONT model should be set
+    assert "ONT" in config["ont_amplicon_params"]["model_file"].upper()
+
+
 def test_assay_type_set_for_both_platforms(tmp_path):
     """Both platforms should set assay_type='amplicon'."""
     for platform in [None, "ont"]:

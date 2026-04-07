@@ -32,7 +32,7 @@ def ont_amplicon_config(tmp_path, muc1_primers):
             "reverse_primer": muc1_primers["reverse"],
             "pcr_bias": {"preset": "default"},
         },
-        "pacbio_params": {
+        "ont_amplicon_params": {
             "model_type": "errhmm",
             "model_file": str(model_file),
             "threads": 4,
@@ -192,7 +192,9 @@ class TestOntAmpliconPipeline:
         import logging
 
         # Use a PacBio model name to trigger warning
-        ont_amplicon_config["pacbio_params"]["model_file"] = str(tmp_path / "ERRHMM-SEQUEL.model")
+        ont_amplicon_config["ont_amplicon_params"]["model_file"] = str(
+            tmp_path / "ERRHMM-SEQUEL.model"
+        )
         (tmp_path / "ERRHMM-SEQUEL.model").write_text("model")
 
         mock_prep.return_value = _make_prep(tmp_path)
