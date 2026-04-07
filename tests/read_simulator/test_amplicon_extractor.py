@@ -201,3 +201,94 @@ class TestAmpliconExtractor:
 
         result = extractor.extract(str(fasta), str(output))
         assert result.length > 0
+
+
+def _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp):
+    """Build a FASTA whose amplicon (primers + VNTR fill) is exactly vntr_bp + primer lengths.
+
+    The total amplicon size equals len(fwd) + vntr_bp + len(rev_rc).
+    """
+    from Bio.Seq import Seq
+
+    fwd = muc1_primers["forward"]
+    rev_rc = str(Seq(muc1_primers["reverse"]).reverse_complement())
+    # Fill with repeating bases to reach desired VNTR region size
+    fill = "ACGT" * ((vntr_bp // 4) + 1)
+    vntr_region = fill[:vntr_bp]
+    sequence = "N" * 50 + fwd + vntr_region + rev_rc + "N" * 50
+    fasta = tmp_path / f"hap_{vntr_bp}.fa"
+    fasta.write_text(f">hap1\n{sequence}\n")
+    expected_len = len(fwd) + vntr_bp + len(rev_rc)
+    return fasta, expected_len
+
+
+class TestAmpliconProductRangeBoundaries:
+    """Boundary tests for expected_product_range with the default [500, 15000] bounds.
+
+    Verifies that short VNTR alleles (<25 repeats, ~1200bp amplicon) are accepted
+    after lowering the minimum from 1500 to 500 (#91).
+    """
+
+    def test_1200bp_amplicon_passes_with_500_lower_bound(self, tmp_path, muc1_primers):
+        """A 20-repeat allele producing ~1200bp amplicon must pass with [500, 15000]."""
+        fasta, expected_len = _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp=1146)
+        # expected_len ≈ 1200 (1146 + 27 fwd + 27 rev_rc)
+        assert 1190 <= expected_len <= 1210
+        output = tmp_path / "amplicon.fa"
+
+        extractor = AmpliconExtractor(
+            forward_primer=muc1_primers["forward"],
+            reverse_primer=muc1_primers["reverse"],
+            expected_product_range=(500, 15000),
+        )
+
+        result = extractor.extract(str(fasta), str(output))
+        assert result.length == expected_len
+
+    def test_400bp_amplicon_rejected_below_500(self, tmp_path, muc1_primers):
+        """An amplicon of ~400bp must be rejected when minimum is 500."""
+        fasta, expected_len = _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp=346)
+        # expected_len ≈ 400 (346 + 27 + 27)
+        assert 390 <= expected_len <= 410
+        output = tmp_path / "amplicon.fa"
+
+        extractor = AmpliconExtractor(
+            forward_primer=muc1_primers["forward"],
+            reverse_primer=muc1_primers["reverse"],
+            expected_product_range=(500, 15000),
+        )
+
+        with pytest.raises(AmpliconExtractionError, match="outside expected"):
+            extractor.extract(str(fasta), str(output))
+
+    def test_3000bp_amplicon_passes(self, tmp_path, muc1_primers):
+        """A normal-sized 3000bp amplicon must pass with [500, 15000]."""
+        fasta, expected_len = _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp=2946)
+        # expected_len ≈ 3000
+        assert 2990 <= expected_len <= 3010
+        output = tmp_path / "amplicon.fa"
+
+        extractor = AmpliconExtractor(
+            forward_primer=muc1_primers["forward"],
+            reverse_primer=muc1_primers["reverse"],
+            expected_product_range=(500, 15000),
+        )
+
+        result = extractor.extract(str(fasta), str(output))
+        assert result.length == expected_len
+
+    def test_16000bp_amplicon_rejected_above_15000(self, tmp_path, muc1_primers):
+        """An amplicon of ~16000bp must be rejected when maximum is 15000."""
+        fasta, expected_len = _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp=15946)
+        # expected_len ≈ 16000
+        assert 15990 <= expected_len <= 16010
+        output = tmp_path / "amplicon.fa"
+
+        extractor = AmpliconExtractor(
+            forward_primer=muc1_primers["forward"],
+            reverse_primer=muc1_primers["reverse"],
+            expected_product_range=(500, 15000),
+        )
+
+        with pytest.raises(AmpliconExtractionError, match="outside expected"):
+            extractor.extract(str(fasta), str(output))

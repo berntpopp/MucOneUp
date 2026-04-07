@@ -219,7 +219,7 @@ Amplicon boundaries are defined by primer binding sites in `config.json`:
     "forward_primer": "GGAGAAAAGGAGACTTCGGCTACCCAG",
     "reverse_primer": "GCCGTTGTGCACCAGAGTAGAAGCTGA",
     "primer_source": "Wenzel et al. 2018 (PMID: 29520014)",
-    "expected_product_range": [1500, 15000]
+    "expected_product_range": [500, 15000]
 }
 ```
 
@@ -237,10 +237,10 @@ The primers are the core sequences from Wenzel et al. 2018 (PS2/PS3), used acros
 `expected_product_range` is optional. When set, the extracted amplicon length is validated:
 
 ```json
-"expected_product_range": [1500, 15000]
+"expected_product_range": [500, 15000]
 ```
 
-This means 1500 <= amplicon_length <= 6000 bp. Amplicons outside this range raise an error.
+This means 500 <= amplicon_length <= 15000 bp. Amplicons outside this range raise an error.
 
 ---
 
