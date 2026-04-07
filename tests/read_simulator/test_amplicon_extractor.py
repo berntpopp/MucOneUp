@@ -225,15 +225,29 @@ def _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp):
 class TestAmpliconProductRangeBoundaries:
     """Boundary tests for expected_product_range with the default [500, 15000] bounds.
 
-    Verifies that short VNTR alleles (<25 repeats, ~1200bp amplicon) are accepted
-    after lowering the minimum from 1500 to 500 (#91).
+    Verifies that short amplicon products are accepted after lowering the
+    minimum from 1500 to 500 (#91). Tests use raw bp sizes (not repeat
+    counts) since the extractor operates on sequence length, not VNTR
+    repeat structure.
     """
 
+    @staticmethod
+    def _primer_overhead(muc1_primers):
+        """Compute total primer contribution to amplicon length."""
+        from Bio.Seq import Seq
+
+        fwd_len = len(muc1_primers["forward"])
+        rev_len = len(str(Seq(muc1_primers["reverse"]).reverse_complement()))
+        return fwd_len + rev_len
+
     def test_1200bp_amplicon_passes_with_500_lower_bound(self, tmp_path, muc1_primers):
-        """A 20-repeat allele producing ~1200bp amplicon must pass with [500, 15000]."""
-        fasta, expected_len = _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp=1146)
-        # expected_len ≈ 1200 (1146 + 27 fwd + 27 rev_rc)
-        assert 1190 <= expected_len <= 1210
+        """A ~1200bp amplicon (e.g. short VNTR) must pass with [500, 15000]."""
+        overhead = self._primer_overhead(muc1_primers)
+        target_product = 1200
+        fasta, expected_len = _make_amplicon_fasta(
+            tmp_path, muc1_primers, vntr_bp=target_product - overhead
+        )
+        assert abs(expected_len - target_product) <= 2
         output = tmp_path / "amplicon.fa"
 
         extractor = AmpliconExtractor(
@@ -246,10 +260,13 @@ class TestAmpliconProductRangeBoundaries:
         assert result.length == expected_len
 
     def test_400bp_amplicon_rejected_below_500(self, tmp_path, muc1_primers):
-        """An amplicon of ~400bp must be rejected when minimum is 500."""
-        fasta, expected_len = _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp=346)
-        # expected_len ≈ 400 (346 + 27 + 27)
-        assert 390 <= expected_len <= 410
+        """A ~400bp amplicon must be rejected when minimum is 500."""
+        overhead = self._primer_overhead(muc1_primers)
+        target_product = 400
+        fasta, expected_len = _make_amplicon_fasta(
+            tmp_path, muc1_primers, vntr_bp=target_product - overhead
+        )
+        assert abs(expected_len - target_product) <= 2
         output = tmp_path / "amplicon.fa"
 
         extractor = AmpliconExtractor(
@@ -262,10 +279,13 @@ class TestAmpliconProductRangeBoundaries:
             extractor.extract(str(fasta), str(output))
 
     def test_3000bp_amplicon_passes(self, tmp_path, muc1_primers):
-        """A normal-sized 3000bp amplicon must pass with [500, 15000]."""
-        fasta, expected_len = _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp=2946)
-        # expected_len ≈ 3000
-        assert 2990 <= expected_len <= 3010
+        """A normal-sized ~3000bp amplicon must pass with [500, 15000]."""
+        overhead = self._primer_overhead(muc1_primers)
+        target_product = 3000
+        fasta, expected_len = _make_amplicon_fasta(
+            tmp_path, muc1_primers, vntr_bp=target_product - overhead
+        )
+        assert abs(expected_len - target_product) <= 2
         output = tmp_path / "amplicon.fa"
 
         extractor = AmpliconExtractor(
@@ -278,10 +298,13 @@ class TestAmpliconProductRangeBoundaries:
         assert result.length == expected_len
 
     def test_16000bp_amplicon_rejected_above_15000(self, tmp_path, muc1_primers):
-        """An amplicon of ~16000bp must be rejected when maximum is 15000."""
-        fasta, expected_len = _make_amplicon_fasta(tmp_path, muc1_primers, vntr_bp=15946)
-        # expected_len ≈ 16000
-        assert 15990 <= expected_len <= 16010
+        """A ~16000bp amplicon must be rejected when maximum is 15000."""
+        overhead = self._primer_overhead(muc1_primers)
+        target_product = 16000
+        fasta, expected_len = _make_amplicon_fasta(
+            tmp_path, muc1_primers, vntr_bp=target_product - overhead
+        )
+        assert abs(expected_len - target_product) <= 2
         output = tmp_path / "amplicon.fa"
 
         extractor = AmpliconExtractor(
