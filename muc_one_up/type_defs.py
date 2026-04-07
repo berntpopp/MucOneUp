@@ -220,6 +220,16 @@ class PacbioConfig(TypedDict, total=False):
     length_max: int
 
 
+class OntAmpliconConfig(TypedDict, total=False):
+    """ONT amplicon simulation parameters (pbsim3 single-pass mode)."""
+
+    model_type: str
+    model_file: str
+    threads: int
+    seed: int | None
+    accuracy_mean: float
+
+
 # ---------------------------------------------------------------------------
 # Legacy aliases (kept for backward compatibility)
 # ---------------------------------------------------------------------------

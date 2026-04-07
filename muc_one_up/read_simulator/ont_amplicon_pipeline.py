@@ -50,7 +50,7 @@ def simulate_ont_amplicon_pipeline(
     no CCS consensus). See module docstring for pipeline stages.
 
     Args:
-        config: Pipeline config with tools, amplicon_params, pacbio_params,
+        config: Pipeline config with tools, amplicon_params, ont_amplicon_params,
             read_simulation sections.
         input_fa: Input FASTA (haploid or diploid).
         human_reference: Optional reference for alignment.
@@ -68,10 +68,10 @@ def simulate_ont_amplicon_pipeline(
 
     from typing import cast
 
-    from ..type_defs import AmpliconConfig, PacbioConfig, ReadSimulationConfig
+    from ..type_defs import AmpliconConfig, OntAmpliconConfig, ReadSimulationConfig
 
     amplicon_params = cast(AmpliconConfig, config.get("amplicon_params", {}))
-    pacbio_params = cast(PacbioConfig, config.get("pacbio_params", {}))
+    ont_params = cast(OntAmpliconConfig, config.get("ont_amplicon_params", {}))
     tools = config.get("tools", {})
     rs_raw = config.get("read_simulation", {})
     rs_config = cast(ReadSimulationConfig, rs_raw)
@@ -81,20 +81,20 @@ def simulate_ont_amplicon_pipeline(
     samtools_cmd = tools.get("samtools", "samtools")
     minimap2_cmd = tools.get("minimap2", "minimap2")
 
-    # Params from config
-    model_type = pacbio_params["model_type"]
-    model_file = pacbio_params["model_file"]
-    threads = pacbio_params.get("threads", 4)
-    seed = pacbio_params.get("seed")
-    accuracy_mean = pacbio_params.get("accuracy_mean", 0.95)
+    # ONT-specific params — uses ont_amplicon_params (NOT pacbio_params)
+    model_type = ont_params.get("model_type", "errhmm")
+    model_file = ont_params.get("model_file", "reference/pbsim3/ERRHMM-ONT.model")
+    threads = ont_params.get("threads", 4)
+    seed = ont_params.get("seed")
+    accuracy_mean = ont_params.get("accuracy_mean", 0.95)
 
-    # Warn if model file doesn't look like an ONT model
+    # Validate model file looks like an ONT model
     model_name = Path(model_file).name.upper()
     if "ONT" not in model_name and "NANOPORE" not in model_name:
         logging.warning(
             "ONT amplicon mode is using model file '%s' which does not appear "
-            "to be an ONT model. Consider using --model-file with an ONT model "
-            "(e.g., ERRHMM-ONT.model or QSHMM-ONT-HQ.model).",
+            "to be an ONT model. The default is ERRHMM-ONT.model. "
+            "Check ont_amplicon_params.model_file in config or use --model-file.",
             model_file,
         )
 
@@ -111,10 +111,7 @@ def simulate_ont_amplicon_pipeline(
         expected_range_tuple = (int(expected_range[0]), int(expected_range[1]))
 
     _rs_cov = rs_config.get("coverage")
-    _pb_cov = pacbio_params.get("coverage")
-    total_coverage: int = int(
-        _rs_cov if _rs_cov is not None else (_pb_cov if _pb_cov is not None else 30)
-    )
+    total_coverage: int = int(_rs_cov if _rs_cov is not None else 30)
 
     pcr_bias_config = amplicon_params.get("pcr_bias", {})
 

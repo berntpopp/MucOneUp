@@ -530,6 +530,12 @@
     "min_rq": 0.99,
     "threads": 8
   },
+  "ont_amplicon_params": {
+    "model_type": "errhmm",
+    "model_file": "reference/pbsim3/ERRHMM-ONT.model",
+    "threads": 8,
+    "accuracy_mean": 0.95
+  },
   "amplicon_params": {
     "forward_primer": "GGAGAAAAGGAGACTTCGGCTACCCAG",
     "reverse_primer": "GCCGTTGTGCACCAGAGTAGAAGCTGA",
