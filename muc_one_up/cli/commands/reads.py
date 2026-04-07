@@ -146,9 +146,8 @@ def _apply_ont_amplicon_params(
 
     Mutates config in place. Uses ont_amplicon_params section (separate
     from pacbio_params) so the ONT pipeline gets an ONT-specific model.
-
-    Raises:
-        click.ClickException: If required params are missing after merge.
+    Falls back to sensible defaults (ERRHMM-ONT.model) when values are
+    missing or explicitly null.
     """
     if "ont_amplicon_params" not in config:
         config["ont_amplicon_params"] = {}
@@ -162,11 +161,11 @@ def _apply_ont_amplicon_params(
         params["seed"] = seed
         logging.info("Using random seed: %d (results will be reproducible)", seed)
 
-    # Default to ERRHMM-ONT.model if no model configured
-    if "model_file" not in params:
+    # Default to ERRHMM-ONT.model if missing or explicitly null
+    if not params.get("model_file"):
         params["model_file"] = "reference/pbsim3/ERRHMM-ONT.model"
         logging.info("Using default ONT model: %s", params["model_file"])
-    if "model_type" not in params:
+    if not params.get("model_type"):
         params["model_type"] = "errhmm"
 
 

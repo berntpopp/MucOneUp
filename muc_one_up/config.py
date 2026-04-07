@@ -192,7 +192,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "threads": {"type": "number", "minimum": 1},
                 "seed": {"type": ["number", "null"]},
                 "accuracy_mean": {
-                    "type": ["number", "null"],
+                    "type": "number",
                     "minimum": 0.0,
                     "maximum": 1.0,
                 },
