@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "MucOneUp"
+abstract: "A Python CLI tool for simulating MUC1 VNTR diploid references"
+authors:
+  - family-names: "Popp"
+    given-names: "Bernt"
+    orcid: "https://orcid.org/0000-0002-3679-1081"
+repository-code: "https://github.com/berntpopp/MucOneUp"
+url: "https://berntpopp.github.io/MucOneUp/"
+license: MIT
+version: "0.44.4"
+date-released: "2026-04-08"
+keywords:
+  - MUC1
+  - VNTR
+  - bioinformatics
+  - genomics
+  - simulation
+  - diploid reference
+  - ADTKD-MUC1
