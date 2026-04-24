@@ -5,6 +5,7 @@
 [![Documentation](https://img.shields.io/badge/docs-MkDocs%20Material-blue)](https://berntpopp.github.io/MucOneUp/)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-blue.svg)](https://github.com/berntpopp/MucOneUp/pkgs/container/muconeup%2Fmuconeup)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19740405.svg)](https://doi.org/10.5281/zenodo.19740405)
 
 MUC1 VNTR simulation and analysis toolkit for genomics research.
 
@@ -99,17 +100,23 @@ make check   # Verify installation
 
 ## Citation
 
-If you use MucOneUp in your research:
+If you use MucOneUp in your research, please cite the archived release:
+
+- **Concept DOI (always latest):** [10.5281/zenodo.19740405](https://doi.org/10.5281/zenodo.19740405)
+- **This version (v0.44.4):** [10.5281/zenodo.19740406](https://doi.org/10.5281/zenodo.19740406)
 
 ```bibtex
-@software{muconeup2025,
-  author = {Popp, Bernt},
-  title = {MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit},
-  year = {2025},
-  url = {https://github.com/berntpopp/MucOneUp},
-  note = {Version available at https://github.com/berntpopp/MucOneUp/releases}
+@software{muconeup_v0_44_4,
+  author  = {Popp, Bernt},
+  title   = {MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit},
+  version = {v0.44.4},
+  year    = {2026},
+  doi     = {10.5281/zenodo.19740406},
+  url     = {https://doi.org/10.5281/zenodo.19740406}
 }
 ```
+
+Machine-readable metadata is available in [`CITATION.cff`](CITATION.cff) (GitHub's "Cite this repository" button generates formatted citations from it).
 
 **Status:** Pre-release software under active development. A manuscript is in preparation.
 

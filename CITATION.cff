@@ -12,6 +12,14 @@ url: "https://berntpopp.github.io/MucOneUp/"
 license: MIT
 version: "0.44.4"
 date-released: "2026-04-08"
+doi: "10.5281/zenodo.19740405"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.19740405"
+    description: "Concept DOI (all versions)"
+  - type: doi
+    value: "10.5281/zenodo.19740406"
+    description: "v0.44.4 versioned DOI"
 keywords:
   - MUC1
   - VNTR
