@@ -24,7 +24,6 @@ dependencies:
   - fontconfig=2.14.2=h14ed4e7_0
   - fonts-conda-ecosystem=1=0
   - fonts-conda-forge=1=0
-  - fonttools=4.56.0=py39h9399b63_0
   - freetype=2.12.1=h267a509_2
   - fribidi=1.0.10=h36c2ea0_0
   - genometools-genometools=1.6.5=py39h33ebc56_3
@@ -102,8 +101,6 @@ dependencies:
   - pcre2=10.43=hcad00b1_0
   - perl=5.32.1=7_hd590300_perl5
   - piecewise-regression=1.1.2=pyhd8ed1ab_0
-  - pillow=8.2.0=py39hf95b381_1
-  - pip=25.0.1=pyh8b19718_0
   - pixman=0.44.2=h29eaf8c_0
   - pthread-stubs=0.4=hb9d3cd8_1002
   - pybedtools=0.10.0=py39hdf45acc_2
@@ -121,7 +118,6 @@ dependencies:
   - samtools=1.21=h50ea8bc_0
   - scikit-learn=0.23.2=py39hf3c863f_3
   - scipy=1.13.1=py39haf93ffa_0
-  - setuptools=75.8.0=pyhff2d567_0
   - six=1.17.0=pyhd8ed1ab_0
   - sqlite=3.46.0=h6d4b2fc_0
   - statsmodels=0.14.4=py39hf3d9206_0
@@ -129,7 +125,6 @@ dependencies:
   - tk=8.6.13=noxft_h4845f30_101
   - tzdata=2025a=h78e105d_0
   - unicodedata2=16.0.0=py39h8cd3c5a_0
-  - wheel=0.45.1=pyhd8ed1ab_1
   - xorg-kbproto=1.0.7=hb9d3cd8_1003
   - xorg-libice=1.1.2=hb9d3cd8_0
   - xorg-libsm=1.2.5=he73a12e_0

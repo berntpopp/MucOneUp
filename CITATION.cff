@@ -10,8 +10,8 @@ authors:
 repository-code: "https://github.com/berntpopp/MucOneUp"
 url: "https://berntpopp.github.io/MucOneUp/"
 license: MIT
-version: "0.44.4"
-date-released: "2026-04-08"
+version: "0.44.5"
+date-released: "2026-09-14"
 doi: "10.5281/zenodo.19740405"
 identifiers:
   - type: doi

@@ -27,9 +27,6 @@ channels:
   - defaults
 
 dependencies:
-  # Core Python
-  - python=3.9
-
   # PacBio simulation and processing tools
   - pbsim3>=3.0.5         # PacBio/ONT read simulator
   - pbccs>=6.4.0          # Circular Consensus Sequencing (CCS)
