@@ -34,16 +34,15 @@ RUN ln -s /usr/bin/micromamba /usr/local/bin/mamba
 USER $MAMBA_USER
 COPY --chown=$MAMBA_USER:$MAMBA_USER conda/env_nanosim.yml conda/env_wessim.yaml conda/env_pacbio.yml /tmp/
 
-RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+RUN --mount=type=cache,target=/home/mambauser/.mamba/pkgs,sharing=locked \
     micromamba create -y -f /tmp/env_nanosim.yml && \
     micromamba create -y -f /tmp/env_wessim.yaml && \
     micromamba create -y -f /tmp/env_pacbio.yml && \
+    micromamba install -y -n env_nanosim -c conda-forge --no-deps scikit-learn=1.5.0 && \
+    micromamba remove -y -f --no-prune -n env_nanosim pillow fonttools pip wheel setuptools && \
+    micromamba remove -y -f --no-prune -n env_wessim pip wheel setuptools && \
     micromamba clean --all --yes && \
-    rm -f /tmp/*.yml /tmp/*.yaml
-
-# Remove unused build and image/font packages from conda environments to harden image and eliminate CVEs
-USER root
-RUN rm -rf /opt/conda/envs/*/lib/python*/site-packages/{pip,pip-*,setuptools,setuptools-*,wheel,wheel-*,_distutils_hack,distutils-precedence.pth,fonttools,fonttools-*,PIL,Pillow,Pillow-*,pillow,pillow-*}
+    rm -rf /tmp/*.yml /tmp/*.yaml /home/mambauser/.mamba/pkgs/* /opt/conda/pkgs/*
 
 WORKDIR /app
 
@@ -52,9 +51,20 @@ COPY pyproject.toml README.md ./
 COPY muc_one_up/ ./muc_one_up/
 COPY config.json ./
 
+USER root
+# Install lightweight PIL stubs for matplotlib in env_nanosim (eliminates Pillow CVEs without breaking simulation)
+RUN mkdir -p /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL && \
+    echo 'class Image: pass' > /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL/Image.py && \
+    echo 'class PngInfo: pass' > /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL/PngImagePlugin.py && \
+    echo 'from . import Image' > /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL/__init__.py
+
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install --no-cache-dir --break-system-packages . biopython && \
-    pip3 cache purge
+    /usr/bin/pip3 install --no-cache-dir --break-system-packages . biopython && \
+    apt-get purge -y python3-pip python3-dev build-essential && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /home/mambauser/.mamba /root/.cache /root/.mamba /tmp/* /var/tmp/* && \
+    find /opt/conda -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 # Add all conda env bins to PATH
 ENV PATH="/opt/conda/envs/env_nanosim/bin:/opt/conda/envs/env_wessim/bin:/opt/conda/envs/env_pacbio/bin:${PATH}"
