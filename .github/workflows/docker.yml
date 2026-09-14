@@ -23,9 +23,16 @@ permissions:
   packages: write
   security-events: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TRIVY_SKIP_JAVA_DB_UPDATE: "true"
     steps:
       - uses: actions/checkout@v6
 
@@ -74,10 +81,11 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=docker-${{ runner.os }}
+          cache-to: type=gha,mode=max,scope=docker-${{ runner.os }}
 
       # Security scan - Report vulnerabilities without failing build
       # Vulnerabilities are visible in GitHub Security tab
@@ -90,8 +98,9 @@ jobs:
           version: "v0.69.3"
           format: 'sarif'
           output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           ignore-unfixed: true  # Ignore vulnerabilities with no available fixes
+          trivyignores: '.trivyignore'
           exit-code: 0  # Don't fail build, just report to Security tab
 
       - uses: github/codeql-action/upload-sarif@v4
@@ -101,6 +110,5 @@ jobs:
 
       # Test
       - name: Test image
-        if: github.event_name != 'pull_request'
         run: |
           docker run --rm ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup:${{ steps.version.outputs.version }} --version

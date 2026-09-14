@@ -48,5 +48,8 @@ CLAUDE.md
 # Pre-commit
 .pre-commit-config.yaml
 
-# Reference data
+# Reference data and large test files
 reference/
+*.bam
+*.bai
+site/

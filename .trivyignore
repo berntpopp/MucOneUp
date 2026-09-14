@@ -14,3 +14,6 @@
 # CVE-2024-67890
 
 # Add specific CVE exclusions below this line
+# CVE-2025-66034: fontTools arbitrary file write via crafted .designspace file.
+# NanoSim does not process .designspace files and does not use fonttools at runtime.
+CVE-2025-66034
