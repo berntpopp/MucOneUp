@@ -539,7 +539,7 @@ Parameters for Oxford Nanopore read simulation.
 |-------|------|-------------|---------|
 | `training_data_path` | string | NanoSim pre-trained model path | Required |
 | `coverage` | integer | Target coverage depth | 50 |
-| `min_read_length` | integer | Minimum read length (bp) | 1000 |
+| `min_read_length` | integer | Minimum read length (bp). For `muconeup reads ont`, precedence is `--min-read-length` > this value > built-in 100 | 100 (`reads ont`) |
 | `max_read_length` | integer | Maximum read length (bp) | 10000 |
 | `correction_factor` | float | Coverage adjustment factor | 0.325 |
 | `enable_split_simulation` | boolean | Diploid split-simulation mode | true |

@@ -120,7 +120,8 @@ def run_pbsim3_simulation(
         ExternalToolError: If pbsim3 or samtools command fails (propagated).
 
     Example:
-        Simulate with QSHMM model for Sequel II chemistry::
+        Simulate with the ERRHMM model for Sequel chemistry (pbsim3 ships no
+        QSHMM Sequel model)::
 
             from muc_one_up.read_simulator.wrappers.pbsim3_wrapper import run_pbsim3_simulation
 
@@ -128,8 +129,8 @@ def run_pbsim3_simulation(
                 pbsim3_cmd="pbsim",
                 samtools_cmd="samtools",
                 reference="vntr_diploid.fa",
-                model_type="qshmm",
-                model_file="/models/QSHMM-SEQUEL.model",
+                model_type="errhmm",
+                model_file="/models/ERRHMM-SEQUEL.model",
                 coverage=30,
                 output_prefix="sim",
                 pass_num=3,

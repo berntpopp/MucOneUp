@@ -1,5 +1,6 @@
 """Tests for common_utils subprocess helpers."""
 
+import logging
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -80,3 +81,23 @@ def test_streaming_mode_non_timeout_error_includes_exit_code():
 
         error = exc_info.value
         assert "exit code" in str(error).lower() or "failed" in str(error).lower()
+
+
+@pytest.mark.parametrize(
+    ("level", "expect_error"), [(None, True), (logging.DEBUG, False)], ids=["default", "debug"]
+)
+def test_capture_mode_failure_log_level(caplog, level, expect_error):
+    """Non-zero exits log at ERROR by default, or at the requested failure_log_level."""
+    failed = subprocess.CompletedProcess(args=["tool"], returncode=255, stdout="", stderr="usage")
+    kwargs = {} if level is None else {"failure_log_level": level}
+
+    with (
+        caplog.at_level(logging.DEBUG),
+        patch("subprocess.run", return_value=failed),
+        pytest.raises(ExternalToolError),
+    ):
+        run_command(["tool"], capture=True, **kwargs)
+
+    exit_records = [r for r in caplog.records if "exited with code 255" in r.getMessage()]
+    assert len(exit_records) == 1
+    assert (exit_records[0].levelno == logging.ERROR) is expect_error

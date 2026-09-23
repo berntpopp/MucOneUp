@@ -8,7 +8,7 @@ from typing import Any
 
 import click
 
-from ...read_simulator.constants import VALID_PCR_PRESETS
+from ...read_simulator.constants import DEFAULT_ONT_MIN_READ_LENGTH, VALID_PCR_PRESETS
 from .._common import require_config
 from ..error_handling import cli_error_handler
 from ..options import shared_read_options
@@ -296,9 +296,11 @@ def illumina(
 @click.option(
     "--min-read-length",
     type=int,
-    default=100,
-    show_default=True,
-    help="Minimum read length.",
+    default=None,
+    help=(
+        "Minimum read length. Overrides nanosim_params.min_read_length from the "
+        f"config; if neither is set, {DEFAULT_ONT_MIN_READ_LENGTH} is used."
+    ),
 )
 @shared_read_options
 @click.pass_context
@@ -339,7 +341,11 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     if "nanosim_params" not in config:
         config["nanosim_params"] = {}
     ns = cast(NanosimConfig, config["nanosim_params"])
-    ns["min_read_length"] = min_read_length
+    # Precedence: CLI flag > config value > built-in default.
+    if min_read_length is not None:
+        ns["min_read_length"] = min_read_length
+    elif ns.get("min_read_length") is None:
+        ns["min_read_length"] = DEFAULT_ONT_MIN_READ_LENGTH
     # Propagate CLI coverage to nanosim_params where the ONT backend reads it.
     # Only overwrite if CLI provided a value or config lacks ONT-specific coverage.
     if coverage is not None:
@@ -428,25 +434,26 @@ def pacbio(
     Examples:
       # Single file with standard HiFi settings (Q20)
       muconeup --config X reads pacbio sample.001.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --out-base my_hifi
 
       # Multiple files with high-accuracy HiFi (Q30)
       muconeup --config X reads pacbio sample.*.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --min-rq 0.999 --min-passes 5
 
       # Ultra-deep coverage simulation
       muconeup --config X reads pacbio sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --coverage 100 --pass-num 5
 
     \b
     Model Files:
       Download from: https://github.com/yukiteruono/pbsim3/tree/master/data
-      - QSHMM-SEQUEL.model: Sequel II chemistry
-      - QSHMM-RSII.model: RS II chemistry
-      - ERRHMM-SEQUEL.model: Alternative error model
+      - ERRHMM-SEQUEL.model: Sequel chemistry (--model-type errhmm)
+      - QSHMM-RSII.model: RS II chemistry (--model-type qshmm)
+      pbsim3 does not ship a QSHMM Sequel model; the model type must
+      match the model file.
 
     \b
     Quality Control:
@@ -557,7 +564,7 @@ def amplicon(
     Examples:
       # Basic PacBio amplicon simulation
       muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model
 
       # ONT amplicon simulation
       muconeup --config X reads amplicon --platform ont sample.fa \\
@@ -565,12 +572,12 @@ def amplicon(
 
       # High coverage with stochastic PCR bias
       muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --coverage 1000 --stochastic-pcr --seed 42
 
       # No PCR bias (equal coverage per allele)
       muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --pcr-preset no_bias
     """
     require_config(ctx)

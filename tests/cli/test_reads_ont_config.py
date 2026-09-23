@@ -88,3 +88,26 @@ def test_ont_default_coverage_propagated_when_missing(tmp_path):
     config = _invoke_ont(tmp_path, base)
     # _setup_read_config defaults to 30 in read_simulation; should propagate
     assert config["nanosim_params"]["coverage"] == 30
+
+
+def test_ont_config_min_read_length_not_clobbered(tmp_path):
+    """Config nanosim_params.min_read_length must survive when CLI omits the flag."""
+    base = {"nanosim_params": {"training_data_path": "/fake", "min_read_length": 1500}}
+    config = _invoke_ont(tmp_path, base)
+    assert config["nanosim_params"]["min_read_length"] == 1500
+
+
+def test_ont_cli_min_read_length_overrides_config(tmp_path):
+    """CLI --min-read-length takes precedence over the config value."""
+    base = {"nanosim_params": {"training_data_path": "/fake", "min_read_length": 1500}}
+    config = _invoke_ont(tmp_path, base, ["--min-read-length", "250"])
+    assert config["nanosim_params"]["min_read_length"] == 250
+
+
+def test_ont_min_read_length_builtin_default(tmp_path):
+    """Without CLI flag or config value, the built-in default applies."""
+    from muc_one_up.read_simulator.constants import DEFAULT_ONT_MIN_READ_LENGTH
+
+    base = {"nanosim_params": {"training_data_path": "/fake"}}
+    config = _invoke_ont(tmp_path, base)
+    assert config["nanosim_params"]["min_read_length"] == DEFAULT_ONT_MIN_READ_LENGTH == 100
