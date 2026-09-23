@@ -303,6 +303,28 @@ def illumina(
         f"config; if neither is set, {DEFAULT_ONT_MIN_READ_LENGTH} is used."
     ),
 )
+@click.option(
+    "--simulator",
+    type=click.Choice(["nanosim", "pbsim3-fragments"]),
+    default="nanosim",
+    show_default=True,
+    help="nanosim: NanoSim genomic reads. pbsim3-fragments: sampled fragments through "
+    "pbsim3 with per-read truth ({base}_read_truth.tsv.gz) and optional --read-profile.",
+)
+@click.option("--n-reads", type=int, default=None, help="pbsim3-fragments: number of reads.")
+@click.option(
+    "--read-length-median", type=float, default=None, help="pbsim3-fragments: median read length."
+)
+@click.option(
+    "--read-length-sigma", type=float, default=None, help="pbsim3-fragments: log-normal sigma."
+)
+@click.option(
+    "--flank-fasta",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="pbsim3-fragments: FASTA with 'left'/'right' records added around each haplotype.",
+)
+@read_profile_option
 @no_align_option
 @shared_read_options
 @click.pass_context
@@ -317,6 +339,12 @@ def ont(
     seed,
     track_read_source,
     no_align,
+    simulator,
+    n_reads,
+    read_length_median,
+    read_length_sigma,
+    flank_fasta,
+    read_profile,
 ):
     """Simulate Oxford Nanopore long reads from one or more FASTA files.
 
@@ -365,6 +393,22 @@ def ont(
     elif "coverage" not in ns:
         ns["coverage"] = config["read_simulation"]["coverage"]
 
+    if simulator == "pbsim3-fragments":
+        config = apply_cli_read_model(config, read_profile, "ont")
+        config["read_simulation"]["simulator"] = "ont-fragments"
+        fragment = {
+            "n_reads": n_reads,
+            "length_median": read_length_median,
+            "length_sigma": read_length_sigma,
+            "flank_fasta": flank_fasta,
+            "seed": seed,
+        }
+        config["ont_fragment_params"] = {
+            **config.get("ont_fragment_params", {}),
+            **{k: v for k, v in fragment.items() if v is not None},
+        }
+    elif read_profile:
+        raise click.ClickException("--read-profile requires --simulator pbsim3-fragments")
     apply_tracking_and_alignment(config, track_read_source=False, no_align=no_align)
 
     _run_batch_simulation(

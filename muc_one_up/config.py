@@ -308,7 +308,14 @@ CONFIG_SCHEMA: dict[str, Any] = {
             "properties": {
                 "simulator": {
                     "type": "string",
-                    "enum": ["illumina", "ont", "pacbio", "amplicon", "ont-amplicon"],
+                    "enum": [
+                        "illumina",
+                        "ont",
+                        "pacbio",
+                        "amplicon",
+                        "ont-amplicon",
+                        "ont-fragments",
+                    ],
                 },
                 "reseq_model": {"type": "string"},
                 "sample_bam": {"type": "string"},
@@ -513,6 +520,17 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 },
             },
             "required": ["forward_primer", "reverse_primer"],
+            "additionalProperties": False,
+        },
+        "ont_fragment_params": {
+            "type": "object",
+            "properties": {
+                "n_reads": {"type": ["integer", "null"], "minimum": 1},
+                "length_median": {"type": "number", "exclusiveMinimum": 0},
+                "length_sigma": {"type": "number", "exclusiveMinimum": 0},
+                "flank_fasta": {"type": ["string", "null"]},
+                "seed": {"type": ["integer", "null"]},
+            },
             "additionalProperties": False,
         },
         "read_model": {

@@ -120,3 +120,31 @@ def test_reference_kept_without_no_align(tmp_path):
 def test_profiles_command_lists_builtins():
     result = CliRunner().invoke(cli, ["reads", "profiles"])
     assert result.exit_code == 0, result.output
+
+
+def test_ont_pbsim3_fragments_configures_simulator(tmp_path):
+    result, config = _invoke(
+        tmp_path,
+        [
+            "ont",
+            "--simulator",
+            "pbsim3-fragments",
+            "--read-profile",
+            _profile(tmp_path),
+            "--n-reads",
+            "300",
+            "--read-length-median",
+            "6000",
+            "--seed",
+            "4",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert config["read_simulation"]["simulator"] == "ont-fragments"
+    assert config["ont_fragment_params"] == {"n_reads": 300, "length_median": 6000.0, "seed": 4}
+    assert config["read_model"]["name"] == "cli_test_ont"
+
+
+def test_ont_read_profile_requires_fragment_simulator(tmp_path):
+    result, _ = _invoke(tmp_path, ["ont", "--read-profile", _profile(tmp_path)])
+    assert result.exit_code != 0 and "pbsim3-fragments" in result.output
