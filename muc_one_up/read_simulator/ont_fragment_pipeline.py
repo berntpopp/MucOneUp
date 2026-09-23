@@ -144,5 +144,6 @@ def simulate_ont_fragment_pipeline(
         end_time=datetime.now(),
         platform="ONT",
         tools_used=["pbsim3", "minimap2", "samtools"],
+        extra_rows=[("Read_truth", truth.name)],
     )
     return final_output

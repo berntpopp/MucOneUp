@@ -96,6 +96,11 @@ measured spectrum. pbsim3 remains the default when no profile is used.
 | `n_hp_edits`, `hp_edits` | Injected homopolymer changes as `pos:base:true>new` (source orientation) |
 | `detail` | Smear deletion interval or chimera junction |
 
+The run's `*_metadata.tsv` records `Read_profile`, `Read_profile_sha256` and
+`Read_truth` (the manifest file name). Fragment runs record `Fragment_reads`
+(or `Coverage`), `Fragment_length_median`, `Fragment_length_sigma` and
+`Flank_fasta` instead of the NanoSim read-length rows.
+
 `--track-read-source` without a profile uses a no-op molecule model. Reads then
 get truth but keep the legacy error model.
 

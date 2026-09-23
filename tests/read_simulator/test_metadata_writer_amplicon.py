@@ -102,3 +102,56 @@ def test_non_amplicon_ont_metadata_unchanged(tmp_path):
     assert meta["Coverage"] == "200"
     assert meta["Min_read_length"] == "2000"
     assert "Template_molecules" not in meta
+
+
+def _write_extra(tmp_path: Path, config: dict, platform: str, extra) -> dict[str, str]:
+    with (
+        patch(
+            "muc_one_up.read_simulator.utils.metadata_writer.capture_tool_versions",
+            return_value={},
+        ),
+        patch("muc_one_up.read_simulator.utils.metadata_writer.log_tool_versions"),
+    ):
+        path = write_metadata_file(
+            output_dir=str(tmp_path),
+            output_base="x",
+            config=config,
+            start_time=datetime(2025, 1, 1, 12, 0, 0),
+            end_time=datetime(2025, 1, 1, 12, 1, 0),
+            platform=platform,
+            extra_rows=extra,
+        )
+    rows = Path(path).read_text().splitlines()[1:]
+    return dict(row.split("\t", 1) for row in rows)
+
+
+def test_read_profile_and_truth_are_recorded(tmp_path):
+    """Truth-tracked runs record the profile identity and truth manifest (#122)."""
+    config = {
+        "read_simulation": {"coverage": 500, "assay_type": "amplicon"},
+        "read_model": {"profile": "p.json", "name": "prof", "sha256": "ab" * 32},
+    }
+    meta = _write_extra(tmp_path, config, "ONT", [("Read_truth", "x_read_truth.tsv.gz")])
+    assert meta["Read_profile"] == "prof"
+    assert meta["Read_profile_sha256"] == "ab" * 32
+    assert meta["Read_truth"] == "x_read_truth.tsv.gz"
+
+
+def test_fragment_simulator_reports_fragment_not_nanosim_rows(tmp_path):
+    config = {
+        "read_simulation": {"simulator": "ont-fragments", "coverage": 20},
+        "nanosim_params": {"coverage": 20, "min_read_length": 100},
+        "ont_fragment_params": {"n_reads": 800, "length_median": 6000, "length_sigma": 0.5},
+    }
+    meta = _write_extra(tmp_path, config, "ONT", None)
+    assert "Min_read_length" not in meta
+    assert meta["Fragment_reads"] == "800"
+    assert meta["Fragment_length_median"] == "6000"
+    assert meta["Fragment_length_sigma"] == "0.5"
+
+
+def test_legacy_metadata_has_no_new_rows(tmp_path):
+    config = {"nanosim_params": {"coverage": 20, "min_read_length": 100}}
+    meta = _write_extra(tmp_path, config, "ONT", None)
+    assert not {"Read_profile", "Read_truth", "Fragment_reads"} & meta.keys()
+    assert meta["Min_read_length"] == "100"

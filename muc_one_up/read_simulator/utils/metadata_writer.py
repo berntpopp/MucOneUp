@@ -65,6 +65,30 @@ def _platform_rows(config: dict, platform: str) -> MetadataRows:
     return []
 
 
+def _fragment_rows(config: dict) -> MetadataRows:
+    """Return the settings used by ``reads ont --simulator pbsim3-fragments``."""
+    from ..ont_fragment_pipeline import _fragment_settings
+
+    _, fragments, params = _fragment_settings(config)
+    rows: MetadataRows = [
+        ("Fragment_reads", params.get("n_reads")),
+        ("Coverage", None if params.get("n_reads") else config["read_simulation"].get("coverage")),
+        ("Fragment_length_median", fragments.length_median),
+        ("Fragment_length_sigma", fragments.length_sigma),
+        ("Flank_fasta", params.get("flank_fasta")),
+    ]
+    return rows
+
+
+def _read_model_rows(config: dict) -> MetadataRows:
+    """Return the active read profile identity (empty for legacy simulation)."""
+    read_model = config.get("read_model") or {}
+    return [
+        ("Read_profile", read_model.get("name")),
+        ("Read_profile_sha256", read_model.get("sha256")),
+    ]
+
+
 def _pcr_bias_rows(pcr_cfg: dict) -> MetadataRows:
     """Return the PCR bias preset label and stochastic flag."""
     from ..pcr_bias import PCRBiasModel
@@ -108,6 +132,8 @@ def write_metadata_file(
     end_time: datetime,
     platform: str,
     tools_used: list[str] | None = None,
+    *,
+    extra_rows: MetadataRows | None = None,
 ) -> str:
     """
     Write TSV metadata file with provenance information.
@@ -120,6 +146,8 @@ def write_metadata_file(
         end_time: Pipeline end timestamp
         platform: Sequencing platform ("Illumina", "ONT", or "PacBio")
         tools_used: Tool keys whose versions are captured (default: all tools)
+        extra_rows: Additional (key, value) rows from the pipeline, e.g. the
+            ``Read_truth`` manifest of a truth-tracked run
 
     For amplicon runs (``read_simulation.assay_type == "amplicon"`` or an
     amplicon simulator), amplicon fields (Template_molecules, Model_type,
@@ -210,8 +238,11 @@ def write_metadata_file(
         # Platform- or assay-specific parameters (skip if N/A)
         if _is_amplicon_run(config):
             rows = _amplicon_rows(config, platform)
+        elif config.get("read_simulation", {}).get("simulator") == "ont-fragments":
+            rows = _fragment_rows(config)
         else:
             rows = _platform_rows(config, platform)
+        rows += _read_model_rows(config) + list(extra_rows or [])
         for key, value in rows:
             if value is not None:
                 f.write(f"{key}\t{value}\n")

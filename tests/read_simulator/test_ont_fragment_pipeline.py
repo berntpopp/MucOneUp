@@ -101,3 +101,15 @@ def test_zero_requests_are_rejected(tmp_path: Path, diploid: Path, config: dict)
     """n_reads=0 or coverage=0 must not silently become a non-zero simulation (#113)."""
     with pytest.raises(ValueError, match="must be positive"):
         _run(tmp_path, diploid, config)
+
+
+def test_metadata_records_truth_manifest(tmp_path: Path, diploid: Path) -> None:
+    config = {"ont_fragment_params": {"n_reads": 5}}
+    with (
+        patch(f"{MOD}.simulate_molecule_reads", return_value=5),
+        patch(f"{MOD}.create_pipeline_metadata") as meta,
+    ):
+        simulate_ont_fragment_pipeline(
+            config, str(diploid), output_config=OutputConfig(out_dir=tmp_path, out_base="x")
+        )
+    assert meta.call_args.kwargs["extra_rows"] == [("Read_truth", "x_read_truth.tsv.gz")]

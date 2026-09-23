@@ -195,6 +195,7 @@ def simulate_amplicon_reads_pipeline(
             intermediate_files.extend(prep.intermediate_files)
             hifi_fastq = str(output_dir / f"{output_base}_amplicon_hifi.fastq")
             model = truth_tracked_model(config, source_tracker is not None)
+            truth_name = f"{output_base}_read_truth.tsv.gz"
             if model is not None:
                 logging.info("STAGES 5-7: Truth-tracked molecule simulation (PacBio HiFi)")
                 run = PbsimRun(
@@ -216,7 +217,7 @@ def simulate_amplicon_reads_pipeline(
                     sequencer_for(config, run),
                     temp_path / "molecules",
                     Path(hifi_fastq),
-                    output_dir / f"{output_base}_read_truth.tsv.gz",
+                    output_dir / truth_name,
                     output_base,
                     seed,
                 )
@@ -281,6 +282,7 @@ def simulate_amplicon_reads_pipeline(
                 end_time=end_time,
                 platform="PacBio",
                 tools_used=["pbsim3", "ccs", "minimap2", "samtools"],
+                extra_rows=[("Read_truth", truth_name)] if model is not None else None,
             )
 
             return final_output

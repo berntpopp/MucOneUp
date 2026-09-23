@@ -146,6 +146,7 @@ def simulate_ont_amplicon_pipeline(
 
             merged_fastq = str(output_dir / f"{output_base}_amplicon_ont.fastq")
             model = truth_tracked_model(config, source_tracker is not None)
+            truth_name = f"{output_base}_read_truth.tsv.gz"
             if model is not None:
                 logging.info("STAGES 4-6: Truth-tracked molecule simulation (ONT)")
                 run = PbsimRun(
@@ -163,7 +164,7 @@ def simulate_ont_amplicon_pipeline(
                     sequencer_for(config, run),
                     temp_path / "molecules",
                     Path(merged_fastq),
-                    output_dir / f"{output_base}_read_truth.tsv.gz",
+                    output_dir / truth_name,
                     output_base,
                     seed,
                 )
@@ -223,6 +224,7 @@ def simulate_ont_amplicon_pipeline(
                 end_time=end_time,
                 platform="ONT",
                 tools_used=["pbsim3", "minimap2", "samtools"],
+                extra_rows=[("Read_truth", truth_name)] if model is not None else None,
             )
 
             return final_output

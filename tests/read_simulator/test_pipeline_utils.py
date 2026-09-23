@@ -239,6 +239,7 @@ class TestCreatePipelineMetadata:
             end_time,
             "Illumina",
             tools_used,
+            extra_rows=None,
         )
         assert result == str(output_dir / "base_metadata.tsv")
 

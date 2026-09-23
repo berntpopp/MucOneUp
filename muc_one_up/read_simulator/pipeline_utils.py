@@ -153,6 +153,8 @@ def create_pipeline_metadata(
     end_time: datetime,
     platform: str,
     tools_used: list[str],
+    *,
+    extra_rows: list[tuple[str, Any]] | None = None,
 ) -> str:
     """Write pipeline metadata TSV, accepting a :class:`~pathlib.Path` for output_dir.
 
@@ -169,6 +171,7 @@ def create_pipeline_metadata(
         end_time: Pipeline end timestamp.
         platform: Sequencing platform (``"Illumina"``, ``"ONT"``, or ``"PacBio"``).
         tools_used: List of tool keys actually used in this pipeline run.
+        extra_rows: Additional metadata rows (e.g. the read truth manifest).
 
     Returns:
         Path to the created metadata file as a string.
@@ -181,6 +184,7 @@ def create_pipeline_metadata(
         end_time,
         platform,
         tools_used,
+        extra_rows=extra_rows,
     )
 
 
