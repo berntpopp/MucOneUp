@@ -24,7 +24,7 @@ from __future__ import annotations
 import gzip
 import json
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -302,7 +302,7 @@ class ReadSourceTracker:
         config: dict,
         mutation_positions: list | None = None,
         mutation_name: str | None = None,
-        applied_snp_info: list | None = None,
+        applied_snp_info: Mapping[int, list] | Sequence[list] | None = None,
         reference_assembly: str | None = None,
     ) -> ReadSourceTracker:
         """Build a tracker from simulation results and config.
@@ -315,7 +315,8 @@ class ReadSourceTracker:
             config: Configuration dict with 'repeats', 'constants', 'reference_assembly'.
             mutation_positions: List of MutationTarget objects (or None).
             mutation_name: Mutation name string (e.g. "dupC"), or None.
-            applied_snp_info: List of SNP info lists, indexed by haplotype (0-based).
+            applied_snp_info: SNP info per 0-based haplotype index, as the mapping returned
+                by ``integrate_snps_unified`` or a list indexed by haplotype.
             reference_assembly: Override for reference assembly (defaults to config value).
 
         Returns:
@@ -348,9 +349,14 @@ class ReadSourceTracker:
         # Build SNP info dict (0-based haplotype indices)
         snp_info_dict: dict[int, list[dict[str, object]]] = {}
         if applied_snp_info:
-            for i, snp_list in enumerate(applied_snp_info):
+            items = (
+                applied_snp_info.items()
+                if isinstance(applied_snp_info, Mapping)
+                else enumerate(applied_snp_info)
+            )
+            for i, snp_list in items:
                 if snp_list:
-                    snp_info_dict[i] = snp_list
+                    snp_info_dict[int(i)] = list(snp_list)
 
         return cls(
             repeat_chains=repeat_chains,
