@@ -62,6 +62,7 @@ def run_command(
     capture: bool = False,
     cwd: Path | None = None,
     stdout_path: Path | None = None,
+    failure_log_level: int = logging.ERROR,
 ) -> RunResult:
     """
     Run a command in its own process group so that it can be killed on timeout.
@@ -85,6 +86,8 @@ def run_command(
         capture: If True, capture stdout/stderr instead of streaming.
         cwd: Working directory for the subprocess.
         stdout_path: If provided, stream stdout directly to this file path.
+        failure_log_level: Logging level for the non-zero exit message (default:
+            ERROR). Use DEBUG for probes where a non-zero exit is expected.
 
     Returns:
         A RunResult with returncode (and captured output when capture=True).
@@ -125,7 +128,9 @@ def run_command(
             raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
 
         if proc.returncode != 0:
-            logging.error("Command exited with code %d: %s", proc.returncode, cmd_str)
+            logging.log(
+                failure_log_level, "Command exited with code %d: %s", proc.returncode, cmd_str
+            )
             raise ExternalToolError(
                 tool="command",
                 exit_code=proc.returncode,
@@ -170,7 +175,9 @@ def run_command(
             command=cmd_str,
         )
         if proc.returncode != 0:
-            logging.error("Command exited with code %d: %s", proc.returncode, cmd_str)
+            logging.log(
+                failure_log_level, "Command exited with code %d: %s", proc.returncode, cmd_str
+            )
             raise ExternalToolError(
                 tool="command",
                 exit_code=proc.returncode,
@@ -245,7 +252,8 @@ def run_command(
             logging.info("Command terminated due to timeout (%d seconds): %s", timeout, cmd_str)
             stderr_msg = f"Command timed out after {timeout}s"
         else:
-            logging.error(
+            logging.log(
+                failure_log_level,
                 "Command exited with non-zero exit code %d: %s",
                 popen_proc.returncode,
                 cmd_str,
