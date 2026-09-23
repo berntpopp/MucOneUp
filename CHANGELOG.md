@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Seed provenance** — `simulate --seed N` is now recorded as
   `provenance.seed` in `simulation_stats.json` (#109)
+- **NanoSim read-source tracking** — the ONT parser now accepts NanoSim's
+  `haplotype-N` reference names and raises instead of silently assigning
+  unparseable reads to haplotype 1; `simulate --track-read-source` now writes
+  the `haplotypes`, `config` and `mutation_details` fields that
+  `reads ... --track-read-source` needs (#102)
 
 #### Illumina Coverage Downsampling Now Works
 

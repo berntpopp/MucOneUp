@@ -178,4 +178,5 @@ def run_single_simulation_iteration(
         mutation_pair,
         applied_snp_info_normal,
         applied_snp_info_mut,
+        mutation_positions=mutation_positions,
     )

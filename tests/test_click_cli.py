@@ -230,6 +230,69 @@ class TestSimulateCommand:
         stats = json.loads(stats_files[0].read_text())
         assert stats["provenance"]["seed"] == 42
 
+    def _run_seeded_simulate(self, runner, config_file, out_dir, *extra):
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_file),
+                "simulate",
+                "--out-dir",
+                str(out_dir),
+                "--out-base",
+                "tracked",
+                "--seed",
+                "42",
+                *extra,
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        return json.loads((out_dir / "tracked.001.simulation_stats.json").read_text())
+
+    def test_simulate_track_read_source_writes_companion_keys(
+        self, runner, minimal_config, tmp_path
+    ):
+        """--track-read-source writes keys needed by from_companion_files (issue #102)."""
+        from muc_one_up.read_simulator.source_tracking import ReadSourceTracker
+
+        minimal_config["mutations"]["dupC"] = {
+            "allowed_repeats": sorted(minimal_config["repeats"]),
+            "strict_mode": False,
+            "changes": [{"type": "insert", "start": 1, "end": 1, "sequence": "C"}],
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(minimal_config))
+        out_dir = tmp_path / "out"
+        stats = self._run_seeded_simulate(
+            runner,
+            config_file,
+            out_dir,
+            "--track-read-source",
+            "--mutation-name",
+            "dupC",
+            "--mutation-targets",
+            "2,3",
+        )
+        assert set(stats["haplotypes"]) == {"haplotype_1", "haplotype_2"}
+        assert "repeats" in stats["config"]
+        assert "constants" in stats["config"]
+        assert stats["mutation_details"] == {"mutation_name": "dupC", "targets": [[2, 3]]}
+
+        stats_path = str(out_dir / "tracked.001.simulation_stats.json")
+        tracker = ReadSourceTracker.from_companion_files(stats_path)
+        assert tracker is not None
+        assert set(tracker.coordinate_maps) == {1, 2}
+        assert tracker.coordinate_maps[2].regions[2].is_mutated is True
+
+    def test_simulate_without_tracking_omits_companion_keys(
+        self, runner, temp_config_file, tmp_path
+    ):
+        """Default stats output is unchanged when tracking is not requested."""
+        stats = self._run_seeded_simulate(runner, temp_config_file, tmp_path / "out")
+        assert "haplotypes" not in stats
+        assert "config" not in stats
+        assert "mutation_details" not in stats
+
     def test_simulate_with_fixed_lengths(self, runner, temp_config, tmp_path):
         """Test simulate with fixed lengths."""
         result = runner.invoke(

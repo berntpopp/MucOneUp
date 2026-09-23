@@ -11,10 +11,11 @@ The `--track-read-source` flag annotates every simulated read with its ground-tr
 ## Quick Start
 
 ```bash
-# Step 1: simulate haplotypes
+# Step 1: simulate haplotypes (records tracking data in simulation_stats.json)
 muconeup --config config.json simulate \
   --out-base sample --fixed-lengths 30 \
-  --mutation-name dupC --mutation-targets 1,25
+  --mutation-name dupC --mutation-targets 1,25 \
+  --track-read-source
 
 # Step 2: simulate Illumina reads with source tracking
 muconeup --config config.json reads illumina sample.001.simulated.fa \
@@ -124,7 +125,9 @@ Read origin extraction varies by platform but produces the same manifest format:
 
 ### Standalone `reads` command
 
-When calling `reads` directly (not via `simulate`), the tracker reconstructs simulation metadata from the companion `simulation_stats.json` file. If the companion file is missing, a warning is emitted and a partial manifest (positions only, no VNTR/mutation annotations) is produced.
+When calling `reads` directly (not via `simulate`), the tracker reconstructs simulation metadata from the companion `simulation_stats.json` file. `simulate --track-read-source` writes the required `haplotypes`, `config` (repeats and constants) and `mutation_details` fields into that file; without them a warning is emitted and no manifest is produced.
+
+For ONT, the haplotype is parsed from NanoSim read names (`haplotype_N` or NanoSim's rewritten `haplotype-N`). Reads whose names do not identify a haplotype raise an error rather than being assigned to haplotype 1.
 
 ---
 
