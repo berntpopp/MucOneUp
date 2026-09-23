@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Realistic, truth-tracked long-read simulation (read profiles, molecule model,
 empirical error channel, per-read truth, fragment-based genomic ONT) and fixes
-#97, #102, #104-#111. The maintained changelog is `docs/about/changelog.md`.
+#97, #102, #104-#124. The maintained changelog is `docs/about/changelog.md`.
 
 ## [0.28.1] - 2026-03-16
 

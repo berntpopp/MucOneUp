@@ -11,8 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Realistic, truth-tracked long-read simulation. See the
 [Realistic Truth-Tracked Reads](../guides/realistic-read-simulation.md) guide.
-Default simulations without a read profile are unchanged (a seeded legacy ONT
-amplicon run is byte-identical to 0.44.5).
+Simulations without a read profile or `--track-read-source` produce the same
+reads (a seeded legacy ONT amplicon FASTQ is byte-identical to 0.44.5). The bug
+fixes listed under **Changed** alter outputs of some existing configurations on
+purpose. Requires samtools >= 1.13 (`view --subsample`).
 
 ### Added
 - **Read profiles** (`--read-profile NAME|PATH`, `muconeup reads profiles`):
@@ -56,6 +58,42 @@ amplicon run is byte-identical to 0.44.5).
   - PacBio amplicon mode honours `keep_intermediate_files`;
   - docs no longer reference the unshipped `QSHMM-SEQUEL.model`;
   - the pbsim3 version probe no longer logs a spurious ERROR.
+
+### Changed (intentional output differences for existing configurations)
+- samtools downsampling uses the exact fraction: `-s SEED.FRAC` turned 0.05
+  into ~50%, and the wrapper truncated fractions to 4 decimals (#97)
+- `reads ont` keeps `nanosim_params.min_read_length` from the config instead of
+  overwriting it with 100 when `--min-read-length` is omitted (#108)
+- `simulate --seed` is recorded in provenance, which changes
+  `config_fingerprint` and adds a `Seed` row (#109)
+- Amplicon metadata TSV reports `Template_molecules`, model and PCR rows
+  instead of NanoSim/PacBio WGS rows; PacBio amplicon mode honours
+  `keep_intermediate_files` (#110)
+- The NanoSim read-name parser raises on names without a haplotype instead of
+  assigning haplotype 1 (#102)
+- A generic `{reference}.mmi` next to the reference is no longer used (#117)
+
+### Pre-release review fixes
+An independent review of the release branch found and fixed:
+- off-target molecules sampled across artificial flank/haplotype junctions;
+  they now come from real flank intervals with haplotype coordinates (#112)
+- truth-tracked runs yielding zero reads now fail; zero fragment requests are
+  rejected (#113)
+- config-file fragment lengths and PCR parameters no longer override the read
+  profile (#114)
+- `--accuracy-sd` removed: pbsim3 rejects it (#115)
+- `reads ont --no-align` now skips NanoSim alignment (#116)
+- empirical deletions no longer remove protected homopolymer bases (#118)
+- smear retention bounds (`smear_min_keep` in [0, 0.95], at least one base) (#119)
+- `--platform`/`--simulator` default to the read profile's platform and to
+  `pbsim3-fragments` with a profile (#120)
+- the empirical error channel uses its own seed stream (#121)
+- metadata records `Read_profile`, `Read_profile_sha256`, `Read_truth` and
+  fragment settings (#122)
+- fragment sampling gives uniform coverage along the source; truth coordinate
+  systems are documented (#123)
+- malformed read profiles raise validation errors; full-run homopolymer
+  deletions in the stutter table are applied instead of clamped (#124)
 
 ---
 
