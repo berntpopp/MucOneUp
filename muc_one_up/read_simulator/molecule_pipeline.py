@@ -14,6 +14,7 @@ Reads are then relabelled so every read carries molecule truth.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 from collections.abc import Mapping, Sequence
@@ -144,6 +145,19 @@ def simulate_molecule_reads(
     return count
 
 
+def stage_seed(seed: int | None, stage: str) -> int | None:
+    """Stable per-stage seed derived from the user seed (None stays unseeded).
+
+    The molecule model uses ``random.Random(seed)``; stages that draw from their
+    own Python RNG use a derived seed so their stream is not a replay of the
+    molecule stream.
+    """
+    if seed is None:
+        return None
+    digest = hashlib.sha256(f"{seed}:{stage}".encode()).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
 @dataclass(frozen=True)
 class EmpiricalSequencer:
     """Calibrated in-process error channel; one read per molecule."""
@@ -153,7 +167,7 @@ class EmpiricalSequencer:
     def sequence(
         self, molecules: Sequence[Molecule], work_dir: Path, seed: int | None
     ) -> tuple[list[Path], dict[str, str]]:
-        rng = random.Random(seed)
+        rng = random.Random(stage_seed(seed, "errors"))
         fastq = work_dir / "empirical.fastq"
         with open(fastq, "w") as handle:
             for molecule in molecules:

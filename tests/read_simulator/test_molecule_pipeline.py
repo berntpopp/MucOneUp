@@ -152,3 +152,24 @@ def test_all_reads_dropped_is_an_error(tmp_path: Path) -> None:
         simulate_molecule_reads(
             MOLS, run, tmp_path, tmp_path / "o.fq", tmp_path / "t.tsv.gz", "b", 1
         )
+
+
+def test_empirical_channel_uses_a_stream_independent_of_the_molecule_rng(tmp_path: Path) -> None:
+    """Molecules are built with Random(seed); errors must not replay that stream (#121)."""
+    import random
+
+    from muc_one_up.read_simulator.empirical_errors import EmpiricalErrorModel
+    from muc_one_up.read_simulator.molecule_pipeline import EmpiricalSequencer, stage_seed
+
+    seen = []
+
+    def spy(seq, model, rng):
+        seen.append(rng.random())
+        return seq, "I" * len(seq)
+
+    with patch(f"{MOD}.apply_errors", side_effect=spy):
+        EmpiricalSequencer(EmpiricalErrorModel.from_dict(ERRORS)).sequence(MOLS[:1], tmp_path, 5)
+    assert seen[0] != random.Random(5).random()
+    assert seen[0] == random.Random(stage_seed(5, "errors")).random()
+    assert stage_seed(None, "errors") is None
+    assert stage_seed(5, "errors") == stage_seed(5, "errors") != stage_seed(6, "errors")
