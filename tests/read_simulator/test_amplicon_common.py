@@ -73,3 +73,59 @@ class TestExtractAndPrepare:
         assert sum(prep.allele_coverages) >= 2  # each allele gets at least 1
         for t in prep.allele_templates:
             assert t.exists()
+
+
+class TestTruthTrackedHelpers:
+    """Shared truth-tracked helpers used by both amplicon pipelines (#100, #103)."""
+
+    def test_model_selection(self, tmp_path):
+        import json
+
+        from muc_one_up.read_simulator.amplicon_common import truth_tracked_model
+
+        assert truth_tracked_model({}, tracking_requested=False) is None
+        assert truth_tracked_model({}, tracking_requested=True).forward_frac == 1.0
+        path = tmp_path / "p.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "name": "p",
+                    "platform": "ont",
+                    "molecules": {"smear_rate": 0.2},
+                }
+            )
+        )
+        model = truth_tracked_model(
+            {"read_model": {"profile": str(path)}}, tracking_requested=False
+        )
+        assert model.smear_rate == 0.2
+
+    def test_offtarget_source_excludes_amplicon(self, tmp_path):
+        from unittest.mock import patch
+
+        from muc_one_up.read_simulator.amplicon_common import (
+            AmpliconPrep,
+            simulate_truth_tracked_amplicons,
+        )
+        from muc_one_up.read_simulator.molecule_pipeline import PbsimRun
+        from muc_one_up.read_simulator.molecules import MoleculeModel
+
+        prep = AmpliconPrep(
+            allele_templates=[],
+            allele_coverages=[5],
+            output_dir=tmp_path,
+            output_base="x",
+            amplicon_sequences=["CCCCGGGG"],
+            haplotype_sequences=["AAAACCCCGGGGTTTT"],
+        )
+        run = PbsimRun("pbsim", "samtools", "qshmm", "m.model")
+        model = MoleculeModel(offtarget_frac=0.5, offtarget_median_bp=3)
+        with patch("muc_one_up.read_simulator.amplicon_common.simulate_molecule_reads") as sim:
+            sim.return_value = 10
+            simulate_truth_tracked_amplicons(
+                prep, model, run, tmp_path, tmp_path / "o.fq", tmp_path / "t.tsv.gz", "x", 1
+            )
+        molecules = sim.call_args.args[0]
+        off = [m for m in molecules if m.kind == "offtarget"]
+        assert len(off) == 5 and all(set(m.seq) <= {"A", "T"} for m in off)

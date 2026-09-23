@@ -6,9 +6,9 @@ amplicon pipeline via amplicon_common.py.
 
 Pipeline stages:
 1-3. Amplicon extraction and preparation (shared)
-4.   PBSIM3 template mode, ONT model, pass_num=1
-5.   BAM → FASTQ conversion (no CCS — ONT is single-pass)
-6.   Merge per-allele FASTQs (diploid)
+4-6. Legacy: PBSIM3 template mode per allele (pass_num=1), FASTQ collection
+     and merge. Truth-tracked (read profile or --track-read-source): one
+     molecule-model pbsim3 run with renamed reads and a read truth manifest.
 7.   Align to reference (minimap2 map-ont)
 8.   Write metadata, cleanup
 """
@@ -24,11 +24,16 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .output_config import OutputConfig
 
-from ..exceptions import ExternalToolError, FileOperationError, ReadSimulationError
-from .amplicon_common import extract_and_prepare_amplicons
+from ..exceptions import ExternalToolError, FileOperationError
+from .amplicon_common import (
+    extract_and_prepare_amplicons,
+    simulate_truth_tracked_amplicons,
+    truth_tracked_model,
+)
 from .constants import MINIMAP2_PRESET_ONT
+from .molecule_pipeline import PbsimRun
 from .pipeline_utils import (
-    cleanup_intermediates,
+    cleanup_unless_kept,
     create_pipeline_metadata,
     resolve_pipeline_outputs,
 )
@@ -54,18 +59,14 @@ def simulate_ont_amplicon_pipeline(
             read_simulation sections.
         input_fa: Input FASTA (haploid or diploid).
         human_reference: Optional reference for alignment.
-        source_tracker: Not supported — raises if non-None.
+        source_tracker: When given (``--track-read-source``), reads are simulated
+            through the truth-tracked molecule path and a read truth manifest
+            ``{base}_read_truth.tsv.gz`` is written next to the reads.
         output_config: Optional output path control.
 
     Returns:
         Path to final output (aligned BAM or FASTQ).
     """
-    if source_tracker is not None:
-        raise ReadSimulationError(
-            "Read source tracking is not yet supported for amplicon simulation. "
-            "Remove --track-read-source to proceed."
-        )
-
     from typing import cast
 
     from ..type_defs import AmpliconConfig, OntAmpliconConfig, ReadSimulationConfig
@@ -144,58 +145,47 @@ def simulate_ont_amplicon_pipeline(
             )
             intermediate_files.extend(prep.intermediate_files)
 
-            # STAGE 4: PBSIM3 template mode — ONT, single-pass
-            logging.info("STAGE 4: Running PBSIM3 template mode (ONT, pass_num=1)")
-
-            allele_outputs: list[list[str]] = []
-            for i, template_fa in enumerate(prep.allele_templates, 1):
-                prefix = str(temp_path / f"ont_hap{i}")
-                hap_seed = (seed + i) if seed is not None else None
-
-                outputs = run_pbsim3_template_simulation(
+            merged_fastq = str(output_dir / f"{output_base}_amplicon_ont.fastq")
+            model = truth_tracked_model(config, source_tracker is not None)
+            if model is not None:
+                logging.info("STAGES 4-6: Truth-tracked molecule simulation (ONT)")
+                run = PbsimRun(
                     pbsim3_cmd=pbsim3_cmd,
                     samtools_cmd=samtools_cmd,
-                    template_fasta=str(template_fa),
                     model_type=model_type,
                     model_file=model_file,
-                    output_prefix=prefix,
-                    pass_num=1,
                     accuracy_mean=accuracy_mean,
-                    seed=hap_seed,
                     accuracy_sd=accuracy_sd,
                     difference_ratio=difference_ratio,
+                    threads=threads,
                 )
-                allele_outputs.append(outputs)
-                intermediate_files.extend(outputs)
-                logging.info("  Haplotype %d: %d output file(s)", i, len(outputs))
-
-            # STAGE 5: Collect FASTQ reads
-            # pbsim3 with pass_num=1 outputs FASTQ directly (.fq.gz);
-            # with pass_num>=2 it outputs BAM (needs conversion).
-            logging.info("STAGE 5: Collecting reads as FASTQ")
-
-            allele_fastqs: list[str] = []
-            for i, output_group in enumerate(allele_outputs, 1):
-                for j, output_file in enumerate(output_group, 1):
-                    if output_file.endswith((".fq", ".fq.gz", ".fastq", ".fastq.gz")):
-                        allele_fastqs.append(output_file)
-                    else:
-                        fq_out = str(temp_path / f"ont_hap{i}_{j:04d}.fastq")
-                        convert_bam_to_fastq(
-                            samtools_cmd=samtools_cmd,
-                            input_bam=output_file,
-                            output_fastq=fq_out,
-                            threads=threads,
-                        )
-                        allele_fastqs.append(fq_out)
-
-            # STAGE 6: Merge FASTQs
-            merged_fastq = str(output_dir / f"{output_base}_amplicon_ont.fastq")
-            logging.info("STAGE 6: Merging %d FASTQs", len(allele_fastqs))
-
-            from .utils.fastq_utils import merge_fastq_files
-
-            merge_fastq_files(allele_fastqs, merged_fastq, validate_inputs=False)
+                simulate_truth_tracked_amplicons(
+                    prep,
+                    model,
+                    run,
+                    temp_path / "molecules",
+                    Path(merged_fastq),
+                    output_dir / f"{output_base}_read_truth.tsv.gz",
+                    output_base,
+                    seed,
+                )
+            else:
+                intermediate_files.extend(
+                    _simulate_legacy_allele_fastqs(
+                        prep.allele_templates,
+                        temp_path,
+                        merged_fastq,
+                        pbsim3_cmd=pbsim3_cmd,
+                        samtools_cmd=samtools_cmd,
+                        model_type=model_type,
+                        model_file=model_file,
+                        accuracy_mean=accuracy_mean,
+                        accuracy_sd=accuracy_sd,
+                        difference_ratio=difference_ratio,
+                        threads=threads,
+                        seed=seed,
+                    )
+                )
 
             # STAGE 7: Alignment (optional)
             if human_reference is None:
@@ -253,12 +243,79 @@ def simulate_ont_amplicon_pipeline(
         logging.error("Unexpected error in ONT amplicon pipeline: %s", e)
         raise RuntimeError(f"ONT amplicon pipeline failed: {e}") from e
     finally:
-        keep = config.get("read_simulation", {}).get("keep_intermediate_files", False)
-        if keep:
-            logging.info("Keeping intermediate files (keep_intermediate_files=true)")
-        else:
-            try:
-                if intermediate_files:
-                    cleanup_intermediates(intermediate_files)
-            except Exception as cleanup_err:
-                logging.warning("Cleanup failed (non-fatal): %s", cleanup_err)
+        cleanup_unless_kept(config, intermediate_files)
+
+
+def _simulate_legacy_allele_fastqs(
+    allele_templates: list[Path],
+    temp_path: Path,
+    merged_fastq: str,
+    *,
+    pbsim3_cmd: str,
+    samtools_cmd: str,
+    model_type: str,
+    model_file: str,
+    accuracy_mean: float,
+    accuracy_sd: float | None,
+    difference_ratio: str | None,
+    threads: int,
+    seed: int | None,
+) -> list[str]:
+    """Legacy stages 4-6: per-allele pbsim3 runs merged into one FASTQ.
+
+    Returns the intermediate files produced. Kept byte-identical to releases
+    before read profiles so seeded legacy simulations stay reproducible.
+    """
+    intermediate_files: list[str] = []
+    # STAGE 4: PBSIM3 template mode — ONT, single-pass
+    logging.info("STAGE 4: Running PBSIM3 template mode (ONT, pass_num=1)")
+
+    allele_outputs: list[list[str]] = []
+    for i, template_fa in enumerate(allele_templates, 1):
+        prefix = str(temp_path / f"ont_hap{i}")
+        hap_seed = (seed + i) if seed is not None else None
+
+        outputs = run_pbsim3_template_simulation(
+            pbsim3_cmd=pbsim3_cmd,
+            samtools_cmd=samtools_cmd,
+            template_fasta=str(template_fa),
+            model_type=model_type,
+            model_file=model_file,
+            output_prefix=prefix,
+            pass_num=1,
+            accuracy_mean=accuracy_mean,
+            seed=hap_seed,
+            accuracy_sd=accuracy_sd,
+            difference_ratio=difference_ratio,
+        )
+        allele_outputs.append(outputs)
+        intermediate_files.extend(outputs)
+        logging.info("  Haplotype %d: %d output file(s)", i, len(outputs))
+
+    # STAGE 5: Collect FASTQ reads
+    # pbsim3 with pass_num=1 outputs FASTQ directly (.fq.gz);
+    # with pass_num>=2 it outputs BAM (needs conversion).
+    logging.info("STAGE 5: Collecting reads as FASTQ")
+
+    allele_fastqs: list[str] = []
+    for i, output_group in enumerate(allele_outputs, 1):
+        for j, output_file in enumerate(output_group, 1):
+            if output_file.endswith((".fq", ".fq.gz", ".fastq", ".fastq.gz")):
+                allele_fastqs.append(output_file)
+            else:
+                fq_out = str(temp_path / f"ont_hap{i}_{j:04d}.fastq")
+                convert_bam_to_fastq(
+                    samtools_cmd=samtools_cmd,
+                    input_bam=output_file,
+                    output_fastq=fq_out,
+                    threads=threads,
+                )
+                allele_fastqs.append(fq_out)
+
+    # STAGE 6: Merge FASTQs
+    logging.info("STAGE 6: Merging %d FASTQs", len(allele_fastqs))
+
+    from .utils.fastq_utils import merge_fastq_files
+
+    merge_fastq_files(allele_fastqs, merged_fastq, validate_inputs=False)
+    return intermediate_files

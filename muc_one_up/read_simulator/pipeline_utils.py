@@ -12,7 +12,7 @@ Amplicon pipeline entry-points:
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -205,3 +205,11 @@ def cleanup_intermediates(file_list: Sequence[str | None]) -> None:
             logger.debug("Removed intermediate file: %s", path)
         except OSError as exc:
             logger.warning("Could not remove intermediate file %s: %s", path, exc)
+
+
+def cleanup_unless_kept(config: Mapping[str, Any], file_list: Sequence[str | None]) -> None:
+    """Remove intermediates unless ``read_simulation.keep_intermediate_files`` is true."""
+    if config.get("read_simulation", {}).get("keep_intermediate_files", False):
+        logger.info("Keeping intermediate files (keep_intermediate_files=true)")
+        return
+    cleanup_intermediates(file_list)

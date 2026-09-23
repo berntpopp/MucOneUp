@@ -5,16 +5,23 @@ Used by both PacBio and ONT amplicon pipelines. Handles:
 - Primer-based amplicon extraction
 - PCR bias coverage split
 - Template FASTA generation
+- Truth-tracked molecule simulation (read profiles / --track-read-source)
 """
 
 from __future__ import annotations
 
 import logging
+import random
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from Bio import SeqIO
+
+from .molecule_pipeline import PbsimRun, simulate_molecule_reads
+from .molecules import MoleculeModel, build_amplicon_molecules
 from .pcr_bias import PCRBiasModel
+from .read_profiles import active_read_profile
 from .utils.amplicon_extractor import AmpliconExtractor
 from .utils.reference_utils import extract_haplotypes, is_diploid_reference
 from .utils.template_generator import generate_template_fasta
@@ -30,6 +37,8 @@ class AmpliconPrep:
     output_base: str
     intermediate_files: list[str] = field(default_factory=list)
     is_diploid: bool = False
+    amplicon_sequences: list[str] = field(default_factory=list)
+    haplotype_sequences: list[str] = field(default_factory=list)
 
 
 def extract_and_prepare_amplicons(
@@ -144,4 +153,45 @@ def extract_and_prepare_amplicons(
         output_base="amplicon",
         intermediate_files=intermediate_files,
         is_diploid=diploid,
+        amplicon_sequences=[r.sequence for r in amplicon_results],
+        haplotype_sequences=[str(next(SeqIO.parse(fa, "fasta")).seq) for fa in haplotype_fastas],
     )
+
+
+def truth_tracked_model(config: dict[str, Any], tracking_requested: bool) -> MoleculeModel | None:
+    """Molecule model for the truth-tracked path, or None for legacy simulation.
+
+    An active read profile supplies its model. Tracking without a profile uses the
+    no-op model (full-length, forward-strand molecules) so reads get truth
+    without changing the error model.
+    """
+    profile = active_read_profile(config)
+    if profile is not None:
+        return profile.molecules
+    return MoleculeModel() if tracking_requested else None
+
+
+def simulate_truth_tracked_amplicons(
+    prep: AmpliconPrep,
+    model: MoleculeModel,
+    run: PbsimRun,
+    work_dir: Path,
+    out_fastq: Path,
+    truth_tsv: Path,
+    base: str,
+    seed: int | None,
+) -> int:
+    """Build amplicon molecules for ``prep`` and simulate reads with per-read truth."""
+    offtarget = "".join(
+        hap.replace(amp, "")
+        for hap, amp in zip(prep.haplotype_sequences, prep.amplicon_sequences, strict=True)
+    )
+    molecules = build_amplicon_molecules(
+        prep.amplicon_sequences,
+        prep.allele_coverages,
+        model,
+        random.Random(seed),
+        offtarget_source=offtarget or None,
+    )
+    logging.info("Truth-tracked amplicon simulation: %d molecules", len(molecules))
+    return simulate_molecule_reads(molecules, run, work_dir, out_fastq, truth_tsv, base, seed)
