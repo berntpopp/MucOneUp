@@ -138,6 +138,9 @@ def simulate_amplicon_reads_pipeline(
     threads = pacbio_params.get("threads", 4)
     seed = pacbio_params.get("seed")
     accuracy_mean = pacbio_params.get("accuracy_mean", 0.85)
+    # accuracy_sd is deliberately not forwarded: pacbio_params.accuracy_sd configures
+    # WGS mode, and passing it here would change existing amplicon outputs.
+    difference_ratio = pacbio_params.get("difference_ratio")
 
     # Amplicon params
     forward_primer = amplicon_params["forward_primer"]
@@ -211,6 +214,7 @@ def simulate_amplicon_reads_pipeline(
                     pass_num=pass_num,
                     accuracy_mean=accuracy_mean,
                     seed=hap_seed,
+                    difference_ratio=difference_ratio,
                 )
                 clr_bam_groups.append(bams)
                 intermediate_files.extend(bams)

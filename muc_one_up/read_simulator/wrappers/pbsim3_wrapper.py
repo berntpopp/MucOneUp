@@ -326,6 +326,26 @@ def run_pbsim3_simulation(
     return output_bams
 
 
+def _optional_error_profile_args(
+    difference_ratio: str | None, accuracy_sd: float | None, id_prefix: str | None
+) -> list[str | float]:
+    """Build optional pbsim3 error-profile arguments; empty when nothing is set."""
+    args: list[str | float] = []
+    if difference_ratio is not None:
+        parts = difference_ratio.split(":")
+        if len(parts) != 3 or not all(p.isdigit() for p in parts):
+            raise FileOperationError(
+                f"Invalid difference_ratio '{difference_ratio}': expected "
+                "'SUB:INS:DEL' non-negative integers, e.g. '39:24:36'"
+            )
+        args.extend(["--difference-ratio", difference_ratio])
+    if accuracy_sd is not None:
+        args.extend(["--accuracy-sd", accuracy_sd])
+    if id_prefix is not None:
+        args.extend(["--id-prefix", id_prefix])
+    return args
+
+
 def run_pbsim3_template_simulation(
     pbsim3_cmd: str,
     samtools_cmd: str,
@@ -337,6 +357,10 @@ def run_pbsim3_template_simulation(
     accuracy_mean: float = DEFAULT_PBSIM3_ACCURACY_MEAN,
     seed: int | None = None,
     timeout: int = DEFAULT_PBSIM3_TIMEOUT,
+    *,
+    difference_ratio: str | None = None,
+    accuracy_sd: float | None = None,
+    id_prefix: str | None = None,
 ) -> list[str]:
     """Simulate reads using PBSIM3 template mode.
 
@@ -355,6 +379,10 @@ def run_pbsim3_template_simulation(
         accuracy_mean: Mean per-base accuracy before consensus.
         seed: Random seed for reproducibility.
         timeout: Timeout in seconds.
+        difference_ratio: Optional pbsim3 ``--difference-ratio`` (substitution:insertion:
+            deletion, e.g. ``"39:24:36"``). Omitted from the command when None.
+        accuracy_sd: Optional pbsim3 ``--accuracy-sd``. Omitted when None.
+        id_prefix: Optional pbsim3 ``--id-prefix`` for read names. Omitted when None.
 
     Returns:
         List of paths to output BAM files.
@@ -405,6 +433,7 @@ def run_pbsim3_template_simulation(
 
     if seed is not None:
         cmd_args.extend(["--seed", seed])
+    cmd_args.extend(_optional_error_profile_args(difference_ratio, accuracy_sd, id_prefix))
 
     cmd = build_tool_command(pbsim3_cmd, *cmd_args)
 

@@ -88,6 +88,8 @@ def simulate_ont_amplicon_pipeline(
     threads = ont_params.get("threads") or 8
     seed = ont_params.get("seed")  # None is valid here (random seed)
     accuracy_mean = ont_params.get("accuracy_mean") or 0.95
+    accuracy_sd = ont_params.get("accuracy_sd")
+    difference_ratio = ont_params.get("difference_ratio")
 
     # Validate model file looks like an ONT model
     model_name = Path(model_file).name.upper()
@@ -160,6 +162,8 @@ def simulate_ont_amplicon_pipeline(
                     pass_num=1,
                     accuracy_mean=accuracy_mean,
                     seed=hap_seed,
+                    accuracy_sd=accuracy_sd,
+                    difference_ratio=difference_ratio,
                 )
                 allele_outputs.append(outputs)
                 intermediate_files.extend(outputs)

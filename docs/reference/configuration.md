@@ -593,6 +593,7 @@ Parameters for PacBio HiFi read simulation.
 | `min_rq` | number | Minimum read quality (0.0-1.0) | Required |
 | `threads` | number | Parallel threads (minimum 1) | - |
 | `seed` | integer | Random seed (null = random) | null |
+| `difference_ratio` | string | pbsim3 `--difference-ratio` (`SUB:INS:DEL`) for amplicon mode; omitted when unset | pbsim3 default |
 
 ---
 
@@ -624,8 +625,10 @@ Parameters for ONT amplicon read simulation (pbsim3 single-pass mode). Separate 
 | `threads` | number | Parallel threads (minimum 1) | 8 |
 | `seed` | integer | Random seed (null = random) | null |
 | `accuracy_mean` | number | Mean read accuracy (0.0-1.0) | 0.95 |
+| `accuracy_sd` | number | pbsim3 `--accuracy-sd`; omitted when unset | pbsim3 default |
+| `difference_ratio` | string | pbsim3 `--difference-ratio` (`SUB:INS:DEL`). The pbsim3 default produces insertion-heavy errors; per-base rates measured on real R10.4.1 sup MUC1 amplicons (PRJEB92208) give about `"33:31:36"` | pbsim3 default |
 
-Available ONT models: `QSHMM-ONT-HQ.model`, `QSHMM-ONT.model`, `QSHMM-ONT-HQ.model`.
+Available ONT models: `QSHMM-ONT-HQ.model`, `QSHMM-ONT.model`, `ERRHMM-ONT.model`.
 
 ---
 

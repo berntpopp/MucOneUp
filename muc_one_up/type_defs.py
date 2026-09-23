@@ -214,6 +214,7 @@ class PacbioConfig(TypedDict, total=False):
     accuracy_mean: float
     accuracy_sd: float
     accuracy_min: float
+    difference_ratio: str | None
     length_mean: int
     length_sd: int
     length_min: int
@@ -228,6 +229,8 @@ class OntAmpliconConfig(TypedDict, total=False):
     threads: int
     seed: int | None
     accuracy_mean: float
+    accuracy_sd: float | None
+    difference_ratio: str | None
 
 
 # ---------------------------------------------------------------------------

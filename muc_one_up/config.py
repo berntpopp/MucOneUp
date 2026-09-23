@@ -169,6 +169,10 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "accuracy_mean": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
                 "accuracy_sd": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
                 "accuracy_min": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
+                "difference_ratio": {
+                    "type": ["string", "null"],
+                    "pattern": "^[0-9]+:[0-9]+:[0-9]+$",
+                },
                 "length_mean": {"type": ["number", "null"], "minimum": 1},
                 "length_sd": {"type": ["number", "null"], "minimum": 0},
                 "length_min": {"type": ["number", "null"], "minimum": 1},
@@ -195,6 +199,11 @@ CONFIG_SCHEMA: dict[str, Any] = {
                     "type": "number",
                     "minimum": 0.0,
                     "maximum": 1.0,
+                },
+                "accuracy_sd": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
+                "difference_ratio": {
+                    "type": ["string", "null"],
+                    "pattern": "^[0-9]+:[0-9]+:[0-9]+$",
                 },
             },
             "additionalProperties": False,
