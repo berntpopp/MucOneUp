@@ -200,7 +200,6 @@ CONFIG_SCHEMA: dict[str, Any] = {
                     "minimum": 0.0,
                     "maximum": 1.0,
                 },
-                "accuracy_sd": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
                 "difference_ratio": {
                     "type": ["string", "null"],
                     "pattern": "^[0-9]+:[0-9]+:[0-9]+$",

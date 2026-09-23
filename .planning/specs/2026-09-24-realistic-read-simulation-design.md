@@ -99,9 +99,9 @@ and merged. `{base}_read_truth.tsv.gz` gets one row per read:
 `read_id, hap, molecule, kind, strand, src_start, src_end, n_hp_edits,
 hp_edits` (compact JSON list).
 
-pbsim3 wrapper additions: `difference_ratio` (e.g. "39:24:36"),
-`accuracy_sd`, and the existing `accuracy_mean`. All are passed only when
-set, so legacy commands are unchanged.
+pbsim3 wrapper additions: `difference_ratio` (e.g. "39:24:36") and the
+existing `accuracy_mean`, passed only when set, so legacy commands are
+unchanged. (pbsim3 3.0.x has no `--accuracy-sd`; it was removed in #115.)
 
 ### 3.3 Read profiles
 
@@ -113,7 +113,7 @@ set, so legacy commands are unchanged.
   "name": "ont_r10_sup_amplicon_v1",
   "provenance": {"source": "PRJEB92208 aggregate statistics (public)", "derived_by": "MucOneSpan realprofile", "date": "2026-09-23"},
   "platform": "ont",
-  "pbsim": {"model_type": "qshmm", "model_file": "QSHMM-ONT-HQ.model", "accuracy_mean": 0.985, "accuracy_sd": 0.01, "difference_ratio": "39:24:36"},
+  "pbsim": {"model_type": "qshmm", "model_file": "QSHMM-ONT-HQ.model", "accuracy_mean": 0.985, "difference_ratio": "39:24:36"},
   "pcr_bias": {"preset": "madritsch2025_r10"},
   "molecules": {"forward_frac": 0.5, "smear_rate": 0.24, "smear_junction_beta": [2.0, 5.0], "smear_min_keep": 0.15,
                 "chimera_rate": 0.023, "concatemer_rate": 0.024, "offtarget_frac": 0.30, "offtarget_median_bp": 370},

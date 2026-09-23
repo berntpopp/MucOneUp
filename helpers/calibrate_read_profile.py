@@ -237,7 +237,6 @@ def main() -> None:
         args.model_type,
         args.model_file,
         accuracy_mean=ont.get("accuracy_mean", 0.95),
-        accuracy_sd=ont.get("accuracy_sd"),
         difference_ratio=ont.get("difference_ratio"),
     )
     template = str(next(SeqIO.parse(args.template, "fasta")).seq).upper()

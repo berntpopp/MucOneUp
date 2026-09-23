@@ -102,3 +102,14 @@ def test_config_schema_accepts_read_model_section() -> None:
     from muc_one_up.config import CONFIG_SCHEMA
 
     validate(instance={"profile": "x"}, schema=CONFIG_SCHEMA["properties"]["read_model"])
+
+
+def test_ont_amplicon_params_reject_accuracy_sd():
+    """pbsim3 has no --accuracy-sd, so the key must not validate (#115)."""
+    import jsonschema
+
+    from muc_one_up.config import CONFIG_SCHEMA
+
+    schema = CONFIG_SCHEMA["properties"]["ont_amplicon_params"]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"accuracy_sd": 0.01}, {**schema, "required": []})

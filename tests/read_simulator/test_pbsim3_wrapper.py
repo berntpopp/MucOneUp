@@ -522,10 +522,14 @@ class TestTemplateErrorProfilePassthrough:
             assert flag not in cmd
 
     def test_flags_passed_when_set(self, tmp_path):
-        cmd = self._run(tmp_path, difference_ratio="39:24:36", accuracy_sd=0.01, id_prefix="h1")
+        cmd = self._run(tmp_path, difference_ratio="39:24:36", id_prefix="h1")
         assert cmd[cmd.index("--difference-ratio") + 1] == "39:24:36"
-        assert cmd[cmd.index("--accuracy-sd") + 1] == "0.01"
         assert cmd[cmd.index("--id-prefix") + 1] == "h1"
+
+    def test_accuracy_sd_is_not_a_template_option(self, tmp_path):
+        """pbsim3 3.0.x rejects --accuracy-sd ("unrecognized option"), see #115."""
+        with pytest.raises(TypeError):
+            self._run(tmp_path, accuracy_sd=0.01)
 
     @pytest.mark.parametrize("ratio", ["39:24", "a:b:c", "39:24:-1", ""])
     def test_invalid_difference_ratio_rejected(self, tmp_path, ratio):

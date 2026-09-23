@@ -32,8 +32,9 @@ amplicon run is byte-identical to 0.44.5).
   `--flank-fasta`) (#107)
 - **PCR preset `madritsch2025_r10`** reproducing ln(long/short) ≈ −0.056 per
   repeat unit (#104)
-- **pbsim3 options**: `difference_ratio`, `accuracy_sd` (ONT amplicon) and read
-  id prefix, passed only when set (#105)
+- **pbsim3 options**: `difference_ratio` (ONT amplicon) and read id prefix,
+  passed only when set (#105). pbsim3 has no `--accuracy-sd` option, so
+  `ont_amplicon_params` does not accept `accuracy_sd` (#115)
 - **`--no-align`** for `reads amplicon`, `reads ont` and `reads pacbio` (#106)
 - `helpers/calibrate_read_profile.py` to derive and validate profiles
 

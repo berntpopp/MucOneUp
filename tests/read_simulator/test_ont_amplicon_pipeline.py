@@ -319,8 +319,8 @@ class TestOntAmpliconErrorProfileConfig:
     @pytest.mark.parametrize(
         "extra,expected",
         [
-            ({}, (None, None)),
-            ({"difference_ratio": "39:24:36", "accuracy_sd": 0.01}, ("39:24:36", 0.01)),
+            ({}, None),
+            ({"difference_ratio": "39:24:36"}, "39:24:36"),
         ],
     )
     def test_error_profile_forwarded(
@@ -353,4 +353,5 @@ class TestOntAmpliconErrorProfileConfig:
 
         simulate_ont_amplicon_pipeline(ont_amplicon_config, str(fasta), human_reference=str(fasta))
         for call in mock_pbsim3.call_args_list:
-            assert (call.kwargs["difference_ratio"], call.kwargs["accuracy_sd"]) == expected
+            assert call.kwargs["difference_ratio"] == expected
+            assert "accuracy_sd" not in call.kwargs  # pbsim3 has no --accuracy-sd (#115)

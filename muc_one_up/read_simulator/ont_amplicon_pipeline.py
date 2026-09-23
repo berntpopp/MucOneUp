@@ -89,7 +89,6 @@ def simulate_ont_amplicon_pipeline(
     threads = ont_params.get("threads") or 8
     seed = ont_params.get("seed")  # None is valid here (random seed)
     accuracy_mean = ont_params.get("accuracy_mean") or 0.95
-    accuracy_sd = ont_params.get("accuracy_sd")
     difference_ratio = ont_params.get("difference_ratio")
 
     # Validate model file looks like an ONT model
@@ -155,7 +154,6 @@ def simulate_ont_amplicon_pipeline(
                     model_type=model_type,
                     model_file=model_file,
                     accuracy_mean=accuracy_mean,
-                    accuracy_sd=accuracy_sd,
                     difference_ratio=difference_ratio,
                     threads=threads,
                 )
@@ -180,7 +178,6 @@ def simulate_ont_amplicon_pipeline(
                         model_type=model_type,
                         model_file=model_file,
                         accuracy_mean=accuracy_mean,
-                        accuracy_sd=accuracy_sd,
                         difference_ratio=difference_ratio,
                         threads=threads,
                         seed=seed,
@@ -256,7 +253,6 @@ def _simulate_legacy_allele_fastqs(
     model_type: str,
     model_file: str,
     accuracy_mean: float,
-    accuracy_sd: float | None,
     difference_ratio: str | None,
     threads: int,
     seed: int | None,
@@ -285,7 +281,6 @@ def _simulate_legacy_allele_fastqs(
             pass_num=1,
             accuracy_mean=accuracy_mean,
             seed=hap_seed,
-            accuracy_sd=accuracy_sd,
             difference_ratio=difference_ratio,
         )
         allele_outputs.append(outputs)

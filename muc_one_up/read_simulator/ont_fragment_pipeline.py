@@ -101,7 +101,6 @@ def simulate_ont_fragment_pipeline(
         model_type=ont.get("model_type") or "qshmm",
         model_file=ont.get("model_file") or DEFAULT_ONT_MODEL,
         accuracy_mean=ont.get("accuracy_mean") or 0.95,
-        accuracy_sd=ont.get("accuracy_sd"),
         difference_ratio=ont.get("difference_ratio"),
         threads=ont.get("threads") or 4,
     )

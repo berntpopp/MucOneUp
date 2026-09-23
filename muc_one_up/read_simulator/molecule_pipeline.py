@@ -50,7 +50,6 @@ class PbsimRun:
     model_file: str
     pass_num: int = 1
     accuracy_mean: float = 0.95
-    accuracy_sd: float | None = None
     difference_ratio: str | None = None
     ccs_cmd: str | None = None
     min_passes: int = 3
@@ -76,7 +75,6 @@ class PbsimRun:
             pass_num=self.pass_num,
             accuracy_mean=self.accuracy_mean,
             seed=seed,
-            accuracy_sd=self.accuracy_sd,
             difference_ratio=self.difference_ratio,
             id_prefix=_READ_PREFIX,
         )

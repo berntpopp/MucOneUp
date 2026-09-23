@@ -229,7 +229,6 @@ class OntAmpliconConfig(TypedDict, total=False):
     threads: int
     seed: int | None
     accuracy_mean: float
-    accuracy_sd: float | None
     difference_ratio: str | None
 
 
