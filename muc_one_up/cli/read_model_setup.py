@@ -49,3 +49,36 @@ def apply_tracking_and_alignment(
         rs.pop("human_reference", None)
         rs["skip_alignment"] = True
         logging.info("--no-align: alignment skipped; output is FASTQ")
+
+
+def resolve_amplicon_platform(
+    config: dict[str, Any], platform: str | None, read_profile: str | None
+) -> str:
+    """``--platform`` if given, else the read profile's platform, else ``pacbio``.
+
+    The profile may come from ``--read-profile`` or ``read_model.profile`` in the
+    config. An explicit ``--platform`` that contradicts the profile still fails in
+    :func:`apply_cli_read_model`.
+    """
+    if platform:
+        return platform
+    ref = read_profile or (config.get("read_model") or {}).get("profile")
+    if not ref:
+        return "pacbio"
+    try:
+        return load_read_profile(str(ref)).platform
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+def resolve_ont_simulator(
+    config: dict[str, Any], simulator: str | None, read_profile: str | None
+) -> str:
+    """``--simulator`` if given; ``pbsim3-fragments`` for a profile or configured
+    ``read_simulation.simulator: ont-fragments``; otherwise ``nanosim``."""
+    if simulator:
+        return simulator
+    configured = (config.get("read_simulation") or {}).get("simulator")
+    if read_profile or configured == "ont-fragments":
+        return "pbsim3-fragments"
+    return "nanosim"

@@ -22,6 +22,10 @@ muconeup reads profiles
 
 Every run writes `{base}_read_truth.tsv.gz` next to the reads.
 
+With a read profile, `--platform` (amplicon) defaults to the profile's platform
+and `reads ont --simulator` defaults to `pbsim3-fragments`, so both flags are
+optional in the examples above.
+
 ## What a read profile contains
 
 | Part | Effect |

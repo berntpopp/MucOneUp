@@ -12,7 +12,12 @@ from ...read_simulator.constants import DEFAULT_ONT_MIN_READ_LENGTH, VALID_PCR_P
 from .._common import require_config
 from ..error_handling import cli_error_handler
 from ..options import no_align_option, read_profile_option, shared_read_options
-from ..read_model_setup import apply_cli_read_model, apply_tracking_and_alignment
+from ..read_model_setup import (
+    apply_cli_read_model,
+    apply_tracking_and_alignment,
+    resolve_amplicon_platform,
+    resolve_ont_simulator,
+)
 
 # ============================================================================
 # Shared batch helper
@@ -306,10 +311,11 @@ def illumina(
 @click.option(
     "--simulator",
     type=click.Choice(["nanosim", "pbsim3-fragments"]),
-    default="nanosim",
-    show_default=True,
+    default=None,
     help="nanosim: NanoSim genomic reads. pbsim3-fragments: sampled fragments through "
-    "pbsim3 with per-read truth ({base}_read_truth.tsv.gz) and optional --read-profile.",
+    "pbsim3 with per-read truth ({base}_read_truth.tsv.gz) and optional --read-profile. "
+    "Default: pbsim3-fragments with --read-profile or when the config sets "
+    "read_simulation.simulator to ont-fragments, otherwise nanosim.",
 )
 @click.option("--n-reads", type=int, default=None, help="pbsim3-fragments: number of reads.")
 @click.option(
@@ -372,6 +378,7 @@ def ont(
     from ...config import load_config_raw
 
     config = load_config_raw(str(ctx.obj["config_path"]))
+    simulator = resolve_ont_simulator(config, simulator, read_profile)
     _setup_read_config(config, "ont", coverage, seed, seed_config_key="nanosim_params")
 
     from typing import cast
@@ -575,9 +582,9 @@ def pacbio(
 @click.option(
     "--platform",
     type=click.Choice(["pacbio", "ont"]),
-    default="pacbio",
-    show_default=True,
-    help="Sequencing platform for amplicon simulation.",
+    default=None,
+    help="Sequencing platform for amplicon simulation. Default: the read profile's "
+    "platform when a profile is used, otherwise pacbio.",
 )
 @read_profile_option
 @no_align_option
@@ -655,7 +662,8 @@ def amplicon(
     from ...config import load_config_raw
 
     config = load_config_raw(str(ctx.obj["config_path"]))
-    config = apply_cli_read_model(config, read_profile, "ont" if platform == "ont" else "pacbio")
+    platform = resolve_amplicon_platform(config, platform, read_profile)
+    config = apply_cli_read_model(config, read_profile, platform)
     _setup_read_config(config, "amplicon", coverage, seed)
     apply_tracking_and_alignment(config, track_read_source, no_align)
 
