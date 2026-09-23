@@ -160,3 +160,21 @@ def test_profile_pcr_preset_drops_config_preset_parameters(tmp_path: Path) -> No
         "preset": "madritsch2025_r10",
         "stochastic": True,
     }
+
+
+@pytest.mark.parametrize(
+    "mutation,match",
+    [
+        ({"name": None}, "name"),
+        ({"fragments": {"median": 5}}, "fragments"),
+        ({"errors": {"mismatch_rate": 0.01}}, "errors"),
+        ({"molecules": {"forward_frac": "0.5"}}, "molecules"),
+        ({"molecules": {"stutter": {"C7|+": {"-8": 1.0}}}}, "C7"),
+    ],
+)
+def test_malformed_profiles_raise_value_error(tmp_path: Path, mutation: dict, match: str) -> None:
+    """Construction errors must surface as ValueError naming the problem (#124)."""
+    data = {**MINIMAL, **mutation}
+    data = {k: v for k, v in data.items() if v is not None}
+    with pytest.raises(ValueError, match=match):
+        load_read_profile(str(_write(tmp_path, data)))

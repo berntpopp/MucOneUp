@@ -192,3 +192,13 @@ def test_amplicon_defaults_to_pacbio(tmp_path):
     result, config = _invoke(tmp_path, ["amplicon"])
     assert result.exit_code == 0, result.output
     assert config["read_simulation"]["simulator"] == "amplicon"
+
+
+def test_profile_does_not_hide_missing_primers(tmp_path):
+    """A profile that sets amplicon_params must not bypass the primer check (#124)."""
+    config = {k: v for k, v in BASE_CONFIG.items() if k != "amplicon_params"}
+    result, _ = _invoke(
+        tmp_path, ["amplicon", "--platform", "ont", "--read-profile", _profile(tmp_path)], config
+    )
+    assert result.exit_code != 0
+    assert "forward_primer" in result.output and "KeyError" not in result.output

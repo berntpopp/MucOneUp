@@ -23,10 +23,10 @@ import copy
 import hashlib
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from jsonschema import ValidationError as SchemaError
 from jsonschema import validate
@@ -38,6 +38,7 @@ from .molecules import MoleculeModel
 BUILTIN_DIR = Path(__file__).resolve().parent.parent / "data" / "read_profiles"
 OVERRIDABLE_SECTIONS = ("ont_amplicon_params", "pacbio_params", "amplicon_params")
 PLATFORMS = ("ont", "pacbio")
+_T = TypeVar("_T")
 _KEYS = {
     "schema_version",
     "name",
@@ -118,20 +119,31 @@ def load_read_profile(ref: str) -> ReadProfile:
         raise ValueError("read profile schema_version must be 1")
     if data.get("platform") not in PLATFORMS:
         raise ValueError(f"read profile platform must be one of {PLATFORMS}")
+    if not isinstance(data.get("name"), str) or not data["name"]:
+        raise ValueError(f"read profile {path}: 'name' must be a non-empty string")
     overrides = data.get("config_overrides", {})
     _validate_overrides(overrides)
+
+    def part(name: str, build: Callable[[], _T]) -> _T:
+        try:
+            return build()
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"read profile {path}: invalid '{name}': {exc}") from exc
+
+    fragments = data.get("fragments")
+    errors = data.get("errors")
     return ReadProfile(
-        name=str(data["name"]),
+        name=data["name"],
         platform=data["platform"],
         calibration=str(data.get("calibration", "generic")),
         description=str(data.get("description", "")),
         provenance=data.get("provenance", {}),
         config_overrides=overrides,
-        molecules=MoleculeModel.from_dict(data.get("molecules", {})),
-        fragments=FragmentModel(**data["fragments"]) if "fragments" in data else None,
+        molecules=part("molecules", lambda: MoleculeModel.from_dict(data.get("molecules", {}))),
+        fragments=part("fragments", lambda: FragmentModel(**fragments)) if fragments else None,
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
         source=str(path),
-        errors=EmpiricalErrorModel.from_dict(data["errors"]) if data.get("errors") else None,
+        errors=part("errors", lambda: EmpiricalErrorModel.from_dict(errors)) if errors else None,
     )
 
 

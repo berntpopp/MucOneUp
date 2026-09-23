@@ -82,6 +82,11 @@ class StutterTable:
         for key, pmf in data.items():
             _validate_stutter_key(key)
             items = tuple(sorted((int(delta), float(p)) for delta, p in pmf.items()))
+            run_len = int(key.partition("|")[0][1:])
+            if any(delta < -run_len and p > 0 for delta, p in items):
+                raise ValueError(
+                    f"stutter delta for '{key}' cannot remove more than {run_len} bases"
+                )
             if any(p < 0 for _, p in items) or not math.isclose(
                 sum(p for _, p in items), 1.0, abs_tol=1e-6
             ):
@@ -196,7 +201,7 @@ def apply_stutter(
         delta = table.sample(base, end - start, strand, rng)
         if delta == 0:
             continue
-        new_len = max(1, end - start + delta)
+        new_len = end - start + delta  # 0: the whole run is dropped (seen in real reads)
         parts.append(seq[last:start])
         parts.append(base * new_len)
         edits.append(HpEdit(start, base, end - start, new_len))

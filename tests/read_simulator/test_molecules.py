@@ -47,6 +47,13 @@ class TestApplyStutter:
         assert [(e.base, e.true_len, e.new_len) for e in edits] == [("C", 7, 6)] * 3
         assert [e.pos for e in edits] == [52, 112, 172]
 
+    def test_full_run_deletion_is_applied_not_clamped(self) -> None:
+        """Real R10 reads drop whole C3/G3 runs (~0.1%); a delta of -len is kept (#124)."""
+        table = StutterTable.from_dict({"C3|+": {"-3": 1.0}})
+        seq, edits = apply_stutter("AACCCTT", table, "+", random.Random(1))
+        assert seq == "AATT"
+        assert [(e.pos, e.true_len, e.new_len) for e in edits] == [(2, 3, 0)]
+
     def test_strand_selects_table(self) -> None:
         table = StutterTable.from_dict({"C7|-": {"1": 1.0}})
         assert apply_stutter(UNIT, table, "+", random.Random(1))[0] == UNIT

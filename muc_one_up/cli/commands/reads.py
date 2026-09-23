@@ -671,11 +671,19 @@ def amplicon(
         config["read_simulation"]["simulator"] = "ont-amplicon"
     config["read_simulation"]["assay_type"] = "amplicon"
 
-    # Ensure amplicon_params exists
+    # Ensure amplicon_params has primers (a read profile can create the section
+    # through its PCR overlay, so check the primers themselves).
     if "amplicon_params" not in config:
         raise click.ClickException(
             "Missing amplicon_params section in config. "
             "Add forward_primer and reverse_primer to config.json."
+        )
+    missing = [
+        k for k in ("forward_primer", "reverse_primer") if k not in config["amplicon_params"]
+    ]
+    if missing:
+        raise click.ClickException(
+            f"Missing amplicon_params.{' and '.join(missing)} in config.json."
         )
 
     if platform == "ont":
