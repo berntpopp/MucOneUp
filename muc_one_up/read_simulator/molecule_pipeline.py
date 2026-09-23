@@ -1,24 +1,43 @@
-"""Simulate truth-tracked reads from template molecules with pbsim3 (and ccs for HiFi).
+"""Simulate truth-tracked reads from template molecules.
 
-One pbsim3 template-mode run covers all molecules. Single-pass output (ONT) is
-FASTQ; multi-pass output (PacBio) is turned into HiFi reads with ccs. Reads are
-then relabelled from the pbsim3 MAF so every read carries molecule truth.
+A *sequencer* turns molecules into reads and reports which template each read
+came from (Strategy pattern):
+
+* :class:`PbsimRun` - one pbsim3 template-mode run for all molecules; single-pass
+  output (ONT) is FASTQ, multi-pass output (PacBio) becomes HiFi via ccs; the
+  read -> template map comes from the pbsim3 MAF.
+* :class:`EmpiricalSequencer` - the calibrated in-process error channel
+  (:mod:`.empirical_errors`), used when a read profile defines ``errors``.
+
+Reads are then relabelled so every read carries molecule truth.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+import random
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Protocol
 
+from .empirical_errors import EmpiricalErrorModel, apply_errors
 from .molecules import Molecule
+from .read_profiles import active_read_profile
 from .read_truth import parse_maf_read_templates, relabel_reads, template_id
 from .wrappers.ccs_wrapper import run_ccs_consensus
 from .wrappers.pbsim3_wrapper import run_pbsim3_template_simulation
 from .wrappers.samtools_convert import convert_bam_to_fastq
 
 _READ_PREFIX = "mol"
+
+
+class Sequencer(Protocol):
+    """Turns molecules into reads; returns FASTQ paths and a read -> template map."""
+
+    def sequence(
+        self, molecules: Sequence[Molecule], work_dir: Path, seed: int | None
+    ) -> tuple[list[Path], dict[str, str]]: ...
 
 
 @dataclass(frozen=True)
@@ -41,6 +60,30 @@ class PbsimRun:
     def __post_init__(self) -> None:
         if self.pass_num > 1 and not self.ccs_cmd:
             raise ValueError("multi-pass (HiFi) simulation requires ccs_cmd")
+
+    def sequence(
+        self, molecules: Sequence[Molecule], work_dir: Path, seed: int | None
+    ) -> tuple[list[Path], dict[str, str]]:
+        templates = write_molecule_templates(molecules, work_dir / "molecules.fa")
+        prefix = work_dir / "molecules"
+        outputs = run_pbsim3_template_simulation(
+            pbsim3_cmd=self.pbsim3_cmd,
+            samtools_cmd=self.samtools_cmd,
+            template_fasta=str(templates),
+            model_type=self.model_type,
+            model_file=self.model_file,
+            output_prefix=str(prefix),
+            pass_num=self.pass_num,
+            accuracy_mean=self.accuracy_mean,
+            seed=seed,
+            accuracy_sd=self.accuracy_sd,
+            difference_ratio=self.difference_ratio,
+            id_prefix=_READ_PREFIX,
+        )
+        mapping: dict[str, str] = {}
+        for maf in sorted(work_dir.glob(f"{prefix.name}*.maf.gz")):
+            mapping.update(parse_maf_read_templates(maf))
+        return _to_fastqs(outputs, self, work_dir, seed), mapping
 
 
 def write_molecule_templates(molecules: Sequence[Molecule], path: Path) -> Path:
@@ -82,35 +125,43 @@ def _to_fastqs(outputs: list[str], run: PbsimRun, work_dir: Path, seed: int | No
 
 def simulate_molecule_reads(
     molecules: Sequence[Molecule],
-    run: PbsimRun,
+    sequencer: Sequencer,
     work_dir: Path,
     out_fastq: Path,
     truth_tsv: Path,
     base: str,
     seed: int | None,
 ) -> int:
-    """Simulate reads for ``molecules``; write relabelled FASTQ and truth. Returns read count."""
+    """Sequence ``molecules``; write relabelled FASTQ and truth. Returns read count."""
     work_dir.mkdir(parents=True, exist_ok=True)
-    templates = write_molecule_templates(molecules, work_dir / "molecules.fa")
-    prefix = work_dir / "molecules"
-    outputs = run_pbsim3_template_simulation(
-        pbsim3_cmd=run.pbsim3_cmd,
-        samtools_cmd=run.samtools_cmd,
-        template_fasta=str(templates),
-        model_type=run.model_type,
-        model_file=run.model_file,
-        output_prefix=str(prefix),
-        pass_num=run.pass_num,
-        accuracy_mean=run.accuracy_mean,
-        seed=seed,
-        accuracy_sd=run.accuracy_sd,
-        difference_ratio=run.difference_ratio,
-        id_prefix=_READ_PREFIX,
-    )
-    mapping: dict[str, str] = {}
-    for maf in sorted(work_dir.glob(f"{prefix.name}*.maf.gz")):
-        mapping.update(parse_maf_read_templates(maf))
-    fastqs = _to_fastqs(outputs, run, work_dir, seed)
+    fastqs, mapping = sequencer.sequence(molecules, work_dir, seed)
     count = relabel_reads(fastqs, mapping, {m.id: m for m in molecules}, base, out_fastq, truth_tsv)
     logging.info("Simulated %d truth-tracked reads from %d molecules", count, len(molecules))
     return count
+
+
+@dataclass(frozen=True)
+class EmpiricalSequencer:
+    """Calibrated in-process error channel; one read per molecule."""
+
+    model: EmpiricalErrorModel
+
+    def sequence(
+        self, molecules: Sequence[Molecule], work_dir: Path, seed: int | None
+    ) -> tuple[list[Path], dict[str, str]]:
+        rng = random.Random(seed)
+        fastq = work_dir / "empirical.fastq"
+        with open(fastq, "w") as handle:
+            for molecule in molecules:
+                read, qual = apply_errors(molecule.seq, self.model, rng)
+                handle.write(f"@{template_id(molecule.id)}\n{read}\n+\n{qual}\n")
+        names = {template_id(m.id): template_id(m.id) for m in molecules}
+        return [fastq], names
+
+
+def sequencer_for(config: Mapping[str, Any], pbsim: PbsimRun) -> Sequencer:
+    """Empirical channel when the active read profile defines ``errors``, else pbsim3."""
+    profile = active_read_profile(config)
+    if profile is not None and profile.errors is not None:
+        return EmpiricalSequencer(profile.errors)
+    return pbsim

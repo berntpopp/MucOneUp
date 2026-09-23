@@ -80,3 +80,44 @@ def test_hifi_runs_ccs_and_converts(tmp_path: Path) -> None:
 def test_multipass_requires_ccs_command() -> None:
     with pytest.raises(ValueError, match="ccs_cmd"):
         PbsimRun("pbsim", "samtools", "errhmm", "m.model", pass_num=10)
+
+
+ERRORS = {
+    "mismatch_rate": 0.01,
+    "insertion_rate": 0.005,
+    "deletion_rate": 0.005,
+    "insertion_len_pmf": {"1": 1.0},
+    "deletion_len_pmf": {"1": 1.0},
+    "read_error_sigma": 0.0,
+}
+
+
+def test_empirical_sequencer_end_to_end_without_external_tools(tmp_path: Path) -> None:
+    from muc_one_up.read_simulator.empirical_errors import EmpiricalErrorModel
+    from muc_one_up.read_simulator.molecule_pipeline import EmpiricalSequencer
+
+    mols = [
+        Molecule(i, 1 + i % 2, "full", "+-"[i % 2], "ACGTTGCA" * 50, 0, 400) for i in range(1, 21)
+    ]
+    seq = EmpiricalSequencer(EmpiricalErrorModel.from_dict(ERRORS))
+    n = simulate_molecule_reads(
+        mols, seq, tmp_path, tmp_path / "o.fq", tmp_path / "t.tsv.gz", "e", 3
+    )
+    assert n == 20
+    names = (tmp_path / "o.fq").read_text().splitlines()[::4]
+    assert names[:2] == ["@e_h2_m0000001", "@e_h1_m0000002"]
+
+
+def test_sequencer_for_selects_engine(tmp_path: Path) -> None:
+    import json
+
+    from muc_one_up.read_simulator.molecule_pipeline import EmpiricalSequencer, sequencer_for
+
+    pbsim = PbsimRun("pbsim", "samtools", "qshmm", "m.model")
+    assert sequencer_for({}, pbsim) is pbsim
+    profile = tmp_path / "p.json"
+    profile.write_text(
+        json.dumps({"schema_version": 1, "name": "p", "platform": "ont", "errors": ERRORS})
+    )
+    chosen = sequencer_for({"read_model": {"profile": str(profile)}}, pbsim)
+    assert isinstance(chosen, EmpiricalSequencer) and chosen.model.mismatch_rate == 0.01

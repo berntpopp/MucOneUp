@@ -31,7 +31,7 @@ from .amplicon_common import (
     truth_tracked_model,
 )
 from .constants import MINIMAP2_PRESET_ONT
-from .molecule_pipeline import PbsimRun
+from .molecule_pipeline import PbsimRun, sequencer_for
 from .pipeline_utils import (
     cleanup_unless_kept,
     create_pipeline_metadata,
@@ -162,7 +162,7 @@ def simulate_ont_amplicon_pipeline(
                 simulate_truth_tracked_amplicons(
                     prep,
                     model,
-                    run,
+                    sequencer_for(config, run),
                     temp_path / "molecules",
                     Path(merged_fastq),
                     output_dir / f"{output_base}_read_truth.tsv.gz",

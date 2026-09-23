@@ -7,7 +7,9 @@ specific real library type:
   (``ont_amplicon_params``, ``pacbio_params``, ``amplicon_params``), validated
   against the same JSON schema as the config file;
 * ``molecules``: a :class:`MoleculeModel` (strand mix, PCR artefacts, stutter);
-* ``fragments``: read-length model for genomic fragment simulation.
+* ``fragments``: read-length model for genomic fragment simulation;
+* ``errors`` (optional): a calibrated :class:`EmpiricalErrorModel`; when present
+  reads are sequenced by the empirical channel instead of pbsim3.
 
 Profiles contain aggregate statistics only. Built-ins live in
 ``muc_one_up/data/read_profiles/<name>.json``; any JSON path also works.
@@ -29,6 +31,7 @@ from jsonschema import ValidationError as SchemaError
 from jsonschema import validate
 
 from ..config import CONFIG_SCHEMA
+from .empirical_errors import EmpiricalErrorModel
 from .molecules import MoleculeModel
 
 BUILTIN_DIR = Path(__file__).resolve().parent.parent / "data" / "read_profiles"
@@ -44,6 +47,7 @@ _KEYS = {
     "config_overrides",
     "molecules",
     "fragments",
+    "errors",
 }
 
 
@@ -71,6 +75,7 @@ class ReadProfile:
     fragments: FragmentModel
     sha256: str
     source: str = field(default="")
+    errors: EmpiricalErrorModel | None = None
 
 
 def list_builtin_profiles() -> list[str]:
@@ -125,6 +130,7 @@ def load_read_profile(ref: str) -> ReadProfile:
         fragments=FragmentModel(**data.get("fragments", {})),
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
         source=str(path),
+        errors=EmpiricalErrorModel.from_dict(data["errors"]) if data.get("errors") else None,
     )
 
 

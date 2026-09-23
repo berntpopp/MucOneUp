@@ -18,7 +18,7 @@ from typing import Any
 
 from Bio import SeqIO
 
-from .molecule_pipeline import PbsimRun, simulate_molecule_reads
+from .molecule_pipeline import Sequencer, simulate_molecule_reads
 from .molecules import MoleculeModel, build_amplicon_molecules
 from .pcr_bias import PCRBiasModel
 from .read_profiles import active_read_profile
@@ -180,7 +180,7 @@ def truth_tracked_model(config: dict[str, Any], tracking_requested: bool) -> Mol
 def simulate_truth_tracked_amplicons(
     prep: AmpliconPrep,
     model: MoleculeModel,
-    run: PbsimRun,
+    sequencer: Sequencer,
     work_dir: Path,
     out_fastq: Path,
     truth_tsv: Path,
@@ -200,4 +200,4 @@ def simulate_truth_tracked_amplicons(
         offtarget_source=offtarget or None,
     )
     logging.info("Truth-tracked amplicon simulation: %d molecules", len(molecules))
-    return simulate_molecule_reads(molecules, run, work_dir, out_fastq, truth_tsv, base, seed)
+    return simulate_molecule_reads(molecules, sequencer, work_dir, out_fastq, truth_tsv, base, seed)

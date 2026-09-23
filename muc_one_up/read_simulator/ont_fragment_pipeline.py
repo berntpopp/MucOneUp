@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 from Bio import SeqIO
 
 from .constants import MINIMAP2_PRESET_ONT
-from .molecule_pipeline import PbsimRun, simulate_molecule_reads
+from .molecule_pipeline import PbsimRun, sequencer_for, simulate_molecule_reads
 from .molecules import MoleculeModel, build_fragment_molecules
 from .pipeline_utils import create_pipeline_metadata, resolve_pipeline_outputs
 from .read_profiles import FragmentModel, active_read_profile
@@ -118,7 +118,9 @@ def simulate_ont_fragment_pipeline(
         random.Random(seed),
     )
     with tempfile.TemporaryDirectory(prefix="ont_fragment_sim_") as tmp:
-        simulate_molecule_reads(molecules, run, Path(tmp), fastq, truth, output_base, seed)
+        simulate_molecule_reads(
+            molecules, sequencer_for(config, run), Path(tmp), fastq, truth, output_base, seed
+        )
     final_output = str(fastq)
     if human_reference:
         final_output = align_reads_with_minimap2(
