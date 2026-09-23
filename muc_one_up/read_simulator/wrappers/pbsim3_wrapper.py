@@ -120,7 +120,8 @@ def run_pbsim3_simulation(
         ExternalToolError: If pbsim3 or samtools command fails (propagated).
 
     Example:
-        Simulate with QSHMM model for Sequel II chemistry::
+        Simulate with the ERRHMM model for Sequel chemistry (pbsim3 ships no
+        QSHMM Sequel model)::
 
             from muc_one_up.read_simulator.wrappers.pbsim3_wrapper import run_pbsim3_simulation
 
@@ -128,8 +129,8 @@ def run_pbsim3_simulation(
                 pbsim3_cmd="pbsim",
                 samtools_cmd="samtools",
                 reference="vntr_diploid.fa",
-                model_type="qshmm",
-                model_file="/models/QSHMM-SEQUEL.model",
+                model_type="errhmm",
+                model_file="/models/ERRHMM-SEQUEL.model",
                 coverage=30,
                 output_prefix="sim",
                 pass_num=3,
@@ -326,6 +327,24 @@ def run_pbsim3_simulation(
     return output_bams
 
 
+def _optional_error_profile_args(
+    difference_ratio: str | None, id_prefix: str | None
+) -> list[str | float]:
+    """Build optional pbsim3 error-profile arguments; empty when nothing is set."""
+    args: list[str | float] = []
+    if difference_ratio is not None:
+        parts = difference_ratio.split(":")
+        if len(parts) != 3 or not all(p.isdigit() for p in parts):
+            raise FileOperationError(
+                f"Invalid difference_ratio '{difference_ratio}': expected "
+                "'SUB:INS:DEL' non-negative integers, e.g. '39:24:36'"
+            )
+        args.extend(["--difference-ratio", difference_ratio])
+    if id_prefix is not None:
+        args.extend(["--id-prefix", id_prefix])
+    return args
+
+
 def run_pbsim3_template_simulation(
     pbsim3_cmd: str,
     samtools_cmd: str,
@@ -337,6 +356,9 @@ def run_pbsim3_template_simulation(
     accuracy_mean: float = DEFAULT_PBSIM3_ACCURACY_MEAN,
     seed: int | None = None,
     timeout: int = DEFAULT_PBSIM3_TIMEOUT,
+    *,
+    difference_ratio: str | None = None,
+    id_prefix: str | None = None,
 ) -> list[str]:
     """Simulate reads using PBSIM3 template mode.
 
@@ -355,6 +377,9 @@ def run_pbsim3_template_simulation(
         accuracy_mean: Mean per-base accuracy before consensus.
         seed: Random seed for reproducibility.
         timeout: Timeout in seconds.
+        difference_ratio: Optional pbsim3 ``--difference-ratio`` (substitution:insertion:
+            deletion, e.g. ``"39:24:36"``). Omitted from the command when None.
+        id_prefix: Optional pbsim3 ``--id-prefix`` for read names. Omitted when None.
 
     Returns:
         List of paths to output BAM files.
@@ -405,6 +430,7 @@ def run_pbsim3_template_simulation(
 
     if seed is not None:
         cmd_args.extend(["--seed", seed])
+    cmd_args.extend(_optional_error_profile_args(difference_ratio, id_prefix))
 
     cmd = build_tool_command(pbsim3_cmd, *cmd_args)
 

@@ -490,3 +490,48 @@ class TestRunPbsim3TemplateSimulation:
             assert "out_0001.sam" in mock_convert.call_args[1]["input_sam"]
             assert len(result) == 1
             assert result[0].endswith("out_0001.bam")
+
+
+class TestTemplateErrorProfilePassthrough:
+    """Optional pbsim3 error-profile flags (#105): absent unless explicitly set."""
+
+    @staticmethod
+    def _run(tmp_path, **kwargs):
+        template_fa = tmp_path / "template.fa"
+        template_fa.write_text(">m0000001\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model")
+        (tmp_path / "out.fq.gz").write_bytes(b"\x1f\x8bFAKE")
+        with patch("muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            run_pbsim3_template_simulation(
+                pbsim3_cmd="pbsim",
+                samtools_cmd="samtools",
+                template_fasta=str(template_fa),
+                model_type="qshmm",
+                model_file=str(model_file),
+                output_prefix=str(tmp_path / "out"),
+                pass_num=1,
+                **kwargs,
+            )
+        return [str(x) for x in mock_run.call_args[0][0]]
+
+    def test_legacy_command_has_no_new_flags(self, tmp_path):
+        cmd = self._run(tmp_path)
+        for flag in ("--difference-ratio", "--accuracy-sd", "--id-prefix"):
+            assert flag not in cmd
+
+    def test_flags_passed_when_set(self, tmp_path):
+        cmd = self._run(tmp_path, difference_ratio="39:24:36", id_prefix="h1")
+        assert cmd[cmd.index("--difference-ratio") + 1] == "39:24:36"
+        assert cmd[cmd.index("--id-prefix") + 1] == "h1"
+
+    def test_accuracy_sd_is_not_a_template_option(self, tmp_path):
+        """pbsim3 3.0.x rejects --accuracy-sd ("unrecognized option"), see #115."""
+        with pytest.raises(TypeError):
+            self._run(tmp_path, accuracy_sd=0.01)
+
+    @pytest.mark.parametrize("ratio", ["39:24", "a:b:c", "39:24:-1", ""])
+    def test_invalid_difference_ratio_rejected(self, tmp_path, ratio):
+        with pytest.raises(FileOperationError, match="difference_ratio"):
+            self._run(tmp_path, difference_ratio=ratio)

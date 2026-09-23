@@ -8,9 +8,16 @@ from typing import Any
 
 import click
 
+from ...read_simulator.constants import DEFAULT_ONT_MIN_READ_LENGTH, VALID_PCR_PRESETS
 from .._common import require_config
 from ..error_handling import cli_error_handler
-from ..options import shared_read_options
+from ..options import no_align_option, read_profile_option, shared_read_options
+from ..read_model_setup import (
+    apply_cli_read_model,
+    apply_tracking_and_alignment,
+    resolve_amplicon_platform,
+    resolve_ont_simulator,
+)
 
 # ============================================================================
 # Shared batch helper
@@ -295,14 +302,56 @@ def illumina(
 @click.option(
     "--min-read-length",
     type=int,
-    default=100,
-    show_default=True,
-    help="Minimum read length.",
+    default=None,
+    help=(
+        "Minimum read length. Overrides nanosim_params.min_read_length from the "
+        f"config; if neither is set, {DEFAULT_ONT_MIN_READ_LENGTH} is used."
+    ),
 )
+@click.option(
+    "--simulator",
+    type=click.Choice(["nanosim", "pbsim3-fragments"]),
+    default=None,
+    help="nanosim: NanoSim genomic reads. pbsim3-fragments: sampled fragments through "
+    "pbsim3 with per-read truth ({base}_read_truth.tsv.gz) and optional --read-profile. "
+    "Default: pbsim3-fragments with --read-profile or when the config sets "
+    "read_simulation.simulator to ont-fragments, otherwise nanosim.",
+)
+@click.option("--n-reads", type=int, default=None, help="pbsim3-fragments: number of reads.")
+@click.option(
+    "--read-length-median", type=float, default=None, help="pbsim3-fragments: median read length."
+)
+@click.option(
+    "--read-length-sigma", type=float, default=None, help="pbsim3-fragments: log-normal sigma."
+)
+@click.option(
+    "--flank-fasta",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="pbsim3-fragments: FASTA with 'left'/'right' records added around each haplotype.",
+)
+@read_profile_option
+@no_align_option
 @shared_read_options
 @click.pass_context
 @cli_error_handler
-def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, track_read_source):
+def ont(
+    ctx,
+    input_fastas,
+    out_dir,
+    out_base,
+    coverage,
+    min_read_length,
+    seed,
+    track_read_source,
+    no_align,
+    simulator,
+    n_reads,
+    read_length_median,
+    read_length_sigma,
+    flank_fasta,
+    read_profile,
+):
     """Simulate Oxford Nanopore long reads from one or more FASTA files.
 
     Supports batch processing following Unix philosophy:
@@ -329,6 +378,7 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     from ...config import load_config_raw
 
     config = load_config_raw(str(ctx.obj["config_path"]))
+    simulator = resolve_ont_simulator(config, simulator, read_profile)
     _setup_read_config(config, "ont", coverage, seed, seed_config_key="nanosim_params")
 
     from typing import cast
@@ -338,13 +388,35 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     if "nanosim_params" not in config:
         config["nanosim_params"] = {}
     ns = cast(NanosimConfig, config["nanosim_params"])
-    ns["min_read_length"] = min_read_length
+    # Precedence: CLI flag > config value > built-in default.
+    if min_read_length is not None:
+        ns["min_read_length"] = min_read_length
+    elif ns.get("min_read_length") is None:
+        ns["min_read_length"] = DEFAULT_ONT_MIN_READ_LENGTH
     # Propagate CLI coverage to nanosim_params where the ONT backend reads it.
     # Only overwrite if CLI provided a value or config lacks ONT-specific coverage.
     if coverage is not None:
         ns["coverage"] = coverage
     elif "coverage" not in ns:
         ns["coverage"] = config["read_simulation"]["coverage"]
+
+    if simulator == "pbsim3-fragments":
+        config = apply_cli_read_model(config, read_profile, "ont")
+        config["read_simulation"]["simulator"] = "ont-fragments"
+        fragment = {
+            "n_reads": n_reads,
+            "length_median": read_length_median,
+            "length_sigma": read_length_sigma,
+            "flank_fasta": flank_fasta,
+            "seed": seed,
+        }
+        config["ont_fragment_params"] = {
+            **config.get("ont_fragment_params", {}),
+            **{k: v for k, v in fragment.items() if v is not None},
+        }
+    elif read_profile:
+        raise click.ClickException("--read-profile requires --simulator pbsim3-fragments")
+    apply_tracking_and_alignment(config, track_read_source=False, no_align=no_align)
 
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_ont_reads", "ONT", track_read_source
@@ -389,6 +461,7 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     default=None,
     help="Number of passes per molecule for multi-pass CLR simulation (>=2, overrides config if provided).",
 )
+@no_align_option
 @shared_read_options
 @click.pass_context
 @cli_error_handler
@@ -406,6 +479,7 @@ def pacbio(
     threads,
     seed,
     track_read_source,
+    no_align,
 ):
     """Simulate PacBio HiFi reads from one or more FASTA files.
 
@@ -427,25 +501,26 @@ def pacbio(
     Examples:
       # Single file with standard HiFi settings (Q20)
       muconeup --config X reads pacbio sample.001.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --out-base my_hifi
 
       # Multiple files with high-accuracy HiFi (Q30)
       muconeup --config X reads pacbio sample.*.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --min-rq 0.999 --min-passes 5
 
       # Ultra-deep coverage simulation
       muconeup --config X reads pacbio sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --coverage 100 --pass-num 5
 
     \b
     Model Files:
       Download from: https://github.com/yukiteruono/pbsim3/tree/master/data
-      - QSHMM-SEQUEL.model: Sequel II chemistry
-      - QSHMM-RSII.model: RS II chemistry
-      - ERRHMM-SEQUEL.model: Alternative error model
+      - ERRHMM-SEQUEL.model: Sequel chemistry (--model-type errhmm)
+      - QSHMM-RSII.model: RS II chemistry (--model-type qshmm)
+      pbsim3 does not ship a QSHMM Sequel model; the model type must
+      match the model file.
 
     \b
     Quality Control:
@@ -472,6 +547,8 @@ def pacbio(
         min_rq=min_rq,
     )
 
+    apply_tracking_and_alignment(config, track_read_source=False, no_align=no_align)
+
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_pacbio_hifi", "PacBio HiFi", track_read_source
     )
@@ -492,7 +569,7 @@ def pacbio(
 )
 @click.option(
     "--pcr-preset",
-    type=click.Choice(["default", "no_bias"]),
+    type=click.Choice(sorted(VALID_PCR_PRESETS)),
     default=None,
     help="PCR bias preset profile (default: from config or 'default').",
 )
@@ -505,10 +582,12 @@ def pacbio(
 @click.option(
     "--platform",
     type=click.Choice(["pacbio", "ont"]),
-    default="pacbio",
-    show_default=True,
-    help="Sequencing platform for amplicon simulation.",
+    default=None,
+    help="Sequencing platform for amplicon simulation. Default: the read profile's "
+    "platform when a profile is used, otherwise pacbio.",
 )
+@read_profile_option
+@no_align_option
 @shared_read_options
 @click.pass_context
 @cli_error_handler
@@ -525,6 +604,8 @@ def amplicon(
     platform,
     seed,
     track_read_source,
+    read_profile,
+    no_align,
 ):
     """Simulate amplicon reads from one or more FASTA files.
 
@@ -556,7 +637,7 @@ def amplicon(
     Examples:
       # Basic PacBio amplicon simulation
       muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model
 
       # ONT amplicon simulation
       muconeup --config X reads amplicon --platform ont sample.fa \\
@@ -564,37 +645,45 @@ def amplicon(
 
       # High coverage with stochastic PCR bias
       muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --coverage 1000 --stochastic-pcr --seed 42
+
+      # Realistic R10 ONT amplicons with per-read truth (no alignment)
+      muconeup --config X reads amplicon --platform ont sample.fa \\
+        --read-profile ont_r10_sup_amplicon_v1 --no-align --seed 7
 
       # No PCR bias (equal coverage per allele)
       muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --pcr-preset no_bias
     """
     require_config(ctx)
 
-    # Reject --track-read-source early
-    if track_read_source:
-        raise click.ClickException(
-            "Read source tracking is not yet supported for amplicon simulation. "
-            "Remove --track-read-source to proceed."
-        )
-
     from ...config import load_config_raw
 
     config = load_config_raw(str(ctx.obj["config_path"]))
+    platform = resolve_amplicon_platform(config, platform, read_profile)
+    config = apply_cli_read_model(config, read_profile, platform)
     _setup_read_config(config, "amplicon", coverage, seed)
+    apply_tracking_and_alignment(config, track_read_source, no_align)
 
     if platform == "ont":
         config["read_simulation"]["simulator"] = "ont-amplicon"
     config["read_simulation"]["assay_type"] = "amplicon"
 
-    # Ensure amplicon_params exists
+    # Ensure amplicon_params has primers (a read profile can create the section
+    # through its PCR overlay, so check the primers themselves).
     if "amplicon_params" not in config:
         raise click.ClickException(
             "Missing amplicon_params section in config. "
             "Add forward_primer and reverse_primer to config.json."
+        )
+    missing = [
+        k for k in ("forward_primer", "reverse_primer") if k not in config["amplicon_params"]
+    ]
+    if missing:
+        raise click.ClickException(
+            f"Missing amplicon_params.{' and '.join(missing)} in config.json."
         )
 
     if platform == "ont":
@@ -617,5 +706,19 @@ def amplicon(
         out_base,
         "_amplicon",
         "Amplicon",
-        track_read_source=False,
+        track_read_source=False,  # truth comes from the molecule path, not the WGS tracker
     )
+
+
+@reads.command("profiles")
+def profiles() -> None:
+    """List built-in read profiles (use with --read-profile)."""
+    from ...read_simulator.read_profiles import list_builtin_profiles, load_read_profile
+
+    names = list_builtin_profiles()
+    if not names:
+        click.echo("No built-in read profiles installed.")
+        return
+    for name in names:
+        profile = load_read_profile(name)
+        click.echo(f"{name}\t{profile.platform}\t{profile.calibration}\t{profile.description}")

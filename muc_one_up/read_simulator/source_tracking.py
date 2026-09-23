@@ -9,6 +9,7 @@ VNTR-aware pipelines.
 Key Components:
     build_coordinate_map: Build a repeat coordinate map from a haplotype chain
     ReadSourceTracker: Annotate reads and write manifests/coordinate maps
+    companion_stats_fields: Stats JSON fields read by from_companion_files
 
 Data Models:
     RepeatRegion: A single repeat unit with coordinates and mutation status
@@ -23,10 +24,11 @@ from __future__ import annotations
 import gzip
 import json
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
-from ..type_defs import RepeatUnit
+from ..type_defs import HaplotypeResult, MutationTarget, RepeatUnit
 
 logger = logging.getLogger(__name__)
 
@@ -300,7 +302,7 @@ class ReadSourceTracker:
         config: dict,
         mutation_positions: list | None = None,
         mutation_name: str | None = None,
-        applied_snp_info: list | None = None,
+        applied_snp_info: Mapping[int, list] | Sequence[list] | None = None,
         reference_assembly: str | None = None,
     ) -> ReadSourceTracker:
         """Build a tracker from simulation results and config.
@@ -313,7 +315,8 @@ class ReadSourceTracker:
             config: Configuration dict with 'repeats', 'constants', 'reference_assembly'.
             mutation_positions: List of MutationTarget objects (or None).
             mutation_name: Mutation name string (e.g. "dupC"), or None.
-            applied_snp_info: List of SNP info lists, indexed by haplotype (0-based).
+            applied_snp_info: SNP info per 0-based haplotype index, as the mapping returned
+                by ``integrate_snps_unified`` or a list indexed by haplotype.
             reference_assembly: Override for reference assembly (defaults to config value).
 
         Returns:
@@ -346,9 +349,14 @@ class ReadSourceTracker:
         # Build SNP info dict (0-based haplotype indices)
         snp_info_dict: dict[int, list[dict[str, object]]] = {}
         if applied_snp_info:
-            for i, snp_list in enumerate(applied_snp_info):
+            items = (
+                applied_snp_info.items()
+                if isinstance(applied_snp_info, Mapping)
+                else enumerate(applied_snp_info)
+            )
+            for i, snp_list in items:
                 if snp_list:
-                    snp_info_dict[i] = snp_list
+                    snp_info_dict[int(i)] = list(snp_list)
 
         return cls(
             repeat_chains=repeat_chains,
@@ -581,3 +589,38 @@ class ReadSourceTracker:
             mutation_name=mutation_name,
             snp_info=snp_info if snp_info else None,
         )
+
+
+def companion_stats_fields(
+    results: list[HaplotypeResult],
+    config: dict[str, Any],
+    mutation_positions: list[MutationTarget] | None = None,
+    mutation_name: str | None = None,
+) -> dict[str, Any]:
+    """Build the simulation_stats.json fields read by ``from_companion_files``.
+
+    Args:
+        results: Haplotype results whose chains the stats file describes.
+        config: Configuration dict providing 'repeats' and 'constants'.
+        mutation_positions: Applied mutation targets (1-based), if any.
+        mutation_name: Name of the applied mutation, if any.
+
+    Returns:
+        Dict with 'haplotypes', 'config' and 'mutation_details' keys.
+    """
+    targets = [[mt.haplotype_index, mt.repeat_index] for mt in mutation_positions or []]
+    mutation_details: dict[str, Any] = {}
+    if mutation_name and targets:
+        mutation_details = {"mutation_name": mutation_name, "targets": targets}
+
+    return {
+        "haplotypes": {
+            f"haplotype_{i}": {"repeat_chain": "-".join(str(ru) for ru in hr.chain)}
+            for i, hr in enumerate(results, start=1)
+        },
+        "config": {
+            "repeats": config.get("repeats", {}),
+            "constants": config.get("constants", {}),
+        },
+        "mutation_details": mutation_details,
+    }

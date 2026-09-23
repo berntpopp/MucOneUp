@@ -163,6 +163,7 @@ nav:
   - Guides:
     - Simulation: guides/simulation.md
     - Amplicon Simulation: guides/amplicon-simulation.md
+    - Realistic Truth-Tracked Reads: guides/realistic-read-simulation.md
     - VNTR Capture Efficiency: guides/vntr-capture-efficiency.md
     - Toxic Protein Detection: guides/toxic-protein-detection.md
     - Read Source Tracking: guides/read-source-tracking.md

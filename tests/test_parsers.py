@@ -6,6 +6,9 @@ import csv
 import gzip
 from pathlib import Path
 
+import pytest
+
+from muc_one_up.exceptions import ReadSimulationError
 from muc_one_up.read_simulator.parsers.illumina_parser import (
     parse_illumina_reads,
     write_fragment_origins,
@@ -49,6 +52,23 @@ class TestONTParser:
         fastq.write_text("@chr1_500_aligned_0_F_10_100_5\nACGTACGT\n+\nIIIIIIII\n")
         origins = parse_nanosim_reads(str(fastq), haplotype_map=2)
         assert origins[0].haplotype == 2
+
+    def test_parse_nanosim_hyphenated_haplotype(self, tmp_path):
+        """NanoSim renames haplotype_2 to haplotype-2 (issue #102)."""
+        fastq = tmp_path / "reads.fastq"
+        fastq.write_text("@haplotype-2_1234_aligned_5_R_0_4000_0\nACGTACGT\n+\nIIIIIIII\n")
+        origins = parse_nanosim_reads(str(fastq), haplotype_map=None)
+        assert len(origins) == 1
+        assert origins[0].haplotype == 2
+        assert origins[0].ref_start == 1234
+        assert origins[0].strand == "-"
+
+    def test_unparseable_haplotype_raises(self, tmp_path):
+        """Reads without a haplotype reference must not default to haplotype 1."""
+        fastq = tmp_path / "reads.fastq"
+        fastq.write_text("@chr1_500_aligned_0_F_10_100_5\nACGTACGT\n+\nIIIIIIII\n")
+        with pytest.raises(ReadSimulationError, match="chr1_500_aligned"):
+            parse_nanosim_reads(str(fastq), haplotype_map=None)
 
     def test_multiple_reads(self, tmp_path):
         fastq = tmp_path / "reads.fastq"

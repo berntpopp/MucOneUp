@@ -38,7 +38,7 @@ muconeup --config config.json simulate \
 # 2a. PacBio amplicon reads (default)
 muconeup --config config.json reads amplicon \
   output/sample.001.simulated.fa \
-  --model-file /path/to/QSHMM-RSII.model \
+  --model-type qshmm --model-file /path/to/QSHMM-RSII.model \
   --coverage 500 --seed 42
 
 # 2b. ONT amplicon reads
@@ -97,12 +97,15 @@ Use `--platform` to choose between PacBio and ONT amplicon simulation:
 ```bash
 # PacBio HiFi (default)
 muconeup --config config.json reads amplicon sample.fa \
-  --model-file /path/to/QSHMM-SEQUEL.model
+  --model-type errhmm --model-file /path/to/ERRHMM-SEQUEL.model
 
 # Oxford Nanopore
 muconeup --config config.json reads amplicon --platform ont sample.fa \
   --model-file /path/to/QSHMM-ONT-HQ.model
 ```
+
+!!! note "Model files"
+    Models are obtained from pbsim3's [`data/` directory](https://github.com/yukiteruono/pbsim3/tree/master/data) (e.g. `ERRHMM-SEQUEL`, `ERRHMM-ONT`, `QSHMM-RSII`, `QSHMM-ONT`, `QSHMM-ONT-HQ`). pbsim3 does not ship a QSHMM Sequel model; use `ERRHMM-SEQUEL.model` with `--model-type errhmm`. The model type must match the model file.
 
 Stages 1-4 (extraction, PCR bias, template generation) are shared. The platforms differ in read generation and alignment:
 
@@ -112,7 +115,7 @@ Stages 1-4 (extraction, PCR bias, template generation) are shared. The platforms
 | pbsim3 pass_num | 3+ (multi-pass CLR) | 1 (single-pass) |
 | Consensus | CCS (multi-pass -> HiFi) | None (skip) |
 | minimap2 preset | `map-hifi` | `map-ont` |
-| Error model | `QSHMM-SEQUEL.model` etc. | `QSHMM-ONT-HQ.model` etc. |
+| Error model | `ERRHMM-SEQUEL.model` (errhmm), `QSHMM-RSII.model` (qshmm) | `QSHMM-ONT-HQ.model` etc. |
 | Output suffix | `*_amplicon_hifi.bam` | `*_amplicon_ont.bam` |
 | Tool dependencies | pbsim3, ccs, samtools, minimap2 | pbsim3, samtools, minimap2 |
 
@@ -179,6 +182,7 @@ With the `default` preset (calibrated to Madritsch et al. 2026):
 |--------|-------------|----------|
 | `default` | KOD HS, 25 cycles, calibrated to ~70% bias at 1.5kb difference | Realistic amplicon benchmarking |
 | `no_bias` | Equal 50/50 split regardless of length | Control experiments |
+| `madritsch2025_r10` | α = 9.27e-5, 25 cycles; reproduces ln(long/short) ≈ −0.056 per repeat unit measured in 9 R10.4.1 MUC1 amplicon libraries (PRJEB92208) | Realistic ONT amplicon benchmarking |
 
 ```bash
 # Use default preset (realistic PCR bias)
@@ -301,7 +305,7 @@ Options:
   --platform [pacbio|ont]    Sequencing platform (default: pacbio)
   --model-file PATH         pbsim3 model file (overrides config)
   --model-type [qshmm|errhmm]  pbsim3 model type (overrides config)
-  --pcr-preset [default|no_bias]  PCR bias preset
+  --pcr-preset [default|madritsch2025_r10|no_bias]  PCR bias preset
   --stochastic-pcr          Enable stochastic PCR bias
   --coverage INT             Total template molecules (default: 30)
   --seed INT                 Random seed for reproducibility

@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "name": "ont_r10_sup_amplicon_v1",
+  "platform": "ont",
+  "calibration": "empirical",
+  "description": "ONT R10.4.1 sup MUC1 PCR amplicons (PRJEB92208-like): strand mix, PCR smear/chimeras/concatemers, off-target shorts, strand-aware homopolymer stutter, calibrated PCR length bias",
+  "provenance": {
+    "source": "Aggregate statistics from 9 public ONT R10.4.1 MUC1 amplicon libraries, ENA PRJEB92208 (Madritsch et al. 2025, Sci Rep, doi:10.1038/s41598-025-30441-3). No reads or sequences are included.",
+    "derived_by": "MucOneSpan deep review 2026-09-23 (read-level profiling against per-sample POA consensus); errors and stutter derived and validated with helpers/calibrate_read_profile.py --engine empirical",
+    "targets": {
+      "vntr_error_per_base_median": {
+        "mismatch": 0.00701,
+        "insertion": 0.0067,
+        "deletion": 0.00767,
+        "total": 0.02138
+      },
+      "smear_fraction_of_spanning_median": 0.2361,
+      "smear_deletion_start_rel_pos": {
+        "p25": 0.15,
+        "p50": 0.25,
+        "p75": 0.45,
+        "mean": 0.334
+      },
+      "between_allele_fraction_median": 0.0229,
+      "multi_anchor_fraction_median": 0.024,
+      "off_target_fraction_median": 0.3002,
+      "off_target_read_len_median": 367,
+      "pcr_ln_long_short_per_unit": -0.056
+    },
+    "calibration_report": {
+      "engine": "empirical",
+      "target_total_error": 0.02138,
+      "validation_round1": {
+        "total_error": 0.02257,
+        "max_abs_residual_per_key": {
+          "C3|+": 0.0109,
+          "C3|-": 0.0109,
+          "C4|+": 0.0042,
+          "C4|-": 0.0063,
+          "C5|+": 0.0241,
+          "C5|-": 0.0054,
+          "C6|+": 0.0052,
+          "C6|-": 0.0077,
+          "C7|+": 0.0079,
+          "C7|-": 0.0103,
+          "G3|+": 0.003,
+          "G3|-": 0.0038,
+          "G4|+": 0.0053,
+          "G4|-": 0.0282
+        }
+      }
+    },
+    "uncovered_runs": "Homopolymer keys with fewer than 2000 observations in the targets (for example A/T runs >= 3) have no stutter entry and receive no homopolymer length errors."
+  },
+  "config_overrides": {
+    "amplicon_params": {
+      "pcr_bias": {
+        "preset": "madritsch2025_r10"
+      }
+    }
+  },
+  "molecules": {
+    "forward_frac": 0.5,
+    "smear_rate": 0.24,
+    "smear_junction_beta": [
+      1.8,
+      3.6
+    ],
+    "smear_min_keep": 0.2,
+    "chimera_rate": 0.023,
+    "concatemer_rate": 0.024,
+    "offtarget_frac": 0.3,
+    "offtarget_median_bp": 367,
+    "offtarget_sigma": 0.3,
+    "stutter": {
+      "C3|+": {
+        "-2": 0.00246,
+        "-1": 0.013,
+        "0": 0.9614,
+        "1": 0.0163,
+        "2": 0.00588,
+        "3": 0.00096
+      },
+      "C3|-": {
+        "-3": 0.00116,
+        "-2": 0.00348,
+        "-1": 0.03304,
+        "0": 0.95362,
+        "1": 0.00757,
+        "2": 0.00113
+      },
+      "C4|+": {
+        "-3": 0.00055,
+        "-2": 0.01378,
+        "-1": 0.04361,
+        "0": 0.91688,
+        "1": 0.02362,
+        "2": 0.00097,
+        "3": 0.00059
+      },
+      "C4|-": {
+        "-3": 0.00064,
+        "-2": 0.00304,
+        "-1": 0.02771,
+        "0": 0.96151,
+        "1": 0.0071
+      },
+      "C5|+": {
+        "-3": 0.00499,
+        "-2": 0.02792,
+        "-1": 0.06642,
+        "0": 0.85723,
+        "1": 0.03303,
+        "2": 0.00735,
+        "3": 0.00306
+      },
+      "C5|-": {
+        "-2": 0.00134,
+        "-1": 0.01428,
+        "0": 0.97304,
+        "1": 0.00856,
+        "2": 0.00278
+      },
+      "C6|+": {
+        "-3": 0.01242,
+        "-2": 0.01272,
+        "-1": 0.10854,
+        "0": 0.79022,
+        "1": 0.06414,
+        "2": 0.00957,
+        "3": 0.00239
+      },
+      "C6|-": {
+        "-2": 0.00213,
+        "-1": 0.04647,
+        "0": 0.93158,
+        "1": 0.01761,
+        "2": 0.00139,
+        "3": 0.00082
+      },
+      "C7|+": {
+        "-3": 0.01583,
+        "-2": 0.09226,
+        "-1": 0.27069,
+        "0": 0.52665,
+        "1": 0.07657,
+        "2": 0.01008,
+        "3": 0.00792
+      },
+      "C7|-": {
+        "-3": 0.00098,
+        "-2": 0.00575,
+        "-1": 0.06988,
+        "0": 0.88967,
+        "1": 0.03001,
+        "2": 0.0027,
+        "3": 0.00101
+      },
+      "G3|+": {
+        "-3": 0.00076,
+        "-2": 0.00604,
+        "-1": 0.02234,
+        "0": 0.94941,
+        "1": 0.0208,
+        "2": 0.00065
+      },
+      "G3|-": {
+        "-3": 0.0009,
+        "-2": 0.00208,
+        "-1": 0.03893,
+        "0": 0.92692,
+        "1": 0.02835,
+        "2": 0.00282
+      },
+      "G4|+": {
+        "-2": 0.00174,
+        "-1": 0.02265,
+        "0": 0.96266,
+        "1": 0.01295
+      },
+      "G4|-": {
+        "-3": 0.00252,
+        "-2": 0.01084,
+        "-1": 0.04817,
+        "0": 0.87968,
+        "1": 0.04711,
+        "2": 0.01168
+      }
+    }
+  },
+  "errors": {
+    "mismatch_rate": 0.008272,
+    "insertion_rate": 0.005619,
+    "deletion_rate": 0.004558,
+    "insertion_len_pmf": {
+      "1": 0.8563,
+      "2": 0.1022,
+      "3": 0.0282,
+      "4": 0.0083,
+      "5": 0.003,
+      "6": 0.001,
+      "7": 0.0005,
+      "8": 0.0002,
+      "9": 0.0001,
+      "10": 0.0002
+    },
+    "deletion_len_pmf": {
+      "1": 0.80352,
+      "2": 0.15368,
+      "3": 0.0254,
+      "4": 0.0122,
+      "5": 0.0033,
+      "6": 0.001,
+      "7": 0.0004,
+      "8": 0.0002,
+      "10": 0.0003
+    },
+    "read_error_sigma": 0.499
+  }
+}

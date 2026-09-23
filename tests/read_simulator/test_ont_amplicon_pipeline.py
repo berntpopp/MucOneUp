@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 import pytest
 
-from muc_one_up.exceptions import ReadSimulationError
 from muc_one_up.read_simulator.amplicon_common import AmpliconPrep
 
 
@@ -70,7 +69,7 @@ class TestOntAmpliconPipeline:
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.convert_bam_to_fastq")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.align_reads_with_minimap2")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
-    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_intermediates")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_unless_kept")
     def test_calls_pbsim3_with_pass_num_1(
         self,
         mock_cleanup,
@@ -115,7 +114,7 @@ class TestOntAmpliconPipeline:
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.convert_bam_to_fastq")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.align_reads_with_minimap2")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
-    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_intermediates")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_unless_kept")
     def test_uses_map_ont_preset(
         self,
         mock_cleanup,
@@ -154,28 +153,67 @@ class TestOntAmpliconPipeline:
         mock_align.assert_called_once()
         assert mock_align.call_args.kwargs["preset"] == "map-ont"
 
-    def test_rejects_source_tracker(self, ont_amplicon_config, tmp_path):
-        """Source tracking not supported — must raise."""
-        from muc_one_up.read_simulator.ont_amplicon_pipeline import (
-            simulate_ont_amplicon_pipeline,
-        )
+    @pytest.mark.parametrize(
+        "tracker,read_model,expect_truth_path",
+        [
+            (None, None, False),
+            ("tracker", None, True),
+            (None, {"profile": "PROFILE"}, True),
+        ],
+    )
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.simulate_truth_tracked_amplicons")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline._simulate_legacy_allele_fastqs")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
+    def test_routes_truth_tracked_path(
+        self,
+        mock_metadata,
+        mock_legacy,
+        mock_truth,
+        mock_prep,
+        tracker,
+        read_model,
+        expect_truth_path,
+        ont_amplicon_config,
+        tmp_path,
+    ):
+        """Profile or --track-read-source selects the truth path; otherwise legacy (#100)."""
+        import json
 
-        fasta = tmp_path / "test.fa"
+        if read_model is not None:
+            profile = tmp_path / "p.json"
+            profile.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "name": "p",
+                        "platform": "ont",
+                        "molecules": {"forward_frac": 0.5},
+                    }
+                )
+            )
+            ont_amplicon_config["read_model"] = {"profile": str(profile)}
+        mock_prep.return_value = _make_prep(tmp_path)
+        mock_legacy.return_value = []
+        fasta = tmp_path / "input.fa"
         fasta.write_text(">seq\nACGT\n")
 
-        with pytest.raises(ReadSimulationError, match="source tracking"):
-            simulate_ont_amplicon_pipeline(
-                ont_amplicon_config,
-                str(fasta),
-                source_tracker="not_none",
-            )
+        from muc_one_up.read_simulator.ont_amplicon_pipeline import simulate_ont_amplicon_pipeline
+
+        simulate_ont_amplicon_pipeline(ont_amplicon_config, str(fasta), source_tracker=tracker)
+        assert mock_truth.called is expect_truth_path
+        assert mock_legacy.called is not expect_truth_path
+        if expect_truth_path:
+            model = mock_truth.call_args.args[1]
+            assert model.forward_frac == (0.5 if read_model else 1.0)
+            assert str(mock_truth.call_args.args[5]).endswith("_read_truth.tsv.gz")
 
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.run_pbsim3_template_simulation")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.convert_bam_to_fastq")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.align_reads_with_minimap2")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
-    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_intermediates")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_unless_kept")
     def test_warns_on_non_ont_model(
         self,
         mock_cleanup,
@@ -228,7 +266,7 @@ class TestOntAmpliconPipeline:
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.convert_bam_to_fastq")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.align_reads_with_minimap2")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
-    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_intermediates")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_unless_kept")
     def test_fastq_passthrough_skips_bam_conversion(
         self,
         mock_cleanup,
@@ -267,3 +305,53 @@ class TestOntAmpliconPipeline:
 
         # convert_bam_to_fastq should NOT have been called
         mock_convert.assert_not_called()
+
+
+class TestOntAmpliconErrorProfileConfig:
+    """#105: optional pbsim3 error-profile keys flow from ont_amplicon_params."""
+
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.run_pbsim3_template_simulation")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.convert_bam_to_fastq")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.align_reads_with_minimap2")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_unless_kept")
+    @pytest.mark.parametrize(
+        "extra,expected",
+        [
+            ({}, None),
+            ({"difference_ratio": "39:24:36"}, "39:24:36"),
+        ],
+    )
+    def test_error_profile_forwarded(
+        self,
+        mock_cleanup,
+        mock_metadata,
+        mock_align,
+        mock_convert,
+        mock_pbsim3,
+        mock_prep,
+        extra,
+        expected,
+        ont_amplicon_config,
+        tmp_path,
+    ):
+        ont_amplicon_config["ont_amplicon_params"].update(extra)
+        mock_prep.return_value = _make_prep(tmp_path)
+        mock_pbsim3.side_effect = lambda **kw: [kw["output_prefix"] + ".bam"]
+
+        def convert_side_effect(**kw):
+            Path(kw["output_fastq"]).write_text("@read\nACGT\n+\nIIII\n")
+            return kw["output_fastq"]
+
+        mock_convert.side_effect = convert_side_effect
+        mock_align.return_value = str(tmp_path / "aligned.bam")
+        fasta = tmp_path / "input.fa"
+        fasta.write_text(">seq\nACGT\n")
+
+        from muc_one_up.read_simulator.ont_amplicon_pipeline import simulate_ont_amplicon_pipeline
+
+        simulate_ont_amplicon_pipeline(ont_amplicon_config, str(fasta), human_reference=str(fasta))
+        for call in mock_pbsim3.call_args_list:
+            assert call.kwargs["difference_ratio"] == expected
+            assert "accuracy_sd" not in call.kwargs  # pbsim3 has no --accuracy-sd (#115)

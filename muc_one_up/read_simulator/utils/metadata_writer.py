@@ -25,11 +25,103 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from ...version import __version__
+from ..constants import DEFAULT_PCR_PRESET
 from .tool_version import capture_tool_versions, log_tool_versions
 
 logger = logging.getLogger(__name__)
+
+#: Simulator names that denote targeted amplicon simulation.
+_AMPLICON_SIMULATORS = frozenset({"amplicon", "ont-amplicon"})
+
+#: PCR bias keys that change the model parameters (``stochastic`` does not).
+_PCR_MODEL_KEYS = frozenset({"e_max", "alpha", "cycles", "denaturation_time"})
+
+MetadataRows = list[tuple[str, Any]]
+
+
+def _is_amplicon_run(config: dict) -> bool:
+    """Return True when the config describes an amplicon simulation."""
+    rs_cfg = config.get("read_simulation", {})
+    return rs_cfg.get("assay_type") == "amplicon" or rs_cfg.get("simulator") in _AMPLICON_SIMULATORS
+
+
+def _platform_rows(config: dict, platform: str) -> MetadataRows:
+    """Return whole-genome/standard simulation parameters for *platform*."""
+    if platform == "Illumina":
+        return [("Coverage", config.get("read_simulation", {}).get("coverage"))]
+    if platform == "ONT":
+        ont_cfg = config.get("nanosim_params", {})
+        return [
+            ("Coverage", ont_cfg.get("coverage")),
+            ("Min_read_length", ont_cfg.get("min_read_length")),
+            ("Max_read_length", ont_cfg.get("max_read_length")),
+        ]
+    if platform == "PacBio":
+        pb_cfg = config.get("pacbio_params", {})
+        return [("Coverage", pb_cfg.get("coverage")), ("Pass_num", pb_cfg.get("pass_num"))]
+    return []
+
+
+def _fragment_rows(config: dict) -> MetadataRows:
+    """Return the settings used by ``reads ont --simulator pbsim3-fragments``."""
+    from ..ont_fragment_pipeline import _fragment_settings
+
+    _, fragments, params = _fragment_settings(config)
+    rows: MetadataRows = [
+        ("Fragment_reads", params.get("n_reads")),
+        ("Coverage", None if params.get("n_reads") else config["read_simulation"].get("coverage")),
+        ("Fragment_length_median", fragments.length_median),
+        ("Fragment_length_sigma", fragments.length_sigma),
+        ("Flank_fasta", params.get("flank_fasta")),
+    ]
+    return rows
+
+
+def _read_model_rows(config: dict) -> MetadataRows:
+    """Return the active read profile identity (empty for legacy simulation)."""
+    read_model = config.get("read_model") or {}
+    return [
+        ("Read_profile", read_model.get("name")),
+        ("Read_profile_sha256", read_model.get("sha256")),
+    ]
+
+
+def _pcr_bias_rows(pcr_cfg: dict) -> MetadataRows:
+    """Return the PCR bias preset label and stochastic flag."""
+    from ..pcr_bias import PCRBiasModel
+
+    preset = pcr_cfg.get("preset")
+    if preset is None:
+        preset = "custom" if _PCR_MODEL_KEYS & pcr_cfg.keys() else DEFAULT_PCR_PRESET
+    return [
+        ("PCR_bias_preset", preset),
+        ("PCR_stochastic", PCRBiasModel.from_config(pcr_cfg).stochastic),
+    ]
+
+
+def _amplicon_rows(config: dict, platform: str) -> MetadataRows:
+    """Return amplicon parameters (template count, model, PCR bias).
+
+    Template molecules follow the amplicon pipelines: ``read_simulation.coverage``,
+    falling back to ``pacbio_params.coverage`` for PacBio.
+    """
+    is_pacbio = platform == "PacBio"
+    params = config.get("pacbio_params" if is_pacbio else "ont_amplicon_params", {})
+    templates = config.get("read_simulation", {}).get("coverage")
+    if templates is None and is_pacbio:
+        templates = params.get("coverage")
+    rows: MetadataRows = [
+        ("Template_molecules", templates),
+        ("Model_type", params.get("model_type")),
+        ("Model_file", params.get("model_file")),
+    ]
+    if is_pacbio:
+        rows.append(("Pass_num", params.get("pass_num")))
+    pcr_cfg = config.get("amplicon_params", {}).get("pcr_bias") or {}
+    return rows + _pcr_bias_rows(pcr_cfg)
 
 
 def write_metadata_file(
@@ -40,6 +132,8 @@ def write_metadata_file(
     end_time: datetime,
     platform: str,
     tools_used: list[str] | None = None,
+    *,
+    extra_rows: MetadataRows | None = None,
 ) -> str:
     """
     Write TSV metadata file with provenance information.
@@ -51,6 +145,14 @@ def write_metadata_file(
         start_time: Pipeline start timestamp
         end_time: Pipeline end timestamp
         platform: Sequencing platform ("Illumina", "ONT", or "PacBio")
+        tools_used: Tool keys whose versions are captured (default: all tools)
+        extra_rows: Additional (key, value) rows from the pipeline, e.g. the
+            ``Read_truth`` manifest of a truth-tracked run
+
+    For amplicon runs (``read_simulation.assay_type == "amplicon"`` or an
+    amplicon simulator), amplicon fields (Template_molecules, Model_type,
+    Model_file, Pass_num for PacBio, PCR_bias_preset, PCR_stochastic) replace
+    the whole-genome Coverage/read-length fields.
 
     Returns:
         Path to created metadata file (str)
@@ -133,35 +235,17 @@ def write_metadata_file(
         if "seed" in config:
             f.write(f"Seed\t{config['seed']}\n")
 
-        # Platform-specific parameters (skip if N/A)
-        from typing import cast
-
-        from ...type_defs import NanosimConfig, PacbioConfig, ReadSimulationConfig
-
-        if platform == "Illumina":
-            read_cfg = cast(ReadSimulationConfig, config.get("read_simulation", {}))
-            coverage_val: int | float | None = read_cfg.get("coverage")
-            if coverage_val is not None:
-                f.write(f"Coverage\t{coverage_val}\n")
-        elif platform == "ONT":
-            ont_cfg = cast(NanosimConfig, config.get("nanosim_params", {}))
-            coverage_val = ont_cfg.get("coverage")
-            min_len = ont_cfg.get("min_read_length")
-            max_len = ont_cfg.get("max_read_length")
-            if coverage_val is not None:
-                f.write(f"Coverage\t{coverage_val}\n")
-            if min_len is not None:
-                f.write(f"Min_read_length\t{min_len}\n")
-            if max_len is not None:
-                f.write(f"Max_read_length\t{max_len}\n")
-        elif platform == "PacBio":
-            pb_cfg = cast(PacbioConfig, config.get("pacbio_params", {}))
-            coverage_val = pb_cfg.get("coverage")
-            pass_num = pb_cfg.get("pass_num")
-            if coverage_val is not None:
-                f.write(f"Coverage\t{coverage_val}\n")
-            if pass_num is not None:
-                f.write(f"Pass_num\t{pass_num}\n")
+        # Platform- or assay-specific parameters (skip if N/A)
+        if _is_amplicon_run(config):
+            rows = _amplicon_rows(config, platform)
+        elif config.get("read_simulation", {}).get("simulator") == "ont-fragments":
+            rows = _fragment_rows(config)
+        else:
+            rows = _platform_rows(config, platform)
+        rows += _read_model_rows(config) + list(extra_rows or [])
+        for key, value in rows:
+            if value is not None:
+                f.write(f"{key}\t{value}\n")
 
         # Assay type (e.g., "amplicon") — written when present in config
         assay = config.get("read_simulation", {}).get("assay_type")

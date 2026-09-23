@@ -239,6 +239,7 @@ class TestCreatePipelineMetadata:
             end_time,
             "Illumina",
             tools_used,
+            extra_rows=None,
         )
         assert result == str(output_dir / "base_metadata.tsv")
 
@@ -287,3 +288,23 @@ class TestCleanupIntermediates:
             cleanup_intermediates([str(target)])
 
         assert any("permission denied" in record.message for record in caplog.records)
+
+
+class TestCleanupUnlessKept:
+    """keep_intermediate_files is honoured uniformly by amplicon pipelines (#110)."""
+
+    def test_removes_by_default(self, tmp_path):
+        from muc_one_up.read_simulator.pipeline_utils import cleanup_unless_kept
+
+        f = tmp_path / "x.tmp"
+        f.write_text("x")
+        cleanup_unless_kept({}, [str(f)])
+        assert not f.exists()
+
+    def test_keeps_when_configured(self, tmp_path):
+        from muc_one_up.read_simulator.pipeline_utils import cleanup_unless_kept
+
+        f = tmp_path / "x.tmp"
+        f.write_text("x")
+        cleanup_unless_kept({"read_simulation": {"keep_intermediate_files": True}}, [str(f)])
+        assert f.exists()

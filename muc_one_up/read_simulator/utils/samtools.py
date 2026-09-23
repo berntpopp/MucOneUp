@@ -20,6 +20,22 @@ class SamtoolsError(Exception):
     pass
 
 
+def subsample_args(fraction: float, seed: int) -> list[str]:
+    """Build ``samtools view`` arguments for seeded fractional subsampling.
+
+    Uses ``--subsample``/``--subsample-seed`` (samtools >= 1.13) instead of the
+    deprecated ``-s SEED.FRAC`` form, which newer samtools versions misread.
+
+    Args:
+        fraction: Fraction of templates to keep (0.0-1.0).
+        seed: Random seed for reproducible subsampling.
+
+    Returns:
+        Argument list to splice into a ``samtools view`` command.
+    """
+    return ["--subsample", str(fraction), "--subsample-seed", str(seed)]
+
+
 def check_samtools_available() -> bool:
     """
     Check if samtools is available in PATH.
@@ -80,7 +96,7 @@ def extract_reads_by_region(
 
 def downsample_bam(input_bam: Path, output_bam: Path, fraction: float, seed: int = 42) -> None:
     """
-    Downsample BAM file using samtools view -s.
+    Downsample BAM file using samtools view --subsample.
 
     Uses hash-based sampling which preserves read pairs automatically.
 
@@ -99,17 +115,12 @@ def downsample_bam(input_bam: Path, output_bam: Path, fraction: float, seed: int
 
     logger.debug(f"Downsampling {input_bam} to {fraction:.3f} (seed={seed})")
 
-    # Format: SEED.FRACTION (e.g., 42.375)
-    fraction_str = str(fraction).lstrip("0.")
-    downsample_param = f"{seed}.{fraction_str}"
-
     try:
         run_command(
             [
                 "samtools",
                 "view",
-                "-s",
-                downsample_param,
+                *subsample_args(fraction, seed),
                 "-b",
                 str(input_bam),
                 "-o",

@@ -338,3 +338,32 @@ class TestNonZeroExitCodes:
         version = get_tool_version("pbsim", "pbsim3")
 
         assert version == "pbsim3 (installed)"
+
+
+class TestExpectedProbeFailures:
+    """Version probes of tools that exit non-zero must not log errors (#110)."""
+
+    @patch("muc_one_up.read_simulator.utils.tool_version.run_command")
+    @patch("muc_one_up.read_simulator.utils.tool_version.build_tool_command")
+    def test_probe_demotes_exit_failure_log_to_debug(self, mock_build_cmd, mock_run):
+        mock_build_cmd.return_value = ["pbsim"]
+        mock_run.return_value = _make_result(stdout="USAGE: pbsim [options]\n")
+
+        get_tool_version("pbsim", "pbsim3")
+
+        assert mock_run.call_args.kwargs["failure_log_level"] == logging.DEBUG
+
+    @patch("muc_one_up.read_simulator.utils.tool_version.run_command")
+    @patch("muc_one_up.read_simulator.utils.tool_version.build_tool_command")
+    def test_pbsim3_usage_on_stderr(self, mock_build_cmd, mock_run, caplog):
+        """pbsim 3.0.5 prints usage to stderr and exits 255 when run without args."""
+        mock_build_cmd.return_value = ["pbsim"]
+        mock_run.side_effect = ExternalToolError(
+            tool="command", exit_code=255, stderr="\nUSAGE: pbsim [options] \n", cmd="pbsim"
+        )
+
+        with caplog.at_level(logging.DEBUG):
+            version = get_tool_version("pbsim", "pbsim3")
+
+        assert version == "pbsim3 (installed)"
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]

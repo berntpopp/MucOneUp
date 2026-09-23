@@ -71,6 +71,15 @@ DEFAULT_PBSIM3_LENGTH_MIN: Final[int] = 5000
 DEFAULT_PBSIM3_LENGTH_MAX: Final[int] = 30000
 
 # =============================================================================
+# NanoSim (ONT) Constants
+# =============================================================================
+
+#: Built-in minimum read length for ``muconeup reads ont`` when neither the
+#: ``--min-read-length`` flag nor ``nanosim_params.min_read_length`` is set.
+#: Precedence: CLI flag > config value > this default.
+DEFAULT_ONT_MIN_READ_LENGTH: Final[int] = 100
+
+# =============================================================================
 # CCS (Circular Consensus Sequencing) Constants
 # =============================================================================
 
@@ -189,7 +198,7 @@ MAX_ACCURACY: Final[float] = 1.0
 DEFAULT_AMPLICON_TIMEOUT: Final[int] = 3600
 
 #: Valid PCR bias preset names.
-VALID_PCR_PRESETS: Final[set[str]] = {"default", "no_bias"}
+VALID_PCR_PRESETS: Final[set[str]] = {"default", "no_bias", "madritsch2025_r10"}
 
 #: Default PCR bias preset.
 DEFAULT_PCR_PRESET: Final[str] = "default"

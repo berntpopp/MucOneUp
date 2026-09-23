@@ -56,7 +56,8 @@ def get_tool_version(tool_cmd: str, tool_name: str) -> str:
 
     Special Cases:
         - bwa: Returns exit code 1, parses stderr
-        - pbsim3: NO version in output, returns "pbsim3 (installed)"
+        - pbsim3: no version query exists (pbsim 3.0.5 rejects --version and
+          prints usage to stderr with exit 255); returns "pbsim3 (installed)"
         - faToTwoBit: NO version info, returns "faToTwoBit (version unknown)"
         - pblat: Parses version from usage line ("v. 36x2")
         - NanoSim: Binary is "simulator.py", not "nanosim"
@@ -98,14 +99,12 @@ def get_tool_version(tool_cmd: str, tool_name: str) -> str:
         return "N/A"
 
     def parse_pbsim3(stdout: str, stderr: str) -> str:
-        """Parse pbsim3 version.
+        """Detect pbsim3 from its usage message.
 
-        CRITICAL: pbsim3 conda package provides "pbsim" binary with NO version in output!
-        Fallback: Return generic string since version not retrievable from tool itself.
+        pbsim3 offers no version query (no --version flag; usage has no version)
+        and prints usage to stderr, so presence is reported generically.
         """
-        # Check if this is pbsim output (usage message)
-        if "pbsim" in stdout.lower() or "USAGE: pbsim" in stdout:
-            # pbsim3 doesn't output version - return generic identifier
+        if "usage: pbsim" in f"{stdout}\n{stderr}".lower():
             return "pbsim3 (installed)"
         return "N/A"
 
@@ -182,7 +181,7 @@ def get_tool_version(tool_cmd: str, tool_name: str) -> str:
         # Run and capture output; some tools return non-zero (bwa, pbsim, faToTwoBit)
         # so we catch ExternalToolError and extract stdout/stderr from it.
         try:
-            result = run_command(cmd, capture=True, timeout=5)
+            result = run_command(cmd, capture=True, timeout=5, failure_log_level=logging.DEBUG)
             stdout = result.stdout or ""
             stderr = result.stderr or ""
         except ExternalToolError as e:

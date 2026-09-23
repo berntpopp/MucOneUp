@@ -5,9 +5,9 @@ Orchestrates the complete amplicon simulation workflow:
 2. Primer-based amplicon extraction per haplotype
 3. PCR bias coverage split computation
 4. Template FASTA generation (N copies per allele)
-5. PBSIM3 template mode simulation per allele
-6. CCS consensus generation
-7. BAM merge (diploid)
+5-7. Legacy: PBSIM3 template mode per allele, CCS, BAM merge, FASTQ.
+     Truth-tracked (read profile or --track-read-source): one molecule-model
+     pbsim3 + CCS run with renamed reads and a read truth manifest.
 8. Alignment to human reference (optional)
 """
 
@@ -23,11 +23,16 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .output_config import OutputConfig
 
-from ..exceptions import ExternalToolError, FileOperationError, ReadSimulationError
-from .amplicon_common import extract_and_prepare_amplicons
+from ..exceptions import ExternalToolError, FileOperationError
+from .amplicon_common import (
+    extract_and_prepare_amplicons,
+    simulate_truth_tracked_amplicons,
+    truth_tracked_model,
+)
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
+from .molecule_pipeline import PbsimRun, sequencer_for
 from .pipeline_utils import (
-    cleanup_intermediates,
+    cleanup_unless_kept,
     create_pipeline_metadata,
     resolve_pipeline_outputs,
 )
@@ -91,8 +96,9 @@ def simulate_amplicon_reads_pipeline(
         input_fa: Path to input FASTA (haploid or diploid reference).
         human_reference: Optional path to human reference for final alignment.
             If None, returns FASTQ instead of aligned BAM.
-        source_tracker: Read source tracker — not yet supported for amplicon mode.
-            Passing a non-None value raises RuntimeError.
+        source_tracker: When given (``--track-read-source``), reads are simulated
+            through the truth-tracked molecule path and a read truth manifest
+            ``{base}_read_truth.tsv.gz`` is written next to the reads.
         output_config: Optional OutputConfig controlling output file placement.
             If None, output is placed alongside the input FASTA.
 
@@ -101,15 +107,8 @@ def simulate_amplicon_reads_pipeline(
         otherwise FASTQ).
 
     Raises:
-        RuntimeError: If source_tracker is provided, or if any pipeline stage fails.
+        RuntimeError: If any pipeline stage fails.
     """
-    # Reject read-source tracking for v1
-    if source_tracker is not None:
-        raise ReadSimulationError(
-            "Read source tracking is not yet supported for amplicon simulation. "
-            "Remove --track-read-source to proceed."
-        )
-
     # Extract configuration
     from typing import cast
 
@@ -138,6 +137,9 @@ def simulate_amplicon_reads_pipeline(
     threads = pacbio_params.get("threads", 4)
     seed = pacbio_params.get("seed")
     accuracy_mean = pacbio_params.get("accuracy_mean", 0.85)
+    # accuracy_sd is deliberately not forwarded: pacbio_params.accuracy_sd configures
+    # WGS mode, and passing it here would change existing amplicon outputs.
+    difference_ratio = pacbio_params.get("difference_ratio")
 
     # Amplicon params
     forward_primer = amplicon_params["forward_primer"]
@@ -191,82 +193,59 @@ def simulate_amplicon_reads_pipeline(
             )
 
             intermediate_files.extend(prep.intermediate_files)
-            template_fastas = [str(t) for t in prep.allele_templates]
-
-            # STAGE 5: PBSIM3 template mode simulation
-            logging.info("STAGE 5: Running PBSIM3 template mode simulation")
-
-            clr_bam_groups: list[list[str]] = []
-            for i, template_fa in enumerate(template_fastas, 1):
-                prefix = str(temp_path / f"clr_hap{i}")
-                hap_seed = (seed + i) if seed is not None else None
-
-                bams = run_pbsim3_template_simulation(
+            hifi_fastq = str(output_dir / f"{output_base}_amplicon_hifi.fastq")
+            model = truth_tracked_model(config, source_tracker is not None)
+            truth_name = f"{output_base}_read_truth.tsv.gz"
+            if model is not None:
+                logging.info("STAGES 5-7: Truth-tracked molecule simulation (PacBio HiFi)")
+                run = PbsimRun(
                     pbsim3_cmd=pbsim3_cmd,
                     samtools_cmd=samtools_cmd,
-                    template_fasta=template_fa,
                     model_type=model_type,
                     model_file=model_file,
-                    output_prefix=prefix,
                     pass_num=pass_num,
                     accuracy_mean=accuracy_mean,
-                    seed=hap_seed,
-                )
-                clr_bam_groups.append(bams)
-                intermediate_files.extend(bams)
-                logging.info("  Haplotype %d: %d CLR BAMs", i, len(bams))
-
-            # STAGE 6: CCS consensus generation
-            logging.info("STAGE 6: Generating HiFi consensus with CCS")
-
-            hifi_bams = []
-            for i, clr_bams in enumerate(clr_bam_groups, 1):
-                for j, clr_bam in enumerate(clr_bams, 1):
-                    hifi_out = str(temp_path / f"hifi_hap{i}_{j:04d}.bam")
-                    hifi_bam = _simulate_haplotype_amplicon(
-                        clr_bam=clr_bam,
-                        ccs_cmd=ccs_cmd,
-                        output_path=hifi_out,
-                        min_passes=min_passes,
-                        min_rq=min_rq,
-                        threads=threads,
-                        seed=seed,
-                        hap_idx=i,
-                        bam_idx=j,
-                    )
-                    hifi_bams.append(hifi_bam)
-                    intermediate_files.append(hifi_bam)
-
-            # STAGE 7: Merge HiFi BAMs
-            hifi_merged = str(output_dir / f"{output_base}_amplicon_hifi.bam")
-
-            if len(hifi_bams) > 1:
-                logging.info("STAGE 7: Merging %d HiFi BAMs", len(hifi_bams))
-                hifi_merged = merge_bam_files(
-                    samtools_cmd=samtools_cmd,
-                    input_bams=hifi_bams,
-                    output_bam=hifi_merged,
+                    difference_ratio=difference_ratio,
+                    ccs_cmd=ccs_cmd,
+                    min_passes=min_passes,
+                    min_rq=min_rq,
                     threads=threads,
                 )
+                simulate_truth_tracked_amplicons(
+                    prep,
+                    model,
+                    sequencer_for(config, run),
+                    temp_path / "molecules",
+                    Path(hifi_fastq),
+                    output_dir / truth_name,
+                    output_base,
+                    seed,
+                )
             else:
-                shutil.copy(hifi_bams[0], hifi_merged)
-
-            intermediate_files.append(hifi_merged)
-
-            # Convert to FASTQ
-            hifi_fastq = str(output_dir / f"{output_base}_amplicon_hifi.fastq")
-            hifi_fastq = convert_bam_to_fastq(
-                samtools_cmd=samtools_cmd,
-                input_bam=hifi_merged,
-                output_fastq=hifi_fastq,
-                threads=threads,
-            )
+                hifi_fastq, legacy_files = _simulate_legacy_hifi_fastq(
+                    [str(t) for t in prep.allele_templates],
+                    temp_path,
+                    output_dir,
+                    output_base,
+                    pbsim3_cmd=pbsim3_cmd,
+                    ccs_cmd=ccs_cmd,
+                    samtools_cmd=samtools_cmd,
+                    model_type=model_type,
+                    model_file=model_file,
+                    pass_num=pass_num,
+                    accuracy_mean=accuracy_mean,
+                    difference_ratio=difference_ratio,
+                    min_passes=min_passes,
+                    min_rq=min_rq,
+                    threads=threads,
+                    seed=seed,
+                )
+                intermediate_files.extend(legacy_files)
 
             # STAGE 8: Alignment (optional)
             if human_reference is None:
                 logging.info("Amplicon simulation complete (no alignment)")
                 logging.info("Final output: %s", hifi_fastq)
-                cleanup_intermediates(intermediate_files)
                 final_output = hifi_fastq
             else:
                 intermediate_files.append(hifi_fastq)
@@ -282,8 +261,6 @@ def simulate_amplicon_reads_pipeline(
                     preset=MINIMAP2_PRESET_PACBIO_HIFI,
                     threads=threads,
                 )
-
-                cleanup_intermediates(intermediate_files)
                 final_output = aligned_bam
 
             # Write metadata and log completion for both paths
@@ -305,6 +282,7 @@ def simulate_amplicon_reads_pipeline(
                 end_time=end_time,
                 platform="PacBio",
                 tools_used=["pbsim3", "ccs", "minimap2", "samtools"],
+                extra_rows=[("Read_truth", truth_name)] if model is not None else None,
             )
 
             return final_output
@@ -322,8 +300,102 @@ def simulate_amplicon_reads_pipeline(
         logging.error("Unexpected error in amplicon pipeline: %s", e)
         raise RuntimeError(f"Amplicon pipeline failed: {e}") from e
     finally:
-        try:
-            if intermediate_files:
-                cleanup_intermediates(intermediate_files)
-        except Exception as cleanup_err:
-            logging.warning("Cleanup failed (non-fatal): %s", cleanup_err)
+        cleanup_unless_kept(config, intermediate_files)
+
+
+def _simulate_legacy_hifi_fastq(
+    template_fastas: list[str],
+    temp_path: Path,
+    output_dir: Path,
+    output_base: str,
+    *,
+    pbsim3_cmd: str,
+    ccs_cmd: str,
+    samtools_cmd: str,
+    model_type: str,
+    model_file: str,
+    pass_num: int,
+    accuracy_mean: float,
+    difference_ratio: str | None,
+    min_passes: int,
+    min_rq: float,
+    threads: int,
+    seed: int | None,
+) -> tuple[str, list[str]]:
+    """Legacy stages 5-7: per-allele pbsim3 + CCS, merged HiFi BAM converted to FASTQ.
+
+    Returns (FASTQ path, intermediate files). Kept byte-identical to releases
+    before read profiles so seeded legacy simulations stay reproducible.
+    """
+    intermediate_files: list[str] = []
+
+    # STAGE 5: PBSIM3 template mode simulation
+    logging.info("STAGE 5: Running PBSIM3 template mode simulation")
+
+    clr_bam_groups: list[list[str]] = []
+    for i, template_fa in enumerate(template_fastas, 1):
+        prefix = str(temp_path / f"clr_hap{i}")
+        hap_seed = (seed + i) if seed is not None else None
+
+        bams = run_pbsim3_template_simulation(
+            pbsim3_cmd=pbsim3_cmd,
+            samtools_cmd=samtools_cmd,
+            template_fasta=template_fa,
+            model_type=model_type,
+            model_file=model_file,
+            output_prefix=prefix,
+            pass_num=pass_num,
+            accuracy_mean=accuracy_mean,
+            seed=hap_seed,
+            difference_ratio=difference_ratio,
+        )
+        clr_bam_groups.append(bams)
+        intermediate_files.extend(bams)
+        logging.info("  Haplotype %d: %d CLR BAMs", i, len(bams))
+
+    # STAGE 6: CCS consensus generation
+    logging.info("STAGE 6: Generating HiFi consensus with CCS")
+
+    hifi_bams = []
+    for i, clr_bams in enumerate(clr_bam_groups, 1):
+        for j, clr_bam in enumerate(clr_bams, 1):
+            hifi_out = str(temp_path / f"hifi_hap{i}_{j:04d}.bam")
+            hifi_bam = _simulate_haplotype_amplicon(
+                clr_bam=clr_bam,
+                ccs_cmd=ccs_cmd,
+                output_path=hifi_out,
+                min_passes=min_passes,
+                min_rq=min_rq,
+                threads=threads,
+                seed=seed,
+                hap_idx=i,
+                bam_idx=j,
+            )
+            hifi_bams.append(hifi_bam)
+            intermediate_files.append(hifi_bam)
+
+    # STAGE 7: Merge HiFi BAMs
+    hifi_merged = str(output_dir / f"{output_base}_amplicon_hifi.bam")
+
+    if len(hifi_bams) > 1:
+        logging.info("STAGE 7: Merging %d HiFi BAMs", len(hifi_bams))
+        hifi_merged = merge_bam_files(
+            samtools_cmd=samtools_cmd,
+            input_bams=hifi_bams,
+            output_bam=hifi_merged,
+            threads=threads,
+        )
+    else:
+        shutil.copy(hifi_bams[0], hifi_merged)
+
+    intermediate_files.append(hifi_merged)
+
+    # Convert to FASTQ
+    hifi_fastq = str(output_dir / f"{output_base}_amplicon_hifi.fastq")
+    hifi_fastq = convert_bam_to_fastq(
+        samtools_cmd=samtools_cmd,
+        input_bam=hifi_merged,
+        output_fastq=hifi_fastq,
+        threads=threads,
+    )
+    return hifi_fastq, intermediate_files

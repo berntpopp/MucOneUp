@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "name": "ont_r10_genomic_v1",
+  "platform": "ont",
+  "calibration": "empirical",
+  "description": "ONT R10.4.1 genomic/targeted reads around MUC1 (use with 'reads ont --simulator pbsim3-fragments'): strand mix, empirical error channel and strand-aware homopolymer stutter from public WGS reads; no PCR artefacts",
+  "provenance": {
+    "source": "Aggregate statistics from the public ONT R10.4.1 WGS runs of ENA PRJEB92208 (ERR15277552, ERR15277553; Madritsch et al. 2025, Sci Rep). No reads or sequences are included. Small sample (tens of VNTR-spanning reads): treat homopolymer spectra as approximate.",
+    "derived_by": "MucOneSpan deep review 2026-09-23 read-level profiling; errors and stutter derived and validated with helpers/calibrate_read_profile.py --engine empirical",
+    "fragments_note": "Read-length model is a generic targeted/adaptive-sampling default (median 6 kb, sigma 0.5), not fitted to a specific library.",
+    "calibration_report": {
+      "engine": "empirical",
+      "target_total_error": 0.00398,
+      "validation_round1": {
+        "total_error": 0.00434,
+        "max_abs_residual_per_key": {
+          "C3|+": 0.0035,
+          "C3|-": 0.0021,
+          "C4|+": 0.0012,
+          "C4|-": 0.0009,
+          "C7|+": 0.0009,
+          "C7|-": 0.0025,
+          "G3|+": 0.0004,
+          "G3|-": 0.0013
+        }
+      }
+    },
+    "uncovered_runs": "Homopolymer keys with fewer than 300 observations in the targets (for example A/T runs >= 3) have no stutter entry and receive no homopolymer length errors."
+  },
+  "molecules": {
+    "forward_frac": 0.5,
+    "stutter": {
+      "C3|+": {
+        "-1": 0.0021,
+        "0": 0.98844,
+        "1": 0.00683,
+        "2": 0.0021,
+        "3": 0.00053
+      },
+      "C3|-": {
+        "-1": 0.00276,
+        "0": 0.9954,
+        "1": 0.00184
+      },
+      "C4|+": {
+        "-1": 0.00068,
+        "0": 0.99762,
+        "1": 0.0017
+      },
+      "C4|-": {
+        "-2": 0.0006,
+        "-1": 0.00357,
+        "0": 0.99345,
+        "1": 0.00238
+      },
+      "C7|+": {
+        "-3": 0.00104,
+        "-2": 0.0166,
+        "-1": 0.10062,
+        "0": 0.86514,
+        "1": 0.01245,
+        "2": 0.00104,
+        "3": 0.00311
+      },
+      "C7|-": {
+        "-2": 0.00274,
+        "-1": 0.01733,
+        "0": 0.96807,
+        "1": 0.01186
+      },
+      "G3|+": {
+        "-2": 0.00067,
+        "-1": 0.00334,
+        "0": 0.99398,
+        "1": 0.00067,
+        "2": 0.00134
+      },
+      "G3|-": {
+        "-2": 0.00059,
+        "-1": 0.01114,
+        "0": 0.98241,
+        "1": 0.00586
+      }
+    }
+  },
+  "fragments": {
+    "length_median": 6000,
+    "length_sigma": 0.5
+  },
+  "errors": {
+    "mismatch_rate": 0.001038,
+    "insertion_rate": 0.00106,
+    "deletion_rate": 0.001475,
+    "insertion_len_pmf": {
+      "1": 0.83651,
+      "2": 0.10889,
+      "3": 0.0347,
+      "4": 0.005,
+      "5": 0.005,
+      "7": 0.0099
+    },
+    "deletion_len_pmf": {
+      "1": 0.79059,
+      "2": 0.13511,
+      "3": 0.0338,
+      "4": 0.0236,
+      "5": 0.0101,
+      "7": 0.0034,
+      "10": 0.0034
+    },
+    "read_error_sigma": 1.202
+  }
+}

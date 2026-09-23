@@ -30,8 +30,8 @@ Example:
                     "minimap2": "minimap2"
                 },
                 "pacbio_params": {
-                    "model_type": "qshmm",
-                    "model_file": "/models/QSHMM-SEQUEL.model",
+                    "model_type": "errhmm",
+                    "model_file": "/models/ERRHMM-SEQUEL.model",
                     "coverage": 30,
                     "pass_num": 3,
                     "min_passes": 3,
@@ -179,8 +179,8 @@ def simulate_pacbio_hifi_reads(
                         "minimap2": "minimap2"
                     },
                     "pacbio_params": {
-                        "model_type": "qshmm",
-                        "model_file": "/models/QSHMM-SEQUEL.model",
+                        "model_type": "errhmm",
+                        "model_file": "/models/ERRHMM-SEQUEL.model",
                         "coverage": 30,
                         "pass_num": 3,
                         "min_passes": 3,

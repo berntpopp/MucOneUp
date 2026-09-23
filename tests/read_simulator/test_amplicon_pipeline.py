@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from muc_one_up.exceptions import ReadSimulationError
 from muc_one_up.read_simulator.amplicon_pipeline import simulate_amplicon_reads_pipeline
 
 
@@ -204,20 +203,26 @@ class TestAmpliconPipelineHaploid:
         assert mock_pbsim3.call_count == 1
 
 
-class TestAmpliconPipelineTrackingRejection:
-    """Tests for read-source tracking rejection."""
+class TestAmpliconPipelineTruthTracking:
+    """--track-read-source selects the truth-tracked molecule path (#100)."""
 
-    def test_track_read_source_raises_error(
+    def test_track_read_source_uses_truth_path(
         self,
         haploid_fasta_with_primers,
         amplicon_config,
     ):
-        """--track-read-source should raise for amplicon mode."""
         tracker = MagicMock()
-
-        with pytest.raises(ReadSimulationError, match="not yet supported"):
+        mod = "muc_one_up.read_simulator.amplicon_pipeline"
+        with (
+            patch(f"{mod}.simulate_truth_tracked_amplicons") as truth,
+            patch(f"{mod}._simulate_legacy_hifi_fastq") as legacy,
+            patch(f"{mod}.create_pipeline_metadata"),
+        ):
             simulate_amplicon_reads_pipeline(
                 config=amplicon_config,
                 input_fa=str(haploid_fasta_with_primers),
                 source_tracker=tracker,
             )
+        assert truth.called and not legacy.called
+        run = truth.call_args.args[2]
+        assert run.pass_num > 1 and run.ccs_cmd

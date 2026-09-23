@@ -161,6 +161,11 @@ class TestExtractReadsByRegion:
         assert "256" in cmd
 
 
+def _option_value(cmd: list[str], option: str) -> str:
+    """Return the argument following ``option`` in a command list."""
+    return cmd[cmd.index(option) + 1]
+
+
 class TestDownsampleBam:
     """Tests for BAM downsampling."""
 
@@ -174,10 +179,10 @@ class TestDownsampleBam:
 
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
-        assert "samtools" in cmd
-        assert "view" in cmd
-        assert "-s" in cmd
-        assert "42.375" in cmd
+        assert cmd[:2] == ["samtools", "view"]
+        assert "-s" not in cmd  # deprecated INT.FRAC form (issue #97)
+        assert _option_value(cmd, "--subsample") == "0.375"
+        assert _option_value(cmd, "--subsample-seed") == "42"
 
     def test_downsample_invalid_fraction(self, mock_bam_file, temp_dir):
         """Test validation of fraction parameter."""
@@ -193,20 +198,21 @@ class TestDownsampleBam:
             downsample_bam(mock_bam_file, output_bam, -0.5)
 
     @patch(MOCK_TARGET)
-    def test_downsample_fraction_formatting(self, mock_run, mock_bam_file, temp_dir):
-        """Test correct formatting of downsample parameter."""
+    @pytest.mark.parametrize(
+        ("fraction", "expected"),
+        [(0.5, "0.5"), (0.375, "0.375"), (0.05, "0.05"), (1.0, "1.0")],
+    )
+    def test_downsample_fraction_formatting(
+        self, mock_run, mock_bam_file, temp_dir, fraction, expected
+    ):
+        """Fraction is passed verbatim; leading zeros are no longer stripped."""
         output_bam = temp_dir / "downsampled.bam"
         mock_run.return_value = _ok()
 
-        # Test fraction 0.5 -> seed.5
-        downsample_bam(mock_bam_file, output_bam, 0.5, seed=123)
+        downsample_bam(mock_bam_file, output_bam, fraction, seed=123)
         cmd = mock_run.call_args[0][0]
-        assert "123.5" in cmd
-
-        # Test fraction 0.375 -> seed.375
-        downsample_bam(mock_bam_file, output_bam, 0.375, seed=42)
-        cmd = mock_run.call_args[0][0]
-        assert "42.375" in cmd
+        assert _option_value(cmd, "--subsample") == expected
+        assert _option_value(cmd, "--subsample-seed") == "123"
 
     @patch(MOCK_TARGET)
     def test_downsample_failure(self, mock_run, mock_bam_file, temp_dir):

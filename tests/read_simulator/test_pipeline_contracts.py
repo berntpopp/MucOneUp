@@ -405,7 +405,7 @@ def _patch_amplicon(mocker, tmp_path):
         "muc_one_up.read_simulator.amplicon_pipeline.align_reads_with_minimap2",
         return_value=str(tmp_path / "aligned.bam"),
     )
-    mocker.patch("muc_one_up.read_simulator.amplicon_pipeline.cleanup_intermediates")
+    mocker.patch("muc_one_up.read_simulator.amplicon_pipeline.cleanup_unless_kept")
     mocker.patch("muc_one_up.read_simulator.amplicon_pipeline.create_pipeline_metadata")
 
 

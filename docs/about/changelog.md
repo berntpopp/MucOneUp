@@ -7,7 +7,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.45.0] - 2026-09-24
+
+Realistic, truth-tracked long-read simulation. See the
+[Realistic Truth-Tracked Reads](../guides/realistic-read-simulation.md) guide.
+Simulations without a read profile or `--track-read-source` produce the same
+reads (a seeded legacy ONT amplicon FASTQ is byte-identical to 0.44.5). The bug
+fixes listed under **Changed** alter outputs of some existing configurations on
+purpose. Requires samtools >= 1.13 (`view --subsample`).
+
+### Added
+- **Read profiles** (`--read-profile NAME|PATH`, `muconeup reads profiles`):
+  versioned JSON bundles of config overlays, a molecule model and an optional
+  empirical error model. Built-ins: `ont_r10_sup_amplicon_v1` and
+  `ont_r10_genomic_v1` (calibrated to public PRJEB92208 aggregates) and
+  `hifi_amplicon_v1` (generic). Refs #103
+- **Molecule model**: strand mix, PCR smear, chimeras, concatemers, off-target
+  products and strand-aware homopolymer stutter (#101, #103)
+- **Per-read truth**: unique read names `{base}_h{hap}_m{molecule}` and
+  `{base}_read_truth.tsv.gz` for amplicon and fragment simulation.
+  `--track-read-source` is now supported in amplicon mode (#100)
+- **Empirical error channel**, calibrated to R10.4.1 sup, as an alternative to
+  pbsim3; pbsim3's ONT models floor at ~3.5–4% error in template mode (#103)
+- **Genomic ONT from fragments**: `reads ont --simulator pbsim3-fragments`
+  (`--n-reads`, `--read-length-median`, `--read-length-sigma`,
+  `--flank-fasta`) (#107)
+- **PCR preset `madritsch2025_r10`** reproducing ln(long/short) ≈ −0.056 per
+  repeat unit (#104)
+- **pbsim3 options**: `difference_ratio` (ONT amplicon) and read id prefix,
+  passed only when set (#105). pbsim3 has no `--accuracy-sd` option, so
+  `ont_amplicon_params` does not accept `accuracy_sd` (#115)
+- **`--no-align`** for `reads amplicon`, `reads ont` and `reads pacbio` (#106)
+- `helpers/calibrate_read_profile.py` to derive and validate profiles
+
+### Fixed
+- **minimap2**: a prebuilt `{reference}.{preset}.mmi` that is not older than
+  the FASTA is now reused instead of re-indexing the whole genome on every run
+  (#106). Generic `{reference}.mmi` files are ignored because their preset is
+  unknown (#117)
+- **Seed provenance**: `simulate --seed N` is recorded in `provenance.seed` (#109)
+- **NanoSim read-source tracking**: `haplotype-N` names are parsed and the
+  required companion keys are written (#102)
+- **samtools downsampling**: now uses `--subsample`/`--subsample-seed`; the old
+  `-s SEED.FRAC` form misread fractions such as 0.05 (#97)
+- **`reads ont --min-read-length`**: no longer silently overrides the config (#108)
+- **SNP info** in `ReadSourceTracker.from_simulation_results` is keyed by
+  haplotype (#111)
+- **Amplicon housekeeping** (#110):
+  - metadata TSV reports amplicon settings;
+  - PacBio amplicon mode honours `keep_intermediate_files`;
+  - docs no longer reference the unshipped `QSHMM-SEQUEL.model`;
+  - the pbsim3 version probe no longer logs a spurious ERROR.
+
+### Changed (intentional output differences for existing configurations)
+- samtools downsampling uses the exact fraction: `-s SEED.FRAC` turned 0.05
+  into ~50%, and the wrapper truncated fractions to 4 decimals (#97)
+- `reads ont` keeps `nanosim_params.min_read_length` from the config instead of
+  overwriting it with 100 when `--min-read-length` is omitted (#108)
+- `simulate --seed` is recorded in provenance, which changes
+  `config_fingerprint` and adds a `Seed` row (#109)
+- Amplicon metadata TSV reports `Template_molecules`, model and PCR rows
+  instead of NanoSim/PacBio WGS rows; PacBio amplicon mode honours
+  `keep_intermediate_files` (#110)
+- The NanoSim read-name parser raises on names without a haplotype instead of
+  assigning haplotype 1 (#102)
+- A generic `{reference}.mmi` next to the reference is no longer used (#117)
+
+### Pre-release review fixes
+An independent review of the release branch found and fixed:
+- off-target molecules sampled across artificial flank/haplotype junctions;
+  they now come from real flank intervals with haplotype coordinates (#112)
+- truth-tracked runs yielding zero reads now fail; zero fragment requests are
+  rejected (#113)
+- config-file fragment lengths and PCR parameters no longer override the read
+  profile (#114)
+- `--accuracy-sd` removed: pbsim3 rejects it (#115)
+- `reads ont --no-align` now skips NanoSim alignment (#116)
+- empirical deletions no longer remove protected homopolymer bases (#118)
+- smear retention bounds (`smear_min_keep` in [0, 0.95], at least one base) (#119)
+- `--platform`/`--simulator` default to the read profile's platform and to
+  `pbsim3-fragments` with a profile (#120)
+- the empirical error channel uses its own seed stream (#121)
+- metadata records `Read_profile`, `Read_profile_sha256`, `Read_truth` and
+  fragment settings (#122)
+- fragment sampling gives uniform coverage along the source; truth coordinate
+  systems are documented (#123)
+- malformed read profiles raise validation errors; full-run homopolymer
+  deletions in the stutter table are applied instead of clamped (#124)
+
+---
+
+## [0.44.3] - 2026-04-07
 
 ### Fixed
 - ONT amplicon pipeline now reads from dedicated `ont_amplicon_params` config section instead of `pacbio_params` -- was using PacBio Sequel model (ERRHMM-SEQUEL) for ONT reads (#79)

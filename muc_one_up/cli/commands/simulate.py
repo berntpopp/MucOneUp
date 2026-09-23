@@ -120,7 +120,10 @@ from ..orchestration import run_single_simulation_iteration
     "--track-read-source",
     is_flag=True,
     default=False,
-    help="Generate read source tracking manifest and coordinate map alongside simulated reads.",
+    help=(
+        "Record read source tracking data in simulation_stats.json for "
+        "'reads ... --track-read-source'."
+    ),
 )
 @click.pass_context
 @cli_error_handler

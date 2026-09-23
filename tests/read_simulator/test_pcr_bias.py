@@ -1,7 +1,10 @@
 """Tests for PCR length bias model."""
 
+import math
+
 import pytest
 
+from muc_one_up.read_simulator.constants import VALID_PCR_PRESETS
 from muc_one_up.read_simulator.pcr_bias import PCRBiasModel
 
 
@@ -163,3 +166,24 @@ class TestPCRBiasModelFromConfig:
         config = {}
         model = PCRBiasModel.from_config(config)
         assert model.e_max == pytest.approx(0.95)
+
+
+class TestMadritschR10Preset:
+    """Preset calibrated to PRJEB92208 R10 MUC1 amplicons: ln(long/short) ≈ -0.056 per unit."""
+
+    @staticmethod
+    def _slope_per_unit(model: PCRBiasModel, short_bp: int, long_bp: int) -> float:
+        n_short, n_long = model.compute_coverage_split(1_000_000, short_bp, long_bp)
+        return math.log(n_long / n_short) / ((long_bp - short_bp) / 60)
+
+    def test_preset_is_registered(self) -> None:
+        assert "madritsch2025_r10" in VALID_PCR_PRESETS
+
+    @pytest.mark.parametrize("short_bp,long_bp", [(2000, 3000), (2700, 4700), (4000, 6000)])
+    def test_slope_matches_empirical_estimate(self, short_bp: int, long_bp: int) -> None:
+        model = PCRBiasModel.from_preset("madritsch2025_r10")
+        assert self._slope_per_unit(model, short_bp, long_bp) == pytest.approx(-0.056, abs=0.006)
+
+    def test_default_preset_unchanged(self) -> None:
+        model = PCRBiasModel.from_preset("default")
+        assert (model.e_max, model.alpha, model.cycles) == (0.95, 0.00005, 25)

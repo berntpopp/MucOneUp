@@ -243,3 +243,53 @@ class TestValidatePreset:
         """Test invalid preset raises ValueError."""
         with pytest.raises(ValueError, match="Invalid minimap2 preset"):
             validate_preset("invalid-preset")
+
+
+class TestPrebuiltIndexReuse:
+    """#106: reuse a prebuilt minimap2 index instead of re-indexing the FASTA each run."""
+
+    @staticmethod
+    def _align(mocker, tmp_path, index_names):
+        ref_fa = tmp_path / "ref.fa"
+        ref_fa.write_text(">chr1\nACGT\n")
+        for name in index_names:
+            (tmp_path / name).write_bytes(b"MMI")
+        reads = tmp_path / "r.fastq"
+        reads.write_text("@r\nACGT\n+\nIIII\n")
+        out = tmp_path / "a.bam"
+        out.write_bytes(b"BAM")
+        mod = "muc_one_up.read_simulator.wrappers.minimap2_wrapper"
+        run = mocker.patch(
+            f"{mod}.run_command", side_effect=lambda *a, **k: (tmp_path / "a.sam").write_text("SAM")
+        )
+        mocker.patch(f"{mod}.convert_sam_to_bam", return_value=str(out))
+        mocker.patch(f"{mod}.sort_and_index_bam", return_value=str(out))
+        align_reads_with_minimap2(
+            "minimap2", "samtools", str(ref_fa), str(reads), str(out), MINIMAP2_PRESET_ONT, 2
+        )
+        return [str(x) for x in run.call_args[0][0]], ref_fa
+
+    def test_uses_fasta_without_index(self, mocker, tmp_path):
+        cmd, ref = self._align(mocker, tmp_path, [])
+        assert str(ref) in cmd
+
+    def test_prefers_preset_specific_index(self, mocker, tmp_path):
+        cmd, ref = self._align(
+            mocker, tmp_path, ["ref.fa.mmi", f"ref.fa.{MINIMAP2_PRESET_ONT}.mmi"]
+        )
+        assert f"{ref}.{MINIMAP2_PRESET_ONT}.mmi" in cmd and str(ref) not in cmd
+
+    def test_ignores_generic_index(self, mocker, tmp_path):
+        """A generic .mmi may have been built with another preset's -k/-w (#117)."""
+        cmd, ref = self._align(mocker, tmp_path, ["ref.fa.mmi"])
+        assert str(ref) in cmd and f"{ref}.mmi" not in cmd
+
+    def test_ignores_index_older_than_fasta(self, mocker, tmp_path):
+        """A stale index may hold an older reference sequence (#117)."""
+        import os
+
+        index = tmp_path / f"ref.fa.{MINIMAP2_PRESET_ONT}.mmi"
+        index.write_bytes(b"MMI")
+        os.utime(index, (1_000_000, 1_000_000))
+        cmd, ref = self._align(mocker, tmp_path, [])
+        assert str(ref) in cmd and str(index) not in cmd

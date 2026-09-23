@@ -12,7 +12,7 @@ Amplicon pipeline entry-points:
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -153,6 +153,8 @@ def create_pipeline_metadata(
     end_time: datetime,
     platform: str,
     tools_used: list[str],
+    *,
+    extra_rows: list[tuple[str, Any]] | None = None,
 ) -> str:
     """Write pipeline metadata TSV, accepting a :class:`~pathlib.Path` for output_dir.
 
@@ -169,6 +171,7 @@ def create_pipeline_metadata(
         end_time: Pipeline end timestamp.
         platform: Sequencing platform (``"Illumina"``, ``"ONT"``, or ``"PacBio"``).
         tools_used: List of tool keys actually used in this pipeline run.
+        extra_rows: Additional metadata rows (e.g. the read truth manifest).
 
     Returns:
         Path to the created metadata file as a string.
@@ -181,6 +184,7 @@ def create_pipeline_metadata(
         end_time,
         platform,
         tools_used,
+        extra_rows=extra_rows,
     )
 
 
@@ -205,3 +209,11 @@ def cleanup_intermediates(file_list: Sequence[str | None]) -> None:
             logger.debug("Removed intermediate file: %s", path)
         except OSError as exc:
             logger.warning("Could not remove intermediate file %s: %s", path, exc)
+
+
+def cleanup_unless_kept(config: Mapping[str, Any], file_list: Sequence[str | None]) -> None:
+    """Remove intermediates unless ``read_simulation.keep_intermediate_files`` is true."""
+    if config.get("read_simulation", {}).get("keep_intermediate_files", False):
+        logger.info("Keeping intermediate files (keep_intermediate_files=true)")
+        return
+    cleanup_intermediates(file_list)

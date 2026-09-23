@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 
+from muc_one_up.exceptions import ReadSimulationError
 from muc_one_up.read_simulator.source_tracking import ReadOrigin
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,25 @@ logger = logging.getLogger(__name__)
 # For haplotype refs: haplotype_1_500_aligned_0_F_10_100_5
 # The ref_name can contain underscores, so we parse from the right
 _NANOSIM_PATTERN = re.compile(r"^(.+?)_(\d+)_(aligned|unaligned)_(\d+)_([FR])_(\d+)_(\d+)_(\d+)$")
+
+# NanoSim replaces underscores in reference names with hyphens, so
+# ``haplotype_1`` may appear as ``haplotype-1`` in read names.
+_HAPLOTYPE_PATTERN = re.compile(r"^haplotype[-_](\d+)")
+
+
+def _haplotype_from_ref_name(ref_name: str, read_id: str) -> int:
+    """Extract the 1-based haplotype number from a NanoSim reference name.
+
+    Raises:
+        ReadSimulationError: If the reference name does not identify a haplotype.
+    """
+    hap_match = _HAPLOTYPE_PATTERN.match(ref_name)
+    if hap_match is None:
+        raise ReadSimulationError(
+            f"Cannot determine haplotype from NanoSim read name {read_id!r} "
+            f"(reference {ref_name!r} does not match 'haplotype[-_]N')"
+        )
+    return int(hap_match.group(1))
 
 
 def _parse_single_read(
@@ -35,8 +55,7 @@ def _parse_single_read(
     if haplotype_map is not None:
         haplotype = haplotype_map
     else:
-        hap_match = re.match(r"haplotype_(\d+)", ref_name)
-        haplotype = int(hap_match.group(1)) if hap_match else 1
+        haplotype = _haplotype_from_ref_name(ref_name, read_id)
 
     ref_end = ref_start + seq_len
 
@@ -62,6 +81,10 @@ def parse_nanosim_reads(
 
     Returns:
         List of ReadOrigin entries.
+
+    Raises:
+        ReadSimulationError: If ``haplotype_map`` is None and a read's reference
+            name does not identify its haplotype.
     """
     origins: list[ReadOrigin] = []
 

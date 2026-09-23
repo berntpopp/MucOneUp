@@ -539,7 +539,7 @@ Parameters for Oxford Nanopore read simulation.
 |-------|------|-------------|---------|
 | `training_data_path` | string | NanoSim pre-trained model path | Required |
 | `coverage` | integer | Target coverage depth | 50 |
-| `min_read_length` | integer | Minimum read length (bp) | 1000 |
+| `min_read_length` | integer | Minimum read length (bp). For `muconeup reads ont`, precedence is `--min-read-length` > this value > built-in 100 | 100 (`reads ont`) |
 | `max_read_length` | integer | Maximum read length (bp) | 10000 |
 | `correction_factor` | float | Coverage adjustment factor | 0.325 |
 | `enable_split_simulation` | boolean | Diploid split-simulation mode | true |
@@ -593,6 +593,7 @@ Parameters for PacBio HiFi read simulation.
 | `min_rq` | number | Minimum read quality (0.0-1.0) | Required |
 | `threads` | number | Parallel threads (minimum 1) | - |
 | `seed` | integer | Random seed (null = random) | null |
+| `difference_ratio` | string | pbsim3 `--difference-ratio` (`SUB:INS:DEL`) for amplicon mode; omitted when unset | pbsim3 default |
 
 ---
 
@@ -624,8 +625,43 @@ Parameters for ONT amplicon read simulation (pbsim3 single-pass mode). Separate 
 | `threads` | number | Parallel threads (minimum 1) | 8 |
 | `seed` | integer | Random seed (null = random) | null |
 | `accuracy_mean` | number | Mean read accuracy (0.0-1.0) | 0.95 |
+| `difference_ratio` | string | pbsim3 `--difference-ratio` (`SUB:INS:DEL`). The pbsim3 default produces insertion-heavy errors; per-base rates measured on real R10.4.1 sup MUC1 amplicons (PRJEB92208) give about `"33:31:36"` | pbsim3 default |
 
-Available ONT models: `QSHMM-ONT-HQ.model`, `QSHMM-ONT.model`, `QSHMM-ONT-HQ.model`.
+Available ONT models: `QSHMM-ONT-HQ.model`, `QSHMM-ONT.model`, `ERRHMM-ONT.model`.
+
+---
+
+## Read Model and Fragment Parameters Sections
+
+### `read_model`
+
+Activates a [read profile](../guides/realistic-read-simulation.md) from the
+config file; `--read-profile` on the command line takes precedence.
+
+```json
+{"read_model": {"profile": "ont_r10_sup_amplicon_v1"}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `profile` | string | Built-in profile name or path to a profile JSON (required) |
+| `name`, `sha256` | string | Recorded automatically when a profile is applied |
+
+### `ont_fragment_params`
+
+Settings for `reads ont --simulator pbsim3-fragments` (config simulator
+`ont-fragments`). The ONT error model settings come from `ont_amplicon_params`.
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `n_reads` | integer | Number of reads | derived from coverage |
+| `length_median` | number | Median read length (bp) | profile, else 5000 |
+| `length_sigma` | number | Log-normal sigma | profile, else 0.5 |
+| `flank_fasta` | string | FASTA with `left`/`right` records added around each haplotype | none |
+| `seed` | integer | Random seed | none |
+
+`read_simulation.track_read_source` (boolean) requests truth-tracked amplicon
+simulation, as `--track-read-source` does.
 
 ---
 
@@ -676,7 +712,7 @@ Parameters for amplicon read simulation (shared by PacBio and ONT) with PCR leng
 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
-| `preset` | string | "default" or "no_bias" | "default" |
+| `preset` | string | "default", "no_bias" or "madritsch2025_r10" | "default" |
 | `e_max` | float | Max per-cycle efficiency (0-1) | 0.95 |
 | `alpha` | float | Length decay rate (bp^-1) | 0.00005 |
 | `cycles` | integer | Number of PCR cycles | 25 |

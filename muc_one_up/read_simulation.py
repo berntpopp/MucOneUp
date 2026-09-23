@@ -102,8 +102,16 @@ def _get_simulator(simulator_type: str) -> Callable[..., str]:
         return lambda config, input_fa, human_reference, **kw: simulate_ont_amplicon_pipeline(
             config, input_fa, human_reference=human_reference, **kw
         )
+    elif simulator_type == "ont-fragments":
+        from muc_one_up.read_simulator.ont_fragment_pipeline import (
+            simulate_ont_fragment_pipeline,
+        )
+
+        return lambda config, input_fa, human_reference, **kw: simulate_ont_fragment_pipeline(
+            config, input_fa, human_reference=human_reference, **kw
+        )
     else:
-        valid = "amplicon, illumina, ont, ont-amplicon, pacbio"
+        valid = "amplicon, illumina, ont, ont-amplicon, ont-fragments, pacbio"
         raise ValueError(f"Unknown simulator: '{simulator_type}'. Valid options: {valid}. ")
 
 
@@ -189,11 +197,12 @@ def simulate_reads(
         "ont": "Oxford Nanopore (ONT) read simulation pipeline with NanoSim",
         "pacbio": "PacBio HiFi read simulation pipeline with pbsim3/CCS",
         "amplicon": "PacBio amplicon read simulation pipeline with pbsim3/CCS (template mode)",
+        "ont-fragments": "ONT genomic fragment simulation with pbsim3 and per-read truth",
     }
     logging.info(f"Using {simulator_names.get(simulator, f'{simulator} simulator')}")
 
     # Warn if human reference is missing (for alignment-based pipelines)
-    if simulator in ["ont", "pacbio", "amplicon"] and not human_reference:
+    if simulator in ["ont", "ont-fragments", "pacbio", "amplicon"] and not human_reference:
         logging.warning(
             f"No human_reference specified in config for {simulator.upper()} alignment. "
             "Alignment step will be skipped (FASTQ output only)."
