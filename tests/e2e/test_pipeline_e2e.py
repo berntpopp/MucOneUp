@@ -203,3 +203,49 @@ class TestAmpliconE2E:
             assert read_count > 0, "BAM should contain reads"
         except ImportError:
             pass
+
+
+@pytest.mark.e2e
+@pytest.mark.requires_tools("pbsim3")
+class TestTruthTrackedPbsim3E2E:
+    """Truth-tracked amplicon path through real pbsim3 (--track-read-source, no profile)."""
+
+    def test_ont_amplicon_tracking_traces_every_read(self, tmp_path, e2e_config_base):
+        import gzip
+        import json as _json
+
+        from muc_one_up.read_simulator.ont_amplicon_pipeline import simulate_ont_amplicon_pipeline
+        from muc_one_up.read_simulator.output_config import OutputConfig
+        from muc_one_up.simulate import simulate_from_chains
+        from muc_one_up.type_defs import RepeatUnit
+
+        repo = Path(__file__).resolve().parents[2]
+        config = _json.loads((repo / "config.json").read_text())
+        chains = [
+            [
+                RepeatUnit.from_str(u)
+                for u in ["1", "2", "3", "4", "5", "C", *["X"] * n, "6", "7", "8", "9"]
+            ]
+            for n in (15, 25)
+        ]
+        fasta = tmp_path / "s.fa"
+        fasta.write_text(
+            "".join(
+                f">haplotype_{i}\n{h.sequence}\n"
+                for i, h in enumerate(simulate_from_chains(chains, config), 1)
+            )
+        )
+        config["tools"] = e2e_config_base["tools"]
+        config["read_simulation"] = {"coverage": 50, "track_read_source": True}
+        config["ont_amplicon_params"] = {
+            "model_file": str(repo / "reference/pbsim3/QSHMM-ONT-HQ.model"),
+            "seed": 3,
+        }
+        out = simulate_ont_amplicon_pipeline(
+            config, str(fasta), output_config=OutputConfig(out_dir=tmp_path, out_base="t")
+        )
+        with gzip.open(tmp_path / "t_read_truth.tsv.gz", "rt") as handle:
+            rows = handle.read().splitlines()[1:]
+        names = [ln[1:] for i, ln in enumerate(Path(out).read_text().splitlines()) if i % 4 == 0]
+        assert len(rows) == len(names) == 50
+        assert [r.split("\t")[0] for r in rows] == names

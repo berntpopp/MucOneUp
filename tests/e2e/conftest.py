@@ -52,8 +52,8 @@ def e2e_diploid_fasta(tmp_path, minimal_config) -> Path:
 
     fasta_path = tmp_path / "e2e_diploid.fa"
     with open(fasta_path, "w") as f:
-        for hr in results:
-            f.write(f">{hr.name}\n{hr.sequence}\n")
+        for i, hr in enumerate(results, 1):
+            f.write(f">haplotype_{i}\n{hr.sequence}\n")
     return fasta_path
 
 
