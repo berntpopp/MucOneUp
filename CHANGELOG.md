@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Seed provenance** — `simulate --seed N` is now recorded as
+  `provenance.seed` in `simulation_stats.json` (#109)
+
 #### Illumina Coverage Downsampling Now Works
 
 - **Fixed config key mismatch** that prevented Illumina read downsampling from executing

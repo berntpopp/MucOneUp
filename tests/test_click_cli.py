@@ -206,6 +206,30 @@ class TestSimulateCommand:
         # May fail due to missing tools, but CLI parsing should work
         assert "config" in result.output.lower() or result.exit_code in [0, 1]
 
+    def test_simulate_seed_recorded_in_provenance(self, runner, temp_config_file, tmp_path):
+        """Seeded simulate records the seed in stats provenance (issue #109)."""
+        out_dir = tmp_path / "out"
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(temp_config_file),
+                "simulate",
+                "--out-dir",
+                str(out_dir),
+                "--out-base",
+                "seeded",
+                "--seed",
+                "42",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+        stats_files = list(out_dir.glob("seeded.*simulation_stats.json"))
+        assert len(stats_files) == 1
+        stats = json.loads(stats_files[0].read_text())
+        assert stats["provenance"]["seed"] == 42
+
     def test_simulate_with_fixed_lengths(self, runner, temp_config, tmp_path):
         """Test simulate with fixed lengths."""
         result = runner.invoke(
