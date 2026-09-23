@@ -39,8 +39,10 @@ amplicon run is byte-identical to 0.44.5).
 - `helpers/calibrate_read_profile.py` to derive and validate profiles
 
 ### Fixed
-- **minimap2**: a prebuilt `{reference}.{preset}.mmi` or `{reference}.mmi` is
-  now reused instead of re-indexing the whole genome on every run (#106)
+- **minimap2**: a prebuilt `{reference}.{preset}.mmi` that is not older than
+  the FASTA is now reused instead of re-indexing the whole genome on every run
+  (#106). Generic `{reference}.mmi` files are ignored because their preset is
+  unknown (#117)
 - **Seed provenance**: `simulate --seed N` is recorded in `provenance.seed` (#109)
 - **NanoSim read-source tracking**: `haplotype-N` names are parsed and the
   required companion keys are written (#102)

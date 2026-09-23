@@ -109,7 +109,8 @@ homopolymer errors instead.
 
 - **Alignment:** use `--no-align` when FASTQ is enough. When alignment is
   needed, build the index once so it is reused
-  (`minimap2 -x map-ont -d GRCh38.fa.map-ont.mmi GRCh38.fa`).
+  (`minimap2 -x map-ont -d GRCh38.fa.map-ont.mmi GRCh38.fa`). Only an index
+  named `{reference}.{preset}.mmi` and newer than the FASTA is used.
 - **Speed:** without alignment, the empirical ONT profile produces about 3,000
   amplicon reads in a few seconds.
 - **Genomic flanks:** fragment simulation clips reads at the ends of the

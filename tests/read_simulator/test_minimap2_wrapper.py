@@ -279,6 +279,17 @@ class TestPrebuiltIndexReuse:
         )
         assert f"{ref}.{MINIMAP2_PRESET_ONT}.mmi" in cmd and str(ref) not in cmd
 
-    def test_falls_back_to_generic_index(self, mocker, tmp_path):
+    def test_ignores_generic_index(self, mocker, tmp_path):
+        """A generic .mmi may have been built with another preset's -k/-w (#117)."""
         cmd, ref = self._align(mocker, tmp_path, ["ref.fa.mmi"])
-        assert f"{ref}.mmi" in cmd
+        assert str(ref) in cmd and f"{ref}.mmi" not in cmd
+
+    def test_ignores_index_older_than_fasta(self, mocker, tmp_path):
+        """A stale index may hold an older reference sequence (#117)."""
+        import os
+
+        index = tmp_path / f"ref.fa.{MINIMAP2_PRESET_ONT}.mmi"
+        index.write_bytes(b"MMI")
+        os.utime(index, (1_000_000, 1_000_000))
+        cmd, ref = self._align(mocker, tmp_path, [])
+        assert str(ref) in cmd and str(index) not in cmd

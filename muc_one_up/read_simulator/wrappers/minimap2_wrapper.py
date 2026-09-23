@@ -57,19 +57,22 @@ from .samtools_wrapper import convert_sam_to_bam, sort_and_index_bam
 
 
 def resolve_minimap2_target(reference: str, preset: str) -> str:
-    """Return a prebuilt minimap2 index for ``reference`` if one exists, else the FASTA.
+    """Return a prebuilt ``{reference}.{preset}.mmi`` if it is usable, else the FASTA.
 
-    minimap2 fixes indexing parameters (-k/-w) inside a .mmi, and presets differ,
-    so a preset-specific ``{reference}.{preset}.mmi`` is preferred over a generic
-    ``{reference}.mmi``. Reusing an index avoids rebuilding a whole-genome index
+    minimap2 fixes the indexing parameters (-k/-w) and the reference sequence
+    inside a .mmi, so only a preset-specific index that is not older than the
+    FASTA is reused. A generic ``{reference}.mmi`` is ignored because its preset
+    is unknown. Reusing an index avoids rebuilding a whole-genome index
     (~12 GB RAM for GRCh38) on every simulation run.
     """
-    for candidate in (Path(f"{reference}.{preset}.mmi"), Path(f"{reference}.mmi")):
-        if candidate.exists():
-            logging.info("Using prebuilt minimap2 index: %s", candidate)
-            return str(candidate)
+    index = Path(f"{reference}.{preset}.mmi")
+    if index.exists():
+        if index.stat().st_mtime >= Path(reference).stat().st_mtime:
+            logging.info("Using prebuilt minimap2 index: %s", index)
+            return str(index)
+        logging.warning("Ignoring minimap2 index older than %s: %s", reference, index)
     logging.info(
-        "No prebuilt minimap2 index for %s; indexing on the fly. Build one once with "
+        "No usable prebuilt minimap2 index for %s; indexing on the fly. Build one once with "
         "'minimap2 -x %s -d %s.%s.mmi %s' to speed up repeated runs.",
         reference,
         preset,
