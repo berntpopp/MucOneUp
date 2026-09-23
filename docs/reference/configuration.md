@@ -676,7 +676,7 @@ Parameters for amplicon read simulation (shared by PacBio and ONT) with PCR leng
 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
-| `preset` | string | "default" or "no_bias" | "default" |
+| `preset` | string | "default", "no_bias" or "madritsch2025_r10" | "default" |
 | `e_max` | float | Max per-cycle efficiency (0-1) | 0.95 |
 | `alpha` | float | Length decay rate (bp^-1) | 0.00005 |
 | `cycles` | integer | Number of PCR cycles | 25 |

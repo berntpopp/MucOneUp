@@ -189,7 +189,7 @@ MAX_ACCURACY: Final[float] = 1.0
 DEFAULT_AMPLICON_TIMEOUT: Final[int] = 3600
 
 #: Valid PCR bias preset names.
-VALID_PCR_PRESETS: Final[set[str]] = {"default", "no_bias"}
+VALID_PCR_PRESETS: Final[set[str]] = {"default", "no_bias", "madritsch2025_r10"}
 
 #: Default PCR bias preset.
 DEFAULT_PCR_PRESET: Final[str] = "default"

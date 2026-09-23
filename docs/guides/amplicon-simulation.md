@@ -179,6 +179,7 @@ With the `default` preset (calibrated to Madritsch et al. 2026):
 |--------|-------------|----------|
 | `default` | KOD HS, 25 cycles, calibrated to ~70% bias at 1.5kb difference | Realistic amplicon benchmarking |
 | `no_bias` | Equal 50/50 split regardless of length | Control experiments |
+| `madritsch2025_r10` | α = 9.27e-5, 25 cycles; reproduces ln(long/short) ≈ −0.056 per repeat unit measured in 9 R10.4.1 MUC1 amplicon libraries (PRJEB92208) | Realistic ONT amplicon benchmarking |
 
 ```bash
 # Use default preset (realistic PCR bias)
@@ -301,7 +302,7 @@ Options:
   --platform [pacbio|ont]    Sequencing platform (default: pacbio)
   --model-file PATH         pbsim3 model file (overrides config)
   --model-type [qshmm|errhmm]  pbsim3 model type (overrides config)
-  --pcr-preset [default|no_bias]  PCR bias preset
+  --pcr-preset [default|madritsch2025_r10|no_bias]  PCR bias preset
   --stochastic-pcr          Enable stochastic PCR bias
   --coverage INT             Total template molecules (default: 30)
   --seed INT                 Random seed for reproducibility

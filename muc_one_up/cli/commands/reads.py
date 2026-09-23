@@ -8,6 +8,7 @@ from typing import Any
 
 import click
 
+from ...read_simulator.constants import VALID_PCR_PRESETS
 from .._common import require_config
 from ..error_handling import cli_error_handler
 from ..options import shared_read_options
@@ -492,7 +493,7 @@ def pacbio(
 )
 @click.option(
     "--pcr-preset",
-    type=click.Choice(["default", "no_bias"]),
+    type=click.Choice(sorted(VALID_PCR_PRESETS)),
     default=None,
     help="PCR bias preset profile (default: from config or 'default').",
 )

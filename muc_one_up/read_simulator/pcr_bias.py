@@ -30,6 +30,16 @@ _PRESETS: dict[str, dict[str, Any]] = {
         "denaturation_time": 10.0,
         "stochastic": False,
     },
+    # Calibrated to 9 R10.4.1 MUC1 amplicon libraries (PRJEB92208; Madritsch et al.):
+    # ln(n_long / n_short) = -0.056 per 60-bp repeat unit (R^2 0.85). alpha solved
+    # numerically for the exact model at 2.7 vs 4.7 kb.
+    "madritsch2025_r10": {
+        "e_max": 0.95,
+        "alpha": 0.0000927,
+        "cycles": 25,
+        "denaturation_time": 10.0,
+        "stochastic": False,
+    },
     "no_bias": {
         "e_max": 1.0,
         "alpha": 0.0,
