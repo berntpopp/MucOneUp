@@ -315,6 +315,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "sample_bam_hg19": {"type": "string"},
                 "sample_bam_hg38": {"type": "string"},
                 "human_reference": {"type": "string"},
+                "track_read_source": {"type": "boolean"},
                 "read_number": {"type": "number"},
                 "fragment_size": {"type": "number"},
                 "fragment_sd": {"type": "number"},

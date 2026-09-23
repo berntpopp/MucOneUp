@@ -135,3 +135,27 @@ def shared_read_options(func: Any) -> Any:
         type=click.Path(exists=True, dir_okay=False),
     )(func)
     return func
+
+
+def read_profile_option(func: Any) -> Any:
+    """Add ``--read-profile NAME|PATH`` (realistic, truth-tracked read simulation)."""
+    return click.option(
+        "--read-profile",
+        default=None,
+        help=(
+            "Read profile (built-in name or JSON path) bundling a calibrated error model, "
+            "PCR preset, strand mix, PCR artefacts and homopolymer stutter. Enables the "
+            "truth-tracked path and writes {base}_read_truth.tsv.gz. "
+            "See 'muconeup reads profiles' for built-ins."
+        ),
+    )(func)
+
+
+def no_align_option(func: Any) -> Any:
+    """Add ``--no-align`` (skip alignment even if a reference is configured)."""
+    return click.option(
+        "--no-align",
+        is_flag=True,
+        default=False,
+        help="Skip alignment to read_simulation.human_reference and output FASTQ only.",
+    )(func)

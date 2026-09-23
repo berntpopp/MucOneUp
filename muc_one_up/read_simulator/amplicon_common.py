@@ -161,6 +161,9 @@ def extract_and_prepare_amplicons(
 def truth_tracked_model(config: dict[str, Any], tracking_requested: bool) -> MoleculeModel | None:
     """Molecule model for the truth-tracked path, or None for legacy simulation.
 
+    Tracking is requested by a source tracker (``tracking_requested``) or by
+    ``read_simulation.track_read_source`` in the config (set by the CLI).
+
     An active read profile supplies its model. Tracking without a profile uses the
     no-op model (full-length, forward-strand molecules) so reads get truth
     without changing the error model.
@@ -168,7 +171,10 @@ def truth_tracked_model(config: dict[str, Any], tracking_requested: bool) -> Mol
     profile = active_read_profile(config)
     if profile is not None:
         return profile.molecules
-    return MoleculeModel() if tracking_requested else None
+    tracking = tracking_requested or bool(
+        config.get("read_simulation", {}).get("track_read_source", False)
+    )
+    return MoleculeModel() if tracking else None
 
 
 def simulate_truth_tracked_amplicons(

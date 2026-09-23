@@ -11,7 +11,8 @@ import click
 from ...read_simulator.constants import DEFAULT_ONT_MIN_READ_LENGTH, VALID_PCR_PRESETS
 from .._common import require_config
 from ..error_handling import cli_error_handler
-from ..options import shared_read_options
+from ..options import no_align_option, read_profile_option, shared_read_options
+from ..read_model_setup import apply_cli_read_model, apply_tracking_and_alignment
 
 # ============================================================================
 # Shared batch helper
@@ -302,10 +303,21 @@ def illumina(
         f"config; if neither is set, {DEFAULT_ONT_MIN_READ_LENGTH} is used."
     ),
 )
+@no_align_option
 @shared_read_options
 @click.pass_context
 @cli_error_handler
-def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, track_read_source):
+def ont(
+    ctx,
+    input_fastas,
+    out_dir,
+    out_base,
+    coverage,
+    min_read_length,
+    seed,
+    track_read_source,
+    no_align,
+):
     """Simulate Oxford Nanopore long reads from one or more FASTA files.
 
     Supports batch processing following Unix philosophy:
@@ -353,6 +365,8 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     elif "coverage" not in ns:
         ns["coverage"] = config["read_simulation"]["coverage"]
 
+    apply_tracking_and_alignment(config, track_read_source=False, no_align=no_align)
+
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_ont_reads", "ONT", track_read_source
     )
@@ -396,6 +410,7 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     default=None,
     help="Number of passes per molecule for multi-pass CLR simulation (>=2, overrides config if provided).",
 )
+@no_align_option
 @shared_read_options
 @click.pass_context
 @cli_error_handler
@@ -413,6 +428,7 @@ def pacbio(
     threads,
     seed,
     track_read_source,
+    no_align,
 ):
     """Simulate PacBio HiFi reads from one or more FASTA files.
 
@@ -480,6 +496,8 @@ def pacbio(
         min_rq=min_rq,
     )
 
+    apply_tracking_and_alignment(config, track_read_source=False, no_align=no_align)
+
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_pacbio_hifi", "PacBio HiFi", track_read_source
     )
@@ -517,6 +535,8 @@ def pacbio(
     show_default=True,
     help="Sequencing platform for amplicon simulation.",
 )
+@read_profile_option
+@no_align_option
 @shared_read_options
 @click.pass_context
 @cli_error_handler
@@ -533,6 +553,8 @@ def amplicon(
     platform,
     seed,
     track_read_source,
+    read_profile,
+    no_align,
 ):
     """Simulate amplicon reads from one or more FASTA files.
 
@@ -575,6 +597,10 @@ def amplicon(
         --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --coverage 1000 --stochastic-pcr --seed 42
 
+      # Realistic R10 ONT amplicons with per-read truth (no alignment)
+      muconeup --config X reads amplicon --platform ont sample.fa \\
+        --read-profile ont_r10_sup_amplicon_v1 --no-align --seed 7
+
       # No PCR bias (equal coverage per allele)
       muconeup --config X reads amplicon sample.fa \\
         --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
@@ -582,17 +608,12 @@ def amplicon(
     """
     require_config(ctx)
 
-    # Reject --track-read-source early
-    if track_read_source:
-        raise click.ClickException(
-            "Read source tracking is not yet supported for amplicon simulation. "
-            "Remove --track-read-source to proceed."
-        )
-
     from ...config import load_config_raw
 
     config = load_config_raw(str(ctx.obj["config_path"]))
+    config = apply_cli_read_model(config, read_profile, "ont" if platform == "ont" else "pacbio")
     _setup_read_config(config, "amplicon", coverage, seed)
+    apply_tracking_and_alignment(config, track_read_source, no_align)
 
     if platform == "ont":
         config["read_simulation"]["simulator"] = "ont-amplicon"
@@ -625,5 +646,19 @@ def amplicon(
         out_base,
         "_amplicon",
         "Amplicon",
-        track_read_source=False,
+        track_read_source=False,  # truth comes from the molecule path, not the WGS tracker
     )
+
+
+@reads.command("profiles")
+def profiles() -> None:
+    """List built-in read profiles (use with --read-profile)."""
+    from ...read_simulator.read_profiles import list_builtin_profiles, load_read_profile
+
+    names = list_builtin_profiles()
+    if not names:
+        click.echo("No built-in read profiles installed.")
+        return
+    for name in names:
+        profile = load_read_profile(name)
+        click.echo(f"{name}\t{profile.platform}\t{profile.calibration}\t{profile.description}")
