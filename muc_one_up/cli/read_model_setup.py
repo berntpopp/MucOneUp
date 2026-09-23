@@ -43,5 +43,9 @@ def apply_tracking_and_alignment(
     rs = config.setdefault("read_simulation", {})
     if track_read_source:
         rs["track_read_source"] = True
-    if no_align and rs.pop("human_reference", None):
+    if no_align:
+        # Dropping the reference is not enough: NanoSim falls back to aligning
+        # against the simulated FASTA, so pipelines check skip_alignment (#116).
+        rs.pop("human_reference", None)
+        rs["skip_alignment"] = True
         logging.info("--no-align: alignment skipped; output is FASTQ")

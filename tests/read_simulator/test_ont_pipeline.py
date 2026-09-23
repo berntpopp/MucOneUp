@@ -703,3 +703,27 @@ class TestDiploidSplitSimulation:
         # Act & Assert
         with pytest.raises(RuntimeError, match="ONT split-simulation failed"):
             simulate_ont_reads_pipeline(config, str(input_fa))
+
+
+class TestSkipAlignment:
+    """--no-align must skip alignment for NanoSim too, not fall back to the FASTA (#116)."""
+
+    def test_skip_alignment_returns_fastq_without_minimap2(self, mocker, tmp_path):
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGT\n")
+        config = {
+            "tools": {"nanosim": "nanosim", "minimap2": "minimap2", "samtools": "samtools"},
+            "nanosim_params": {"training_data_path": "model", "coverage": 30},
+            "read_simulation": {"skip_alignment": True},
+        }
+        fastq = str(tmp_path / "reads.fastq")
+        mocker.patch(
+            "muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation", return_value=fastq
+        )
+        mock_align = mocker.patch(
+            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
+        )
+        out = simulate_ont_reads_pipeline(config, str(input_fa))
+        assert not mock_align.called
+        assert out == fastq
+        assert list(tmp_path.glob("*_metadata.tsv"))  # metadata is still written

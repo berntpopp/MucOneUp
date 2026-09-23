@@ -110,6 +110,7 @@ def test_no_align_drops_reference(tmp_path):
         result, config = _invoke(tmp_path, [*command, "--no-align"])
         assert result.exit_code == 0, result.output
         assert "human_reference" not in config["read_simulation"]
+        assert config["read_simulation"]["skip_alignment"] is True  # honoured by NanoSim (#116)
 
 
 def test_reference_kept_without_no_align(tmp_path):

@@ -282,38 +282,42 @@ def simulate_ont_reads_pipeline(
             logging.error("NanoSim simulation failed: %s", e)
             raise RuntimeError(f"ONT read simulation failed: {e!s}") from e
 
-    # 2. Align reads with minimap2
-    logging.info("2. Starting read alignment with minimap2")
+    skip_alignment = bool(config.get("read_simulation", {}).get("skip_alignment", False))
     output_bam = f"{output_prefix}.bam"
-
-    # Resolve reference for alignment
-    if human_reference is None:
-        try:
-            reference_for_alignment = resolve_human_reference(
-                config, assembly_ctx, aligner="minimap2"
-            )
-        except ConfigurationError:
-            logging.warning("Falling back to aligning against simulated reference")
-            reference_for_alignment = input_fa
+    if skip_alignment:
+        logging.info("2. Alignment skipped (--no-align); output is FASTQ")
     else:
-        reference_for_alignment = human_reference
-        logging.info("Using user-provided reference: %s", reference_for_alignment)
+        # 2. Align reads with minimap2
+        logging.info("2. Starting read alignment with minimap2")
 
-    logging.info("Aligning ONT reads to reference: %s", reference_for_alignment)
+        # Resolve reference for alignment
+        if human_reference is None:
+            try:
+                reference_for_alignment = resolve_human_reference(
+                    config, assembly_ctx, aligner="minimap2"
+                )
+            except ConfigurationError:
+                logging.warning("Falling back to aligning against simulated reference")
+                reference_for_alignment = input_fa
+        else:
+            reference_for_alignment = human_reference
+            logging.info("Using user-provided reference: %s", reference_for_alignment)
 
-    try:
-        align_ont_reads_with_minimap2(
-            minimap2_cmd=minimap2_cmd,
-            samtools_cmd=samtools_cmd,
-            human_reference=reference_for_alignment,
-            reads_fastq=fastq_file,
-            output_bam=output_bam,
-            threads=int(threads),
-        )
-        logging.info("Read alignment completed successfully")
-    except Exception as e:
-        logging.error("Read alignment failed: %s", e)
-        raise RuntimeError(f"ONT read alignment failed: {e!s}") from e
+        logging.info("Aligning ONT reads to reference: %s", reference_for_alignment)
+
+        try:
+            align_ont_reads_with_minimap2(
+                minimap2_cmd=minimap2_cmd,
+                samtools_cmd=samtools_cmd,
+                human_reference=reference_for_alignment,
+                reads_fastq=fastq_file,
+                output_bam=output_bam,
+                threads=int(threads),
+            )
+            logging.info("Read alignment completed successfully")
+        except Exception as e:
+            logging.error("Read alignment failed: %s", e)
+            raise RuntimeError(f"ONT read alignment failed: {e!s}") from e
 
     # Calculate elapsed time
     end_time = datetime.now()
@@ -325,7 +329,8 @@ def simulate_ont_reads_pipeline(
     )
 
     logging.info("Final outputs:")
-    logging.info("  Aligned and indexed BAM: %s", output_bam)
+    if not skip_alignment:
+        logging.info("  Aligned and indexed BAM: %s", output_bam)
     logging.info("  Reads FASTQ: %s", fastq_file)
 
     # Generate read source tracking manifest if tracker provided
@@ -363,8 +368,8 @@ def simulate_ont_reads_pipeline(
         start_time=start_time,
         end_time=end_time,
         platform="ONT",
-        tools_used=["nanosim", "minimap2", "samtools"],
+        tools_used=["nanosim"] if skip_alignment else ["nanosim", "minimap2", "samtools"],
     )
     logging.info("  Metadata file: %s", metadata_file)
 
-    return output_bam
+    return fastq_file if skip_alignment else output_bam
