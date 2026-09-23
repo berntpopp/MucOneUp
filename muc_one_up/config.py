@@ -514,6 +514,16 @@ CONFIG_SCHEMA: dict[str, Any] = {
             "required": ["forward_primer", "reverse_primer"],
             "additionalProperties": False,
         },
+        "read_model": {
+            "type": "object",
+            "properties": {
+                "profile": {"type": "string"},
+                "name": {"type": "string"},
+                "sha256": {"type": "string"},
+            },
+            "required": ["profile"],
+            "additionalProperties": False,
+        },
     },
     "required": [
         "repeats",
