@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from ..exceptions import ReadSimulationError
 from .empirical_errors import EmpiricalErrorModel, apply_errors
 from .molecules import Molecule
 from .read_profiles import active_read_profile
@@ -134,6 +135,11 @@ def simulate_molecule_reads(
     work_dir.mkdir(parents=True, exist_ok=True)
     fastqs, mapping = sequencer.sequence(molecules, work_dir, seed)
     count = relabel_reads(fastqs, mapping, {m.id: m for m in molecules}, base, out_fastq, truth_tsv)
+    if count == 0:
+        raise ReadSimulationError(
+            f"Simulation produced 0 reads from {len(molecules)} molecules; check coverage, "
+            "template lengths and ccs filters (min_passes, min_rq)"
+        )
     logging.info("Simulated %d truth-tracked reads from %d molecules", count, len(molecules))
     return count
 

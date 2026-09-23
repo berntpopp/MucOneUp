@@ -87,3 +87,17 @@ def test_profile_models_and_alignment(tmp_path: Path, diploid: Path) -> None:
     molecules = sim.call_args.args[0]
     assert len(molecules) == 25 and all(m.strand == "+" for m in molecules)
     assert out == "x.bam" and align.call_args.kwargs["preset"] == "map-ont"
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"ont_fragment_params": {"n_reads": 0}},
+        {"ont_fragment_params": {"n_reads": -3}},
+        {"read_simulation": {"coverage": 0}},
+    ],
+)
+def test_zero_requests_are_rejected(tmp_path: Path, diploid: Path, config: dict) -> None:
+    """n_reads=0 or coverage=0 must not silently become a non-zero simulation (#113)."""
+    with pytest.raises(ValueError, match="must be positive"):
+        _run(tmp_path, diploid, config)

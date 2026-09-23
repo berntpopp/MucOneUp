@@ -69,9 +69,13 @@ def _fragment_settings(
 
 
 def _n_reads(params: dict[str, Any], rs: dict[str, Any], sources: list[str], median: float) -> int:
-    if params.get("n_reads"):
+    if params.get("n_reads") is not None:
+        if int(params["n_reads"]) < 1:
+            raise ValueError(f"n_reads must be positive, got {params['n_reads']}")
         return int(params["n_reads"])
-    coverage = float(rs.get("coverage") or 30)
+    coverage = float(rs["coverage"]) if rs.get("coverage") is not None else 30.0
+    if coverage <= 0:
+        raise ValueError(f"coverage must be positive, got {coverage:g}")
     mean_source = sum(len(s) for s in sources) / len(sources)
     return max(1, round(coverage * mean_source * len(sources) / median))
 

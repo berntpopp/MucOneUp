@@ -121,3 +121,34 @@ def test_sequencer_for_selects_engine(tmp_path: Path) -> None:
     )
     chosen = sequencer_for({"read_model": {"profile": str(profile)}}, pbsim)
     assert isinstance(chosen, EmpiricalSequencer) and chosen.model.mismatch_rate == 0.01
+
+
+def test_zero_reads_is_an_error(tmp_path: Path) -> None:
+    """An empty simulation must fail loudly, not exit 0 with an empty FASTQ (#113)."""
+    from muc_one_up.exceptions import ReadSimulationError
+    from muc_one_up.read_simulator.empirical_errors import EmpiricalErrorModel
+    from muc_one_up.read_simulator.molecule_pipeline import EmpiricalSequencer
+
+    seq = EmpiricalSequencer(EmpiricalErrorModel.from_dict(ERRORS))
+    with pytest.raises(ReadSimulationError, match="0 reads from 0 molecules"):
+        simulate_molecule_reads([], seq, tmp_path, tmp_path / "o.fq", tmp_path / "t.tsv.gz", "e", 3)
+
+
+def test_all_reads_dropped_is_an_error(tmp_path: Path) -> None:
+    """e.g. ccs rejecting every ZMW: pbsim3/ccs succeed but nothing is emitted (#113)."""
+    from muc_one_up.exceptions import ReadSimulationError
+
+    def fake_pbsim(**kw):
+        prefix = kw["output_prefix"]
+        _gz(Path(f"{prefix}.fq.gz"), "")
+        _gz(Path(f"{prefix}.maf.gz"), "")
+        return [f"{prefix}.fq.gz"]
+
+    run = PbsimRun("pbsim", "samtools", "qshmm", "m.model")
+    with (
+        patch(f"{MOD}.run_pbsim3_template_simulation", side_effect=fake_pbsim),
+        pytest.raises(ReadSimulationError, match="0 reads from 2 molecules"),
+    ):
+        simulate_molecule_reads(
+            MOLS, run, tmp_path, tmp_path / "o.fq", tmp_path / "t.tsv.gz", "b", 1
+        )
