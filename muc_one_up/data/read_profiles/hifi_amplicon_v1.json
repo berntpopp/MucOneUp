@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "hifi_amplicon_v1",
+  "platform": "pacbio",
+  "calibration": "generic",
+  "description": "PacBio HiFi MUC1 amplicons with both strands and per-read truth; pbsim3 + ccs error model (NOT calibrated to real HiFi data)",
+  "provenance": {
+    "source": "No real HiFi MUC1 amplicon data was available for calibration; only the strand mix is set. PCR artefacts and PCR length bias are left at defaults because they depend on the PCR protocol.",
+    "note": "In MucOneUp 0.44.x audits pbsim3 ERRHMM-SEQUEL + ccs amplicon reads had ~0.7% median error (about Q21), noisier than typical HiFi (>= Q30). Calibrate pacbio_params (pass_num, min_rq) against your own data before drawing platform conclusions."
+  },
+  "molecules": {
+    "forward_frac": 0.5
+  }
+}
