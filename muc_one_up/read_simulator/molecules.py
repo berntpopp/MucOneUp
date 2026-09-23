@@ -34,7 +34,11 @@ def reverse_complement(seq: str) -> str:
 
 @dataclass(frozen=True)
 class HpEdit:
-    """One injected homopolymer length change (positions in source orientation)."""
+    """One injected homopolymer length change.
+
+    ``pos`` is 0-based in the product sequence before strand orientation, i.e.
+    after any smear deletion, chimera junction or concatemer join.
+    """
 
     pos: int
     base: str
@@ -318,15 +322,22 @@ def build_fragment_molecules(
     model: MoleculeModel,
     rng: random.Random,
 ) -> list[Molecule]:
-    """Sample genomic fragments: haplotype uniform, log-normal length, uniform start."""
+    """Sample genomic fragments: haplotype uniform, log-normal length, uniform coverage.
+
+    A fragment of length L starts uniformly in ``[-(L - 1), len(source))`` and is
+    clipped to the source, as if the source were a window of a longer genome.
+    Every source base is then equally likely to be covered, so both flanks and
+    the VNTR are sampled evenly; fragments overlapping a source end are shorter.
+    """
     if not sources or n_molecules < 0 or length_median <= 0 or length_sigma <= 0:
         raise ValueError("sources must be non-empty and length parameters positive")
     molecules: list[Molecule] = []
     for mol_id in range(1, n_molecules + 1):
         hap = rng.randrange(len(sources)) + 1
         source = sources[hap - 1]
-        start = rng.randrange(len(source))
-        end = min(len(source), start + _lognormal_length(length_median, length_sigma, rng))
+        length = _lognormal_length(length_median, length_sigma, rng)
+        offset = rng.randrange(-(length - 1), len(source))
+        start, end = max(0, offset), min(len(source), offset + length)
         molecules.append(
             _finish(mol_id, hap, "fragment", source[start:end], (start, end), model, rng)
         )

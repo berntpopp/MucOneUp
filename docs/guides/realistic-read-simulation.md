@@ -92,8 +92,8 @@ measured spectrum. pbsim3 remains the default when no profile is used.
 | `molecule` | Molecule id |
 | `kind` | `full`, `smear`, `chimera`, `concatemer`, `offtarget` or `fragment` |
 | `strand` | `+`: read in haplotype orientation (MUC1 C-runs read as C); `-`: reverse complement |
-| `src_start`, `src_end` | 0-based, end-exclusive source interval: amplicon products use amplicon coordinates, off-target products haplotype coordinates |
-| `n_hp_edits`, `hp_edits` | Injected homopolymer changes as `pos:base:true>new` (source orientation) |
+| `src_start`, `src_end` | 0-based, end-exclusive source interval: amplicon products use amplicon coordinates, off-target products haplotype coordinates, fragments coordinates in the fragment source (left flank + haplotype + right flank, so haplotype position = `src_start` − left flank length when `--flank-fasta` is used) |
+| `n_hp_edits`, `hp_edits` | Injected homopolymer changes as `pos:base:true>new`; `pos` is 0-based in the product before strand orientation (after a smear deletion, chimera junction or concatemer join), not in amplicon coordinates |
 | `detail` | Smear deletion interval or chimera junction |
 
 The run's `*_metadata.tsv` records `Read_profile`, `Read_profile_sha256` and
@@ -122,6 +122,8 @@ homopolymer errors instead.
   named `{reference}.{preset}.mmi` and newer than the FASTA is used.
 - **Speed:** without alignment, the empirical ONT profile produces about 3,000
   amplicon reads in a few seconds.
-- **Genomic flanks:** fragment simulation clips reads at the ends of the
-  simulated flanks (10 kb by default). Use `--flank-fasta` with `left`/`right`
-  records to extend them.
+- **Genomic flanks:** fragments are sampled as from a window of a longer
+  genome: coverage is uniform along the source, and reads that overlap a source
+  end are clipped there (flanks are 10 kb by default). `--coverage` is the mean
+  depth. Use `--flank-fasta` with `left`/`right` records to extend the flanks
+  so that fewer reads are clipped.

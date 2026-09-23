@@ -182,3 +182,17 @@ class TestFragmentMolecules:
         lengths = sorted(len(m.seq) for m in mols)
         assert 3500 < lengths[1000] <= 5200
         assert all(0 <= m.src_start < m.src_end <= 20000 and m.kind == "fragment" for m in mols)
+
+    def test_coverage_is_uniform_along_the_source(self) -> None:
+        """Starts were uniform in [0, len) with right-end clipping only (#123)."""
+        source = "ACGT" * 750  # 3,000 bp
+        mols = build_fragment_molecules(
+            [source], 6000, 1000, 0.2, MoleculeModel(), random.Random(7)
+        )
+        depth = [0] * len(source)
+        for m in mols:
+            assert 0 <= m.src_start < m.src_end <= len(source)
+            for i in range(m.src_start, m.src_end):
+                depth[i] += 1
+        left, right = sum(depth[:200]) / 200, sum(depth[-200:]) / 200
+        assert left / right == pytest.approx(1.0, abs=0.15)

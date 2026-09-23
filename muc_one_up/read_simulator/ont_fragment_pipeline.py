@@ -77,8 +77,10 @@ def _n_reads(params: dict[str, Any], rs: dict[str, Any], sources: list[str], med
     coverage = float(rs["coverage"]) if rs.get("coverage") is not None else 30.0
     if coverage <= 0:
         raise ValueError(f"coverage must be positive, got {coverage:g}")
+    # Fragments start in [-(L-1), len) (uniform coverage), so a base is covered
+    # with probability ~L / (len + L): n = depth * (len + L) / L per source.
     mean_source = sum(len(s) for s in sources) / len(sources)
-    return max(1, round(coverage * mean_source * len(sources) / median))
+    return max(1, round(coverage * (mean_source + median) * len(sources) / median))
 
 
 def simulate_ont_fragment_pipeline(

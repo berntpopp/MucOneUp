@@ -54,7 +54,7 @@ def test_defaults_mix_strands_and_derive_read_count(tmp_path: Path, diploid: Pat
     config = {"read_simulation": {"coverage": 10}, "ont_fragment_params": {"length_median": 1000}}
     out, sim, align = _run(tmp_path, diploid, config)
     molecules = sim.call_args.args[0]
-    assert len(molecules) == 60  # 10x * 3000 bp * 2 haplotypes / 1000 bp
+    assert len(molecules) == 80  # 10x * (3000 + 1000) bp * 2 haplotypes / 1000 bp (#123)
     assert {m.strand for m in molecules} == {"+", "-"}
     assert out.endswith("_ont_fragments.fastq") and not align.called
 
