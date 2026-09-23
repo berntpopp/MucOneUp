@@ -134,7 +134,12 @@ def apply_errors(
         draw = rng.random()
         if draw < p_del:
             events["deletion"] += 1
-            i += _draw(del_pmf, rng)
+            # Stop at the next protected base: homopolymer lengths are set by
+            # the stutter table only.
+            stop = min(len(seq), i + _draw(del_pmf, rng))
+            i += 1
+            while i < stop and not protected[i]:
+                i += 1
             continue
         if draw < p_ins:
             events["insertion"] += 1

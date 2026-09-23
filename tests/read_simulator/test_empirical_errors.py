@@ -77,3 +77,15 @@ def test_from_dict_validation(data: dict, match: str) -> None:
     }
     with pytest.raises(ValueError, match=match):
         EmpiricalErrorModel.from_dict({**base, **data})
+
+
+def test_deletions_stop_at_protected_homopolymers() -> None:
+    """Homopolymer lengths come only from the stutter table, never from deletions (#118)."""
+    deleter = EmpiricalErrorModel(
+        0.0, 0.0, 0.2, {1: 1.0}, {4: 1.0}, read_error_sigma=0.0
+    )  # every deletion is 4 bp long
+    seq = "GTACCCCCCCGT" * 200  # only the protected C7 runs contain C
+    for seed in range(20):
+        read, _ = apply_errors(seq, deleter, random.Random(seed))
+        assert read.count("C") == seq.count("C")
+        assert len(read) < len(seq)  # deletions did happen
