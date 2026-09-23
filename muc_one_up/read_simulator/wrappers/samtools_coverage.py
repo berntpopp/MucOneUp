@@ -15,6 +15,7 @@ from pathlib import Path
 from ...exceptions import FileOperationError
 from ..command_utils import build_tool_command
 from ..utils import run_command
+from ..utils.samtools import subsample_args
 
 
 def calculate_vntr_coverage(
@@ -183,9 +184,6 @@ def downsample_bam(
     Raises:
         SystemExit: If any samtools command fails.
     """
-    # Format the fraction string for samtools view -s option (seed.fraction)
-    fraction_str = f"{seed}.{int(fraction * 10000):04d}"
-
     # Create a temporary BED file for the target region.
     # Region string is 1-based inclusive (samtools format); BED is 0-based half-open.
     region_bed = output_bam.replace(".bam", "_region.bed")
@@ -196,8 +194,8 @@ def downsample_bam(
         f.write(f"{chrom}\t{bed_start}\t{end}\n")
 
     # Two-pass approach: extract non-region reads (full) then region reads (downsampled).
-    # Cannot use -L/-U/-s together because -U captures reads failing ANY filter,
-    # so VNTR reads dropped by -s would end up in -U and get merged back.
+    # Cannot use -L/-U/--subsample together because -U captures reads failing ANY filter,
+    # so VNTR reads dropped by --subsample would end up in -U and get merged back.
     region_bam = output_bam.replace(".bam", "_region_only.bam")
     other_bam = output_bam.replace(".bam", "_other_regions.bam")
 
@@ -223,8 +221,7 @@ def downsample_bam(
         samtools_exe,
         "view",
         "-b",  # Output BAM
-        "-s",
-        fraction_str,  # Downsampling fraction with seed
+        *subsample_args(fraction, seed),  # Seeded downsampling of region reads
         "-L",
         region_bed,  # Target region BED
         "-@",
@@ -290,17 +287,13 @@ def downsample_entire_bam(
     Raises:
         SystemExit: If any samtools command fails.
     """
-    # Format the fraction string for samtools view -s option (seed.fraction)
-    fraction_str = f"{seed}.{int(fraction * 10000):04d}"
-
     # Downsample the entire BAM file
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     cmd = build_tool_command(
         samtools_exe,
         "view",
         "-b",  # Output BAM
-        "-s",
-        fraction_str,  # Downsampling fraction with seed
+        *subsample_args(fraction, seed),  # Seeded downsampling
         "-@",
         threads,  # Threads (build_tool_command handles conversion)
         "-o",

@@ -224,7 +224,7 @@ sample_vntr_efficiency_stats.json       # Coverage statistics
 
 ### Hash-Based Downsampling
 
-Uses `samtools view -s SEED.FRACTION` for reproducible, pair-preserving downsampling:
+Uses `samtools view --subsample FRACTION --subsample-seed SEED` (samtools >= 1.13) for reproducible, pair-preserving downsampling:
 - Seed ensures reproducibility across runs
 - Read name hashing automatically preserves pairs
 - No duplicate reads in merged output (mutually exclusive regions)

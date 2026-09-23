@@ -9,6 +9,7 @@ VNTR-aware pipelines.
 Key Components:
     build_coordinate_map: Build a repeat coordinate map from a haplotype chain
     ReadSourceTracker: Annotate reads and write manifests/coordinate maps
+    companion_stats_fields: Stats JSON fields read by from_companion_files
 
 Data Models:
     RepeatRegion: A single repeat unit with coordinates and mutation status
@@ -25,8 +26,9 @@ import json
 import logging
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from typing import Any
 
-from ..type_defs import RepeatUnit
+from ..type_defs import HaplotypeResult, MutationTarget, RepeatUnit
 
 logger = logging.getLogger(__name__)
 
@@ -581,3 +583,38 @@ class ReadSourceTracker:
             mutation_name=mutation_name,
             snp_info=snp_info if snp_info else None,
         )
+
+
+def companion_stats_fields(
+    results: list[HaplotypeResult],
+    config: dict[str, Any],
+    mutation_positions: list[MutationTarget] | None = None,
+    mutation_name: str | None = None,
+) -> dict[str, Any]:
+    """Build the simulation_stats.json fields read by ``from_companion_files``.
+
+    Args:
+        results: Haplotype results whose chains the stats file describes.
+        config: Configuration dict providing 'repeats' and 'constants'.
+        mutation_positions: Applied mutation targets (1-based), if any.
+        mutation_name: Name of the applied mutation, if any.
+
+    Returns:
+        Dict with 'haplotypes', 'config' and 'mutation_details' keys.
+    """
+    targets = [[mt.haplotype_index, mt.repeat_index] for mt in mutation_positions or []]
+    mutation_details: dict[str, Any] = {}
+    if mutation_name and targets:
+        mutation_details = {"mutation_name": mutation_name, "targets": targets}
+
+    return {
+        "haplotypes": {
+            f"haplotype_{i}": {"repeat_chain": "-".join(str(ru) for ru in hr.chain)}
+            for i, hr in enumerate(results, start=1)
+        },
+        "config": {
+            "repeats": config.get("repeats", {}),
+            "constants": config.get("constants", {}),
+        },
+        "mutation_details": mutation_details,
+    }

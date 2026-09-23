@@ -217,6 +217,19 @@ def run_read_simulation(
             ) from e
 
 
+def _add_companion_fields(report, args, config, results, mutation_positions, mutation_name):
+    """Add read-source companion fields to a stats report if tracking was requested.
+
+    These fields let ``ReadSourceTracker.from_companion_files`` rebuild the
+    tracker when reads are simulated later with ``reads ... --track-read-source``.
+    """
+    if getattr(args, "track_read_source", False) is not True:
+        return
+    from ..read_simulator.source_tracking import companion_stats_fields
+
+    report.update(companion_stats_fields(results, config, mutation_positions, mutation_name))
+
+
 def write_simulation_statistics(
     args,
     config,
@@ -231,8 +244,13 @@ def write_simulation_statistics(
     mutation_pair,
     applied_snp_info_normal,
     applied_snp_info_mut,
+    mutation_positions=None,
 ):
-    """Generate and write simulation statistics with provenance metadata."""
+    """Generate and write simulation statistics with provenance metadata.
+
+    When ``args.track_read_source`` is set, the report also carries the
+    companion fields needed to reconstruct read source tracking.
+    """
     from typing import Any
 
     vntr_coverage_stats: dict[str, Any] = {}
@@ -272,6 +290,15 @@ def write_simulation_statistics(
             applied_snp_info=applied_snp_info_mut,
             provenance_info=provenance_info,
         )
+        _add_companion_fields(normal_stats_report, args, config, results, None, None)
+        _add_companion_fields(
+            mutated_stats_report,
+            args,
+            config,
+            mutated_results,
+            mutation_positions,
+            mutation_pair[1],
+        )
 
         stats_file_normal = numbered_filename(
             out_dir, out_base, sim_index, "simulation_stats.json", variant="normal"
@@ -299,6 +326,9 @@ def write_simulation_statistics(
             vntr_coverage=vntr_coverage_stats,
             applied_snp_info=applied_snp_info_normal,
             provenance_info=provenance_info,
+        )
+        _add_companion_fields(
+            stats_report, args, config, results, mutation_positions, args.mutation_name
         )
 
         stats_output_file = numbered_filename(out_dir, out_base, sim_index, "simulation_stats.json")

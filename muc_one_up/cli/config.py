@@ -98,6 +98,10 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
                 current_assembly,
                 args.reference_assembly,
             )
+
+        # Record the CLI seed so provenance metadata reports it (extract_seed).
+        if getattr(args, "seed", None) is not None:
+            config["seed"] = args.seed
     except FileNotFoundError as e:
         raise ConfigurationError(f"Config file not found: {args.config}") from e
     except json.JSONDecodeError as e:

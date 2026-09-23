@@ -236,7 +236,7 @@ class TestDownsampleBAM:
     """Test downsample_entire_bam fraction calculation."""
 
     def test_constructs_fraction_string_correctly(self, mocker, tmp_path):
-        """Test that seed.fraction string format is correct."""
+        """Test that fraction and seed are passed as --subsample flags."""
         # Arrange
         input_bam = tmp_path / "input.bam"
         output_bam = tmp_path / "output.bam"
@@ -275,13 +275,10 @@ class TestDownsampleBAM:
         assert len(view_call) >= 1
         view_cmd = view_call[0]
 
-        assert "-s" in view_cmd
-        s_index = view_cmd.index("-s")
-        fraction_str = view_cmd[s_index + 1]
-
-        # Format should be: seed.fraction where fraction is 4 digits
-        # 0.5 = 5000/10000 = .5000, so seed.fraction = 42.5000
-        assert fraction_str == "42.5000"
+        # Modern subsampling flags, not the deprecated -s SEED.FRAC (issue #97)
+        assert "-s" not in view_cmd
+        assert view_cmd[view_cmd.index("--subsample") + 1] == "0.5"
+        assert view_cmd[view_cmd.index("--subsample-seed") + 1] == "42"
 
     def test_uses_correct_thread_count(self, mocker, tmp_path):
         """Test that thread count is passed correctly."""
@@ -368,22 +365,22 @@ class TestDownsampleBamRegion:
 
         downsample_bam("samtools", str(input_bam), str(output_bam), "chr1:100-200", 0.5, 42, 4)
 
-        # Should have 4 commands: pass1 (view -L -U), pass2 (view -s -L), merge, index
+        # Should have 4 commands: pass1 (view -L -U), pass2 (view --subsample -L), merge, index
         assert len(commands_called) == 4
 
-        # Pass 1: -L and -U present, no -s
+        # Pass 1: -L and -U present, no subsampling
         pass1 = commands_called[0]
         assert "-L" in pass1
         assert "-U" in pass1
-        assert "-s" not in pass1
+        assert "--subsample" not in pass1
 
-        # Pass 2: -s and -L present, no -U
+        # Pass 2: --subsample and -L present, no -U, no deprecated -s
         pass2 = commands_called[1]
-        assert "-s" in pass2
+        assert "-s" not in pass2
         assert "-L" in pass2
         assert "-U" not in pass2
-        s_idx = pass2.index("-s")
-        assert pass2[s_idx + 1] == "42.5000"
+        assert pass2[pass2.index("--subsample") + 1] == "0.5"
+        assert pass2[pass2.index("--subsample-seed") + 1] == "42"
 
         # BED file created and cleaned up (verified in test_creates_and_cleans_up_temp_files)
 

@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Seed provenance** — `simulate --seed N` is now recorded as
+  `provenance.seed` in `simulation_stats.json` (#109)
+- **NanoSim read-source tracking** — the ONT parser now accepts NanoSim's
+  `haplotype-N` reference names and raises instead of silently assigning
+  unparseable reads to haplotype 1; `simulate --track-read-source` now writes
+  the `haplotypes`, `config` and `mutation_details` fields that
+  `reads ... --track-read-source` needs (#102)
+- **samtools downsampling** — BAM downsampling now uses
+  `samtools view --subsample FRAC --subsample-seed SEED` instead of the
+  deprecated `-s SEED.FRAC` form, which samtools 1.22+ misreads and which was
+  malformed for fractions such as 0.05 (kept 50%) or 1.0 (error) (#97)
+
 #### Illumina Coverage Downsampling Now Works
 
 - **Fixed config key mismatch** that prevented Illumina read downsampling from executing
