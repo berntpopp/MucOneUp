@@ -58,13 +58,14 @@ def _fragment_settings(
 ) -> tuple[MoleculeModel, FragmentModel, dict[str, Any]]:
     profile = active_read_profile(config)
     molecules = profile.molecules if profile else MoleculeModel(forward_frac=0.5)
-    fragments = profile.fragments if profile else FragmentModel()
+    # apply_read_profile has already written the profile's lengths into
+    # ont_fragment_params (config < profile), and CLI flags are written on top.
+    base = profile.fragments if profile and profile.fragments else FragmentModel()
     params = dict(config.get("ont_fragment_params", {}))
-    if "length_median" in params or "length_sigma" in params:
-        fragments = FragmentModel(
-            params.get("length_median", fragments.length_median),
-            params.get("length_sigma", fragments.length_sigma),
-        )
+    fragments = FragmentModel(
+        params.get("length_median", base.length_median),
+        params.get("length_sigma", base.length_sigma),
+    )
     return molecules, fragments, params
 
 

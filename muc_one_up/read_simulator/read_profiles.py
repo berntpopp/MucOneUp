@@ -22,6 +22,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -72,7 +73,7 @@ class ReadProfile:
     provenance: Mapping[str, Any]
     config_overrides: Mapping[str, Any]
     molecules: MoleculeModel
-    fragments: FragmentModel
+    fragments: FragmentModel | None  # None when the profile leaves read lengths to the config
     sha256: str
     source: str = field(default="")
     errors: EmpiricalErrorModel | None = None
@@ -127,7 +128,7 @@ def load_read_profile(ref: str) -> ReadProfile:
         provenance=data.get("provenance", {}),
         config_overrides=overrides,
         molecules=MoleculeModel.from_dict(data.get("molecules", {})),
-        fragments=FragmentModel(**data.get("fragments", {})),
+        fragments=FragmentModel(**data["fragments"]) if "fragments" in data else None,
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
         source=str(path),
         errors=EmpiricalErrorModel.from_dict(data["errors"]) if data.get("errors") else None,
@@ -143,10 +144,37 @@ def _deep_merge(base: dict[str, Any], overlay: Mapping[str, Any]) -> dict[str, A
     return base
 
 
+def _drop_config_pcr_parameters(
+    section: dict[str, Any] | None, overlay: Mapping[str, Any], profile_name: str
+) -> None:
+    """Keep config-file PCR parameters from silently overriding a profile's preset.
+
+    ``PCRBiasModel.from_config`` applies every non-preset key as an override of
+    the preset, so config values such as ``alpha`` would otherwise beat the
+    profile. Only the ``stochastic`` mode switch is kept from the config.
+    """
+    pcr_overlay = overlay.get("pcr_bias") or {}
+    pcr = (section or {}).get("pcr_bias")
+    if "preset" not in pcr_overlay or not isinstance(pcr, dict):
+        return
+    dropped = sorted(k for k in pcr if k not in ("preset", "stochastic") and k not in pcr_overlay)
+    for key in dropped:
+        del pcr[key]
+    if dropped:
+        logging.info(
+            "Read profile %s sets PCR preset %s; ignoring config pcr_bias %s",
+            profile_name,
+            pcr_overlay["preset"],
+            ", ".join(dropped),
+        )
+
+
 def apply_read_profile(config: Mapping[str, Any], profile: ReadProfile) -> dict[str, Any]:
     """Return a copy of ``config`` with the profile overlaid and marked active."""
     merged = copy.deepcopy(dict(config))
     for section, values in profile.config_overrides.items():
+        if section == "amplicon_params":
+            _drop_config_pcr_parameters(merged.get(section), values, profile.name)
         section_config = _deep_merge(merged.setdefault(section, {}), values)
         schema = copy.deepcopy(CONFIG_SCHEMA["properties"][section])
         schema.pop("required", None)  # reads commands accept partial sections
@@ -156,6 +184,10 @@ def apply_read_profile(config: Mapping[str, Any], profile: ReadProfile) -> dict[
             raise ValueError(
                 f"read profile '{profile.name}' makes {section} invalid: {exc.message}"
             ) from exc
+    if profile.fragments is not None:
+        fragment_params = merged.setdefault("ont_fragment_params", {})
+        fragment_params["length_median"] = profile.fragments.length_median
+        fragment_params["length_sigma"] = profile.fragments.length_sigma
     merged["read_model"] = {
         "profile": profile.source or profile.name,
         "name": profile.name,

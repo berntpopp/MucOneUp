@@ -33,7 +33,12 @@ Every run writes `{base}_read_truth.tsv.gz` next to the reads.
 | `provenance` | Data source, derivation method, uncovered homopolymer keys and the validation report |
 
 Precedence is **config file < read profile < explicit CLI flags**. For example,
-`--pcr-preset no_bias` overrides the profile's PCR preset. A profile can also
+`--pcr-preset no_bias` overrides the profile's PCR preset. When a profile sets
+a PCR preset, preset parameters from the config file (`alpha`, `e_max`,
+`cycles`, `denaturation_time`) are ignored; `stochastic` is kept. A profile's
+`fragments` lengths replace `ont_fragment_params.length_median`/`length_sigma`
+from the config file, and `--read-length-median`/`--read-length-sigma` replace
+the profile's values. A profile can also
 be named in the config file as `"read_model": {"profile": "<name or path>"}`.
 
 ## Built-in profiles

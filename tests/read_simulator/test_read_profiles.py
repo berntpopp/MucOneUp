@@ -113,3 +113,50 @@ def test_ont_amplicon_params_reject_accuracy_sd():
     schema = CONFIG_SCHEMA["properties"]["ont_amplicon_params"]
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({"accuracy_sd": 0.01}, {**schema, "required": []})
+
+
+def test_profile_fragments_beat_config_file(tmp_path: Path) -> None:
+    """config < profile: config-file fragment lengths yield to the profile (#114)."""
+    from muc_one_up.read_simulator.ont_fragment_pipeline import _fragment_settings
+
+    config = {"ont_fragment_params": {"length_median": 1000, "length_sigma": 0.9, "n_reads": 7}}
+    merged = apply_read_profile(config, load_read_profile(str(_write(tmp_path, MINIMAL))))
+    assert merged["ont_fragment_params"] == {
+        "length_median": 5000,
+        "length_sigma": 0.45,
+        "n_reads": 7,
+    }
+    _, fragments, _ = _fragment_settings(merged)
+    assert (fragments.length_median, fragments.length_sigma) == (5000, 0.45)
+
+
+def test_cli_fragment_flags_still_beat_profile(tmp_path: Path) -> None:
+    from muc_one_up.read_simulator.ont_fragment_pipeline import _fragment_settings
+
+    merged = apply_read_profile({}, load_read_profile(str(_write(tmp_path, MINIMAL))))
+    merged["ont_fragment_params"]["length_median"] = 800  # what reads ont --read-length-median does
+    _, fragments, _ = _fragment_settings(merged)
+    assert (fragments.length_median, fragments.length_sigma) == (800, 0.45)
+
+
+def test_profile_without_fragments_keeps_config_lengths(tmp_path: Path) -> None:
+    data = {k: v for k, v in MINIMAL.items() if k != "fragments"}
+    config = {"ont_fragment_params": {"length_median": 1000}}
+    merged = apply_read_profile(config, load_read_profile(str(_write(tmp_path, data))))
+    assert merged["ont_fragment_params"] == {"length_median": 1000}
+
+
+def test_profile_pcr_preset_drops_config_preset_parameters(tmp_path: Path) -> None:
+    """A config alpha/e_max must not silently override the profile's preset (#114)."""
+    config = {
+        "amplicon_params": {
+            "forward_primer": "ACGT",
+            "reverse_primer": "TTGG",
+            "pcr_bias": {"preset": "default", "alpha": 0.5, "e_max": 0.7, "stochastic": True},
+        }
+    }
+    merged = apply_read_profile(config, load_read_profile(str(_write(tmp_path, MINIMAL))))
+    assert merged["amplicon_params"]["pcr_bias"] == {
+        "preset": "madritsch2025_r10",
+        "stochastic": True,
+    }
