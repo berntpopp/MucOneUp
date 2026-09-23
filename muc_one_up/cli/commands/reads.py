@@ -434,25 +434,26 @@ def pacbio(
     Examples:
       # Single file with standard HiFi settings (Q20)
       muconeup --config X reads pacbio sample.001.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --out-base my_hifi
 
       # Multiple files with high-accuracy HiFi (Q30)
       muconeup --config X reads pacbio sample.*.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --min-rq 0.999 --min-passes 5
 
       # Ultra-deep coverage simulation
       muconeup --config X reads pacbio sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --coverage 100 --pass-num 5
 
     \b
     Model Files:
       Download from: https://github.com/yukiteruono/pbsim3/tree/master/data
-      - QSHMM-SEQUEL.model: Sequel II chemistry
-      - QSHMM-RSII.model: RS II chemistry
-      - ERRHMM-SEQUEL.model: Alternative error model
+      - ERRHMM-SEQUEL.model: Sequel chemistry (--model-type errhmm)
+      - QSHMM-RSII.model: RS II chemistry (--model-type qshmm)
+      pbsim3 does not ship a QSHMM Sequel model; the model type must
+      match the model file.
 
     \b
     Quality Control:
@@ -563,7 +564,7 @@ def amplicon(
     Examples:
       # Basic PacBio amplicon simulation
       muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model
 
       # ONT amplicon simulation
       muconeup --config X reads amplicon --platform ont sample.fa \\
@@ -571,12 +572,12 @@ def amplicon(
 
       # High coverage with stochastic PCR bias
       muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --coverage 1000 --stochastic-pcr --seed 42
 
       # No PCR bias (equal coverage per allele)
       muconeup --config X reads amplicon sample.fa \\
-        --model-file /models/QSHMM-SEQUEL.model \\
+        --model-type errhmm --model-file /models/ERRHMM-SEQUEL.model \\
         --pcr-preset no_bias
     """
     require_config(ctx)
