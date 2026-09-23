@@ -24,6 +24,7 @@ from typing import NamedTuple
 
 _COMPLEMENT = str.maketrans("ACGTNacgtn", "TGCANtgcan")
 _STRANDS = ("+", "-")
+_SMEAR_MAX_KEEP = 0.95  # smear products keep at most this fraction of the amplicon
 
 
 def reverse_complement(seq: str) -> str:
@@ -136,6 +137,10 @@ class MoleculeModel:
             value = getattr(self, name)
             if not 0.0 <= value <= 1.0:
                 raise ValueError(f"{name} must be in [0, 1], got {value}")
+        if self.smear_min_keep > _SMEAR_MAX_KEEP:
+            raise ValueError(
+                f"smear_min_keep must be in [0, {_SMEAR_MAX_KEEP}], got {self.smear_min_keep}"
+            )
         if not 0.0 <= self.offtarget_frac < 1.0:
             raise ValueError(f"offtarget_frac must be in [0, 1), got {self.offtarget_frac}")
         if self.smear_rate + self.chimera_rate + self.concatemer_rate > 1.0:
@@ -220,8 +225,10 @@ def _finish(
 def _smear(seq: str, model: MoleculeModel, rng: random.Random) -> tuple[str, str]:
     a, b = model.smear_junction_beta
     start = int(rng.betavariate(a, b) * len(seq))
-    keep = rng.uniform(model.smear_min_keep, 0.95)
-    resume = min(len(seq), start + round((1.0 - keep) * len(seq)))
+    keep = rng.uniform(model.smear_min_keep, _SMEAR_MAX_KEEP)
+    min_bases = max(1, math.ceil(model.smear_min_keep * len(seq)))
+    deleted = min(round((1.0 - keep) * len(seq)), len(seq) - min_bases)
+    resume = min(len(seq), start + max(0, deleted))
     return seq[:start] + seq[resume:], f"deletion:{start}-{resume}"
 
 

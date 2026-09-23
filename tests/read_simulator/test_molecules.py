@@ -100,6 +100,25 @@ class TestAmpliconMolecules:
             assert m.seq == AMP_B[:start] + AMP_B[resume:]
             assert 0.2 * len(AMP_B) - 1 <= len(m.seq) < len(AMP_B)
 
+    @pytest.mark.parametrize("min_keep", [0.96, 1.0, -0.1])
+    def test_smear_min_keep_must_leave_a_range(self, min_keep: float) -> None:
+        """uniform(min_keep, 0.95) inverts above 0.95 (#119)."""
+        with pytest.raises(ValueError, match="smear_min_keep"):
+            MoleculeModel(smear_min_keep=min_keep)
+
+    @pytest.mark.parametrize("min_keep", [0.0, 0.5])
+    def test_smear_keeps_at_least_min_keep_and_one_base(self, min_keep: float) -> None:
+        """smear_min_keep=0 could delete the whole molecule (#119)."""
+        import math
+
+        model = MoleculeModel(
+            smear_rate=1.0, smear_min_keep=min_keep, smear_junction_beta=(0.1, 20)
+        )
+        for amplicon in ("ACGTTGCAAC" * 2, "ACG"):
+            for seed in range(200):
+                (m,) = build_amplicon_molecules([amplicon], [1], model, random.Random(seed))
+                assert len(m.seq) >= max(1, math.ceil(min_keep * len(amplicon)))
+
     def test_chimeras_join_two_haplotypes_at_homologous_fraction(self) -> None:
         model = MoleculeModel(chimera_rate=1.0)
         mols = build_amplicon_molecules([AMP_A, AMP_B], [50, 50], model, random.Random(2))
