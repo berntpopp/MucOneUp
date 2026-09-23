@@ -19,7 +19,7 @@ from typing import Any
 from Bio import SeqIO
 
 from .molecule_pipeline import Sequencer, simulate_molecule_reads
-from .molecules import MoleculeModel, build_amplicon_molecules
+from .molecules import MoleculeModel, SourceInterval, build_amplicon_molecules
 from .pcr_bias import PCRBiasModel
 from .read_profiles import active_read_profile
 from .utils.amplicon_extractor import AmpliconExtractor
@@ -177,6 +177,27 @@ def truth_tracked_model(config: dict[str, Any], tracking_requested: bool) -> Mol
     return MoleculeModel() if tracking else None
 
 
+def offtarget_intervals(haplotypes: list[str], amplicons: list[str]) -> list[SourceInterval]:
+    """Flanks outside each haplotype's amplicon, kept separate with haplotype coordinates.
+
+    Off-target products must come from real contiguous sequence; joining the
+    flanks would invent a junction that looks like a VNTR deletion.
+    """
+    intervals: list[SourceInterval] = []
+    for hap, (seq, amplicon) in enumerate(zip(haplotypes, amplicons, strict=True), start=1):
+        pos = seq.find(amplicon)
+        if pos < 0:
+            raise ValueError(f"amplicon not found in haplotype {hap}")
+        end = pos + len(amplicon)
+        intervals += [SourceInterval(hap, 0, seq[:pos]), SourceInterval(hap, end, seq[end:])]
+    intervals = [i for i in intervals if i.seq]
+    if not intervals:
+        raise ValueError(
+            "offtarget_frac > 0 but the haplotypes have no flanking sequence outside the amplicon"
+        )
+    return intervals
+
+
 def simulate_truth_tracked_amplicons(
     prep: AmpliconPrep,
     model: MoleculeModel,
@@ -188,16 +209,16 @@ def simulate_truth_tracked_amplicons(
     seed: int | None,
 ) -> int:
     """Build amplicon molecules for ``prep`` and simulate reads with per-read truth."""
-    offtarget = "".join(
-        hap.replace(amp, "")
-        for hap, amp in zip(prep.haplotype_sequences, prep.amplicon_sequences, strict=True)
-    )
     molecules = build_amplicon_molecules(
         prep.amplicon_sequences,
         prep.allele_coverages,
         model,
         random.Random(seed),
-        offtarget_source=offtarget or None,
+        offtarget_sources=(
+            offtarget_intervals(prep.haplotype_sequences, prep.amplicon_sequences)
+            if model.offtarget_frac
+            else ()
+        ),
     )
     logging.info("Truth-tracked amplicon simulation: %d molecules", len(molecules))
     return simulate_molecule_reads(molecules, sequencer, work_dir, out_fastq, truth_tsv, base, seed)

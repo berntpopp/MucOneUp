@@ -20,6 +20,7 @@ import math
 import random
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields
+from typing import NamedTuple
 
 _COMPLEMENT = str.maketrans("ACGTNacgtn", "TGCANtgcan")
 _STRANDS = ("+", "-")
@@ -40,12 +41,20 @@ class HpEdit:
     new_len: int
 
 
+class SourceInterval(NamedTuple):
+    """A contiguous stretch of haplotype ``hap`` starting at 0-based ``start``."""
+
+    hap: int
+    start: int
+    seq: str
+
+
 @dataclass(frozen=True)
 class Molecule:
     """A simulated template molecule; ``seq`` is in sequencing orientation."""
 
     id: int
-    hap: int  # 1-based haplotype; 0 for off-target products
+    hap: int  # 1-based haplotype of origin
     kind: str  # full | smear | chimera | concatemer | offtarget | fragment
     strand: str
     seq: str
@@ -252,19 +261,21 @@ def build_amplicon_molecules(
     model: MoleculeModel,
     rng: random.Random,
     *,
-    offtarget_source: str | None = None,
+    offtarget_sources: Sequence[SourceInterval] = (),
 ) -> list[Molecule]:
     """Build PCR amplicon molecules: ``counts[i]`` per haplotype plus artefacts.
 
     Each full-length slot becomes a smear, chimera (only with two haplotypes) or
     concatemer product with the configured probabilities. Off-target products
-    are added on top (``offtarget_frac`` of the final total) from
-    ``offtarget_source``.
+    are added on top (``offtarget_frac`` of the final total). Each is cut from
+    one of ``offtarget_sources`` (chosen weighted by length), so it never
+    crosses an interval end, and records that haplotype and its coordinates.
     """
     if len(amplicons) != len(counts):
         raise ValueError("amplicons and counts must have equal length")
-    if model.offtarget_frac and not offtarget_source:
-        raise ValueError("offtarget_source is required when offtarget_frac > 0")
+    sources = [s for s in offtarget_sources if s.seq]
+    if model.offtarget_frac and not sources:
+        raise ValueError("offtarget_sources are required when offtarget_frac > 0")
     molecules: list[Molecule] = []
     for hap_index, (amplicon, count) in enumerate(zip(amplicons, counts, strict=True), start=1):
         partner = amplicons[1 - (hap_index - 1)] if len(amplicons) == 2 else None
@@ -274,19 +285,20 @@ def build_amplicon_molecules(
             molecules.append(
                 _finish(mol_id, hap_index, kind, seq, (0, len(amplicon)), model, rng, detail)
             )
-    if model.offtarget_frac and offtarget_source:
+    if model.offtarget_frac:
         n_off = round(len(molecules) * model.offtarget_frac / (1.0 - model.offtarget_frac))
+        weights = [len(s.seq) for s in sources]
         for _ in range(n_off):
+            source = rng.choices(sources, weights=weights)[0]
             length = min(
-                len(offtarget_source),
+                len(source.seq),
                 _lognormal_length(model.offtarget_median_bp, model.offtarget_sigma, rng),
             )
-            start = rng.randrange(0, len(offtarget_source) - length + 1)
-            piece = offtarget_source[start : start + length]
+            start = rng.randrange(0, len(source.seq) - length + 1)
+            piece = source.seq[start : start + length]
+            span = (source.start + start, source.start + start + length)
             molecules.append(
-                _finish(
-                    len(molecules) + 1, 0, "offtarget", piece, (start, start + length), model, rng
-                )
+                _finish(len(molecules) + 1, source.hap, "offtarget", piece, span, model, rng)
             )
     return molecules
 

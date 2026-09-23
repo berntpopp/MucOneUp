@@ -128,4 +128,22 @@ class TestTruthTrackedHelpers:
             )
         molecules = sim.call_args.args[0]
         off = [m for m in molecules if m.kind == "offtarget"]
-        assert len(off) == 5 and all(set(m.seq) <= {"A", "T"} for m in off)
+        assert len(off) == 5
+        # No piece joins the left and right flank across the deleted amplicon (#112).
+        assert all(set(m.seq) in ({"A"}, {"T"}) for m in off)
+        for m in off:
+            assert m.hap == 1
+            span = (0, 4) if set(m.seq) == {"A"} else (12, 16)
+            assert span[0] <= m.src_start < m.src_end <= span[1]
+
+    def test_offtarget_without_flanks_raises_clear_error(self, tmp_path):
+        from muc_one_up.read_simulator.amplicon_common import offtarget_intervals
+
+        with pytest.raises(ValueError, match="no flanking sequence"):
+            offtarget_intervals(["CCCCGGGG"], ["CCCCGGGG"])
+
+    def test_offtarget_intervals_per_haplotype(self):
+        from muc_one_up.read_simulator.amplicon_common import offtarget_intervals
+
+        got = offtarget_intervals(["AACCGGT", "TTCCGG"], ["CCGG", "CCGG"])
+        assert [(i.hap, i.start, i.seq) for i in got] == [(1, 0, "AA"), (1, 6, "T"), (2, 0, "TT")]

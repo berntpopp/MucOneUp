@@ -8,6 +8,7 @@ import pytest
 
 from muc_one_up.read_simulator.molecules import (
     MoleculeModel,
+    SourceInterval,
     StutterTable,
     apply_stutter,
     build_amplicon_molecules,
@@ -113,15 +114,35 @@ class TestAmpliconMolecules:
     def test_concatemers_and_offtarget(self) -> None:
         model = MoleculeModel(concatemer_rate=0.1, offtarget_frac=0.25, offtarget_median_bp=300)
         mols = build_amplicon_molecules(
-            [AMP_A], [400], model, random.Random(4), offtarget_source="ACGT" * 2000
+            [AMP_A],
+            [400],
+            model,
+            random.Random(4),
+            offtarget_sources=[SourceInterval(1, 0, "ACGT" * 2000)],
         )
         assert sum(m.kind == "concatemer" for m in mols) == pytest.approx(40, abs=15)
         off = [m for m in mols if m.kind == "offtarget"]
         assert len(off) == round(400 * 0.25 / 0.75)  # offtarget_frac of the final total
-        assert all(m.hap == 0 for m in off)
+        assert all(m.hap == 1 for m in off)
+
+    def test_offtarget_pieces_stay_inside_one_interval(self) -> None:
+        """Pieces never cross interval ends and carry real haplotype coordinates (#112)."""
+        left, right = "A" * 300, "T" * 300
+        sources = [SourceInterval(1, 0, left), SourceInterval(2, 1000, right)]
+        model = MoleculeModel(offtarget_frac=0.5, offtarget_median_bp=200, offtarget_sigma=1.0)
+        mols = build_amplicon_molecules(
+            [AMP_A], [300], model, random.Random(3), offtarget_sources=sources
+        )
+        off = [m for m in mols if m.kind == "offtarget"]
+        assert {m.hap for m in off} == {1, 2}
+        for m in off:
+            source = sources[m.hap - 1]
+            piece = source.seq[m.src_start - source.start : m.src_end - source.start]
+            assert m.src_start >= source.start and m.src_end <= source.start + len(source.seq)
+            assert m.seq == piece  # forward strand, no stutter: identical to the source slice
 
     def test_offtarget_requires_source(self) -> None:
-        with pytest.raises(ValueError, match="offtarget_source"):
+        with pytest.raises(ValueError, match="offtarget_sources"):
             build_amplicon_molecules(
                 [AMP_A], [10], MoleculeModel(offtarget_frac=0.2), random.Random(1)
             )

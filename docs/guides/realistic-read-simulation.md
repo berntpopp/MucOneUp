@@ -79,11 +79,11 @@ measured spectrum. pbsim3 remains the default when no profile is used.
 | Column | Meaning |
 | --- | --- |
 | `read_id` | `{base}_h{hap}_m{molecule}` (unique) |
-| `hap` | 1-based haplotype; `0` for off-target products |
+| `hap` | 1-based haplotype of origin (off-target products: the haplotype whose flank they were cut from) |
 | `molecule` | Molecule id |
 | `kind` | `full`, `smear`, `chimera`, `concatemer`, `offtarget` or `fragment` |
 | `strand` | `+`: read in haplotype orientation (MUC1 C-runs read as C); `-`: reverse complement |
-| `src_start`, `src_end` | Source interval in the haplotype (amplicons: the amplicon) |
+| `src_start`, `src_end` | 0-based, end-exclusive source interval: amplicon products use amplicon coordinates, off-target products haplotype coordinates |
 | `n_hp_edits`, `hp_edits` | Injected homopolymer changes as `pos:base:true>new` (source orientation) |
 | `detail` | Smear deletion interval or chimera junction |
 
