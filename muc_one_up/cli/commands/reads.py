@@ -8,7 +8,7 @@ from typing import Any
 
 import click
 
-from ...read_simulator.constants import VALID_PCR_PRESETS
+from ...read_simulator.constants import DEFAULT_ONT_MIN_READ_LENGTH, VALID_PCR_PRESETS
 from .._common import require_config
 from ..error_handling import cli_error_handler
 from ..options import shared_read_options
@@ -296,9 +296,11 @@ def illumina(
 @click.option(
     "--min-read-length",
     type=int,
-    default=100,
-    show_default=True,
-    help="Minimum read length.",
+    default=None,
+    help=(
+        "Minimum read length. Overrides nanosim_params.min_read_length from the "
+        f"config; if neither is set, {DEFAULT_ONT_MIN_READ_LENGTH} is used."
+    ),
 )
 @shared_read_options
 @click.pass_context
@@ -339,7 +341,11 @@ def ont(ctx, input_fastas, out_dir, out_base, coverage, min_read_length, seed, t
     if "nanosim_params" not in config:
         config["nanosim_params"] = {}
     ns = cast(NanosimConfig, config["nanosim_params"])
-    ns["min_read_length"] = min_read_length
+    # Precedence: CLI flag > config value > built-in default.
+    if min_read_length is not None:
+        ns["min_read_length"] = min_read_length
+    elif ns.get("min_read_length") is None:
+        ns["min_read_length"] = DEFAULT_ONT_MIN_READ_LENGTH
     # Propagate CLI coverage to nanosim_params where the ONT backend reads it.
     # Only overwrite if CLI provided a value or config lacks ONT-specific coverage.
     if coverage is not None:

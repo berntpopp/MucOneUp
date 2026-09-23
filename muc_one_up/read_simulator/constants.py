@@ -71,6 +71,15 @@ DEFAULT_PBSIM3_LENGTH_MIN: Final[int] = 5000
 DEFAULT_PBSIM3_LENGTH_MAX: Final[int] = 30000
 
 # =============================================================================
+# NanoSim (ONT) Constants
+# =============================================================================
+
+#: Built-in minimum read length for ``muconeup reads ont`` when neither the
+#: ``--min-read-length`` flag nor ``nanosim_params.min_read_length`` is set.
+#: Precedence: CLI flag > config value > this default.
+DEFAULT_ONT_MIN_READ_LENGTH: Final[int] = 100
+
+# =============================================================================
 # CCS (Circular Consensus Sequencing) Constants
 # =============================================================================
 
