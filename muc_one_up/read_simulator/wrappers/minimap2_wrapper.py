@@ -56,6 +56,30 @@ from ..utils import run_command
 from .samtools_wrapper import convert_sam_to_bam, sort_and_index_bam
 
 
+def resolve_minimap2_target(reference: str, preset: str) -> str:
+    """Return a prebuilt minimap2 index for ``reference`` if one exists, else the FASTA.
+
+    minimap2 fixes indexing parameters (-k/-w) inside a .mmi, and presets differ,
+    so a preset-specific ``{reference}.{preset}.mmi`` is preferred over a generic
+    ``{reference}.mmi``. Reusing an index avoids rebuilding a whole-genome index
+    (~12 GB RAM for GRCh38) on every simulation run.
+    """
+    for candidate in (Path(f"{reference}.{preset}.mmi"), Path(f"{reference}.mmi")):
+        if candidate.exists():
+            logging.info("Using prebuilt minimap2 index: %s", candidate)
+            return str(candidate)
+    logging.info(
+        "No prebuilt minimap2 index for %s; indexing on the fly. Build one once with "
+        "'minimap2 -x %s -d %s.%s.mmi %s' to speed up repeated runs.",
+        reference,
+        preset,
+        reference,
+        preset,
+        reference,
+    )
+    return reference
+
+
 def align_reads_with_minimap2(
     minimap2_cmd: str,
     samtools_cmd: str,
@@ -123,7 +147,9 @@ def align_reads_with_minimap2(
 
     Notes:
         - Input FASTQ can be gzip-compressed (.fastq.gz)
-        - Reference FASTA is automatically indexed if .mmi doesn't exist
+        - A prebuilt index is reused when present: ``{reference}.{preset}.mmi``
+          (preferred, matching indexing parameters) or ``{reference}.mmi``;
+          otherwise minimap2 indexes the FASTA in memory on every call
         - Intermediate SAM file is cleaned up after conversion
         - Output BAM is coordinate-sorted and indexed
         - Preset parameter enables technology-specific optimization:
@@ -140,6 +166,8 @@ def align_reads_with_minimap2(
     if not reads_fastq_path.exists():
         raise FileOperationError(f"Input FASTQ file not found: {reads_fastq}")
 
+    target = resolve_minimap2_target(reference, preset)
+
     # Create intermediate SAM filename
     output_sam = str(Path(output_bam).with_suffix(".sam"))
 
@@ -151,7 +179,7 @@ def align_reads_with_minimap2(
         preset,  # Technology-specific preset (map-ont, map-pb, map-hifi)
         "-t",
         threads,  # Threads (build_tool_command handles conversion)
-        reference,
+        target,
         reads_fastq,
         "-o",
         output_sam,
