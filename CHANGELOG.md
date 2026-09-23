@@ -5,84 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.0] - 2026-09-24
+
+Realistic, truth-tracked long-read simulation (read profiles, molecule model,
+empirical error channel, per-read truth, fragment-based genomic ONT) and fixes
+#97, #102, #104-#111. The maintained changelog is `docs/about/changelog.md`.
+
 ## [0.28.1] - 2026-03-16
 
 ### Fixed
 
 - **Add biopython to core dependencies** — `biopython` was only listed in optional `dev` and `docs` dependency groups, but is imported at module level in `read_simulator/utils/reference_utils.py` and used in CLI commands, causing `ModuleNotFoundError: No module named 'Bio'` on fresh installs
-
-## [Unreleased]
-
-### Fixed
-
-- **Seed provenance** — `simulate --seed N` is now recorded as
-  `provenance.seed` in `simulation_stats.json` (#109)
-- **NanoSim read-source tracking** — the ONT parser now accepts NanoSim's
-  `haplotype-N` reference names and raises instead of silently assigning
-  unparseable reads to haplotype 1; `simulate --track-read-source` now writes
-  the `haplotypes`, `config` and `mutation_details` fields that
-  `reads ... --track-read-source` needs (#102)
-- **samtools downsampling** — BAM downsampling now uses
-  `samtools view --subsample FRAC --subsample-seed SEED` instead of the
-  deprecated `-s SEED.FRAC` form, which samtools 1.22+ misreads and which was
-  malformed for fractions such as 0.05 (kept 50%) or 1.0 (error) (#97)
-
-#### Illumina Coverage Downsampling Now Works
-
-- **Fixed config key mismatch** that prevented Illumina read downsampling from executing
-- Pipeline now correctly reads `coverage` configuration key set by CLI
-- Downsampling logic (previously non-functional) now activates properly
-
-**Technical Details:**
-- Standardized on `coverage` key across config, CLI, and pipeline
-- Fixed log format string bug (changed `%d` to `%.2f` for float values)
-- No changes to CLI interface (already used correct key)
-- No changes to test fixtures (already used correct key)
-
-### Changed
-
-#### Breaking Change: Config Key Renamed
-
-- **Renamed:** `downsample_coverage` → `coverage` in `read_simulation` section
-- **Reason:** Standardize with ONT/PacBio pipelines, fix broken downsampling feature
-- **Impact:** User configuration files must be updated
-
-**Migration Required:**
-
-If your `config.json` contains:
-```json
-{
-  "read_simulation": {
-    "downsample_coverage": 150
-  }
-}
-```
-
-Change to:
-```json
-{
-  "read_simulation": {
-    "coverage": 150
-  }
-}
-```
-
-**Note:** The old key was non-functional due to a bug, so this change enables the feature rather than breaking working functionality. Users who never used downsampling are unaffected.
-
-**Files Changed:**
-- `config.json`: Updated key name (line 545)
-- `muc_one_up/config.py`: Updated schema validation (line 296)
-- `muc_one_up/read_simulator/pipeline.py`: Read correct key (lines 279-331)
-
-**Testing:**
-- Added comprehensive test suite: `tests/read_simulator/test_coverage_config.py`
-- 20+ test cases covering key standardization, validation, and edge cases
-- All existing tests pass (already used correct key)
-
-**Documentation:**
-- Implementation plan: `plan/fix-illumina-coverage-downsampling.md`
-
----
 
 ## [0.20.0] - 2025-10-23
 

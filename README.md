@@ -20,6 +20,7 @@ MucOneUp generates realistic **MUC1 Variable Number Tandem Repeat (VNTR) sequenc
 - Diploid haplotype generation with probability-based repeat transitions
 - Frameshift mutation simulation (dupC, delC, custom insertions/deletions)
 - Multi-platform read simulation (Illumina, Oxford Nanopore, PacBio HiFi)
+- Realistic, truth-tracked long reads via calibrated read profiles (ONT R10 amplicon/genomic): PCR artefacts, strand-aware homopolymer stutter and a per-read truth manifest (`--read-profile`, `muconeup reads profiles`)
 - ORF prediction with toxic protein detection for ADTKD-MUC1 analysis
 - SNP integration and VNTR statistics analysis
 - Reproducible workflows with seed-based generation

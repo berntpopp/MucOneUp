@@ -25,7 +25,7 @@ muconeup --config config.json reads illumina sample.001.simulated.fa \
 Works identically with `reads ont` and `reads pacbio`.
 
 !!! note "Amplicon pipelines"
-    Read source tracking is not supported for `reads amplicon` (PacBio or ONT). Passing `--track-read-source` with amplicon mode raises an error.
+    For `reads amplicon` (PacBio or ONT) and `reads ont --simulator pbsim3-fragments`, `--track-read-source` (or a `--read-profile`) writes a per-read truth manifest `{base}_read_truth.tsv.gz` instead of the WGS manifest. See [Realistic Truth-Tracked Reads](realistic-read-simulation.md).
 
 ---
 

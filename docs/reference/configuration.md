@@ -632,6 +632,40 @@ Available ONT models: `QSHMM-ONT-HQ.model`, `QSHMM-ONT.model`, `ERRHMM-ONT.model
 
 ---
 
+## Read Model and Fragment Parameters Sections
+
+### `read_model`
+
+Activates a [read profile](../guides/realistic-read-simulation.md) from the
+config file; `--read-profile` on the command line takes precedence.
+
+```json
+{"read_model": {"profile": "ont_r10_sup_amplicon_v1"}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `profile` | string | Built-in profile name or path to a profile JSON (required) |
+| `name`, `sha256` | string | Recorded automatically when a profile is applied |
+
+### `ont_fragment_params`
+
+Settings for `reads ont --simulator pbsim3-fragments` (config simulator
+`ont-fragments`). The ONT error model settings come from `ont_amplicon_params`.
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `n_reads` | integer | Number of reads | derived from coverage |
+| `length_median` | number | Median read length (bp) | profile, else 5000 |
+| `length_sigma` | number | Log-normal sigma | profile, else 0.5 |
+| `flank_fasta` | string | FASTA with `left`/`right` records added around each haplotype | none |
+| `seed` | integer | Random seed | none |
+
+`read_simulation.track_read_source` (boolean) requests truth-tracked amplicon
+simulation, as `--track-read-source` does.
+
+---
+
 ## Amplicon Parameters Section
 
 ### Purpose
