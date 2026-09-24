@@ -246,13 +246,16 @@ class StutterTable:
                     self.pmfs[fitted[lo]], lo, self.pmfs[fitted[hi]], hi, length
                 )
                 if between is not None:
-                    logging.debug(
-                        "Stutter %s: interpolated between %s and %s", key, fitted[lo], fitted[hi]
+                    logging.info(
+                        "Stutter %s has no fitted entry; interpolated between %s and %s",
+                        key,
+                        fitted[lo],
+                        fitted[hi],
                     )
                     return between
             ref_len = max(shorter) if shorter else min(fitted)
             reference, source = self.pmfs[fitted[ref_len]], fitted[ref_len]
-            logging.debug("Stutter %s has no fitted entry; extrapolating from %s", key, source)
+            logging.info("Stutter %s has no fitted entry; extrapolated from %s", key, source)
         else:
             reference, ref_len = self.fallback.generic_pmf, self.fallback.generic_ref_len
             if base not in self._generic_bases:

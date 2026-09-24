@@ -206,8 +206,10 @@ FALLBACK = {
 def test_empirical_errors_require_stutter_fallback(tmp_path: Path, molecules: dict) -> None:
     """Protected runs without stutter would be error-free by construction (#132)."""
     data = {**MINIMAL, "molecules": molecules, "errors": ERRORS}
-    with pytest.raises(ValueError, match="stutter_fallback"):
+    with pytest.raises(ValueError, match="stutter_fallback") as info:
         load_read_profile(str(_write(tmp_path, data)))
+    assert "helpers/calibrate_read_profile.py" in str(info.value)
+    assert "Homopolymer stutter coverage" in str(info.value)
 
 
 def test_empirical_errors_with_stutter_fallback_load(tmp_path: Path) -> None:

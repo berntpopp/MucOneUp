@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking change: read profile format
+Custom read profiles with an `errors` section (empirical error channel) must
+be updated (#132). Without these, homopolymer runs could be simulated
+error-free, so such profiles are now rejected with a message that points to
+the calibration helper and the
+[Homopolymer stutter coverage](../guides/realistic-read-simulation.md#homopolymer-stutter-coverage)
+section:
+- `molecules.stutter` and `molecules.stutter_fallback` are required, with
+  `rule` (`log_odds_interpolate`), `log_odds_slope_per_base`,
+  `max_extrapolation_bases` and `generic` (`ref_len`, `pmf`);
+- a fitted stutter entry for a protected run (length >= `errors.hp_min_len`)
+  must have P(delta = 0) < 1, and the generic pmf must keep error mass at the
+  table's minimum run length;
+- `errors.hp_min_len` must not be below the stutter table's minimum run length.
+
+Regenerate with `helpers/calibrate_read_profile.py --engine empirical`, or
+copy `stutter_fallback` from a built-in profile. Profiles without `errors`
+(pbsim3 path) are unaffected.
+
 ### Fixed
 - **Homopolymer runs without a stutter entry were simulated error-free**
   (#132). The empirical error channel protects every run >= `hp_min_len` from
@@ -26,14 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     built-ins, so long flank runs such as T19 are not almost always
     misread), or uses a generic pmf with a warning (once per base) when the
     base has no fitted entries;
-  - profiles with an `errors` model must define `molecules.stutter` and
-    `molecules.stutter_fallback`, and `errors.hp_min_len` must not be below
-    the stutter table's minimum run length;
+  - profiles with an `errors` model are validated so no protected run is
+    error-free by construction (see **Breaking change** above);
   - homopolymer runs ignore case (a soft-masked `cccC` is C4 and keeps its
     case when stuttered); runs of `N` get no stutter and are not protected
     from base-level errors;
   - `provenance.stutter_fit` records the fitted and excluded keys, the minimum
-    n and the fallback derivation.
+    n and the fallback derivation; runs resolved by interpolation or
+    extrapolation are logged at INFO once per profile load.
 - `helpers/calibrate_read_profile.py` validates the simulated observed-minus-
   true pmf against the target for every base/length/strand
   (`calibration_report.validation_round*.per_key`) and gains `--min-target-n`
@@ -53,7 +72,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refit tables keep deltas up to ±6. Simulations without a read profile are
   unchanged (seeded legacy ONT and HiFi amplicon FASTQs are byte-identical to
   0.45.0). User profiles with an `errors` section but no
-  `stutter_fallback` are now rejected with a message naming the missing keys.
+  `stutter_fallback` are now rejected (see **Breaking change** above).
+
+### Tests
+- Legacy byte-identity guard: a unit test pins the template FASTA md5s and
+  tool argument lists of seeded legacy ONT and HiFi amplicon runs (tools
+  mocked), and an integration test checks the golden FASTQ md5s with real
+  pbsim3/ccs/samtools (skips when they are missing).
 
 ---
 

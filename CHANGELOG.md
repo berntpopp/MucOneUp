@@ -8,8 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 Homopolymer runs without a stutter-table entry (e.g. the dupC C8 run) are no
-longer simulated error-free by the ONT read profiles (#132). See
-`docs/about/changelog.md`.
+longer simulated error-free by the ONT read profiles (#132). **Breaking change
+for custom read profiles with an `errors` section:** they now need
+`molecules.stutter_fallback`. See `docs/about/changelog.md`.
 
 ## [0.45.0] - 2026-09-24
 

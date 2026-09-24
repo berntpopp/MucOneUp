@@ -135,6 +135,20 @@ class TestFallbackResolution:
         assert draws.count(0) / len(draws) == pytest.approx(1 / 3, abs=0.015)
 
 
+class TestFallbackLogging:
+    def test_unfitted_keys_log_at_info_once_per_table(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        table = _table()
+        with caplog.at_level(logging.INFO):
+            for _ in range(3):
+                table.resolve("C", 8, "+")
+                table.resolve("C", 5, "+")
+        info = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO]
+        assert sum("C8|+" in m and "extrapolat" in m for m in info) == 1
+        assert sum("C5|+" in m and "interpolat" in m for m in info) == 1
+
+
 class TestExtrapolationCap:
     """Extrapolation stops after max_extrapolation_bases (#132 review, minor 4)."""
 

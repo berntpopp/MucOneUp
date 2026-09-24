@@ -167,7 +167,9 @@ def _check_protected_runs_are_stuttered(
         raise ValueError(
             f"read profile {path}: an 'errors' model requires 'molecules.stutter' and "
             "'molecules.stutter_fallback', because homopolymer runs >= hp_min_len get no "
-            "base-level errors and would otherwise be simulated error-free"
+            "base-level errors and would otherwise be simulated error-free. Derive both with "
+            "'helpers/calibrate_read_profile.py --engine empirical' or add them by hand; see "
+            "'Homopolymer stutter coverage' in docs/guides/realistic-read-simulation.md"
         )
     for key, pmf in table.pmfs.items():
         if int(key.partition("|")[0][1:]) >= errors.hp_min_len and dict(pmf).get(0, 0.0) >= 1.0:
