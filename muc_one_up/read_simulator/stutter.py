@@ -16,8 +16,9 @@ on an error. Deltas that would remove more bases than the run has are dropped.
    the error shape mixed with the same weights.
 3. **Extrapolation.** A run longer than the longest (or shorter than the
    shortest) fitted length scales that entry's error odds by
-   ``exp(log_odds_slope_per_base * (run length - reference length))`` and
-   keeps its error shape.
+   ``exp(log_odds_slope_per_base * d)`` and keeps its error shape, where ``d``
+   is the length difference clamped to ``±max_extrapolation_bases``: runs
+   further from the data are treated like the capped length.
 4. **Generic.** A base without fitted entries uses the profile's generic pmf
    at its ``ref_len``, scaled as in 3, and logs a warning (once per base and
    table). The generic pmf is also used when the reference keeps no error
@@ -42,7 +43,7 @@ Pmf = tuple[tuple[int, float], ...]
 
 STRANDS = ("+", "-")
 FALLBACK_RULES = ("log_odds_interpolate",)
-_FALLBACK_KEYS = {"rule", "log_odds_slope_per_base", "generic"}
+_FALLBACK_KEYS = {"rule", "log_odds_slope_per_base", "max_extrapolation_bases", "generic"}
 _PMF_TOLERANCE = 1e-6
 
 
@@ -127,6 +128,7 @@ class StutterFallback:
     """Documented rule for runs without a fitted stutter entry (see module docstring)."""
 
     log_odds_slope_per_base: float
+    max_extrapolation_bases: int
     generic_pmf: Pmf
     generic_ref_len: int
     rule: str = "log_odds_interpolate"
@@ -137,10 +139,19 @@ class StutterFallback:
         slope = self.log_odds_slope_per_base
         if not math.isfinite(slope) or slope < 0:
             raise ValueError(f"log_odds_slope_per_base must be finite and >= 0, got {slope}")
+        if self.max_extrapolation_bases < 0:
+            raise ValueError(
+                f"max_extrapolation_bases must be >= 0, got {self.max_extrapolation_bases}"
+            )
         if self.generic_ref_len < 1:
             raise ValueError("stutter_fallback generic ref_len must be >= 1")
         if dict(self.generic_pmf).get(0, 0.0) >= 1.0:
             raise ValueError("stutter_fallback generic pmf must have error mass (P(0) < 1)")
+
+    def shift(self, length_difference: int) -> float:
+        """Log-odds shift for extrapolating over ``length_difference`` bases (capped)."""
+        cap = self.max_extrapolation_bases
+        return self.log_odds_slope_per_base * max(-cap, min(cap, length_difference))
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> StutterFallback:
@@ -156,6 +167,7 @@ class StutterFallback:
             raise ValueError("stutter_fallback generic ref_len must be >= 1")
         return cls(
             log_odds_slope_per_base=float(data["log_odds_slope_per_base"]),  # type: ignore[arg-type]
+            max_extrapolation_bases=int(data["max_extrapolation_bases"]),  # type: ignore[call-overload]
             generic_pmf=parse_pmf(generic["pmf"], "stutter_fallback generic", ref_len),
             generic_ref_len=ref_len,
             rule=str(data["rule"]),
@@ -253,15 +265,13 @@ class StutterTable:
                     ref_len,
                 )
             logging.debug("Stutter %s uses the generic stutter pmf", key)
-        shift = self.fallback.log_odds_slope_per_base * (length - ref_len)
+        shift = self.fallback.shift(length - ref_len)
         scaled = scale_error_odds(reference, shift, length)
         if _has_error_mass(scaled) or not fitted:
             return scaled
         # The reference's error deltas all remove more bases than this run has.
         logging.info("Stutter %s: reference has no usable error mass; using the generic pmf", key)
-        generic_shift = self.fallback.log_odds_slope_per_base * (
-            length - self.fallback.generic_ref_len
-        )
+        generic_shift = self.fallback.shift(length - self.fallback.generic_ref_len)
         return scale_error_odds(self.fallback.generic_pmf, generic_shift, length)
 
     def _fitted_lengths(self, base: str, strand: str) -> dict[int, str]:

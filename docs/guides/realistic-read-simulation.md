@@ -99,6 +99,7 @@ the amplicon profile. Runs without a fitted entry use the fallback:
 "stutter_fallback": {
   "rule": "log_odds_interpolate",
   "log_odds_slope_per_base": 0.57825,
+  "max_extrapolation_bases": 3,
   "generic": {
     "ref_len": 3,
     "pmf": {"-3": 0.00072, "-2": 0.0034, "-1": 0.02715, "0": 0.94838,
@@ -121,8 +122,10 @@ has are dropped.
    profile's C5 and C6 lie between its fitted C4 and C7.
 3. **Extrapolation.** A run longer than the longest fitted length (or shorter
    than the shortest) multiplies that entry's error odds by
-   `exp(log_odds_slope_per_base × (run length − reference length))` and keeps
-   its error shape.
+   `exp(log_odds_slope_per_base × d)` and keeps its error shape. `d` is the
+   length difference capped at `max_extrapolation_bases`, so a T19 flank run
+   is treated like a run three bases beyond the data instead of being
+   misread almost always.
 4. **Generic.** A base without any fitted entry (for example A and T runs,
    which the PRJEB92208 targets do not cover at length ≥ 3) uses
    `generic.pmf` at `generic.ref_len`, scaled as in step 3. MucOneUp logs a
@@ -133,7 +136,9 @@ has are dropped.
 The calibration helper derives both values from the fitted table: the slope is
 the median least-squares slope of error log-odds against run length over
 base/strand groups with at least three fitted lengths (clamped at 0), and the
-generic pmf is the n-weighted pool of the fitted length-3 entries. Profiles
+generic pmf is the n-weighted pool of the fitted length-3 entries.
+`max_extrapolation_bases` is configured (`--max-extrapolation-bases`, default
+3). Profiles
 without an `errors` section (pbsim3 path) may omit the fallback; missing keys
 then get no extra stutter, because pbsim3 adds its own homopolymer errors.
 

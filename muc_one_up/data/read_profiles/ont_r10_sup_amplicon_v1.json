@@ -255,6 +255,7 @@
     "stutter_fit": {
       "method": "empirical engine: fitted entry = measured hp_P_obs_given_true pmf truncated to |delta| <= max_delta (and >= -run length) and renormalised",
       "min_target_n": 500,
+      "max_extrapolation_bases": "3: the log-odds slope is only extrapolated this many bases beyond the fitted range; longer runs are treated like the capped length",
       "min_run_len": 3,
       "max_delta": 6,
       "fitted_keys": [
@@ -276,7 +277,7 @@
         "G4|-"
       ],
       "excluded_keys": {},
-      "rule": "log_odds_interpolate: runs without a fitted entry of the same base and strand (strand 'both' if no strand-specific entry) interpolate the error log-odds and error shape linearly between the nearest fitted lengths on both sides; beyond the longest (or below the shortest) fitted length the error odds of that entry are scaled by exp(log_odds_slope_per_base * length difference); bases without fitted entries, or references without a usable error delta, use the generic pmf",
+      "rule": "log_odds_interpolate: runs without a fitted entry of the same base and strand (strand 'both' if no strand-specific entry) interpolate the error log-odds and error shape linearly between the nearest fitted lengths on both sides; beyond the longest (or below the shortest) fitted length the error odds of that entry are scaled by exp(log_odds_slope_per_base * length difference), with the difference capped at max_extrapolation_bases; bases without fitted entries, or references without a usable error delta, use the generic pmf",
       "slope": "median least-squares slope of error log-odds vs length over base/strand groups with >= 3 fitted lengths, clamped at 0",
       "generic": "n-weighted pool of fitted entries at length 3; used with a warning for bases without any fitted entry",
       "target_key": "ont_amplicon_PRJEB92208"
@@ -455,6 +456,7 @@
     "stutter_fallback": {
       "rule": "log_odds_interpolate",
       "log_odds_slope_per_base": 0.57825,
+      "max_extrapolation_bases": 3,
       "generic": {
         "ref_len": 3,
         "pmf": {

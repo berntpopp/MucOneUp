@@ -85,12 +85,19 @@ def test_generic_pmf_pools_fitted_keys_at_reference_length_by_n() -> None:
 
 def test_profile_section_is_loadable_and_records_provenance() -> None:
     molecules, provenance = stutter_profile_section(
-        HP_TARGETS, min_n=500, min_len=3, max_delta=6, min_lengths_for_slope=2, generic_ref_len=3
+        HP_TARGETS,
+        min_n=500,
+        min_len=3,
+        max_delta=6,
+        min_lengths_for_slope=2,
+        generic_ref_len=3,
+        max_extrapolation_bases=3,
     )
     fallback = StutterFallback.from_dict(molecules["stutter_fallback"])
     table = StutterTable.from_dict(molecules["stutter"], fallback=fallback)
     assert table.resolve("A", 4, "+") is not None
     assert provenance["min_target_n"] == 500
+    assert molecules["stutter_fallback"]["max_extrapolation_bases"] == 3
     assert provenance["fitted_keys"] == sorted(molecules["stutter"])
     assert "C8|-" in provenance["excluded_keys"]
     for pmf in molecules["stutter"].values():

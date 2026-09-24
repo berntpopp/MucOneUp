@@ -191,6 +191,7 @@ ERRORS = {
 FALLBACK = {
     "rule": "log_odds_interpolate",
     "log_odds_slope_per_base": 0.5,
+    "max_extrapolation_bases": 4,
     "generic": {"ref_len": 3, "pmf": {"-1": 0.05, "0": 0.95}},
 }
 

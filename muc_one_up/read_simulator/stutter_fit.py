@@ -13,6 +13,8 @@ for unfitted runs (see :mod:`.stutter`) is derived from the same fitted table:
   ``min_lengths_for_slope`` fitted lengths, the least-squares slope of the
   error log-odds against run length; the median over those groups, clamped at
   0 so extrapolation never makes longer runs more accurate;
+* ``max_extrapolation_bases``: configured cap on how far the slope is
+  extrapolated beyond the fitted range;
 * ``generic``: the ``n``-weighted pool of the fitted entries at
   ``generic_ref_len`` over all bases and strands.
 
@@ -127,6 +129,7 @@ def stutter_profile_section(
     max_delta: int,
     min_lengths_for_slope: int,
     generic_ref_len: int,
+    max_extrapolation_bases: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Return (molecule-model stutter keys, provenance record) for a read profile."""
     pmfs = fit_stutter_pmfs(hp_targets, min_n=min_n, min_len=min_len, max_delta=max_delta)
@@ -135,6 +138,7 @@ def stutter_profile_section(
     fallback = {
         "rule": "log_odds_interpolate",
         "log_odds_slope_per_base": round(slope, ROUND_DIGITS),
+        "max_extrapolation_bases": max_extrapolation_bases,
         "generic": {"ref_len": generic_ref_len, "pmf": round_pmf(generic)},
     }
     StutterFallback.from_dict(fallback)  # validate before writing
@@ -145,6 +149,10 @@ def stutter_profile_section(
             "|delta| <= max_delta (and >= -run length) and renormalised"
         ),
         "min_target_n": min_n,
+        "max_extrapolation_bases": (
+            f"{max_extrapolation_bases}: the log-odds slope is only extrapolated this many "
+            "bases beyond the fitted range; longer runs are treated like the capped length"
+        ),
         "min_run_len": min_len,
         "max_delta": max_delta,
         "fitted_keys": sorted(pmfs),
@@ -158,7 +166,8 @@ def stutter_profile_section(
             "(strand 'both' if no strand-specific entry) interpolate the error log-odds and "
             "error shape linearly between the nearest fitted lengths on both sides; beyond "
             "the longest (or below the shortest) fitted length the error odds of that entry "
-            "are scaled by exp(log_odds_slope_per_base * length difference); bases without "
+            "are scaled by exp(log_odds_slope_per_base * length difference), with the "
+            "difference capped at max_extrapolation_bases; bases without "
             "fitted entries, or references without a usable error delta, use the generic pmf"
         ),
         "slope": (

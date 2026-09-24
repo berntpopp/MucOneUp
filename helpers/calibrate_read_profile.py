@@ -257,6 +257,12 @@ def _parse_args() -> argparse.Namespace:
         help="run length whose pooled fitted pmfs form the generic fallback pmf",
     )
     ap.add_argument(
+        "--max-extrapolation-bases",
+        type=int,
+        default=3,
+        help="cap on how many bases beyond the fitted range the log-odds slope is extrapolated",
+    )
+    ap.add_argument(
         "--tolerance",
         type=float,
         default=0.03,
@@ -298,6 +304,7 @@ def main() -> None:
             max_delta=args.max_delta,
             min_lengths_for_slope=args.min_lengths_for_slope,
             generic_ref_len=args.generic_ref_len,
+            max_extrapolation_bases=args.max_extrapolation_bases,
         )
         provenance["stutter_fit"]["target_key"] = args.target_key
         molecules.update(section)

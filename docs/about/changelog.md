@@ -22,8 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - new `molecules.stutter_fallback` (rule `log_odds_interpolate`) resolves
     runs without a fitted entry: it interpolates the error log-odds between
     the nearest fitted lengths of the same base and strand, extrapolates
-    beyond the fitted range, or uses a generic pmf with a warning (once per
-    base) when the base has no fitted entries;
+    beyond the fitted range (at most `max_extrapolation_bases`, 3 in the
+    built-ins, so long flank runs such as T19 are not almost always
+    misread), or uses a generic pmf with a warning (once per base) when the
+    base has no fitted entries;
   - profiles with an `errors` model must define `molecules.stutter` and
     `molecules.stutter_fallback`, and `errors.hp_min_len` must not be below
     the stutter table's minimum run length;
@@ -33,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   true pmf against the target for every base/length/strand
   (`calibration_report.validation_round*.per_key`) and gains `--min-target-n`
   (default now 500), `--max-delta` (default now 6, was 3),
-  `--min-lengths-for-slope`, `--generic-ref-len` and `--tolerance`;
+  `--min-lengths-for-slope`, `--generic-ref-len`, `--max-extrapolation-bases`
+  and `--tolerance`;
   `--model-file` is only required for `--engine pbsim3`.
 
 ### Changed (intentional output differences)

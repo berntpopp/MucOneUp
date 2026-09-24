@@ -15,6 +15,7 @@ SLOPE = math.log(2.0)  # error odds double per extra base
 FALLBACK = {
     "rule": "log_odds_interpolate",
     "log_odds_slope_per_base": SLOPE,
+    "max_extrapolation_bases": 4,
     "generic": {"ref_len": 3, "pmf": {"-1": 0.04, "0": 0.9, "1": 0.06}},
 }
 TABLE = {
@@ -134,6 +135,27 @@ class TestFallbackResolution:
         assert draws.count(0) / len(draws) == pytest.approx(1 / 3, abs=0.015)
 
 
+class TestExtrapolationCap:
+    """Extrapolation stops after max_extrapolation_bases (#132 review, minor 4)."""
+
+    def test_long_runs_are_capped_beyond_the_fitted_range(self) -> None:
+        table = _table()  # C7|+ fitted, cap 4
+        capped = _p0(table.resolve("C", 11, "+"))  # type: ignore[arg-type]
+        assert capped == pytest.approx(1 / (1 + 1.0 * 2.0**4))
+        assert _p0(table.resolve("C", 19, "+")) == pytest.approx(capped)  # type: ignore[arg-type]
+
+    def test_generic_extrapolation_is_capped(self) -> None:
+        table = _table()
+        capped = _p0(table.resolve("T", 7, "+"))  # type: ignore[arg-type]
+        assert capped == pytest.approx(1 / (1 + (0.1 / 0.9) * 2.0**4))
+        assert _p0(table.resolve("T", 19, "+")) == pytest.approx(capped)  # type: ignore[arg-type]
+
+    def test_cap_zero_copies_the_reference(self) -> None:
+        fallback = StutterFallback.from_dict({**FALLBACK, "max_extrapolation_bases": 0})
+        table = StutterTable.from_dict(TABLE, fallback=fallback)
+        assert _p0(table.resolve("C", 12, "-")) == pytest.approx(0.8)  # type: ignore[arg-type]
+
+
 class TestFallbackValidation:
     @pytest.mark.parametrize(
         "mutation,match",
@@ -146,6 +168,7 @@ class TestFallbackValidation:
             ({"generic": {"ref_len": 2, "pmf": {"-3": 0.1, "0": 0.9}}}, "remove"),
             ({"generic": {"ref_len": 0, "pmf": {"-1": 0.1, "0": 0.9}}}, "ref_len"),
             ({"surprise": 1}, "unknown"),
+            ({"max_extrapolation_bases": -1}, "max_extrapolation_bases"),
         ],
     )
     def test_invalid_fallback_rejected(self, mutation: dict, match: str) -> None:
