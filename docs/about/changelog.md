@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-09-24
+
 ### Breaking change: read profile format
 Custom read profiles with an `errors` section (empirical error channel) must
 be updated (#132). Without these, homopolymer runs could be simulated
