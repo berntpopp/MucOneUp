@@ -90,7 +90,10 @@ source, so every such run must resolve to a stutter pmf. A profile with an
 `molecules.stutter_fallback`.
 
 Stutter keys are `{base}{length}|{strand}` in haplotype orientation, e.g.
-`C8|+`. The built-in ONT profiles fit every per-strand key of the target with
+`C8|+`. Case is ignored: a soft-masked `cccC` is a C4 run, and stutter keeps
+the run's own case. Runs of `N` (or any non-ACGT character) are unknown
+sequence, not homopolymers: they get no stutter and are not protected from
+base-level errors. The built-in ONT profiles fit every per-strand key of the target with
 enough observations (`provenance.stutter_fit.min_target_n`: 500 for the
 amplicon profile, 300 for the genomic profile), including the dupC C8 run in
 the amplicon profile. Runs without a fitted entry use the fallback:

@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - profiles with an `errors` model must define `molecules.stutter` and
     `molecules.stutter_fallback`, and `errors.hp_min_len` must not be below
     the stutter table's minimum run length;
+  - homopolymer runs ignore case (a soft-masked `cccC` is C4 and keeps its
+    case when stuttered); runs of `N` get no stutter and are not protected
+    from base-level errors;
   - `provenance.stutter_fit` records the fitted and excluded keys, the minimum
     n and the fallback derivation.
 - `helpers/calibrate_read_profile.py` validates the simulated observed-minus-

@@ -13,6 +13,7 @@ from muc_one_up.read_simulator.molecules import (
     apply_stutter,
     build_amplicon_molecules,
     build_fragment_molecules,
+    homopolymer_runs,
     reverse_complement,
 )
 
@@ -67,6 +68,26 @@ class TestApplyStutter:
         plus = sum(1 for d in deltas if d and d[0].new_len == 8) / 4000
         assert minus == pytest.approx(0.3, abs=0.03)
         assert plus == pytest.approx(0.1, abs=0.02)
+
+
+class TestHomopolymerRunCase:
+    """Lowercase is its uppercase base; N runs get no stutter (#132 review)."""
+
+    def test_runs_ignore_case_and_skip_n(self) -> None:
+        runs = list(homopolymer_runs("AAcCcGNNNNNTttt", 3))
+        assert runs == [(2, 5, "C"), (11, 15, "T")]
+
+    def test_stutter_on_lowercase_run_keeps_case(self) -> None:
+        shorter = StutterTable.from_dict({"C3|+": {"-1": 1.0}})
+        longer = StutterTable.from_dict({"C3|+": {"2": 1.0}})
+        assert apply_stutter("AAcccTT", shorter, "+", random.Random(1))[0] == "AAccTT"
+        seq, edits = apply_stutter("AAcCcTT", longer, "+", random.Random(1))
+        assert seq == "AAcCcccTT"
+        assert [(e.base, e.true_len, e.new_len) for e in edits] == [("C", 3, 5)]
+
+    def test_n_runs_are_never_stuttered(self) -> None:
+        table = StutterTable.from_dict({"C3|+": {"-1": 1.0}})
+        assert apply_stutter("ACNNNNNNGT", table, "+", random.Random(1)) == ("ACNNNNNNGT", ())
 
 
 class TestMoleculeModel:

@@ -39,6 +39,7 @@ __all__ = [
 ]
 
 _COMPLEMENT = str.maketrans("ACGTNacgtn", "TGCANtgcan")
+_HP_BASES = frozenset("ACGT")
 _SMEAR_MAX_KEEP = 0.95  # smear products keep at most this fraction of the amplicon
 
 
@@ -158,14 +159,21 @@ class MoleculeModel:
 
 
 def homopolymer_runs(seq: str, min_len: int) -> Iterator[tuple[int, int, str]]:
-    """Yield (start, end, base) of runs of one base with length >= min_len."""
+    """Yield (start, end, base) of runs of one base with length >= min_len.
+
+    Case is ignored (soft-masked ``cccC`` is a C4 run) and ``base`` is upper
+    case. Runs of anything but A/C/G/T (e.g. ``N``) are unknown sequence, not
+    homopolymers: they are not yielded, so they get no stutter and no
+    protection from base-level errors.
+    """
+    upper = seq.upper()
     i = 0
-    while i < len(seq):
+    while i < len(upper):
         j = i
-        while j < len(seq) and seq[j] == seq[i]:
+        while j < len(upper) and upper[j] == upper[i]:
             j += 1
-        if j - i >= min_len:
-            yield i, j, seq[i]
+        if j - i >= min_len and upper[i] in _HP_BASES:
+            yield i, j, upper[i]
         i = j
 
 
@@ -182,7 +190,9 @@ def apply_stutter(
             continue
         new_len = end - start + delta  # 0: the whole run is dropped (seen in real reads)
         parts.append(seq[last:start])
-        parts.append(base * new_len)
+        # keep the run's own characters (case); a longer run repeats its last one
+        run = seq[start:end]
+        parts.append(run[:new_len] if delta < 0 else run + run[-1] * delta)
         edits.append(HpEdit(start, base, end - start, new_len))
         last = end
     parts.append(seq[last:])
