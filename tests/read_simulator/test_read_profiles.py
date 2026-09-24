@@ -178,3 +178,61 @@ def test_malformed_profiles_raise_value_error(tmp_path: Path, mutation: dict, ma
     data = {k: v for k, v in data.items() if v is not None}
     with pytest.raises(ValueError, match=match):
         load_read_profile(str(_write(tmp_path, data)))
+
+
+ERRORS = {
+    "mismatch_rate": 0.008,
+    "insertion_rate": 0.005,
+    "deletion_rate": 0.004,
+    "insertion_len_pmf": {"1": 1.0},
+    "deletion_len_pmf": {"1": 1.0},
+}
+FALLBACK = {
+    "rule": "log_odds_linear",
+    "log_odds_slope_per_base": 0.5,
+    "generic": {"ref_len": 3, "pmf": {"-1": 0.05, "0": 0.95}},
+}
+
+
+@pytest.mark.parametrize(
+    "molecules",
+    [
+        {"forward_frac": 0.5},
+        {"forward_frac": 0.5, "stutter": {"C7|+": {"-1": 0.3, "0": 0.7}}},
+    ],
+)
+def test_empirical_errors_require_stutter_fallback(tmp_path: Path, molecules: dict) -> None:
+    """Protected runs without stutter would be error-free by construction (#132)."""
+    data = {**MINIMAL, "molecules": molecules, "errors": ERRORS}
+    with pytest.raises(ValueError, match="stutter_fallback"):
+        load_read_profile(str(_write(tmp_path, data)))
+
+
+def test_empirical_errors_with_stutter_fallback_load(tmp_path: Path) -> None:
+    molecules = {**MINIMAL["molecules"], "stutter_fallback": FALLBACK}
+    data = {**MINIMAL, "molecules": molecules, "errors": ERRORS}
+    profile = load_read_profile(str(_write(tmp_path, data)))
+    assert profile.molecules.stutter is not None
+    assert profile.molecules.stutter.resolve("A", 5, "-") is not None
+
+
+def test_protected_runs_shorter_than_stutter_min_len_rejected(tmp_path: Path) -> None:
+    molecules = {**MINIMAL["molecules"], "stutter_fallback": FALLBACK}
+    errors = {**ERRORS, "hp_min_len": 2}
+    data = {**MINIMAL, "molecules": molecules, "errors": errors}
+    with pytest.raises(ValueError, match="hp_min_len"):
+        load_read_profile(str(_write(tmp_path, data)))
+
+
+@pytest.mark.parametrize("name", ["ont_r10_sup_amplicon_v1", "ont_r10_genomic_v1"])
+def test_ont_profiles_record_stutter_fit_provenance(name: str) -> None:
+    profile = load_read_profile(name)
+    fit = profile.provenance["stutter_fit"]
+    assert fit["min_target_n"] >= 1
+    assert set(fit["fitted_keys"]) == set(profile.molecules.stutter.pmfs)
+    assert "rule" in fit and "generic" in fit
+
+
+def test_amplicon_profile_fits_dupc_c8_on_both_strands() -> None:
+    table = load_read_profile("ont_r10_sup_amplicon_v1").molecules.stutter
+    assert {"C8|+", "C8|-"} <= set(table.pmfs)

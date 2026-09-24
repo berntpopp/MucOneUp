@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Homopolymer runs without a stutter entry were simulated error-free**
+  (#132). The empirical error channel protects every run >= `hp_min_len` from
+  base-level errors, and a missing stutter key drew no length change, so the
+  dupC C8 run, all A/T runs and G runs >= 5 of the ONT profiles were read
+  perfectly. Now:
+  - `ont_r10_sup_amplicon_v1` fits every per-strand key of the PRJEB92208
+    amplicon target with n >= 500, adding `C8|+` and `C8|-` (p_correct 0.362
+    and 0.747); `ont_r10_genomic_v1` is refit from the WGS target (n >= 300),
+    which has no C8 key;
+  - new `molecules.stutter_fallback` (rule `log_odds_linear`) resolves runs
+    without a fitted entry: it extrapolates the error odds from the longest
+    fitted length of the same base and strand, or uses a generic pmf with a
+    warning (once per base) when the base has no fitted entries;
+  - profiles with an `errors` model must define `molecules.stutter` and
+    `molecules.stutter_fallback`, and `errors.hp_min_len` must not be below
+    the stutter table's minimum run length;
+  - `provenance.stutter_fit` records the fitted and excluded keys, the minimum
+    n and the fallback derivation.
+- `helpers/calibrate_read_profile.py` validates the simulated observed-minus-
+  true pmf against the target for every base/length/strand
+  (`calibration_report.validation_round*.per_key`) and gains `--min-target-n`
+  (default now 500), `--max-delta` (default now 6, was 3),
+  `--min-lengths-for-slope`, `--generic-ref-len` and `--tolerance`;
+  `--model-file` is only required for `--engine pbsim3`.
+
+### Changed (intentional output differences)
+- Reads simulated with `ont_r10_sup_amplicon_v1` or `ont_r10_genomic_v1`
+  change for the same seed: all homopolymer runs are now stuttered and the
+  refit tables keep deltas up to ±6. Simulations without a read profile are
+  unchanged (seeded legacy ONT and HiFi amplicon FASTQs are byte-identical to
+  0.45.0). User profiles with an `errors` section but no
+  `stutter_fallback` are now rejected with a message naming the missing keys.
+
+---
+
 ## [0.45.0] - 2026-09-24
 
 Realistic, truth-tracked long-read simulation. See the

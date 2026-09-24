@@ -117,7 +117,22 @@ def test_sequencer_for_selects_engine(tmp_path: Path) -> None:
     assert sequencer_for({}, pbsim) is pbsim
     profile = tmp_path / "p.json"
     profile.write_text(
-        json.dumps({"schema_version": 1, "name": "p", "platform": "ont", "errors": ERRORS})
+        json.dumps(
+            {
+                "schema_version": 1,
+                "name": "p",
+                "platform": "ont",
+                "errors": ERRORS,
+                "molecules": {  # an errors model needs stutter plus a fallback (#132)
+                    "stutter": {"C7|+": {"-1": 0.2, "0": 0.8}},
+                    "stutter_fallback": {
+                        "rule": "log_odds_linear",
+                        "log_odds_slope_per_base": 0.5,
+                        "generic": {"ref_len": 3, "pmf": {"-1": 0.05, "0": 0.95}},
+                    },
+                },
+            }
+        )
     )
     chosen = sequencer_for({"read_model": {"profile": str(profile)}}, pbsim)
     assert isinstance(chosen, EmpiricalSequencer) and chosen.model.mismatch_rate == 0.01

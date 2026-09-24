@@ -22,8 +22,23 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from typing import NamedTuple
 
+from .stutter import StutterFallback, StutterTable
+
+__all__ = [
+    "HpEdit",
+    "Molecule",
+    "MoleculeModel",
+    "SourceInterval",
+    "StutterFallback",
+    "StutterTable",
+    "apply_stutter",
+    "build_amplicon_molecules",
+    "build_fragment_molecules",
+    "homopolymer_runs",
+    "reverse_complement",
+]
+
 _COMPLEMENT = str.maketrans("ACGTNacgtn", "TGCANtgcan")
-_STRANDS = ("+", "-")
 _SMEAR_MAX_KEEP = 0.95  # smear products keep at most this fraction of the amplicon
 
 
@@ -67,57 +82,6 @@ class Molecule:
     src_end: int
     hp_edits: tuple[HpEdit, ...] = ()
     detail: str = ""
-
-
-@dataclass(frozen=True)
-class StutterTable:
-    """Per-(base, length, strand) probability mass over homopolymer length deltas."""
-
-    pmfs: Mapping[str, tuple[tuple[int, float], ...]]
-    min_len: int = 3
-
-    @classmethod
-    def from_dict(cls, data: Mapping[str, Mapping[str, float]], min_len: int = 3) -> StutterTable:
-        pmfs: dict[str, tuple[tuple[int, float], ...]] = {}
-        for key, pmf in data.items():
-            _validate_stutter_key(key)
-            items = tuple(sorted((int(delta), float(p)) for delta, p in pmf.items()))
-            run_len = int(key.partition("|")[0][1:])
-            if any(delta < -run_len and p > 0 for delta, p in items):
-                raise ValueError(
-                    f"stutter delta for '{key}' cannot remove more than {run_len} bases"
-                )
-            if any(p < 0 for _, p in items) or not math.isclose(
-                sum(p for _, p in items), 1.0, abs_tol=1e-6
-            ):
-                raise ValueError(f"stutter pmf for '{key}' must be non-negative and sum to 1")
-            pmfs[key] = items
-        return cls(pmfs, min_len)
-
-    def sample(self, base: str, length: int, strand: str, rng: random.Random) -> int:
-        """Draw a length delta; 0 when the table has no entry for this run."""
-        pmf = self.pmfs.get(f"{base}{length}|{strand}") or self.pmfs.get(f"{base}{length}|both")
-        if not pmf:
-            return 0
-        draw = rng.random()
-        cumulative = 0.0
-        for delta, prob in pmf:
-            cumulative += prob
-            if draw < cumulative:
-                return delta
-        return pmf[-1][0]
-
-
-def _validate_stutter_key(key: str) -> None:
-    run, sep, strand = key.partition("|")
-    if (
-        not sep
-        or strand not in (*_STRANDS, "both")
-        or len(run) < 2
-        or run[0] not in "ACGT"
-        or not run[1:].isdigit()
-    ):
-        raise ValueError(f"invalid stutter key '{key}': expected e.g. 'C7|+', 'G4|-' or 'A5|both'")
 
 
 @dataclass(frozen=True)
@@ -165,14 +129,29 @@ class MoleculeModel:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> MoleculeModel:
-        """Build from a JSON-like mapping; unknown keys are rejected."""
-        known = {f.name for f in fields(cls)}
+        """Build from a JSON-like mapping; unknown keys are rejected.
+
+        ``stutter_fallback`` (optional) configures how runs without a fitted
+        ``stutter`` entry are resolved; see :mod:`.stutter`.
+        """
+        known = {f.name for f in fields(cls)} | {"stutter_fallback"}
         unknown = set(data) - known
         if unknown:
             raise ValueError(f"unknown molecule model keys: {sorted(unknown)}")
         kwargs = dict(data)
+        fallback_data = kwargs.pop("stutter_fallback", None)
+        if fallback_data is not None and kwargs.get("stutter") is None:
+            raise ValueError("stutter_fallback requires a stutter table")
         if "stutter" in kwargs and kwargs["stutter"] is not None:
-            kwargs["stutter"] = StutterTable.from_dict(kwargs["stutter"])  # type: ignore[arg-type]
+            fallback = (
+                StutterFallback.from_dict(fallback_data)  # type: ignore[arg-type]
+                if fallback_data is not None
+                else None
+            )
+            kwargs["stutter"] = StutterTable.from_dict(
+                kwargs["stutter"],  # type: ignore[arg-type]
+                fallback=fallback,
+            )
         if "smear_junction_beta" in kwargs:
             kwargs["smear_junction_beta"] = tuple(kwargs["smear_junction_beta"])  # type: ignore[arg-type]
         return cls(**kwargs)  # type: ignore[arg-type]
