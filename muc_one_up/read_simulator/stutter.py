@@ -17,6 +17,9 @@ Runs without a fitted entry are resolved by an optional
    reference are multiplied by ``exp(log_odds_slope_per_base * (run length -
    reference length))``. The error shape (the pmf conditional on an error) is
    kept; deltas that would remove more bases than the run has are dropped.
+   If no error delta of the reference is left, the generic pmf is scaled
+   instead, so a run resolved by the fallback is never error-free. The generic
+   pmf must keep error mass at the table's minimum run length.
 
 Without a fallback a missing key draws no delta. That is only safe when the
 sequencer adds its own homopolymer errors (pbsim3); read profiles with an
@@ -87,6 +90,10 @@ def scale_error_odds(pmf: Pmf, log_odds_shift: float, run_len: int) -> Pmf:
     return tuple(sorted(scaled))
 
 
+def _has_error_mass(pmf: Pmf) -> bool:
+    return any(d != 0 and p > 0 for d, p in pmf)
+
+
 @dataclass(frozen=True)
 class StutterFallback:
     """Documented rule for runs without a fitted stutter entry (see module docstring)."""
@@ -140,6 +147,15 @@ class StutterTable:
     _generic_bases: set[str] = field(
         default_factory=set, init=False, compare=False, repr=False, hash=False
     )
+
+    def __post_init__(self) -> None:
+        if self.fallback is not None and not _has_error_mass(
+            scale_error_odds(self.fallback.generic_pmf, 0.0, self.min_len)
+        ):
+            raise ValueError(
+                "stutter_fallback generic pmf must keep error mass for runs of "
+                f"{self.min_len} bases (an error delta >= -{self.min_len})"
+            )
 
     @classmethod
     def from_dict(
@@ -199,7 +215,15 @@ class StutterTable:
                 )
             logging.debug("Stutter %s uses the generic stutter pmf", key)
         shift = self.fallback.log_odds_slope_per_base * (length - ref_len)
-        return scale_error_odds(reference, shift, length)
+        scaled = scale_error_odds(reference, shift, length)
+        if _has_error_mass(scaled) or not fitted:
+            return scaled
+        # The reference's error deltas all remove more bases than this run has.
+        logging.info("Stutter %s: reference has no usable error mass; using the generic pmf", key)
+        generic_shift = self.fallback.log_odds_slope_per_base * (
+            length - self.fallback.generic_ref_len
+        )
+        return scale_error_odds(self.fallback.generic_pmf, generic_shift, length)
 
     def _fitted_lengths(self, base: str, strand: str) -> dict[int, str]:
         """Run length -> key of fitted entries for ``base`` on ``strand`` (else ``both``)."""

@@ -158,8 +158,9 @@ def _check_protected_runs_are_stuttered(
 
     The empirical channel applies no base-level errors inside runs of at least
     ``errors.hp_min_len`` bases, so the stutter table is their only error
-    source: it must exist, reach down to ``hp_min_len`` and define a fallback
-    for runs without a fitted entry.
+    source: it must exist, reach down to ``hp_min_len``, define a fallback for
+    runs without a fitted entry, and every fitted entry for a protected run
+    must have error mass (P(delta = 0) < 1).
     """
     table = molecules.stutter
     if table is None or table.fallback is None:
@@ -168,6 +169,13 @@ def _check_protected_runs_are_stuttered(
             "'molecules.stutter_fallback', because homopolymer runs >= hp_min_len get no "
             "base-level errors and would otherwise be simulated error-free"
         )
+    for key, pmf in table.pmfs.items():
+        if int(key.partition("|")[0][1:]) >= errors.hp_min_len and dict(pmf).get(0, 0.0) >= 1.0:
+            raise ValueError(
+                f"read profile {path}: stutter entry '{key}' has P(delta = 0) = 1, so this "
+                "protected homopolymer run would be simulated error-free; fit it from data "
+                "or remove it so the stutter_fallback applies"
+            )
     if errors.hp_min_len < table.min_len:
         raise ValueError(
             f"read profile {path}: errors.hp_min_len ({errors.hp_min_len}) must be >= the "

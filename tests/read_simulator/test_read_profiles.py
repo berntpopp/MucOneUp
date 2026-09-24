@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -236,3 +237,13 @@ def test_ont_profiles_record_stutter_fit_provenance(name: str) -> None:
 def test_amplicon_profile_fits_dupc_c8_on_both_strands() -> None:
     table = load_read_profile("ont_r10_sup_amplicon_v1").molecules.stutter
     assert {"C8|+", "C8|-"} <= set(table.pmfs)
+
+
+@pytest.mark.parametrize("key", ["C3|+", "G4|both"])
+def test_error_free_fitted_entry_for_protected_run_rejected(tmp_path: Path, key: str) -> None:
+    """A fitted P(0) = 1 would make a protected run error-free (#132 review)."""
+    stutter = {**MINIMAL["molecules"]["stutter"], key: {"0": 1.0}}
+    molecules = {**MINIMAL["molecules"], "stutter": stutter, "stutter_fallback": FALLBACK}
+    data = {**MINIMAL, "molecules": molecules, "errors": ERRORS}
+    with pytest.raises(ValueError, match=re.escape(key)):
+        load_read_profile(str(_write(tmp_path, data)))

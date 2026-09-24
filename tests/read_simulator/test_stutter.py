@@ -145,8 +145,33 @@ class TestFallbackValidation:
             MoleculeModel.from_dict({"stutter_fallback": FALLBACK})
 
 
+class TestNoErrorFreeFallback:
+    """A resolved fallback pmf always keeps error mass (#132 review)."""
+
+    def test_reference_losing_all_error_deltas_uses_generic(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        table = StutterTable.from_dict(
+            {"C7|+": {"-6": 0.3, "0": 0.7}}, fallback=StutterFallback.from_dict(FALLBACK)
+        )
+        for length in (3, 4, 5):
+            with caplog.at_level(logging.INFO):
+                pmf = table.resolve("C", length, "+")
+            assert pmf is not None and _p0(pmf) < 1.0, length
+            assert min(d for d, _ in pmf) >= -length
+        assert "generic" in caplog.text
+
+    def test_generic_pmf_must_keep_error_mass_at_min_len(self) -> None:
+        fallback = StutterFallback.from_dict(
+            {**FALLBACK, "generic": {"ref_len": 5, "pmf": {"-5": 0.1, "0": 0.9}}}
+        )
+        with pytest.raises(ValueError, match="generic"):
+            StutterTable.from_dict({"C7|+": {"0": 0.5, "-1": 0.5}}, fallback=fallback)
+
+
 class TestScaleErrorOdds:
-    def test_error_free_reference_stays_error_free(self) -> None:
+    def test_error_free_reference_has_no_error_mass_to_scale(self) -> None:
+        """The pure scaler cannot invent errors; StutterTable then uses the generic pmf."""
         assert scale_error_odds(((0, 1.0),), 2.0, 5) == ((0, 1.0),)
 
     def test_error_only_reference_stays_error_only(self) -> None:
