@@ -12,7 +12,7 @@
       "engine": "empirical",
       "target_total_error": 0.00398,
       "validation_round1": {
-        "total_error": 0.00459,
+        "total_error": 0.0046,
         "template": "amplicon_dupc.fa",
         "n_molecules": 4000,
         "tolerance": 0.03,
@@ -23,8 +23,8 @@
             "n_sim": 21791,
             "p_correct_target": 0.9827,
             "status": "compared",
-            "p_correct_sim": 0.9916,
-            "max_abs_residual": 0.0093,
+            "p_correct_sim": 0.9914,
+            "max_abs_residual": 0.0089,
             "within_tolerance": true
           },
           "A2|-": {
@@ -41,8 +41,8 @@
             "n_sim": 362523,
             "p_correct_target": 0.9979,
             "status": "compared",
-            "p_correct_sim": 0.9905,
-            "max_abs_residual": 0.0074,
+            "p_correct_sim": 0.9906,
+            "max_abs_residual": 0.0073,
             "within_tolerance": true
           },
           "C2|-": {
@@ -59,8 +59,8 @@
             "n_sim": 99050,
             "p_correct_target": 0.9885,
             "status": "compared",
-            "p_correct_sim": 0.9857,
-            "max_abs_residual": 0.0028,
+            "p_correct_sim": 0.9858,
+            "max_abs_residual": 0.0026,
             "within_tolerance": true
           },
           "C3|-": {
@@ -68,8 +68,8 @@
             "n_sim": 100950,
             "p_correct_target": 0.9945,
             "status": "compared",
-            "p_correct_sim": 0.993,
-            "max_abs_residual": 0.0017,
+            "p_correct_sim": 0.9928,
+            "max_abs_residual": 0.0019,
             "within_tolerance": true
           },
           "C4|+": {
@@ -77,8 +77,8 @@
             "n_sim": 148575,
             "p_correct_target": 0.997,
             "status": "compared",
-            "p_correct_sim": 0.9964,
-            "max_abs_residual": 0.0009,
+            "p_correct_sim": 0.9962,
+            "max_abs_residual": 0.001,
             "within_tolerance": true
           },
           "C4|-": {
@@ -86,8 +86,8 @@
             "n_sim": 151425,
             "p_correct_target": 0.9929,
             "status": "compared",
-            "p_correct_sim": 0.9918,
-            "max_abs_residual": 0.0011,
+            "p_correct_sim": 0.9917,
+            "max_abs_residual": 0.0012,
             "within_tolerance": true
           },
           "C5|+": {
@@ -109,8 +109,8 @@
             "n_sim": 3962,
             "p_correct_target": 0.8969,
             "status": "compared",
-            "p_correct_sim": 0.9889,
-            "max_abs_residual": 0.092,
+            "p_correct_sim": 0.9649,
+            "max_abs_residual": 0.068,
             "within_tolerance": false
           },
           "C6|-": {
@@ -118,8 +118,8 @@
             "n_sim": 4038,
             "p_correct_target": 0.9636,
             "status": "compared",
-            "p_correct_sim": 0.9703,
-            "max_abs_residual": 0.0181,
+            "p_correct_sim": 0.975,
+            "max_abs_residual": 0.0193,
             "within_tolerance": true
           },
           "C7|+": {
@@ -127,7 +127,7 @@
             "n_sim": 45563,
             "p_correct_target": 0.8651,
             "status": "compared",
-            "p_correct_sim": 0.8642,
+            "p_correct_sim": 0.8644,
             "max_abs_residual": 0.0013,
             "within_tolerance": true
           },
@@ -136,8 +136,8 @@
             "n_sim": 46437,
             "p_correct_target": 0.9663,
             "status": "compared",
-            "p_correct_sim": 0.9636,
-            "max_abs_residual": 0.0027,
+            "p_correct_sim": 0.9641,
+            "max_abs_residual": 0.0022,
             "within_tolerance": true
           },
           "G2|+": {
@@ -145,8 +145,8 @@
             "n_sim": 370447,
             "p_correct_target": 0.9972,
             "status": "compared",
-            "p_correct_sim": 0.9925,
-            "max_abs_residual": 0.0047,
+            "p_correct_sim": 0.9922,
+            "max_abs_residual": 0.005,
             "within_tolerance": true
           },
           "G2|-": {
@@ -155,7 +155,7 @@
             "p_correct_target": 0.9957,
             "status": "compared",
             "p_correct_sim": 0.992,
-            "max_abs_residual": 0.004,
+            "max_abs_residual": 0.0041,
             "within_tolerance": true
           },
           "G3|+": {
@@ -172,8 +172,8 @@
             "n_sim": 76722,
             "p_correct_target": 0.9824,
             "status": "compared",
-            "p_correct_sim": 0.9815,
-            "max_abs_residual": 0.0009,
+            "p_correct_sim": 0.9812,
+            "max_abs_residual": 0.0012,
             "within_tolerance": true
           },
           "T2|+": {
@@ -181,8 +181,8 @@
             "n_sim": 13867,
             "p_correct_target": 0.9722,
             "status": "compared",
-            "p_correct_sim": 0.9926,
-            "max_abs_residual": 0.0204,
+            "p_correct_sim": 0.9917,
+            "max_abs_residual": 0.0195,
             "within_tolerance": true
           },
           "T2|-": {
@@ -190,8 +190,8 @@
             "n_sim": 14133,
             "p_correct_target": 0.9551,
             "status": "compared",
-            "p_correct_sim": 0.992,
-            "max_abs_residual": 0.0369,
+            "p_correct_sim": 0.9934,
+            "max_abs_residual": 0.0383,
             "within_tolerance": false
           }
         }
@@ -218,7 +218,7 @@
         "C6|+": "n=97",
         "C6|-": "n=110"
       },
-      "rule": "log_odds_linear: runs without a fitted entry use the longest fitted length <= the run of the same base and strand (else the shortest; strand 'both' if no strand-specific entry), scaling the error odds by exp(log_odds_slope_per_base * length difference) and keeping the error shape",
+      "rule": "log_odds_interpolate: runs without a fitted entry of the same base and strand (strand 'both' if no strand-specific entry) interpolate the error log-odds and error shape linearly between the nearest fitted lengths on both sides; beyond the longest (or below the shortest) fitted length the error odds of that entry are scaled by exp(log_odds_slope_per_base * length difference); bases without fitted entries, or references without a usable error delta, use the generic pmf",
       "slope": "median least-squares slope of error log-odds vs length over base/strand groups with >= 3 fitted lengths, clamped at 0",
       "generic": "n-weighted pool of fitted entries at length 3; used with a warning for bases without any fitted entry",
       "target_key": "ont_wgs_PRJEB92208"
@@ -282,7 +282,7 @@
       }
     },
     "stutter_fallback": {
-      "rule": "log_odds_linear",
+      "rule": "log_odds_interpolate",
       "log_odds_slope_per_base": 0.66095,
       "generic": {
         "ref_len": 3,

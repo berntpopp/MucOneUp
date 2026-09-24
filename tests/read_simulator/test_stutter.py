@@ -13,7 +13,7 @@ from muc_one_up.read_simulator.stutter import StutterFallback, StutterTable, sca
 
 SLOPE = math.log(2.0)  # error odds double per extra base
 FALLBACK = {
-    "rule": "log_odds_linear",
+    "rule": "log_odds_interpolate",
     "log_odds_slope_per_base": SLOPE,
     "generic": {"ref_len": 3, "pmf": {"-1": 0.04, "0": 0.9, "1": 0.06}},
 }
@@ -61,10 +61,27 @@ class TestFallbackResolution:
         assert pmf is not None
         assert _p0(pmf) == pytest.approx(1 / (1 + 0.25 * 4.0))
 
-    def test_gap_uses_longest_fitted_length_below(self) -> None:
-        pmf = _table().resolve("C", 5, "+")  # fitted: C3 and C7
+    def test_gap_interpolates_log_odds_between_fitted_lengths(self) -> None:
+        pmf = _table().resolve("C", 5, "+")  # fitted: C3 (P0 0.9) and C7 (P0 0.5)
         assert pmf is not None
-        assert _p0(pmf) == pytest.approx(1 / (1 + (0.1 / 0.9) * 4.0))
+        log_odds = 0.5 * math.log(0.1 / 0.9) + 0.5 * math.log(0.5 / 0.5)
+        assert _p0(pmf) == pytest.approx(1 / (1 + math.exp(log_odds)))
+        errors = {d: p / (1 - _p0(pmf)) for d, p in pmf if d != 0}
+        # error shape: equal-weight mix of C3 {-1: 1} and C7 {-2: .2, -1: .6, +1: .2}
+        assert errors == pytest.approx({-2: 0.1, -1: 0.8, 1: 0.1})
+
+    def test_interpolation_weights_by_distance(self) -> None:
+        pmf = _table().resolve("C", 6, "+")
+        assert pmf is not None
+        log_odds = 0.25 * math.log(0.1 / 0.9) + 0.75 * math.log(1.0)
+        assert _p0(pmf) == pytest.approx(1 / (1 + math.exp(log_odds)))
+
+    def test_interpolation_is_not_extrapolation_from_below(self) -> None:
+        """No step at the upper fitted length: C6 lies between C3 and C7 (#132 review)."""
+        table = _table()
+        p0 = [_p0(table.resolve("C", n, "+")) for n in range(3, 8)]  # type: ignore[arg-type]
+        assert p0 == sorted(p0, reverse=True)
+        assert p0[-1] == pytest.approx(0.5)
 
     def test_shorter_than_fitted_scales_down_from_shortest(self) -> None:
         pmf = _table().resolve("C", 3, "-")  # only C7|- fitted

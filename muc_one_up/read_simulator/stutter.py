@@ -5,21 +5,24 @@ source orientation, read strand ``+``/``-`` or ``both``) to a probability mass
 over length deltas. Fitted entries come from measured data.
 
 Runs without a fitted entry are resolved by an optional
-:class:`StutterFallback` (rule ``log_odds_linear``):
+:class:`StutterFallback` (rule ``log_odds_interpolate``). Error log-odds are
+``log(P(delta != 0) / P(delta == 0))``; the error shape is the pmf conditional
+on an error. Deltas that would remove more bases than the run has are dropped.
 
-1. **Reference.** Use the fitted entries of the same base and strand (or of
-   strand ``both`` when that base has no strand-specific entries). The
-   reference is the longest fitted length that is not longer than the run; if
-   every fitted length is longer, it is the shortest fitted length.
-2. **Generic.** If the base has no fitted entries at all, use the profile's
-   generic pmf at its ``ref_len`` and log a warning (once per base and table).
-3. **Scaling.** The error odds ``P(delta != 0) / P(delta == 0)`` of the
-   reference are multiplied by ``exp(log_odds_slope_per_base * (run length -
-   reference length))``. The error shape (the pmf conditional on an error) is
-   kept; deltas that would remove more bases than the run has are dropped.
-   If no error delta of the reference is left, the generic pmf is scaled
-   instead, so a run resolved by the fallback is never error-free. The generic
-   pmf must keep error mass at the table's minimum run length.
+1. **Fitted lengths.** Use the fitted entries of the same base and strand (or
+   of strand ``both`` when that base has no strand-specific entries).
+2. **Interpolation.** A run between two fitted lengths takes the log-odds
+   interpolated linearly between the nearest fitted lengths on both sides, and
+   the error shape mixed with the same weights.
+3. **Extrapolation.** A run longer than the longest (or shorter than the
+   shortest) fitted length scales that entry's error odds by
+   ``exp(log_odds_slope_per_base * (run length - reference length))`` and
+   keeps its error shape.
+4. **Generic.** A base without fitted entries uses the profile's generic pmf
+   at its ``ref_len``, scaled as in 3, and logs a warning (once per base and
+   table). The generic pmf is also used when the reference keeps no error
+   delta for this run, so a run resolved by the fallback is never error-free;
+   it must itself keep error mass at the table's minimum run length.
 
 Without a fallback a missing key draws no delta. That is only safe when the
 sequencer adds its own homopolymer errors (pbsim3); read profiles with an
@@ -38,7 +41,7 @@ from dataclasses import dataclass, field
 Pmf = tuple[tuple[int, float], ...]
 
 STRANDS = ("+", "-")
-FALLBACK_RULES = ("log_odds_linear",)
+FALLBACK_RULES = ("log_odds_interpolate",)
 _FALLBACK_KEYS = {"rule", "log_odds_slope_per_base", "generic"}
 _PMF_TOLERANCE = 1e-6
 
@@ -94,6 +97,31 @@ def _has_error_mass(pmf: Pmf) -> bool:
     return any(d != 0 and p > 0 for d, p in pmf)
 
 
+def interpolate_log_odds(
+    lower: Pmf, lower_len: int, upper: Pmf, upper_len: int, run_len: int
+) -> Pmf | None:
+    """Interpolate error log-odds and error shape between two fitted lengths.
+
+    Returns None when either side has no error mass or no mass at 0 for this
+    run (log-odds undefined); callers then extrapolate instead.
+    """
+    weight = (run_len - lower_len) / (upper_len - lower_len)
+    log_odds = 0.0
+    shape: dict[int, float] = {}
+    for pmf, w in ((lower, 1.0 - weight), (upper, weight)):
+        p_correct = dict(pmf).get(0, 0.0)
+        errors = [(d, p) for d, p in pmf if d != 0 and d >= -run_len and p > 0]
+        error_mass = sum(p for _, p in errors)
+        if error_mass == 0 or p_correct == 0:
+            return None
+        log_odds += w * math.log(error_mass / p_correct)
+        for d, p in errors:
+            shape[d] = shape.get(d, 0.0) + w * p / error_mass
+    new_correct = 1.0 / (1.0 + math.exp(log_odds))
+    scaled = [(d, (1.0 - new_correct) * p) for d, p in shape.items() if p > 0]
+    return tuple(sorted([*scaled, (0, new_correct)]))
+
+
 @dataclass(frozen=True)
 class StutterFallback:
     """Documented rule for runs without a fitted stutter entry (see module docstring)."""
@@ -101,7 +129,7 @@ class StutterFallback:
     log_odds_slope_per_base: float
     generic_pmf: Pmf
     generic_ref_len: int
-    rule: str = "log_odds_linear"
+    rule: str = "log_odds_interpolate"
 
     def __post_init__(self) -> None:
         if self.rule not in FALLBACK_RULES:
@@ -198,6 +226,17 @@ class StutterTable:
         fitted = self._fitted_lengths(base, strand)
         if fitted:
             shorter = [n for n in fitted if n <= length]
+            longer = [n for n in fitted if n >= length]
+            if shorter and longer:
+                lo, hi = max(shorter), min(longer)
+                between = interpolate_log_odds(
+                    self.pmfs[fitted[lo]], lo, self.pmfs[fitted[hi]], hi, length
+                )
+                if between is not None:
+                    logging.debug(
+                        "Stutter %s: interpolated between %s and %s", key, fitted[lo], fitted[hi]
+                    )
+                    return between
             ref_len = max(shorter) if shorter else min(fitted)
             reference, source = self.pmfs[fitted[ref_len]], fitted[ref_len]
             logging.debug("Stutter %s has no fitted entry; extrapolating from %s", key, source)

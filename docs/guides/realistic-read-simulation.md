@@ -97,7 +97,7 @@ the amplicon profile. Runs without a fitted entry use the fallback:
 
 ```json
 "stutter_fallback": {
-  "rule": "log_odds_linear",
+  "rule": "log_odds_interpolate",
   "log_odds_slope_per_base": 0.57825,
   "generic": {
     "ref_len": 3,
@@ -109,17 +109,26 @@ the amplicon profile. Runs without a fitted entry use the fallback:
 
 (values from `ont_r10_sup_amplicon_v1`)
 
-1. **Reference.** The fitted entry of the same base and strand (or strand
-   `both` if the base has no strand-specific entries) at the longest fitted
-   length that is not longer than the run; if every fitted length is longer,
-   the shortest.
-2. **Generic.** A base without any fitted entry (for example A and T runs,
+The error log-odds of a pmf are log(P(Δ≠0)/P(Δ=0)); its error shape is the
+pmf conditional on an error. Deltas that would remove more bases than the run
+has are dropped.
+
+1. **Fitted lengths.** The fitted entries of the same base and strand (or
+   strand `both` if the base has no strand-specific entries).
+2. **Interpolation.** A run between two fitted lengths takes the log-odds
+   interpolated linearly between the nearest fitted lengths on both sides,
+   with the error shapes mixed by the same weights. For example the genomic
+   profile's C5 and C6 lie between its fitted C4 and C7.
+3. **Extrapolation.** A run longer than the longest fitted length (or shorter
+   than the shortest) multiplies that entry's error odds by
+   `exp(log_odds_slope_per_base × (run length − reference length))` and keeps
+   its error shape.
+4. **Generic.** A base without any fitted entry (for example A and T runs,
    which the PRJEB92208 targets do not cover at length ≥ 3) uses
-   `generic.pmf` at `generic.ref_len`. MucOneUp logs a warning once per base.
-3. **Scaling.** The reference's error odds P(Δ≠0)/P(Δ=0) are multiplied by
-   `exp(log_odds_slope_per_base × (run length − reference length))`. The shape
-   of the error deltas is kept, and deltas that would remove more bases than
-   the run has are dropped.
+   `generic.pmf` at `generic.ref_len`, scaled as in step 3. MucOneUp logs a
+   warning once per base. The generic pmf is also used when a reference keeps
+   no error delta for a short run, so a run resolved by the fallback is never
+   error-free.
 
 The calibration helper derives both values from the fitted table: the slope is
 the median least-squares slope of error log-odds against run length over

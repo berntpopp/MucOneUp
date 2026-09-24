@@ -133,7 +133,7 @@ def stutter_profile_section(
     slope = fit_log_odds_slope(pmfs, min_lengths=min_lengths_for_slope)
     generic = pooled_generic_pmf(hp_targets, pmfs, ref_len=generic_ref_len)
     fallback = {
-        "rule": "log_odds_linear",
+        "rule": "log_odds_interpolate",
         "log_odds_slope_per_base": round(slope, ROUND_DIGITS),
         "generic": {"ref_len": generic_ref_len, "pmf": round_pmf(generic)},
     }
@@ -154,10 +154,12 @@ def stutter_profile_section(
             if key not in pmfs and _key_parts(key)[1] >= min_len
         },
         "rule": (
-            "log_odds_linear: runs without a fitted entry use the longest fitted length <= "
-            "the run of the same base and strand (else the shortest; strand 'both' if no "
-            "strand-specific entry), scaling the error odds by "
-            "exp(log_odds_slope_per_base * length difference) and keeping the error shape"
+            "log_odds_interpolate: runs without a fitted entry of the same base and strand "
+            "(strand 'both' if no strand-specific entry) interpolate the error log-odds and "
+            "error shape linearly between the nearest fitted lengths on both sides; beyond "
+            "the longest (or below the shortest) fitted length the error odds of that entry "
+            "are scaled by exp(log_odds_slope_per_base * length difference); bases without "
+            "fitted entries, or references without a usable error delta, use the generic pmf"
         ),
         "slope": (
             f"median least-squares slope of error log-odds vs length over base/strand "

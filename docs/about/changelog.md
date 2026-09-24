@@ -19,10 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     amplicon target with n >= 500, adding `C8|+` and `C8|-` (p_correct 0.362
     and 0.747); `ont_r10_genomic_v1` is refit from the WGS target (n >= 300),
     which has no C8 key;
-  - new `molecules.stutter_fallback` (rule `log_odds_linear`) resolves runs
-    without a fitted entry: it extrapolates the error odds from the longest
-    fitted length of the same base and strand, or uses a generic pmf with a
-    warning (once per base) when the base has no fitted entries;
+  - new `molecules.stutter_fallback` (rule `log_odds_interpolate`) resolves
+    runs without a fitted entry: it interpolates the error log-odds between
+    the nearest fitted lengths of the same base and strand, extrapolates
+    beyond the fitted range, or uses a generic pmf with a warning (once per
+    base) when the base has no fitted entries;
   - profiles with an `errors` model must define `molecules.stutter` and
     `molecules.stutter_fallback`, and `errors.hp_min_len` must not be below
     the stutter table's minimum run length;

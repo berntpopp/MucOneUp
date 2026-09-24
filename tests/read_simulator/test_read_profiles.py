@@ -189,7 +189,7 @@ ERRORS = {
     "deletion_len_pmf": {"1": 1.0},
 }
 FALLBACK = {
-    "rule": "log_odds_linear",
+    "rule": "log_odds_interpolate",
     "log_odds_slope_per_base": 0.5,
     "generic": {"ref_len": 3, "pmf": {"-1": 0.05, "0": 0.95}},
 }
@@ -247,3 +247,12 @@ def test_error_free_fitted_entry_for_protected_run_rejected(tmp_path: Path, key:
     data = {**MINIMAL, "molecules": molecules, "errors": ERRORS}
     with pytest.raises(ValueError, match=re.escape(key)):
         load_read_profile(str(_write(tmp_path, data)))
+
+
+def test_genomic_profile_interpolates_c5_c6_between_fitted_c4_and_c7() -> None:
+    """WGS target lacks C5/C6 (n < 300): they lie between fitted C4 and C7 (#132 review)."""
+    table = load_read_profile("ont_r10_genomic_v1").molecules.stutter
+    assert table.fallback is not None and table.fallback.rule == "log_odds_interpolate"
+    for strand in "+-":
+        p0 = [dict(table.resolve("C", n, strand)).get(0, 0.0) for n in (4, 5, 6, 7)]
+        assert p0[0] > p0[1] > p0[2] > p0[3], strand

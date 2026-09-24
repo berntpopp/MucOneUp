@@ -126,7 +126,7 @@ def test_sequencer_for_selects_engine(tmp_path: Path) -> None:
                 "molecules": {  # an errors model needs stutter plus a fallback (#132)
                     "stutter": {"C7|+": {"-1": 0.2, "0": 0.8}},
                     "stutter_fallback": {
-                        "rule": "log_odds_linear",
+                        "rule": "log_odds_interpolate",
                         "log_odds_slope_per_base": 0.5,
                         "generic": {"ref_len": 3, "pmf": {"-1": 0.05, "0": 0.95}},
                     },
