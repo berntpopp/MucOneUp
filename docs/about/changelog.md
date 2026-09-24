@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+## [0.46.0] - 2026-09-24
+
+### Breaking change: read profile format
+Custom read profiles with an `errors` section (empirical error channel) must
+be updated (#132). Without these, homopolymer runs could be simulated
+error-free, so such profiles are now rejected with a message that points to
+the calibration helper and the
+[Homopolymer stutter coverage](../guides/realistic-read-simulation.md#homopolymer-stutter-coverage)
+section:
+- `molecules.stutter` and `molecules.stutter_fallback` are required, with
+  `rule` (`log_odds_interpolate`), `log_odds_slope_per_base`,
+  `max_extrapolation_bases` and `generic` (`ref_len`, `pmf`);
+- a fitted stutter entry for a protected run (length >= `errors.hp_min_len`)
+  must have P(delta = 0) < 1, and the generic pmf must keep error mass at the
+  table's minimum run length;
+- `errors.hp_min_len` must not be below the stutter table's minimum run length.
+
+Regenerate with `helpers/calibrate_read_profile.py --engine empirical`, or
+copy `stutter_fallback` from a built-in profile. Profiles without `errors`
+(pbsim3 path) are unaffected.
+
+### Fixed
+- **Homopolymer runs without a stutter entry were simulated error-free**
+  (#132). The empirical error channel protects every run >= `hp_min_len` from
+  base-level errors, and a missing stutter key drew no length change, so the
+  dupC C8 run, all A/T runs and G runs >= 5 of the ONT profiles were read
+  perfectly. Now:
+  - `ont_r10_sup_amplicon_v1` fits every per-strand key of the PRJEB92208
+    amplicon target with n >= 500, adding `C8|+` and `C8|-` (p_correct 0.362
+    and 0.747); `ont_r10_genomic_v1` is refit from the WGS target (n >= 300),
+    which has no C8 key;
+  - new `molecules.stutter_fallback` (rule `log_odds_interpolate`) resolves
+    runs without a fitted entry: it interpolates the error log-odds between
+    the nearest fitted lengths of the same base and strand, extrapolates
+    beyond the fitted range (at most `max_extrapolation_bases`, 3 in the
+    built-ins, so long flank runs such as T19 are not almost always
+    misread), or uses a generic pmf with a warning (once per base) when the
+    base has no fitted entries;
+  - profiles with an `errors` model are validated so no protected run is
+    error-free by construction (see **Breaking change** above);
+  - homopolymer runs ignore case (a soft-masked `cccC` is C4 and keeps its
+    case when stuttered); runs of `N` get no stutter and are not protected
+    from base-level errors;
+  - `provenance.stutter_fit` records the fitted and excluded keys, the minimum
+    n and the fallback derivation; runs resolved by interpolation or
+    extrapolation are logged at INFO once per profile load.
+- `helpers/calibrate_read_profile.py` validates the simulated observed-minus-
+  true pmf against the target for every base/length/strand
+  (`calibration_report.validation_round*.per_key`) and gains `--min-target-n`
+  (default now 500), `--max-delta` (default now 6, was 3),
+  `--min-lengths-for-slope`, `--generic-ref-len`, `--max-extrapolation-bases`
+  and `--tolerance`;
+  `--model-file` is only required for `--engine pbsim3`. With
+  `--engine pbsim3` it drops an inherited `errors` model and
+  `stutter_fallback`; with `--engine empirical` it requires
+  `errors.hp_min_len` to equal the stutter table's minimum run length (3).
+  Fitting fails with a message instead of dividing by zero when a target key
+  has no mass within `--max-delta`, and rounding never makes P(0) negative.
+
+### Changed (intentional output differences)
+- Reads simulated with `ont_r10_sup_amplicon_v1` or `ont_r10_genomic_v1`
+  change for the same seed: all homopolymer runs are now stuttered and the
+  refit tables keep deltas up to ±6. Simulations without a read profile are
+  unchanged (seeded legacy ONT and HiFi amplicon FASTQs are byte-identical to
+  0.45.0). User profiles with an `errors` section but no
+  `stutter_fallback` are now rejected (see **Breaking change** above).
+
+### Tests
+- Legacy byte-identity guard: a unit test pins the template FASTA md5s and
+  tool argument lists of seeded legacy ONT and HiFi amplicon runs (tools
+  mocked), and an integration test checks the golden FASTQ md5s with real
+  pbsim3/ccs/samtools (skips when they are missing).
+
+---
+
 ## [0.45.0] - 2026-09-24
 
 Realistic, truth-tracked long-read simulation. See the

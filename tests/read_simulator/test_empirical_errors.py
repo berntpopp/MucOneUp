@@ -89,3 +89,14 @@ def test_deletions_stop_at_protected_homopolymers() -> None:
         read, _ = apply_errors(seq, deleter, random.Random(seed))
         assert read.count("C") == seq.count("C")
         assert len(read) < len(seq)  # deletions did happen
+
+
+def test_n_runs_are_not_protected_and_lowercase_runs_are() -> None:
+    """N runs are unknown sequence, not homopolymers; lowercase is its base (#132 review)."""
+    seq = ("ACGT" + "N" * 6 + "GTCA" + "c" * 6) * 500
+    mismatches_only = EmpiricalErrorModel(0.1, 0.0, 0.0, {1: 1.0}, {1: 1.0}, read_error_sigma=0.0)
+    read, _ = apply_errors(seq, mismatches_only, random.Random(4))
+    n_runs = [read[i * 20 + 4 : i * 20 + 10] for i in range(500)]
+    c_runs = [read[i * 20 + 14 : i * 20 + 20] for i in range(500)]
+    assert sum(run != "N" * 6 for run in n_runs) > 100  # exposed to base-level errors
+    assert all(run == "c" * 6 for run in c_runs)  # protected like "CCCCCC"

@@ -132,6 +132,10 @@ def load_read_profile(ref: str) -> ReadProfile:
 
     fragments = data.get("fragments")
     errors = data.get("errors")
+    molecules = part("molecules", lambda: MoleculeModel.from_dict(data.get("molecules", {})))
+    error_model = part("errors", lambda: EmpiricalErrorModel.from_dict(errors)) if errors else None
+    if error_model is not None:
+        _check_protected_runs_are_stuttered(path, molecules, error_model)
     return ReadProfile(
         name=data["name"],
         platform=data["platform"],
@@ -139,12 +143,46 @@ def load_read_profile(ref: str) -> ReadProfile:
         description=str(data.get("description", "")),
         provenance=data.get("provenance", {}),
         config_overrides=overrides,
-        molecules=part("molecules", lambda: MoleculeModel.from_dict(data.get("molecules", {}))),
+        molecules=molecules,
         fragments=part("fragments", lambda: FragmentModel(**fragments)) if fragments else None,
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
         source=str(path),
-        errors=part("errors", lambda: EmpiricalErrorModel.from_dict(errors)) if errors else None,
+        errors=error_model,
     )
+
+
+def _check_protected_runs_are_stuttered(
+    path: Path, molecules: MoleculeModel, errors: EmpiricalErrorModel
+) -> None:
+    """Reject profiles whose protected homopolymer runs could be error-free (#132).
+
+    The empirical channel applies no base-level errors inside runs of at least
+    ``errors.hp_min_len`` bases, so the stutter table is their only error
+    source: it must exist, reach down to ``hp_min_len``, define a fallback for
+    runs without a fitted entry, and every fitted entry for a protected run
+    must have error mass (P(delta = 0) < 1).
+    """
+    table = molecules.stutter
+    if table is None or table.fallback is None:
+        raise ValueError(
+            f"read profile {path}: an 'errors' model requires 'molecules.stutter' and "
+            "'molecules.stutter_fallback', because homopolymer runs >= hp_min_len get no "
+            "base-level errors and would otherwise be simulated error-free. Derive both with "
+            "'helpers/calibrate_read_profile.py --engine empirical' or add them by hand; see "
+            "'Homopolymer stutter coverage' in docs/guides/realistic-read-simulation.md"
+        )
+    for key, pmf in table.pmfs.items():
+        if int(key.partition("|")[0][1:]) >= errors.hp_min_len and dict(pmf).get(0, 0.0) >= 1.0:
+            raise ValueError(
+                f"read profile {path}: stutter entry '{key}' has P(delta = 0) = 1, so this "
+                "protected homopolymer run would be simulated error-free; fit it from data "
+                "or remove it so the stutter_fallback applies"
+            )
+    if errors.hp_min_len < table.min_len:
+        raise ValueError(
+            f"read profile {path}: errors.hp_min_len ({errors.hp_min_len}) must be >= the "
+            f"stutter table's minimum run length ({table.min_len})"
+        )
 
 
 def _deep_merge(base: dict[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
