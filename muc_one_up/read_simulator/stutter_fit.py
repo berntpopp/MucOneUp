@@ -43,8 +43,10 @@ def _target_pmf(entry: Mapping[str, Any]) -> dict[int, float]:
     return {int(d): float(p) for d, p in entry["p_obs_minus_true"].items()}
 
 
-def _normalise(pmf: Mapping[int, float]) -> dict[int, float]:
-    total = sum(pmf.values())
+def _normalise(pmf: Mapping[int, float], name: str) -> dict[int, float]:
+    total = sum(p for p in pmf.values() if p > 0)
+    if total <= 0:
+        raise ValueError(f"stutter pmf for '{name}' has no probability mass to normalise")
     return {d: p / total for d, p in sorted(pmf.items()) if p > 0}
 
 
@@ -59,7 +61,7 @@ def fit_stutter_pmfs(
             continue
         lower = -min(length, max_delta)
         kept = {d: p for d, p in _target_pmf(entry).items() if lower <= d <= max_delta}
-        pmfs[key] = _normalise(kept)
+        pmfs[key] = _normalise(kept, f"{key} within |delta| <= {max_delta}")
     return pmfs
 
 
@@ -110,15 +112,21 @@ def pooled_generic_pmf(
             pooled[delta] += hp_targets[key]["n"] * p
     if not pooled:
         raise ValueError(f"no fitted stutter entry at generic ref_len {ref_len}")
-    return _normalise(pooled)
+    return _normalise(pooled, f"generic pool at length {ref_len}")
 
 
 def round_pmf(pmf: Mapping[int, float]) -> dict[str, float]:
-    """Round to ``ROUND_DIGITS``; the rounding drift goes to delta 0 so the pmf sums to 1."""
+    """Round to ``ROUND_DIGITS`` so the pmf still sums to 1.
+
+    The rounding drift goes to delta 0, or to the most probable delta when
+    that would make P(0) negative.
+    """
     rounded = {d: round(p, ROUND_DIGITS) for d, p in sorted(pmf.items())}
     rounded = {d: p for d, p in rounded.items() if p > 0}
-    rounded[0] = round(rounded.get(0, 0.0) + 1.0 - sum(rounded.values()), ROUND_DIGITS)
-    return {str(d): p for d, p in sorted(rounded.items())}
+    drift = 1.0 - sum(rounded.values())
+    target = 0 if rounded.get(0, 0.0) + drift >= 0 else max(rounded, key=lambda d: rounded[d])
+    rounded[target] = round(rounded.get(target, 0.0) + drift, ROUND_DIGITS)
+    return {str(d): p for d, p in sorted(rounded.items()) if p > 0}
 
 
 def stutter_profile_section(

@@ -40,7 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (default now 500), `--max-delta` (default now 6, was 3),
   `--min-lengths-for-slope`, `--generic-ref-len`, `--max-extrapolation-bases`
   and `--tolerance`;
-  `--model-file` is only required for `--engine pbsim3`.
+  `--model-file` is only required for `--engine pbsim3`. With
+  `--engine pbsim3` it drops an inherited `errors` model and
+  `stutter_fallback`; with `--engine empirical` it requires
+  `errors.hp_min_len` to equal the stutter table's minimum run length (3).
+  Fitting fails with a message instead of dividing by zero when a target key
+  has no mass within `--max-delta`, and rounding never makes P(0) negative.
 
 ### Changed (intentional output differences)
 - Reads simulated with `ont_r10_sup_amplicon_v1` or `ont_r10_genomic_v1`

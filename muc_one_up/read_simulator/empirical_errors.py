@@ -24,6 +24,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, fields
 
 from .molecules import homopolymer_runs
+from .stutter import MIN_RUN_LEN
 
 _BASES = "ACGT"
 _MAX_RATE = 0.2
@@ -62,7 +63,7 @@ class EmpiricalErrorModel:
     deletion_len_pmf: Mapping[int, float]
     read_error_sigma: float = 0.45
     q_scale: float = 0.7
-    hp_min_len: int = 3
+    hp_min_len: int = MIN_RUN_LEN
 
     def __post_init__(self) -> None:
         for name in ("mismatch_rate", "insertion_rate", "deletion_rate"):

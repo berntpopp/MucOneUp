@@ -14,7 +14,9 @@ Two engines:
   ``provenance.stutter_fit``.
 * ``--engine pbsim3``: pbsim3 adds its own context-free homopolymer errors, so
   the injected table is *deconvolved* (Richardson-Lucy against a stutter-free
-  pbsim3 run, then multiplicative fixed-point corrections).
+  pbsim3 run, then multiplicative fixed-point corrections). The output profile
+  uses pbsim3 as the sequencer, so an ``errors`` model, ``stutter_fallback``
+  and ``provenance.stutter_fit`` inherited from the base profile are dropped.
 
 Either way the profile is then simulated through MucOneUp's own truth-tracked
 path and re-measured. ``provenance.calibration_report`` stores, per
@@ -64,6 +66,7 @@ from muc_one_up.read_simulator.molecules import (
     homopolymer_runs,
     reverse_complement,
 )
+from muc_one_up.read_simulator.stutter import MIN_RUN_LEN
 from muc_one_up.read_simulator.stutter_fit import (
     compare_to_targets,
     fit_stutter_pmfs,
@@ -296,6 +299,13 @@ def main() -> None:
         derived = empirical_errors_from_targets(targets, read_error_sigma(targets))
         profile["errors"] = {**profile.get("errors", {}), **derived}
         error_model = EmpiricalErrorModel.from_dict(profile["errors"])
+        if error_model.hp_min_len != MIN_RUN_LEN:
+            # Runs >= hp_min_len are protected, runs >= MIN_RUN_LEN are stuttered;
+            # a mismatch would leave runs protected but unstuttered or doubly noised.
+            raise SystemExit(
+                f"errors.hp_min_len ({error_model.hp_min_len}) must equal the stutter "
+                f"table's minimum run length ({MIN_RUN_LEN}) for the empirical engine"
+            )
         sequencer = EmpiricalSequencer(error_model)
         section, provenance["stutter_fit"] = stutter_profile_section(
             hp_all,
@@ -325,7 +335,7 @@ def main() -> None:
         hp_targets = fit_stutter_pmfs(
             hp_all,
             min_n=args.min_target_n,
-            min_len=StutterTable({}).min_len,
+            min_len=MIN_RUN_LEN,
             max_delta=args.max_delta,
         )
         pbsim_spectra, pbsim_err = simulate(
@@ -376,6 +386,13 @@ def main() -> None:
                 stutter[key] = {d: v / total for d, v in corrected.items()}
     if args.engine == "pbsim3":
         molecules["stutter"] = {k: round_pmf(q) for k, q in sorted(stutter.items())}
+        # The profile is calibrated for pbsim3 as the sequencer. An empirical
+        # errors model, its stutter_fallback and fit record inherited from the
+        # base profile describe a different table: drop them. pbsim3 adds its own
+        # homopolymer errors, so unfitted runs are not error-free on this path.
+        molecules.pop("stutter_fallback", None)
+        profile.pop("errors", None)
+        provenance.pop("stutter_fit", None)
     provenance["calibration_report"] = report
     args.out.write_text(json.dumps(profile, indent=2) + "\n")
     print(json.dumps(report, indent=2))

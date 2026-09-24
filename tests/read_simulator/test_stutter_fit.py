@@ -13,6 +13,7 @@ from muc_one_up.read_simulator.stutter_fit import (
     fit_log_odds_slope,
     fit_stutter_pmfs,
     pooled_generic_pmf,
+    round_pmf,
     stutter_profile_section,
 )
 
@@ -120,3 +121,16 @@ class TestCompareToTargets:
         assert report["C8|+"]["within_tolerance"] is False  # p_correct 0.2 vs 0.4
         assert report["G3|+"]["status"] == "not_in_template"
         assert report["G3|+"]["within_tolerance"] is None
+
+
+class TestNumericalGuards:
+    def test_target_without_mass_in_range_is_an_error_naming_the_key(self) -> None:
+        targets = {"C8|+": _target(900, {-7: 1.0})}
+        with pytest.raises(ValueError, match="C8"):
+            fit_stutter_pmfs(targets, min_n=500, min_len=3, max_delta=6)
+
+    def test_rounding_never_makes_p0_negative(self) -> None:
+        pmf = {0: 0.000002, -1: 0.333336, 1: 0.333336, 2: 0.333326}  # rounds to 1.00001
+        rounded = round_pmf(pmf)
+        assert all(p >= 0 for p in rounded.values())
+        assert sum(rounded.values()) == pytest.approx(1.0, abs=1e-9)

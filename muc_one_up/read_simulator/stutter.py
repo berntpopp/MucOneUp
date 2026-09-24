@@ -43,6 +43,7 @@ Pmf = tuple[tuple[int, float], ...]
 
 STRANDS = ("+", "-")
 FALLBACK_RULES = ("log_odds_interpolate",)
+MIN_RUN_LEN = 3  # shortest run the stutter table (and the empirical channel) treats as homopolymer
 _FALLBACK_KEYS = {"rule", "log_odds_slope_per_base", "max_extrapolation_bases", "generic"}
 _PMF_TOLERANCE = 1e-6
 
@@ -179,7 +180,7 @@ class StutterTable:
     """Per-(base, length, strand) probability mass over homopolymer length deltas."""
 
     pmfs: Mapping[str, Pmf]
-    min_len: int = 3
+    min_len: int = MIN_RUN_LEN
     fallback: StutterFallback | None = None
     _resolved: dict[str, Pmf | None] = field(
         default_factory=dict, init=False, compare=False, repr=False, hash=False
@@ -201,7 +202,7 @@ class StutterTable:
     def from_dict(
         cls,
         data: Mapping[str, Mapping[str, float]],
-        min_len: int = 3,
+        min_len: int = MIN_RUN_LEN,
         fallback: StutterFallback | None = None,
     ) -> StutterTable:
         pmfs: dict[str, Pmf] = {}
