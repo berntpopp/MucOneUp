@@ -196,11 +196,15 @@ def run_command(
             stderr=subprocess.PIPE,
             # Use binary mode and handle encoding manually to avoid decode errors
             universal_newlines=False,
-            preexec_fn=os.setsid,  # Unix only
+            start_new_session=True,  # Unix only
             cwd=cwd,
         )
     except Exception as e:
         raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
+
+    pgid = None
+    with contextlib.suppress(Exception):
+        pgid = os.getpgid(popen_proc.pid)
 
     def log_stream(stream, log_func, level=None, prefix=""):
         """Read lines from a stream and log them using log_func."""
@@ -239,11 +243,20 @@ def run_command(
     except subprocess.TimeoutExpired:
         timed_out = True
         logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
+        target_pgid = pgid if pgid is not None else popen_proc.pid
+        if target_pgid:
+            with contextlib.suppress(Exception):
+                os.killpg(target_pgid, signal.SIGTERM)
         try:
-            os.killpg(os.getpgid(popen_proc.pid), signal.SIGTERM)  # Unix only
-        except Exception:
-            logging.exception("Error killing process group")
-        popen_proc.wait()
+            popen_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        finally:
+            if target_pgid:
+                with contextlib.suppress(Exception):
+                    os.killpg(target_pgid, signal.SIGKILL)
+            with contextlib.suppress(Exception):
+                popen_proc.wait()
     stdout_thread.join()
     stderr_thread.join()
 
@@ -318,8 +331,8 @@ def run_pipeline(
         # Start all processes in the pipeline
         for i, cmd in enumerate(cmds):
             stdin_source = processes[-1].stdout if i > 0 else None
-            # Only capture stderr from last process
-            stderr_dest = subprocess.PIPE if (i == len(cmds) - 1) else subprocess.DEVNULL
+            # Only capture stderr from last process; upstream processes inherit stderr
+            stderr_dest = subprocess.PIPE if (i == len(cmds) - 1) else None
 
             proc = subprocess.Popen(
                 cmd,
@@ -341,10 +354,28 @@ def run_pipeline(
         try:
             stdout_bytes, stderr_bytes = last.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
+            with contextlib.suppress(Exception):
+                if last.stdout:
+                    last.stdout.close()
+            with contextlib.suppress(Exception):
+                if last.stderr:
+                    last.stderr.close()
+            pgids = {}
             for p in processes:
                 with contextlib.suppress(Exception):
-                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
-            last.communicate()
+                    pgids[p] = os.getpgid(p.pid)
+                with contextlib.suppress(Exception):
+                    os.killpg(pgids.get(p, p.pid), signal.SIGTERM)
+            for p in processes:
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    p.wait(timeout=5)
+                with contextlib.suppress(Exception):
+                    target_pgid = pgids.get(p)
+                    if target_pgid is None:
+                        target_pgid = os.getpgid(p.pid)
+                    os.killpg(target_pgid, signal.SIGKILL)
+                with contextlib.suppress(Exception):
+                    p.wait()
             raise ExternalToolError(
                 tool="pipeline",
                 exit_code=-1,
@@ -359,18 +390,26 @@ def run_pipeline(
             except subprocess.TimeoutExpired:
                 with contextlib.suppress(Exception):
                     os.killpg(os.getpgid(p.pid), signal.SIGTERM)
-                p.wait(timeout=5)
+                try:
+                    p.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    with contextlib.suppress(Exception):
+                        os.killpg(os.getpgid(p.pid), signal.SIGKILL)
+                    with contextlib.suppress(Exception):
+                        p.wait()
 
         # Check for failures
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
         for i, p in enumerate(processes):
             if p.returncode != 0:
+                stage_msg = (
+                    f"Pipeline stage {i} ({' '.join(cmds[i])}) failed with exit code {p.returncode}"
+                )
+                stderr = f"{stage_msg}: {stderr_text.strip()}" if stderr_text.strip() else stage_msg
                 raise ExternalToolError(
                     tool="pipeline",
                     exit_code=p.returncode,
-                    stderr=(
-                        f"Pipeline stage {i} ({' '.join(cmds[i])}) "
-                        f"failed with exit code {p.returncode}"
-                    ),
+                    stderr=stderr,
                     cmd=pipeline_str,
                 )
 

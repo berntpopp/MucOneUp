@@ -143,6 +143,16 @@ class TestPCRBiasModelStochastic:
         avg_ratio = sum(ratios) / len(ratios)
         assert avg_ratio > 0.5
 
+    def test_stochastic_cycles_above_54_raises(self):
+        """Reject cycles > 54 in stochastic mode to prevent int64 overflow."""
+        with pytest.raises(ValueError, match="cycles must be <= 54 in stochastic mode"):
+            PCRBiasModel.from_params(
+                e_max=0.95,
+                alpha=0.0003,
+                cycles=55,
+                stochastic=True,
+            )
+
 
 class TestPCRBiasModelFromConfig:
     """Tests for constructing from config dict."""

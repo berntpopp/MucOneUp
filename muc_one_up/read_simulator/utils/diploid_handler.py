@@ -321,8 +321,8 @@ def run_split_simulation(
                 merged_fastq=merged_fastq,
                 hap1_fastq=final_hap1_fastq,
                 hap2_fastq=final_hap2_fastq,
-                hap1_reference=hap1_ref,
-                hap2_reference=hap2_ref,
+                hap1_reference=None,
+                hap2_reference=None,
                 reads_hap1=reads_hap1,
                 reads_hap2=reads_hap2,
             )

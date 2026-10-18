@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import random
 from contextlib import nullcontext
 
 import click
@@ -150,14 +151,11 @@ def simulate(ctx, **kwargs):
     # Convert Click kwargs to typed options (replaces _make_args_namespace)
     args = SimulationOptions.from_click_kwargs(ctx.obj["config_path"], kwargs)
 
-    # simulate command generates haplotypes only — no read simulation or ORF output
-    args.simulate_reads = None
-    args.output_orfs = False
-
     # Delegate to existing orchestration (SOLID - Dependency Inversion)
     config, out_dir, out_base = setup_configuration(args)
+    rng = random.Random(args.seed) if args.seed is not None else None
     simulation_configs, predefined_chains, structure_mutation_info = determine_simulation_mode(
-        args, config
+        args, config, rng=rng
     )
     dual_mutation_mode, mutation_pair, _ = process_mutation_config(args, structure_mutation_info)
 
@@ -190,6 +188,7 @@ def simulate(ctx, **kwargs):
                 dual_mutation_mode,
                 mutation_pair,
                 structure_mutation_info,
+                rng=rng,
             )
 
     logging.info("Haplotype generation completed successfully.")

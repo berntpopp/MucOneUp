@@ -186,7 +186,7 @@ def downsample_bam(
     """
     # Create a temporary BED file for the target region.
     # Region string is 1-based inclusive (samtools format); BED is 0-based half-open.
-    region_bed = output_bam.replace(".bam", "_region.bed")
+    region_bed = f"{output_bam.removesuffix('.bam')}_region.bed"
     chrom, coords = region.split(":")
     start, end = coords.split("-")
     bed_start = int(start) - 1  # Convert 1-based inclusive → 0-based
@@ -196,8 +196,8 @@ def downsample_bam(
     # Two-pass approach: extract non-region reads (full) then region reads (downsampled).
     # Cannot use -L/-U/--subsample together because -U captures reads failing ANY filter,
     # so VNTR reads dropped by --subsample would end up in -U and get merged back.
-    region_bam = output_bam.replace(".bam", "_region_only.bam")
-    other_bam = output_bam.replace(".bam", "_other_regions.bam")
+    region_bam = f"{output_bam.removesuffix('.bam')}_region_only.bam"
+    other_bam = f"{output_bam.removesuffix('.bam')}_other_regions.bam"
 
     # Pass 1: Extract non-region reads at full coverage using -L + -U
     cmd = build_tool_command(

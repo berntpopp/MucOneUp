@@ -110,9 +110,7 @@ def sort_and_index_bam(
     temp_bam_path = Path(temp_bam)
     output_bam_path = Path(output_bam)
     if temp_bam_path.exists():
-        if output_bam_path.exists():
-            output_bam_path.unlink()
-        temp_bam_path.rename(output_bam_path)
+        temp_bam_path.replace(output_bam_path)
 
     # Index the BAM file (only if sorted by coordinate)
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)

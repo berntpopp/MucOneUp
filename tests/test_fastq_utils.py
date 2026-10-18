@@ -207,6 +207,14 @@ def test_count_fastq_reads_accepts_string_path(simple_fastq):
     assert count_fastq_reads(str(simple_fastq)) == 3
 
 
+def test_count_fastq_reads_not_multiple_of_4(temp_dir):
+    """Test read counting raises ValidationError when line count is not a multiple of 4."""
+    fastq_path = temp_dir / "truncated.fastq"
+    fastq_path.write_text("@read1\nATCG\n+\nIIII\n@read2\nATCG\n")
+    with pytest.raises(ValidationError, match="not a multiple of 4"):
+        count_fastq_reads(fastq_path)
+
+
 # Tests for merge_fastq_files()
 
 

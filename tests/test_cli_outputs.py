@@ -20,7 +20,7 @@ from muc_one_up.cli.outputs import (
     write_structure_files,
 )
 from muc_one_up.exceptions import FileOperationError
-from muc_one_up.type_defs import HaplotypeResult
+from muc_one_up.type_defs import HaplotypeResult, MutationTarget
 from tests.utils import (
     assert_valid_fasta,
     count_fasta_records,
@@ -43,6 +43,7 @@ def mock_args():
     args.snp_file = None
     args.snp_input_file = None  # Fix: properly set to None
     args.random_snp_density = None
+    args.reference_assembly = "hg38"
     return args
 
 
@@ -126,6 +127,32 @@ class TestWriteFastaOutputs:
             content = f.read()
 
         assert "Mutation Applied: dupC" in content
+
+    def test_write_fasta_single_mode_with_random_mutation_targets(
+        self, tmp_path: Path, mock_args, minimal_config: dict, sample_results: list
+    ):
+        """Random mutation targets (from mutation_positions) are written to FASTA comments."""
+        mock_args.mutation_name = "dupC"
+        mock_args.mutation_targets = None
+
+        write_fasta_outputs(
+            args=mock_args,
+            config=minimal_config,
+            out_dir=str(tmp_path),
+            out_base="test",
+            sim_index=1,
+            results=sample_results,
+            mutated_results=None,
+            dual_mutation_mode=False,
+            mutation_pair=None,
+            mutation_positions=[MutationTarget(1, 2)],
+            structure_mutation_info=None,
+        )
+
+        output_file = tmp_path / "test.001.simulated.fa"
+        assert output_file.exists()
+        content = output_file.read_text()
+        assert "Mutation Applied: dupC (Targets: [(1, 2)])" in content
 
     def test_write_fasta_dual_mutation_mode(
         self, tmp_path: Path, mock_args, minimal_config: dict, sample_results: list
@@ -544,6 +571,31 @@ class TestWriteStructureFiles:
 
         assert "# Mutation Applied: dupC (Target: random)" in content
 
+    def test_write_structure_file_with_random_target_resolved_positions(
+        self, tmp_path: Path, mock_args, minimal_config: dict, sample_results: list
+    ):
+        """When random targets are resolved into mutation_positions, write specific targets."""
+        mock_args.output_structure = True
+        mock_args.mutation_name = "dupC"
+        mock_args.mutation_targets = None
+
+        write_structure_files(
+            args=mock_args,
+            out_dir=str(tmp_path),
+            out_base="test",
+            sim_index=1,
+            results=sample_results,
+            mutated_results=None,
+            dual_mutation_mode=False,
+            mutation_pair=None,
+            mutation_positions=[MutationTarget(1, 2)],
+            structure_mutation_info=None,
+        )
+
+        output_file = tmp_path / "test.001.vntr_structure.txt"
+        content = output_file.read_text()
+        assert "# Mutation Applied: dupC (Targets: [(1, 2)])" in content
+
     def test_write_structure_file_with_structure_mutation_info(
         self, tmp_path: Path, mock_args, minimal_config: dict, sample_results: list
     ):
@@ -804,3 +856,216 @@ class TestOutputsIntegration:
         assert (tmp_path / "test.001.mut.mutated_unit.fa").exists()
         assert (tmp_path / "test.001.normal.vntr_structure.txt").exists()
         assert (tmp_path / "test.001.mut.vntr_structure.txt").exists()
+
+    def test_dual_mode_random_snps_applied_and_shifted_once(
+        self, tmp_path: Path, mock_args, minimal_config: dict, sample_results: list
+    ):
+        """Dual mode applies random SNPs to normal, translates them to mutant with indel shift,
+        and writes random_snp_output_file only once.
+        """
+        import random
+
+        mock_args.output_structure = False
+        mock_args.random_snps = True
+        mock_args.random_snp_density = 50.0
+        snp_out = tmp_path / "random_snps.tsv"
+        mock_args.random_snp_output_file = str(snp_out)
+        mock_args.random_snp_region = "all"
+        mock_args.random_snp_haplotypes = "all"
+        mock_args.seed = 42
+
+        # Create mutated sequence with 1-bp insertion (e.g. dupC at position after left flank)
+        left = minimal_config["constants"]["hg38"]["left"]
+        normal_seq = sample_results[0].sequence
+        # Insert a nucleotide at position len(left) + 2
+        mut_pos = len(left) + 2
+        mut_seq = normal_seq[:mut_pos] + "C" + normal_seq[mut_pos:]
+
+        mutated_results = [
+            HaplotypeResult(sequence=mut_seq, chain=sample_results[0].chain),
+            HaplotypeResult(sequence=sample_results[1].sequence, chain=sample_results[1].chain),
+        ]
+
+        rng = random.Random(42)
+        _out_res, _out_mut_res, snp_normal, snp_mut = write_fasta_outputs(
+            args=mock_args,
+            config=minimal_config,
+            out_dir=str(tmp_path),
+            out_base="test",
+            sim_index=1,
+            results=sample_results,
+            mutated_results=mutated_results,
+            dual_mutation_mode=True,
+            mutation_pair=["normal", "dupC"],
+            mutation_positions=[MutationTarget(1, 1)],
+            structure_mutation_info=None,
+            rng=rng,
+        )
+
+        assert snp_out.exists()
+        # Ensure random_snps.tsv has entries
+        lines = [
+            line.strip()
+            for line in snp_out.read_text().splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+        assert len(lines) > 0
+
+        # Normal and mutant results have SNPs
+        assert len(snp_normal.get(0, [])) > 0
+        assert len(snp_mut.get(0, [])) > 0
+
+        # For any SNP downstream of mut_pos, mutant coordinate must be shifted by +1
+        normal_snps_hap0 = snp_normal[0]
+        mut_snps_hap0 = snp_mut[0]
+        assert len(normal_snps_hap0) == len(mut_snps_hap0)
+        for n_snp, m_snp in zip(normal_snps_hap0, mut_snps_hap0, strict=True):
+            if n_snp["position"] >= mut_pos:
+                assert m_snp["position"] == n_snp["position"] + 1
+
+    def test_dual_mode_snp_inside_mutated_repeat_upstream_of_insertion(
+        self, tmp_path: Path, mock_args, minimal_config: dict
+    ):
+        """(a) SNP inside mutated repeat upstream of mid-repeat insertion remains unshifted."""
+        left = minimal_config["constants"]["hg38"]["left"]
+        right = minimal_config["constants"]["hg38"]["right"]
+        norm_rep1 = minimal_config["repeats"]["1"]
+        rep2 = minimal_config["repeats"]["2"]
+        rep3 = minimal_config["repeats"]["X"]
+
+        normal_seq = left + norm_rep1 + rep2 + rep3 + right
+        results = [_hr(normal_seq, ["1", "2", "X"])]
+
+        # Mutate repeat 1 with insertion at offset 6
+        mut_rep1 = norm_rep1[:6] + "C" + norm_rep1[6:]
+        mut_seq = left + mut_rep1 + rep2 + rep3 + right
+        mut_hr = _hr(mut_seq, ["1m", "2", "X"])
+        mutated_results = [mut_hr]
+
+        # SNP at offset 2 (upstream of insertion at 6)
+        snp_pos = len(left) + 2
+        ref_base = normal_seq[snp_pos]
+        alt_base = "T" if ref_base != "T" else "A"
+
+        snp_tsv = tmp_path / "snps_a.tsv"
+        snp_tsv.write_text(f"1\t{snp_pos}\t{ref_base}\t{alt_base}\n")
+        mock_args.snp_input_file = str(snp_tsv)
+        mock_args.random_snps = False
+
+        _, _, snp_normal, snp_mut = write_fasta_outputs(
+            args=mock_args,
+            config=minimal_config,
+            out_dir=str(tmp_path),
+            out_base="test_a",
+            sim_index=1,
+            results=results,
+            mutated_results=mutated_results,
+            dual_mutation_mode=True,
+            mutation_pair=["normal", "dupC"],
+            mutation_positions=[MutationTarget(1, 1)],
+            structure_mutation_info=None,
+        )
+
+        assert len(snp_normal[0]) == 1
+        assert len(snp_mut[0]) == 1
+        assert snp_mut[0][0]["position"] == snp_pos
+        assert snp_mut[0][0]["ref_base"] == ref_base
+
+    def test_dual_mode_snp_between_two_repeat_insertions(
+        self, tmp_path: Path, mock_args, minimal_config: dict
+    ):
+        """(b) Insertions in repeat 1 and repeat 3; SNP in repeat 2 is shifted only by repeat 1's insertion."""
+        left = minimal_config["constants"]["hg38"]["left"]
+        right = minimal_config["constants"]["hg38"]["right"]
+        norm_rep1 = minimal_config["repeats"]["1"]
+        rep2 = minimal_config["repeats"]["2"]
+        norm_rep3 = minimal_config["repeats"]["X"]
+
+        normal_seq = left + norm_rep1 + rep2 + norm_rep3 + right
+        results = [_hr(normal_seq, ["1", "2", "X"])]
+
+        # Repeat 1 has +1 insertion, Repeat 3 has +2 insertion
+        mut_rep1 = norm_rep1[:4] + "A" + norm_rep1[4:]
+        mut_rep2 = rep2
+        mut_rep3 = norm_rep3[:2] + "CC" + norm_rep3[2:]
+        mut_seq = left + mut_rep1 + mut_rep2 + mut_rep3 + right
+        mut_hr = _hr(mut_seq, ["1m", "2", "Xm"])
+        mut_hr._repeat_lengths = [len(mut_rep1), len(mut_rep2), len(mut_rep3)]
+        mutated_results = [mut_hr]
+
+        # SNP inside repeat 2 at offset 3
+        snp_pos = len(left) + len(norm_rep1) + 3
+        ref_base = normal_seq[snp_pos]
+        alt_base = "G" if ref_base != "G" else "T"
+
+        snp_tsv = tmp_path / "snps_b.tsv"
+        snp_tsv.write_text(f"1\t{snp_pos}\t{ref_base}\t{alt_base}\n")
+        mock_args.snp_input_file = str(snp_tsv)
+        mock_args.random_snps = False
+
+        _, _, snp_normal, snp_mut = write_fasta_outputs(
+            args=mock_args,
+            config=minimal_config,
+            out_dir=str(tmp_path),
+            out_base="test_b",
+            sim_index=1,
+            results=results,
+            mutated_results=mutated_results,
+            dual_mutation_mode=True,
+            mutation_pair=["normal", "dupC"],
+            mutation_positions=[MutationTarget(1, 1), MutationTarget(1, 3)],
+            structure_mutation_info=None,
+        )
+
+        assert len(snp_normal[0]) == 1
+        assert len(snp_mut[0]) == 1
+        # Shifted by +1 from repeat 1's insertion; unaffected by repeat 3's +2 insertion
+        assert snp_mut[0][0]["position"] == snp_pos + 1
+        assert snp_mut[0][0]["ref_base"] == ref_base
+
+    def test_dual_mode_snp_inside_deleted_span_omitted(
+        self, tmp_path: Path, mock_args, minimal_config: dict
+    ):
+        """(c) SNP falling inside a deleted span in a mutated repeat is omitted from mutant SNPs."""
+        left = minimal_config["constants"]["hg38"]["left"]
+        right = minimal_config["constants"]["hg38"]["right"]
+        norm_rep1 = minimal_config["repeats"]["1"]
+        rep2 = minimal_config["repeats"]["2"]
+        rep3 = minimal_config["repeats"]["X"]
+
+        normal_seq = left + norm_rep1 + rep2 + rep3 + right
+        results = [_hr(normal_seq, ["1", "2", "X"])]
+
+        # Repeat 1 has bases 2..4 deleted (-2 bp)
+        mut_rep1 = norm_rep1[:2] + norm_rep1[4:]
+        mut_seq = left + mut_rep1 + rep2 + rep3 + right
+        mut_hr = _hr(mut_seq, ["1m", "2", "X"])
+        mutated_results = [mut_hr]
+
+        # SNP inside the deleted span (offset 3 in repeat 1)
+        snp_pos = len(left) + 3
+        ref_base = normal_seq[snp_pos]
+        alt_base = "A" if ref_base != "A" else "C"
+
+        snp_tsv = tmp_path / "snps_c.tsv"
+        snp_tsv.write_text(f"1\t{snp_pos}\t{ref_base}\t{alt_base}\n")
+        mock_args.snp_input_file = str(snp_tsv)
+        mock_args.random_snps = False
+
+        _, _, snp_normal, snp_mut = write_fasta_outputs(
+            args=mock_args,
+            config=minimal_config,
+            out_dir=str(tmp_path),
+            out_base="test_c",
+            sim_index=1,
+            results=results,
+            mutated_results=mutated_results,
+            dual_mutation_mode=True,
+            mutation_pair=["normal", "dupC"],
+            mutation_positions=[MutationTarget(1, 1)],
+            structure_mutation_info=None,
+        )
+
+        assert len(snp_normal[0]) == 1
+        # Mutated haplotype should omit this deleted SNP
+        assert len(snp_mut.get(0, [])) == 0

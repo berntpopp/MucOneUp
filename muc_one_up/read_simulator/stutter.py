@@ -198,6 +198,9 @@ class StutterTable:
                 f"{self.min_len} bases (an error delta >= -{self.min_len})"
             )
 
+    def __hash__(self) -> int:
+        return hash((tuple(sorted(self.pmfs.items())), self.min_len, self.fallback))
+
     @classmethod
     def from_dict(
         cls,

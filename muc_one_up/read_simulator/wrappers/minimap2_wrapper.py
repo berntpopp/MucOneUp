@@ -92,6 +92,7 @@ def align_reads_with_minimap2(
     preset: str = MINIMAP2_PRESET_ONT,
     threads: int = DEFAULT_MINIMAP2_THREADS,
     timeout: int = DEFAULT_ALIGNMENT_TIMEOUT,
+    exclude_flags: int = 0,
 ) -> str:
     """
     Align long reads to reference genome using minimap2 with configurable preset.
@@ -199,32 +200,53 @@ def align_reads_with_minimap2(
             f"minimap2 alignment failed: Output SAM {output_sam} missing or empty"
         )
 
-    # Convert SAM to BAM using reusable samtools wrapper
-    logging.info(f"Converting SAM to BAM: {output_sam} → {output_bam}")
-    convert_sam_to_bam(
-        samtools_cmd=samtools_cmd,
-        input_sam=output_sam,
-        output_bam=output_bam,
-        threads=threads,
-        timeout=timeout,
-    )
-
-    # Sort and index the BAM file using reusable samtools wrapper
-    logging.info(f"Sorting and indexing BAM: {output_bam}")
-    sort_and_index_bam(
-        samtools_exe=samtools_cmd,
-        input_bam=output_bam,
-        output_bam=output_bam,
-        threads=threads,
-    )
-
-    # Clean up intermediate SAM file
     try:
-        if output_sam_path.exists():
-            output_sam_path.unlink()
-            logging.debug(f"Removed intermediate SAM file: {output_sam}")
-    except Exception as e:
-        logging.warning(f"Could not remove intermediate SAM file {output_sam}: {e}")
+        # Convert SAM to BAM using reusable samtools wrapper
+        logging.info(f"Converting SAM to BAM: {output_sam} → {output_bam}")
+        if exclude_flags > 0:
+            view_cmd = build_tool_command(
+                samtools_cmd,
+                "view",
+                "-b",
+                "-@",
+                threads,
+                "-F",
+                str(exclude_flags),
+                "-o",
+                output_bam,
+                output_sam,
+            )
+            run_command(
+                view_cmd,
+                timeout=timeout,
+                stderr_prefix="[samtools] ",
+                stderr_log_level=logging.INFO,
+            )
+        else:
+            convert_sam_to_bam(
+                samtools_cmd=samtools_cmd,
+                input_sam=output_sam,
+                output_bam=output_bam,
+                threads=threads,
+                timeout=timeout,
+            )
+
+        # Sort and index the BAM file using reusable samtools wrapper
+        logging.info(f"Sorting and indexing BAM: {output_bam}")
+        sort_and_index_bam(
+            samtools_exe=samtools_cmd,
+            input_bam=output_bam,
+            output_bam=output_bam,
+            threads=threads,
+        )
+    finally:
+        # Clean up intermediate SAM file
+        try:
+            if output_sam_path.exists():
+                output_sam_path.unlink()
+                logging.debug(f"Removed intermediate SAM file: {output_sam}")
+        except Exception as e:
+            logging.warning(f"Could not remove intermediate SAM file {output_sam}: {e}")
 
     # Validate final BAM exists and is non-empty
     output_bam_path = Path(output_bam)

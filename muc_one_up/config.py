@@ -118,6 +118,8 @@ from jsonschema import ValidationError, validate
 CONFIG_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
+        "seed": {"type": ["integer", "null"]},
+        "reference_assembly": {"type": "string", "enum": ["hg19", "hg38"]},
         "repeats": {"type": "object", "additionalProperties": {"type": "string"}},
         "reference_genomes": {
             "type": "object",
@@ -429,6 +431,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                     "snapshot": {
                         "type": "object",
                         "properties": {
+                            "primary_primer": {"type": "string"},
                             "primers": {
                                 "type": "object",
                                 "additionalProperties": {"type": "string"},
@@ -452,6 +455,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                     "validation": {
                         "type": "object",
                         "properties": {
+                            "mutant_extension": {"type": "object"},
                             "mutant_pattern": {"type": "string"},
                             "normal_pattern": {"type": "string"},
                             "expected_mutant_fluorescence": {"type": "string"},
@@ -652,6 +656,9 @@ def load_config(config_path: str) -> dict[str, Any]:
         logging.error("Configuration validation error: %s", e.message)
         raise
 
+    # Resolve relative paths relative to config file directory
+    _resolve_config_paths(config, Path(config_path).resolve().parent)
+
     return config  # type: ignore[no-any-return]
 
 
@@ -703,6 +710,7 @@ _PATH_FIELDS: dict[str | None, list[str]] = {
     ],
     "pacbio_params": ["model_file"],
     "ont_amplicon_params": ["model_file"],
+    "ont_fragment_params": ["flank_fasta"],
 }
 
 
@@ -728,6 +736,32 @@ def _resolve_config_paths(config: dict[str, Any], config_dir: Path) -> None:
             if key in section and isinstance(section[key], str):
                 _try_resolve(section, key, config_dir)
 
+    # reference_genomes.*.fasta_path
+    ref_genomes = config.get("reference_genomes", {})
+    if isinstance(ref_genomes, dict):
+        for asm_cfg in ref_genomes.values():
+            if (
+                isinstance(asm_cfg, dict)
+                and "fasta_path" in asm_cfg
+                and isinstance(asm_cfg["fasta_path"], str)
+            ):
+                _try_resolve(asm_cfg, "fasta_path", config_dir)
+
+    # nanosim_params.training_data_path (model prefix)
+    val = config.get("nanosim_params", {}).get("training_data_path")
+    if isinstance(val, str) and not Path(val).is_absolute():
+        p_val = Path(val)
+        cand = config_dir / p_val
+        exists_in_cwd = p_val.exists() or Path(f"{val}_model_profile").exists()
+        if not exists_in_cwd and (cand.exists() or (config_dir / f"{val}_model_profile").exists()):
+            config["nanosim_params"]["training_data_path"] = str(cand.resolve())
+            logging.debug("Resolved config path training_data_path: %s -> %s", val, cand.resolve())
+
+    # read_simulation.vntr_capture_efficiency.capture_bed
+    vce = config.get("read_simulation", {}).get("vntr_capture_efficiency", {})
+    if isinstance(vce, dict) and "capture_bed" in vce and isinstance(vce["capture_bed"], str):
+        _try_resolve(vce, "capture_bed", config_dir)
+
 
 def _try_resolve(section: dict[str, Any], key: str, config_dir: Path) -> None:
     """Resolve a single path field if it's relative and exists from config_dir."""
@@ -735,7 +769,7 @@ def _try_resolve(section: dict[str, Any], key: str, config_dir: Path) -> None:
     path = Path(value)
     if path.is_absolute() or path.exists():
         return
-    resolved = config_dir / path
+    resolved = (config_dir / path).resolve()
     if resolved.exists():
         section[key] = str(resolved)
         logging.debug("Resolved config path %s: %s -> %s", key, value, resolved)

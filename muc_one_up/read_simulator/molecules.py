@@ -23,6 +23,7 @@ from dataclasses import dataclass, field, fields
 from typing import NamedTuple
 
 from .stutter import StutterFallback, StutterTable
+from .utils.sequence_utils import reverse_complement
 
 __all__ = [
     "HpEdit",
@@ -38,14 +39,8 @@ __all__ = [
     "reverse_complement",
 ]
 
-_COMPLEMENT = str.maketrans("ACGTNacgtn", "TGCANtgcan")
 _HP_BASES = frozenset("ACGT")
 _SMEAR_MAX_KEEP = 0.95  # smear products keep at most this fraction of the amplicon
-
-
-def reverse_complement(seq: str) -> str:
-    """Return the reverse complement of a DNA sequence."""
-    return seq.translate(_COMPLEMENT)[::-1]
 
 
 @dataclass(frozen=True)

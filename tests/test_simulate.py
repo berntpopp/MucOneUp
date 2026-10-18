@@ -12,6 +12,7 @@ import random
 
 import pytest
 
+from muc_one_up.mutate import apply_mutations
 from muc_one_up.simulate import (
     assemble_haplotype_from_chain,
     pick_next_symbol_no_end,
@@ -217,47 +218,69 @@ class TestSimulateFromChains:
         assert results[1].chain_strs() == ["1", "A", "B"]
 
     def test_applies_mutation_to_specific_haplotype(self, minimal_config: dict):
-        """Given mutation target, when simulating, then applies mutation correctly."""
+        """Given mutation target, when simulating and mutating, then applies mutation correctly."""
+        minimal_config["mutations"]["dupC"] = {
+            "allowed_repeats": ["1", "2", "X", "A", "B"],
+            "strict_mode": False,
+            "changes": [{"type": "insert", "start": 1, "end": 1, "sequence": "C"}],
+        }
         chains = _ru_chains(["1", "2", "X"], ["1", "A", "B"])
         targets = [MutationTarget(1, 2)]  # Haplotype 1, position 2
 
-        results = simulate_from_chains(chains, minimal_config, "dupC", targets)
+        results = simulate_from_chains(chains, minimal_config)
+        updated, _ = apply_mutations(minimal_config, results, "dupC", targets)
 
-        chain1 = results[0].chain
-        chain2 = results[1].chain
+        chain1 = updated[0].chain
+        chain2 = updated[1].chain
         assert chain1[1].mutated  # Position 2 (0-indexed: 1)
         assert not any(ru.mutated for ru in chain2)
 
     def test_applies_multiple_mutations(self, minimal_config: dict):
-        """Given multiple targets, when simulating, then applies all mutations."""
+        """Given multiple targets, when simulating and mutating, then applies all mutations."""
+        minimal_config["mutations"]["dupC"] = {
+            "allowed_repeats": ["1", "2", "X", "A", "B"],
+            "strict_mode": False,
+            "changes": [{"type": "insert", "start": 1, "end": 1, "sequence": "C"}],
+        }
         chains = _ru_chains(["1", "2", "X"], ["1", "A", "B"])
         targets = [MutationTarget(1, 2), MutationTarget(2, 3)]
 
-        results = simulate_from_chains(chains, minimal_config, "dupC", targets)
+        results = simulate_from_chains(chains, minimal_config)
+        updated, _ = apply_mutations(minimal_config, results, "dupC", targets)
 
-        chain1 = results[0].chain
-        chain2 = results[1].chain
+        chain1 = updated[0].chain
+        chain2 = updated[1].chain
         assert chain1[1].mutated
         assert chain2[2].mutated
 
     def test_skips_out_of_range_mutations(self, minimal_config: dict):
-        """Given out-of-range target, when simulating, then skips mutation."""
+        """Given out-of-range target, apply_mutations raises ValueError."""
+        minimal_config["mutations"]["dupC"] = {
+            "allowed_repeats": ["1", "2", "X", "A", "B"],
+            "strict_mode": False,
+            "changes": [{"type": "insert", "start": 1, "end": 1, "sequence": "C"}],
+        }
         chains = _ru_chains(["1", "2"])  # Only 2 repeats
         targets = [MutationTarget(1, 10)]  # Position 10 doesn't exist
 
-        results = simulate_from_chains(chains, minimal_config, "dupC", targets)
-
-        chain = results[0].chain
-        assert not any(ru.mutated for ru in chain)
+        results = simulate_from_chains(chains, minimal_config)
+        with pytest.raises(ValueError, match="out of range"):
+            apply_mutations(minimal_config, results, "dupC", targets)
 
     def test_does_not_duplicate_mutation_markers(self, minimal_config: dict):
         """Given already-marked repeat, when mutating, then doesn't add duplicate marker."""
+        minimal_config["mutations"]["dupC"] = {
+            "allowed_repeats": ["1", "2", "X", "A", "B"],
+            "strict_mode": False,
+            "changes": [{"type": "insert", "start": 1, "end": 1, "sequence": "C"}],
+        }
         chains = _ru_chains(["1", "2m"])  # Already mutated
         targets = [MutationTarget(1, 2)]  # Target same position
 
-        results = simulate_from_chains(chains, minimal_config, "dupC", targets)
+        results = simulate_from_chains(chains, minimal_config)
+        updated, _ = apply_mutations(minimal_config, results, "dupC", targets)
 
-        chain = results[0].chain
+        chain = updated[0].chain
         assert chain[1] == RepeatUnit("2", mutated=True)  # Not double-mutated
 
 
@@ -334,6 +357,16 @@ class TestSimulateDiploidAdvanced:
         assert r1[0].chain == r2[0].chain  # Same chains
         assert r1[1].chain == r2[1].chain
 
+    def test_raises_index_error_when_fixed_lengths_too_few(self, minimal_config: dict):
+        """Given fewer fixed_lengths than num_haplotypes, raises IndexError."""
+        with pytest.raises(IndexError, match="fixed_lengths length"):
+            simulate_diploid(minimal_config, num_haplotypes=3, fixed_lengths=[20, 30])
+
+    def test_raises_index_error_when_fixed_lengths_too_many(self, minimal_config: dict):
+        """Given more fixed_lengths than num_haplotypes, raises IndexError."""
+        with pytest.raises(IndexError, match="fixed_lengths length"):
+            simulate_diploid(minimal_config, num_haplotypes=2, fixed_lengths=[20, 30, 40])
+
 
 @pytest.mark.integration
 class TestSimulationIntegration:
@@ -363,16 +396,22 @@ class TestSimulationIntegration:
 
     def test_predefined_chains_with_mutations(self, minimal_config: dict):
         """Test predefined chains simulation with mutations."""
+        minimal_config["mutations"]["dupC"] = {
+            "allowed_repeats": ["1", "2", "X", "A", "B"],
+            "strict_mode": False,
+            "changes": [{"type": "insert", "start": 1, "end": 1, "sequence": "C"}],
+        }
         chains = _ru_chains(
             ["1", "2", "X", "B", "6", "7", "8", "9"],
             ["1", "2", "A", "B", "6p", "7", "8", "9"],
         )
         targets = [MutationTarget(1, 3), MutationTarget(2, 4)]
 
-        results = simulate_from_chains(chains, minimal_config, "dupC", targets)
+        results = simulate_from_chains(chains, minimal_config)
+        updated, _ = apply_mutations(minimal_config, results, "dupC", targets)
 
-        chain1 = results[0].chain
-        chain2 = results[1].chain
+        chain1 = updated[0].chain
+        chain2 = updated[1].chain
 
         # Verify mutations
         assert chain1[2] == RepeatUnit("X", mutated=True)

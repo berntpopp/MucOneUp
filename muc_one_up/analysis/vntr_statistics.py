@@ -118,59 +118,39 @@ def analyze_vntr_sequences(
 
     if has_header:
         dict_reader = csv.DictReader(file_handle, delimiter=delimiter)
-        for row in dict_reader:
-            structure = row.get(str(structure_column), "").strip()
-            if not structure:
-                continue
-            if structure in seen:
-                continue
-            seen.add(structure)
-            tokens = parse_vntr(structure)
-            if not tokens:
-                continue
-            # Check each token against known repeats
-            for token in tokens:
-                if token not in known_repeats:
-                    unknown_tokens.add(token)
-            lengths.append(len(tokens))
-            # Build transition matrix
-            for i in range(len(tokens) - 1):
-                src = tokens[i]
-                dst = tokens[i + 1]
-                transition_counts[src][dst] += 1
-            # Transition from the last token to the "END" state
-            transition_counts[tokens[-1]]["END"] += 1
+        col_key = str(structure_column)
+        raw_structures = ((row.get(col_key) or "").strip() for row in dict_reader)
     else:
-        csv_reader = csv.reader(file_handle, delimiter=delimiter)
         try:
             col_index = int(structure_column)
         except ValueError as e:
             raise ValueError(
                 "When no header is present, --structure-column must be an integer index."
             ) from e
-        for csv_row in csv_reader:
-            if not csv_row:
-                continue
-            if col_index >= len(csv_row):
-                continue
-            structure = csv_row[col_index].strip()
-            if not structure:
-                continue
-            if structure in seen:
-                continue
-            seen.add(structure)
-            tokens = parse_vntr(structure)
-            if not tokens:
-                continue
-            for token in tokens:
-                if token not in known_repeats:
-                    unknown_tokens.add(token)
-            lengths.append(len(tokens))
-            for i in range(len(tokens) - 1):
-                src = tokens[i]
-                dst = tokens[i + 1]
-                transition_counts[src][dst] += 1
-            transition_counts[tokens[-1]]["END"] += 1
+        csv_reader = csv.reader(file_handle, delimiter=delimiter)
+        raw_structures = (
+            (row[col_index].strip() if col_index < len(row) else "") for row in csv_reader if row
+        )
+
+    for structure in raw_structures:
+        if not structure or structure in seen:
+            continue
+        seen.add(structure)
+        tokens = parse_vntr(structure)
+        if not tokens:
+            continue
+        # Check each token against known repeats
+        for token in tokens:
+            if token not in known_repeats:
+                unknown_tokens.add(token)
+        lengths.append(len(tokens))
+        # Build transition matrix
+        for i in range(len(tokens) - 1):
+            src = tokens[i]
+            dst = tokens[i + 1]
+            transition_counts[src][dst] += 1
+        # Transition from the last token to the "END" state
+        transition_counts[tokens[-1]]["END"] += 1
 
     # Warn about unknown tokens
     if unknown_tokens:

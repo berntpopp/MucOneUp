@@ -80,8 +80,8 @@ class PCRSimulator:
                 - non_specific (bool): Whether primers are non-specific
         """
         # Find all primer binding sites
-        forward_sites = self._find_binding_sites(template, self.forward_primer, reverse=False)
-        reverse_sites = self._find_binding_sites(template, self.reverse_primer, reverse=True)
+        forward_sites = self._find_binding_sites(template, self.forward_primer)
+        reverse_sites = self._find_binding_sites(template, self.reverse_primer)
 
         if not forward_sites or not reverse_sites:
             self.logger.warning("No primer binding sites found")
@@ -153,14 +153,13 @@ class PCRSimulator:
             "non_specific": non_specific,
         }
 
-    def _find_binding_sites(self, template: str, primer: str, reverse: bool = False) -> list[int]:
+    def _find_binding_sites(self, template: str, primer: str) -> list[int]:
         """
         Find all binding sites for a primer in template.
 
         Args:
             template: Template sequence
             primer: Primer sequence (already RC'd for reverse primer in __init__)
-            reverse: If True, indicates this is the reverse primer (already RC'd)
 
         Returns:
             List of binding site positions
@@ -463,23 +462,28 @@ class SnapshotValidator:
         )
 
         # Step 3: SNaPshot Extension (on survivors only)
+        primer_name = self.mutation_config["snapshot"].get("primary_primer") or (
+            "primer_7c"
+            if "primer_7c" in self.extension.primers
+            else next(iter(self.extension.primers))
+        )
         snapshot_results = []
         for survivor in digest_results["survivors"]:
-            # Try primary primer (primer_7c)
             extension_result = self.extension.extend(
-                template=survivor["sequence"], primer_name="primer_7c"
+                template=survivor["sequence"], primer_name=primer_name
             )
             snapshot_results.append({"amplicon": survivor, "extension": extension_result})
 
         # Step 4: Determine mutation presence
-        # Mutation detected if any survivor shows "C" (Black fluorescence)
+        mutant_ext = self.mutation_patterns.get("mutant_extension", {})
+        expected_fluor = mutant_ext.get("fluorophore") or self.mutation_patterns.get(
+            "expected_mutant_fluorescence", "Black"
+        )
         mutation_detected = any(
-            r["extension"].get("next_base") == "C"
+            r["extension"].get("fluorophore") == expected_fluor
             for r in snapshot_results
             if r["extension"].get("binds", False)
         )
-
-        expected_fluor = self.mutation_patterns.get("expected_mutant_fluorescence", "Black")
 
         return {
             "pcr_results": pcr_results,

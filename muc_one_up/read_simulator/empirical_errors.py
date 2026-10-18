@@ -92,6 +92,20 @@ class EmpiricalErrorModel:
     def total_rate(self) -> float:
         return self.mismatch_rate + self.insertion_rate + self.deletion_rate
 
+    def __hash__(self) -> int:
+        return hash(
+            (
+                self.mismatch_rate,
+                self.insertion_rate,
+                self.deletion_rate,
+                tuple(sorted(self.insertion_len_pmf.items())),
+                tuple(sorted(self.deletion_len_pmf.items())),
+                self.read_error_sigma,
+                self.q_scale,
+                self.hp_min_len,
+            )
+        )
+
 
 def _read_multiplier(model: EmpiricalErrorModel, rng: random.Random) -> float:
     if model.read_error_sigma == 0:
@@ -148,7 +162,7 @@ def apply_errors(
             out.extend(rng.choice(_BASES) for _ in range(_draw(ins_pmf, rng)))
         elif draw < p_mm:
             events["mismatch"] += 1
-            out.append(rng.choice(_BASES.replace(base, "") or _BASES))
+            out.append(rng.choice(_BASES.replace(base.upper(), "") or _BASES))
         else:
             out.append(base)
         i += 1

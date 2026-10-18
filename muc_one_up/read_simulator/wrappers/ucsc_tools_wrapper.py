@@ -10,7 +10,7 @@ This module provides wrapper functions for UCSC tools operations:
 import logging
 from pathlib import Path
 
-from ...exceptions import ExternalToolError, FileOperationError
+from ...exceptions import FileOperationError
 from ..command_utils import build_tool_command
 from ..utils import run_command
 
@@ -31,7 +31,7 @@ def fa_to_twobit(
     """
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     cmd = build_tool_command(tools["faToTwoBit"], input_fa, output_2bit)
-    run_command(cmd, timeout=60, stderr_prefix="[ucsc] ", stderr_log_level=logging.INFO)
+    run_command(cmd, timeout=timeout, stderr_prefix="[ucsc] ", stderr_log_level=logging.INFO)
 
     # Check output exists and is non-empty
     output_path = Path(output_2bit)
@@ -84,22 +84,12 @@ def run_pblat(
         output_psl,
     )
 
-    try:
-        run_command(
-            cmd,
-            timeout=timeout,
-            stderr_prefix="[pblat] ",
-            stderr_log_level=logging.INFO,
-        )
-    except ExternalToolError as e:
-        # Check if output was produced despite error
-        output_path = Path(output_psl)
-        if output_path.exists() and output_path.stat().st_size > 0:
-            logging.warning(
-                "pblat command failed, but output file exists. Continuing with caution."
-            )
-        else:
-            raise FileOperationError("pblat alignment failed and no output was produced") from e
+    run_command(
+        cmd,
+        timeout=timeout,
+        stderr_prefix="[pblat] ",
+        stderr_log_level=logging.INFO,
+    )
 
     # Verify output exists and is non-empty
     output_path = Path(output_psl)

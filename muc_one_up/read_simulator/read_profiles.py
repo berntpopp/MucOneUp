@@ -71,8 +71,8 @@ class ReadProfile:
     platform: str
     calibration: str
     description: str
-    provenance: Mapping[str, Any]
-    config_overrides: Mapping[str, Any]
+    provenance: Mapping[str, Any] = field(hash=False)
+    config_overrides: Mapping[str, Any] = field(hash=False)
     molecules: MoleculeModel
     fragments: FragmentModel | None  # None when the profile leaves read lengths to the config
     sha256: str

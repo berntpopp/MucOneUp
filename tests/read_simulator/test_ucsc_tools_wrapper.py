@@ -15,7 +15,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from muc_one_up.exceptions import FileOperationError
+from muc_one_up.exceptions import ExternalToolError, FileOperationError
 from muc_one_up.read_simulator.wrappers.ucsc_tools_wrapper import fa_to_twobit, run_pblat
 
 
@@ -110,6 +110,19 @@ class TestFaToTwoBit:
         with pytest.raises(FileOperationError, match="missing or empty"):
             fa_to_twobit(str(input_fa), str(output_2bit), tools_dict)
 
+    def test_passes_timeout_parameter(self, mocker, tmp_path, tools_dict):
+        """Test that custom timeout is passed to run_command."""
+        input_fa = tmp_path / "input.fa"
+        output_2bit = tmp_path / "output.2bit"
+        input_fa.write_text(">chr1\nACGT\n")
+
+        mock_run = mocker.patch("muc_one_up.read_simulator.wrappers.ucsc_tools_wrapper.run_command")
+        output_2bit.write_bytes(b"TWOBIT")
+
+        fa_to_twobit(str(input_fa), str(output_2bit), tools_dict, timeout=120)
+
+        assert mock_run.call_args.kwargs.get("timeout") == 120
+
 
 class TestRunPblat:
     """Test run_pblat command construction and error handling."""
@@ -179,7 +192,7 @@ class TestRunPblat:
             run_pblat(str(twobit), str(ref), str(output_psl), tools_dict)
 
     def test_handles_pblat_error_with_output(self, mocker, tmp_path, tools_dict):
-        """Test that pblat error is tolerated if output exists."""
+        """Test that pblat error is not swallowed even if output exists."""
         # Arrange
         twobit = tmp_path / "input.2bit"
         ref = tmp_path / "ref.fa"
@@ -204,14 +217,12 @@ class TestRunPblat:
 
         mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
 
-        # Act: Should log warning but NOT raise error
-        run_pblat(str(twobit), str(ref), str(output_psl), tools_dict)
-
-        # Assert: Output exists, no exception raised
-        assert output_psl.exists()
+        # Act & Assert: Should raise ExternalToolError
+        with pytest.raises(ExternalToolError):
+            run_pblat(str(twobit), str(ref), str(output_psl), tools_dict)
 
     def test_raises_error_when_no_output(self, mocker, tmp_path, tools_dict):
-        """Test that pblat error without output raises FileOperationError."""
+        """Test that pblat error without output raises ExternalToolError."""
         # Arrange
         twobit = tmp_path / "input.2bit"
         ref = tmp_path / "ref.fa"
@@ -236,5 +247,5 @@ class TestRunPblat:
         mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
 
         # Act & Assert: Should raise error
-        with pytest.raises(FileOperationError, match="pblat alignment failed"):
+        with pytest.raises(ExternalToolError):
             run_pblat(str(twobit), str(ref), str(output_psl), tools_dict)

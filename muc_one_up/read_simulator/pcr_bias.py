@@ -68,6 +68,12 @@ class PCRBiasModel:
     denaturation_time: float = 10.0
     stochastic: bool = False
 
+    def __post_init__(self) -> None:
+        if self.stochastic and self.cycles > 54:
+            raise ValueError(
+                f"cycles must be <= 54 in stochastic mode to prevent int64 overflow, got {self.cycles}"
+            )
+
     @classmethod
     def from_preset(cls, name: str, **overrides: Any) -> PCRBiasModel:
         """Load a named preset with optional parameter overrides."""

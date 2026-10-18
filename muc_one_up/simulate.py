@@ -29,7 +29,6 @@ Example:
             print(f"Chain: {'-'.join(hr.chain_strs())}, Length: {len(hr.sequence)} bp")
 
 See Also:
-    - probabilities.py: Weighted random repeat selection
     - distribution.py: Target length sampling
     - mutate.py: Post-simulation mutation application
 """
@@ -44,7 +43,6 @@ from .type_defs import (
     ConfigDict,
     DNASequence,
     HaplotypeResult,
-    MutationTarget,
     ProbabilitiesDict,
     RepeatChain,
     RepeatUnit,
@@ -109,26 +107,17 @@ def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNA
 def simulate_from_chains(
     predefined_chains: list[list[RepeatUnit]],
     config: ConfigDict,
-    mutation_name: str | None = None,
-    mutation_targets: list[MutationTarget] | None = None,
 ) -> list[HaplotypeResult]:
     """Simulate haplotypes from predefined repeat chains.
 
     Takes predefined repeat chains and assembles them into haplotype sequences.
-    Optionally marks positions with mutation markers if mutation_targets are specified.
 
     Args:
         predefined_chains: List of RepeatUnit chains, one per haplotype
         config: Configuration dictionary
-        mutation_name: Optional mutation name (for logging)
-        mutation_targets: Optional list of (haplotype_idx, repeat_idx) tuples
-                         using 1-based indexing
 
     Returns:
         List of HaplotypeResult objects
-
-    Note:
-        mutation_targets use 1-based indexing for both haplotype and repeat positions
     """
     ref_assembly = config.get("reference_assembly", "hg38")
     constants: AssemblyConstants = config["constants"][ref_assembly]
@@ -139,29 +128,6 @@ def simulate_from_chains(
     for i, chain in enumerate(predefined_chains):
         # Copy the chain so we don't mutate the caller's data
         working_chain = list(chain)
-
-        # Apply mutations if specified in the mutation_targets
-        if mutation_name and mutation_targets:
-            for target in mutation_targets:
-                # Check if this mutation applies to the current haplotype
-                if target.haplotype_index == i + 1:  # 1-indexed haplotype numbers
-                    # Convert from 1-indexed to 0-indexed for the repeat position
-                    zero_based_idx = target.repeat_index - 1
-                    # Ensure the repeat index is valid
-                    if 0 <= zero_based_idx < len(working_chain):
-                        ru = working_chain[zero_based_idx]
-                        # Only add mutation marker if it doesn't already have one
-                        if not ru.mutated:
-                            logging.info(
-                                f"Applying mutation '{mutation_name}' to haplotype {i + 1}, "
-                                f"repeat position {target.repeat_index} (0-based: {zero_based_idx})"
-                            )
-                            working_chain[zero_based_idx] = RepeatUnit(ru.symbol, mutated=True)
-                    else:
-                        logging.warning(
-                            f"Mutation target repeat index {target.repeat_index} (0-based: {zero_based_idx}) "
-                            f"is out of range for haplotype {i + 1} (length {len(working_chain)})"
-                        )
 
         logging.info(
             f"Assembling haplotype {i + 1} from predefined chain with {len(working_chain)} repeats"
@@ -204,6 +170,11 @@ def simulate_diploid(
     Raises:
         IndexError: If fixed_lengths is provided but has wrong length
     """
+    if fixed_lengths is not None and len(fixed_lengths) != num_haplotypes:
+        raise IndexError(
+            f"fixed_lengths length ({len(fixed_lengths)}) must equal num_haplotypes ({num_haplotypes})"
+        )
+
     if rng is None and seed is not None:
         rng = _random_module.Random(seed)
         logging.debug("Created RNG with seed %d", seed)
@@ -266,7 +237,7 @@ def simulate_single_haplotype(
     probabilities: ProbabilitiesDict = config["probabilities"]
     repeats_dict: dict[str, str] = config["repeats"]
 
-    assembled_seq = left_const
+    parts = [left_const]
     repeat_chain: list[RepeatUnit] = []
     current_symbol = "1"
     total_repeats = 0
@@ -274,42 +245,43 @@ def simulate_single_haplotype(
 
     while True:
         repeat_chain.append(RepeatUnit(current_symbol))
-        assembled_seq += repeats_dict[current_symbol]
+        parts.append(repeats_dict[current_symbol])
         total_repeats += 1
 
         if total_repeats == final_block_start:
             forced_6 = _rng.choice(["6", "6p"])
             logging.debug("Forcing terminal block: %s, 7, 8, 9", forced_6)
             repeat_chain.append(RepeatUnit(forced_6))
-            assembled_seq += repeats_dict[forced_6]
+            parts.append(repeats_dict[forced_6])
             total_repeats += 1
 
             repeat_chain.append(RepeatUnit("7"))
-            assembled_seq += repeats_dict["7"]
+            parts.append(repeats_dict["7"])
             total_repeats += 1
 
             repeat_chain.append(RepeatUnit("8"))
-            assembled_seq += repeats_dict["8"]
+            parts.append(repeats_dict["8"])
             total_repeats += 1
 
             repeat_chain.append(RepeatUnit("9"))
-            assembled_seq += repeats_dict["9"]
+            parts.append(repeats_dict["9"])
             total_repeats += 1
 
-            assembled_seq += right_const
+            parts.append(right_const)
             break
 
         if total_repeats >= target_length:
-            assembled_seq += right_const
+            parts.append(right_const)
             break
 
         next_symbol = pick_next_symbol_no_end(probabilities, current_symbol, rng=rng)
         if next_symbol is None:
             logging.debug("No valid next symbol; appending right constant.")
-            assembled_seq += right_const
+            parts.append(right_const)
             break
 
         current_symbol = next_symbol
 
+    assembled_seq = "".join(parts)
     logging.info("Simulated haplotype with %d repeats.", total_repeats)
     return HaplotypeResult(sequence=assembled_seq, chain=repeat_chain)

@@ -9,7 +9,6 @@ Key Functions:
     apply_mutations: Apply named mutation to specific haplotype positions
     validate_allowed_repeats: Ensure mutation targets are valid repeat symbols
     apply_changes_to_repeat: Execute insertion/deletion/replacement operations
-    rebuild_haplotype_sequence: Reassemble sequence after mutations
 
 Mutation Structure:
     Mutations are defined in config["mutations"][name] with:
@@ -43,7 +42,6 @@ See Also:
 import logging
 import random as _random_module
 
-from .assembly import assemble_sequence
 from .type_defs import (
     AssemblyConstants,
     ConfigDict,
@@ -52,7 +50,6 @@ from .type_defs import (
     MutationDefinition,
     MutationName,
     MutationTarget,
-    RepeatChain,
     RepeatUnit,
 )
 
@@ -126,6 +123,7 @@ def apply_mutations(
     mutation_def = config["mutations"][mutation_name]
     ref_assembly = config.get("reference_assembly", "hg38")
     constants: AssemblyConstants = config["constants"][ref_assembly]
+    left_len = len(constants["left"])
     repeats_dict = config["repeats"]
     valid_symbols = set(repeats_dict.keys())
 
@@ -146,9 +144,30 @@ def apply_mutations(
         HaplotypeResult(
             sequence=hr.sequence,
             chain=[RepeatUnit(ru.symbol, ru.mutated) for ru in hr.chain],
+            _repeat_lengths=list(hr._repeat_lengths) if hr._repeat_lengths is not None else None,
         )
         for hr in results
     ]
+    lengths_by_hap: list[list[int]] = []
+    for hr in results:
+        if hr._repeat_lengths is not None and len(hr._repeat_lengths) == len(hr.chain):
+            lengths_by_hap.append(list(hr._repeat_lengths))
+        else:
+            lengths = [len(repeats_dict[ru.symbol]) for ru in hr.chain]
+            if sum(1 for ru in hr.chain if ru.mutated) == 1:
+                right_flank_len = (
+                    len(constants.get("right", ""))
+                    if (
+                        not hr.chain
+                        or hr.chain[-1].symbol == "9"
+                        or hr.sequence.endswith(constants.get("right", ""))
+                    )
+                    else 0
+                )
+                delta = len(hr.sequence) - left_len - right_flank_len - sum(lengths)
+                mut_idx = next(i for i, ru in enumerate(hr.chain) if ru.mutated)
+                lengths[mut_idx] += delta
+            lengths_by_hap.append(lengths)
     mutated_units: dict[
         int, list[tuple[int, str]]
     ] = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
@@ -157,19 +176,22 @@ def apply_mutations(
     for target in targets:
         hap_i = target.haplotype_index
         rep_i = target.repeat_index
-        hap_index = hap_i - 1
-        repeat_index = rep_i - 1
+        h_i = hap_i - 1
+        r_i = rep_i - 1
 
-        if hap_index < 0 or hap_index >= len(updated_results):
+        if h_i < 0 or h_i >= len(updated_results):
             raise ValueError(f"Haplotype index {hap_i} out of range (1..{len(updated_results)}).")
 
-        hr = updated_results[hap_index]
+        hr = updated_results[h_i]
 
-        if repeat_index < 0 or repeat_index >= len(hr.chain):
+        if r_i < 0 or r_i >= len(hr.chain):
             raise ValueError(f"Repeat index {rep_i} out of range (1..{len(hr.chain)}).")
 
+        start = left_len + sum(lengths_by_hap[h_i][:r_i])
+        stop = start + lengths_by_hap[h_i][r_i]
+
         # Handle the case where the current symbol is not in allowed_repeats
-        current_symbol_clean = hr.chain[repeat_index].symbol
+        current_symbol_clean = hr.chain[r_i].symbol
         if current_symbol_clean not in allowed_repeats:
             if not allowed_repeats:
                 raise ValueError(
@@ -196,19 +218,30 @@ def apply_mutations(
                 new_symbol,
                 mutation_name,
             )
-            hr.chain[repeat_index] = RepeatUnit(new_symbol)
-            seq = assemble_sequence(hr.chain, repeats_dict, constants)
-            updated_results[hap_index] = HaplotypeResult(sequence=seq, chain=hr.chain)
-            hr = updated_results[hap_index]
+            hr.chain[r_i] = RepeatUnit(new_symbol)
+            replacement_seq = repeats_dict[new_symbol]
+            hr.sequence = hr.sequence[:start] + replacement_seq + hr.sequence[stop:]
+            lengths_by_hap[h_i][r_i] = len(replacement_seq)
+            stop = start + len(replacement_seq)
 
         # Apply the specified changes and capture the mutated unit.
         seq, chain, mutated_repeat = apply_changes_to_repeat(
-            hr.sequence, hr.chain, repeat_index, changes, config, mutation_name
+            hr.sequence,
+            hr.chain,
+            r_i,
+            changes,
+            config,
+            mutation_name,
+            start=start,
+            stop=stop,
         )
 
         # Mark the mutated repeat.
-        chain[repeat_index] = RepeatUnit(chain[repeat_index].symbol, mutated=True)
-        updated_results[hap_index] = HaplotypeResult(sequence=seq, chain=chain)
+        chain[r_i] = RepeatUnit(chain[r_i].symbol, mutated=True)
+        lengths_by_hap[h_i][r_i] = len(mutated_repeat)
+        updated_results[h_i] = HaplotypeResult(
+            sequence=seq, chain=chain, _repeat_lengths=list(lengths_by_hap[h_i])
+        )
         logging.info(
             "Applied mutation '%s' at haplotype %d, repeat %d",
             mutation_name,
@@ -217,27 +250,15 @@ def apply_mutations(
         )
 
         # Record the mutated unit sequence.
-        mutated_units.setdefault(hap_i, []).append((rep_i, mutated_repeat))
+        hap_units = mutated_units.setdefault(hap_i, [])
+        for idx_u, (existing_rep_i, _) in enumerate(hap_units):
+            if existing_rep_i == rep_i:
+                hap_units[idx_u] = (rep_i, mutated_repeat)
+                break
+        else:
+            hap_units.append((rep_i, mutated_repeat))
 
     return updated_results, mutated_units
-
-
-def rebuild_haplotype_sequence(chain: RepeatChain, config: ConfigDict) -> DNASequence:
-    """Rebuild haplotype sequence after mutation.
-
-    Delegates to assembly.assemble_sequence().
-    Converts legacy string chain to RepeatUnit list.
-
-    Args:
-        chain: List of repeat symbols, possibly with 'm' suffix marking mutations
-        config: Configuration dict containing 'constants' and 'repeats' sections
-
-    Returns:
-        Reassembled haplotype DNA sequence
-    """
-    typed_chain = [RepeatUnit.from_str(s) for s in chain]
-    ref_assembly = config.get("reference_assembly", "hg38")
-    return assemble_sequence(typed_chain, config["repeats"], config["constants"][ref_assembly])
 
 
 def apply_changes_to_repeat(
@@ -247,6 +268,8 @@ def apply_changes_to_repeat(
     changes: list[dict[str, int | str]],
     config: ConfigDict,
     mutation_name: MutationName,
+    start: int,
+    stop: int,
 ) -> tuple[DNASequence, list[RepeatUnit], DNASequence]:
     """Modify repeat unit sequence using mutation change operations.
 
@@ -261,6 +284,8 @@ def apply_changes_to_repeat(
         changes: List of change dicts with 'type', 'start', 'end', 'sequence' keys
         config: Configuration dict for assembly constants and repeat lookups
         mutation_name: Name of mutation (for error messages)
+        start: 0-based start index of the repeat in seq
+        stop: 0-based stop index of the repeat in seq
 
     Returns:
         Tuple containing:
@@ -278,57 +303,44 @@ def apply_changes_to_repeat(
         - replace: Replace bases from start to end with sequence
         - delete_insert: Delete between boundaries, insert at boundary
     """
-    repeats_dict: dict[str, str] = config["repeats"]
-    reference_assembly = config.get("reference_assembly", "hg38")
-    assembly_const: AssemblyConstants = config["constants"][reference_assembly]
-    left_const_len = len(assembly_const["left"])
-
-    offset = left_const_len
-    for i in range(repeat_index):
-        offset += len(repeats_dict[chain[i].symbol])
-
-    current_symbol = chain[repeat_index].symbol
-    repeat_seq = repeats_dict[current_symbol]
-    start_pos = offset
-    end_pos = offset + len(repeat_seq) - 1  # inclusive
-
-    repeat_chars = list(repeat_seq)
-    repeat_length = len(repeat_chars)
+    current_repeat_seq = seq[start:stop]
+    repeat_chars = list(current_repeat_seq)
 
     for change in changes:
+        repeat_length = len(repeat_chars)
         ctype = change.get("type")
-        start = change.get("start")
-        end = change.get("end")
+        change_start = change.get("start")
+        change_end = change.get("end")
         insertion_str = change.get("sequence", "")
 
-        if start is None or end is None or ctype is None:
+        if change_start is None or change_end is None or ctype is None:
             raise ValueError(f"Malformed change in mutation '{mutation_name}': missing fields.")
 
         # Type narrowing: after None check, these must be int (from config validation)
-        if not isinstance(start, int) or not isinstance(end, int):
+        if not isinstance(change_start, int) or not isinstance(change_end, int):
             raise ValueError(f"Invalid types for start/end in mutation '{mutation_name}'")
         if not isinstance(insertion_str, str):
             insertion_str = str(insertion_str)
 
-        start_idx = start - 1
-        end_idx = end - 1
+        start_idx = change_start - 1
+        end_idx = change_end - 1
 
         if ctype == "insert":
             if not (0 <= start_idx <= repeat_length):
                 raise ValueError(
-                    f"Insert out of bounds in mutation '{mutation_name}': start={start}, repeat length={repeat_length}"
+                    f"Insert out of bounds in mutation '{mutation_name}': start={change_start}, repeat length={repeat_length}"
                 )
             repeat_chars[start_idx:start_idx] = list(insertion_str)
         elif ctype == "delete":
             if start_idx < 0 or end_idx >= repeat_length or start_idx > end_idx:
                 raise ValueError(
-                    f"Delete out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
+                    f"Delete out of bounds in mutation '{mutation_name}': start={change_start}, end={change_end}, repeat length={repeat_length}"
                 )
             del repeat_chars[start_idx : end_idx + 1]
         elif ctype == "replace":
             if start_idx < 0 or end_idx >= repeat_length or start_idx > end_idx:
                 raise ValueError(
-                    f"Replace out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
+                    f"Replace out of bounds in mutation '{mutation_name}': start={change_start}, end={change_end}, repeat length={repeat_length}"
                 )
             repeat_chars[start_idx : end_idx + 1] = list(insertion_str)
         elif ctype == "delete_insert":
@@ -336,7 +348,7 @@ def apply_changes_to_repeat(
             # are to be retained, deleting the bases strictly between them.
             if start_idx < 0 or end_idx >= repeat_length or start_idx >= end_idx:
                 raise ValueError(
-                    f"delete_insert out of bounds in mutation '{mutation_name}': start={start}, end={end}, repeat length={repeat_length}"
+                    f"delete_insert out of bounds in mutation '{mutation_name}': start={change_start}, end={change_end}, repeat length={repeat_length}"
                 )
             # Delete bases strictly between start_idx and end_idx.
             del repeat_chars[start_idx + 1 : end_idx]
@@ -346,5 +358,5 @@ def apply_changes_to_repeat(
             raise ValueError(f"Unknown mutation type '{ctype}' in mutation '{mutation_name}'")
 
     mutated_repeat = "".join(repeat_chars)
-    new_seq = seq[:start_pos] + mutated_repeat + seq[end_pos + 1 :]
+    new_seq = seq[:start] + mutated_repeat + seq[stop:]
     return new_seq, chain, mutated_repeat

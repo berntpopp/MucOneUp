@@ -44,6 +44,7 @@ References:
     - CCS: https://ccs.how/
 """
 
+import contextlib
 import logging
 from pathlib import Path
 
@@ -63,6 +64,119 @@ from ..constants import (
 )
 from ..utils import run_command
 from .samtools_wrapper import convert_sam_to_bam
+
+
+def _clean_stale_pbsim3_outputs(output_prefix: str) -> None:
+    """Remove pre-existing numbered BAM/SAM files to avoid collecting stale outputs."""
+    output_prefix_path = Path(output_prefix)
+    parent = output_prefix_path.parent
+    if parent.exists():
+        for pat in (
+            f"{output_prefix_path.name}_[0-9][0-9][0-9][0-9].bam",
+            f"{output_prefix_path.name}_[0-9][0-9][0-9][0-9].sam",
+        ):
+            for stale_file in parent.glob(pat):
+                with contextlib.suppress(Exception):
+                    stale_file.unlink()
+
+
+def _collect_pbsim3_bams(
+    output_prefix: str,
+    samtools_cmd: str,
+    timeout: int = DEFAULT_PBSIM3_TIMEOUT,
+) -> list[str]:
+    """
+    Collect and validate pbsim3 BAM outputs, converting SAM to BAM if needed.
+
+    Handles both multi-sequence ({prefix}_0001.bam) and single-sequence ({prefix}.bam)
+    outputs, as well as .sam counterparts.
+    """
+    output_prefix_path = Path(output_prefix)
+    parent_dir = output_prefix_path.parent
+
+    # Convert any numbered SAM files to BAM first
+    multi_sam_pattern = f"{output_prefix_path.name}_[0-9][0-9][0-9][0-9].sam"
+    for sam_path in sorted(parent_dir.glob(multi_sam_pattern)):
+        bam_target = sam_path.with_suffix(".bam")
+        if not bam_target.exists():
+            convert_sam_to_bam(
+                samtools_cmd=samtools_cmd,
+                input_sam=str(sam_path),
+                output_bam=str(bam_target),
+                threads=4,
+                timeout=timeout,
+            )
+        try:
+            sam_path.unlink()
+        except Exception as e:
+            logging.warning("Could not remove SAM file %s: %s", sam_path, e)
+
+    # Collect all BAM files
+    multi_bam_pattern = f"{output_prefix_path.name}_[0-9][0-9][0-9][0-9].bam"
+    multi_bam_files = sorted(str(p) for p in parent_dir.glob(multi_bam_pattern))
+
+    output_bams: list[str] = []
+
+    if multi_bam_files:
+        logging.info("pbsim3 produced %d BAM files (diploid simulation)", len(multi_bam_files))
+        for i, bam_file in enumerate(multi_bam_files, 1):
+            bam_path = Path(bam_file)
+            if not bam_path.exists():
+                raise FileOperationError(f"pbsim3 output BAM {bam_file} not found after simulation")
+            if bam_path.stat().st_size == 0:
+                raise FileOperationError(f"pbsim3 produced empty BAM file: {bam_file}")
+            logging.info(
+                "  Haplotype %d CLR BAM: %s (%.2f MB)",
+                i,
+                bam_file,
+                bam_path.stat().st_size / (1024 * 1024),
+            )
+            output_bams.append(bam_file)
+    else:
+        output_bam = f"{output_prefix}.bam"
+        output_sam = f"{output_prefix}.sam"
+        output_bam_path = Path(output_bam)
+        output_sam_path = Path(output_sam)
+
+        if output_sam_path.exists() and not output_bam_path.exists():
+            logging.info(
+                "pbsim3 produced SAM output, converting to BAM: %s → %s",
+                output_sam,
+                output_bam,
+            )
+            convert_sam_to_bam(
+                samtools_cmd=samtools_cmd,
+                input_sam=output_sam,
+                output_bam=output_bam,
+                threads=4,
+                timeout=timeout,
+            )
+            try:
+                if output_sam_path.exists():
+                    output_sam_path.unlink()
+                    logging.debug("Removed intermediate SAM file: %s", output_sam)
+            except Exception as e:
+                logging.warning("Could not remove intermediate SAM file %s: %s", output_sam, e)
+
+        if not output_bam_path.exists():
+            raise FileOperationError(
+                f"pbsim3 simulation failed: Expected output BAM {output_bam} not found. "
+                f"Also checked for diploid BAMs matching pattern: {multi_bam_pattern}. "
+                f"Check pbsim3 logs for errors."
+            )
+        if output_bam_path.stat().st_size == 0:
+            raise FileOperationError(
+                f"pbsim3 simulation produced empty BAM file: {output_bam}. "
+                f"This may indicate insufficient reference length or coverage settings."
+            )
+        logging.info("pbsim3 simulation complete: %s", output_bam)
+        logging.info("  Output size: %.2f MB", output_bam_path.stat().st_size / (1024 * 1024))
+        output_bams.append(output_bam)
+
+    total_size = sum(Path(bam).stat().st_size for bam in output_bams)
+    logging.info("pbsim3 simulation complete: %d CLR BAM file(s)", len(output_bams))
+    logging.info("  Total size: %.2f MB", total_size / (1024 * 1024))
+    return output_bams
 
 
 def run_pbsim3_simulation(
@@ -163,6 +277,19 @@ def run_pbsim3_simulation(
         - Output includes: .bam (reads), .maf (alignment), .ref (reference)
         - Automatically detects SAM output and converts to BAM
     """
+    # Validate simulation parameters
+    validate_pbsim3_parameters(
+        coverage=coverage,
+        pass_num=pass_num,
+        accuracy_mean=accuracy_mean,
+        accuracy_sd=accuracy_sd,
+        accuracy_min=accuracy_min,
+        length_mean=length_mean,
+        length_min=length_min,
+        length_max=length_max,
+        min_coverage=1e-6,
+    )
+
     # Validate model type against allowed values from constants
     if model_type not in VALID_PBSIM3_MODEL_TYPES:
         valid_types = ", ".join(sorted(VALID_PBSIM3_MODEL_TYPES))
@@ -179,12 +306,6 @@ def run_pbsim3_simulation(
     reference_path = Path(reference)
     if not reference_path.exists():
         raise FileOperationError(f"Reference FASTA file not found: {reference}")
-
-    # Validate pass_num is at least 2 (required for multi-pass)
-    if pass_num < 2:
-        raise FileOperationError(
-            f"Invalid pass_num: {pass_num}. Multi-pass simulation requires pass_num ≥ 2"
-        )
 
     # Build pbsim3 command with all parameters
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
@@ -235,96 +356,16 @@ def run_pbsim3_simulation(
     if seed is not None:
         logging.info(f"  Seed: {seed}")
 
+    # Clean up any stale numbered outputs from previous runs with the same prefix
+    _clean_stale_pbsim3_outputs(output_prefix)
+
     # Run pbsim3 simulation
     # Let ExternalToolError propagate from run_command (don't catch/re-raise)
     run_command(cmd, timeout=timeout, stderr_prefix="[pbsim3] ", stderr_log_level=logging.INFO)
 
-    # Determine output file format and handle multiple BAM files (diploid simulations)
-    # pbsim3 can produce:
-    # 1. Single file: {prefix}.bam or {prefix}.sam (haploid reference)
-    # 2. Multiple files: {prefix}_0001.bam, {prefix}_0002.bam, ... (diploid reference)
-
-    # Check for multiple BAM files (diploid simulation)
-    # Pattern: {output_prefix}_*.bam (e.g., sim_0001.bam, sim_0002.bam)
-    output_prefix_path = Path(output_prefix)
-    multi_bam_pattern = f"{output_prefix_path.name}_*.bam"
-    multi_bam_files = sorted(str(p) for p in output_prefix_path.parent.glob(multi_bam_pattern))
-
-    output_bams = []
-
-    if multi_bam_files:
-        # Multiple BAM files detected (diploid/polyploid reference)
-        logging.info(f"pbsim3 produced {len(multi_bam_files)} BAM files (diploid simulation)")
-
-        # Validate each BAM file exists and is non-empty
-        for i, bam_file in enumerate(multi_bam_files, 1):
-            bam_path = Path(bam_file)
-            if not bam_path.exists():
-                raise FileOperationError(f"pbsim3 output BAM {bam_file} not found after simulation")
-            if bam_path.stat().st_size == 0:
-                raise FileOperationError(f"pbsim3 produced empty BAM file: {bam_file}")
-
-            logging.info(
-                f"  Haplotype {i} CLR BAM: {bam_file} ({bam_path.stat().st_size / (1024 * 1024):.2f} MB)"
-            )
-            output_bams.append(bam_file)
-
-    else:
-        # Single haploid reference - check for .bam or .sam output
-        output_bam = f"{output_prefix}.bam"
-        output_sam = f"{output_prefix}.sam"
-
-        output_bam_path = Path(output_bam)
-        output_sam_path = Path(output_sam)
-
-        if output_sam_path.exists() and not output_bam_path.exists():
-            # Single SAM file detected (needs conversion)
-            logging.info(
-                f"pbsim3 produced SAM output, converting to BAM: {output_sam} → {output_bam}"
-            )
-
-            # Convert SAM to BAM using reusable samtools wrapper
-            convert_sam_to_bam(
-                samtools_cmd=samtools_cmd,
-                input_sam=output_sam,
-                output_bam=output_bam,
-                threads=4,  # Use moderate threads for conversion
-                timeout=timeout,
-            )
-
-            # Clean up intermediate SAM file
-            try:
-                if output_sam_path.exists():
-                    output_sam_path.unlink()
-                    logging.debug(f"Removed intermediate SAM file: {output_sam}")
-            except Exception as e:
-                logging.warning(f"Could not remove intermediate SAM file {output_sam}: {e}")
-
-        # Validate single BAM exists
-        if not output_bam_path.exists():
-            raise FileOperationError(
-                f"pbsim3 simulation failed: Expected output BAM {output_bam} not found. "
-                f"Also checked for diploid BAMs matching pattern: {multi_bam_pattern}. "
-                f"Check pbsim3 logs for errors."
-            )
-
-        if output_bam_path.stat().st_size == 0:
-            raise FileOperationError(
-                f"pbsim3 simulation produced empty BAM file: {output_bam}. "
-                f"This may indicate insufficient reference length or coverage settings."
-            )
-
-        logging.info(f"pbsim3 simulation complete: {output_bam}")
-        logging.info(f"  Output size: {output_bam_path.stat().st_size / (1024 * 1024):.2f} MB")
-
-        output_bams.append(output_bam)
-
-    # Log total output statistics
-    total_size = sum(Path(bam).stat().st_size for bam in output_bams)
-    logging.info(f"pbsim3 simulation complete: {len(output_bams)} CLR BAM file(s)")
-    logging.info(f"  Total size: {total_size / (1024 * 1024):.2f} MB")
-
-    return output_bams
+    return _collect_pbsim3_bams(
+        output_prefix=output_prefix, samtools_cmd=samtools_cmd, timeout=timeout
+    )
 
 
 def _optional_error_profile_args(
@@ -442,6 +483,9 @@ def run_pbsim3_template_simulation(
     if seed is not None:
         logging.info("  Seed: %d", seed)
 
+    # Clean up any stale numbered outputs from previous runs with the same prefix
+    _clean_stale_pbsim3_outputs(output_prefix)
+
     run_command(
         cmd, timeout=timeout, stderr_prefix="[pbsim3-templ] ", stderr_log_level=logging.INFO
     )
@@ -452,9 +496,6 @@ def run_pbsim3_template_simulation(
     #   - {prefix}.sam or {prefix}_0001.sam (needs conversion)
     # pass_num == 1: FASTQ (single-pass, e.g., ONT)
     #   - {prefix}.fq.gz
-    output_prefix_path = Path(output_prefix)
-    parent_dir = output_prefix_path.parent
-
     # Check for FASTQ output only in single-pass mode (pass_num=1).
     # For pass_num >= 2, ignore any pre-existing/stale FASTQ and continue
     # with BAM/SAM handling for the current multi-pass simulation.
@@ -465,64 +506,9 @@ def run_pbsim3_template_simulation(
         logging.info("pbsim3 template simulation complete: 1 FASTQ file (single-pass)")
         return [str(fq_gz)]
 
-    # Convert any numbered SAM files to BAM first
-    multi_sam_pattern = f"{output_prefix_path.name}_*.sam"
-    for sam_path in sorted(parent_dir.glob(multi_sam_pattern)):
-        bam_target = sam_path.with_suffix(".bam")
-        if not bam_target.exists():
-            convert_sam_to_bam(
-                samtools_cmd=samtools_cmd,
-                input_sam=str(sam_path),
-                output_bam=str(bam_target),
-                threads=4,
-                timeout=timeout,
-            )
-        try:
-            sam_path.unlink()
-        except Exception as e:
-            logging.warning("Could not remove SAM file %s: %s", sam_path, e)
-
-    # Collect all BAM files
-    multi_bam_pattern = f"{output_prefix_path.name}_*.bam"
-    multi_bam_files = sorted(str(p) for p in parent_dir.glob(multi_bam_pattern))
-
-    output_bams: list[str] = []
-
-    if multi_bam_files:
-        for bam_file in multi_bam_files:
-            bam_path = Path(bam_file)
-            if not bam_path.exists():
-                raise FileOperationError(f"pbsim3 output BAM {bam_file} not found")
-            if bam_path.stat().st_size == 0:
-                raise FileOperationError(f"pbsim3 produced empty BAM: {bam_file}")
-            output_bams.append(bam_file)
-    else:
-        output_bam = f"{output_prefix}.bam"
-        output_sam = f"{output_prefix}.sam"
-
-        if Path(output_sam).exists() and not Path(output_bam).exists():
-            convert_sam_to_bam(
-                samtools_cmd=samtools_cmd,
-                input_sam=output_sam,
-                output_bam=output_bam,
-                threads=4,
-                timeout=timeout,
-            )
-            try:
-                Path(output_sam).unlink()
-            except Exception as e:
-                logging.warning("Could not remove SAM file %s: %s", output_sam, e)
-
-        if not Path(output_bam).exists():
-            raise FileOperationError(
-                f"pbsim3 template simulation failed: Expected output {output_bam} not found."
-            )
-        if Path(output_bam).stat().st_size == 0:
-            raise FileOperationError(f"pbsim3 produced empty BAM: {output_bam}")
-        output_bams.append(output_bam)
-
-    logging.info("pbsim3 template simulation complete: %d BAM file(s)", len(output_bams))
-    return output_bams
+    return _collect_pbsim3_bams(
+        output_prefix=output_prefix, samtools_cmd=samtools_cmd, timeout=timeout
+    )
 
 
 def validate_pbsim3_parameters(
@@ -534,6 +520,7 @@ def validate_pbsim3_parameters(
     length_mean: int,
     length_min: int,
     length_max: int,
+    min_coverage: float | None = None,
 ) -> None:
     """
     Validate pbsim3 simulation parameters before running.
@@ -547,6 +534,7 @@ def validate_pbsim3_parameters(
         length_mean: Mean read length.
         length_min: Minimum read length.
         length_max: Maximum read length.
+        min_coverage: Minimum allowed coverage (default: MIN_COVERAGE).
 
     Raises:
         ValueError: If any parameter is outside valid range.
@@ -574,10 +562,12 @@ def validate_pbsim3_parameters(
     """
     from ..constants import MAX_COVERAGE, MAX_PASS_NUM, MIN_COVERAGE, MIN_PASS_NUM
 
+    min_cov = MIN_COVERAGE if min_coverage is None else min_coverage
+
     # Validate coverage range
-    if coverage < MIN_COVERAGE or coverage > MAX_COVERAGE:
+    if coverage < min_cov or coverage > MAX_COVERAGE:
         raise ValueError(
-            f"Invalid coverage: {coverage}. Must be between {MIN_COVERAGE} and {MAX_COVERAGE}"
+            f"Invalid coverage: {coverage}. Must be between {min_cov} and {MAX_COVERAGE}"
         )
 
     # Validate pass_num range

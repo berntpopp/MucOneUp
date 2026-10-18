@@ -49,42 +49,123 @@ def compute_gc_content(seq: str) -> float:
     return 100.0 * gc_count / len(seq)
 
 
-def extract_vntr_region(seq: str, config: dict[str, Any]) -> str:
-    """
-    Extract the VNTR region from a simulated haplotype sequence by removing
-    the left and right constant flanks.
+def get_haplotype_vntr_bounds(
+    seq: str,
+    config: dict[str, Any],
+    chain: list[RepeatUnit] | None = None,
+    repeat_lengths: list[int] | None = None,
+) -> tuple[int, int]:
+    """Calculate the [start, end) nucleotide bounds of the VNTR region in seq.
 
     Args:
-        seq (str): The full simulated haplotype sequence.
-        config (Dict[str, Any]): Configuration dict containing 'constants'.
+        seq: Haplotype DNA sequence.
+        config: Configuration dict with constants and optional reference assembly.
+        chain: Optional repeat chain.
+        repeat_lengths: Optional nucleotide lengths for each repeat in chain.
 
     Returns:
-        str: The VNTR region sequence.
+        tuple[int, int]: (start, end) 0-based boundary indices within seq.
     """
     reference_assembly = config.get("reference_assembly", "hg38")
-    left = config.get("constants", {}).get(reference_assembly, {}).get("left", "")
-    right = config.get("constants", {}).get(reference_assembly, {}).get("right", "")
-    if seq.startswith(left) and seq.endswith(right):
-        return seq[len(left) : -len(right)]
-    return seq
+    constants = config.get("constants", {})
+    if isinstance(constants, dict):
+        if reference_assembly in constants and isinstance(constants[reference_assembly], dict):
+            ref_const = constants[reference_assembly]
+        else:
+            ref_const = constants
+    else:
+        ref_const = {}
+    left = ref_const.get("left", "") if isinstance(ref_const, dict) else ""
+    right = ref_const.get("right", "") if isinstance(ref_const, dict) else ""
+    left = str(left) if left is not None else ""
+    right = str(right) if right is not None else ""
+
+    if not left and not right:
+        return (0, len(seq))
+
+    if chain is None:
+        if len(seq) < len(left) + len(right):
+            return (0, len(seq))
+        return (len(left), len(seq) - len(right))
+
+    if len(seq) < len(left):
+        return (0, len(seq))
+
+    vntr_start = len(left)
+    if len(right) == 0:
+        right_len = 0
+    elif not chain or chain[-1].symbol == "9":
+        has_right = len(seq) >= len(left) + len(right)
+        right_len = len(right) if has_right else 0
+    else:
+        repeats_dict = config.get("repeats", {})
+        expected_vntr_len = (
+            sum(repeat_lengths)
+            if repeat_lengths is not None
+            else sum(len(repeats_dict.get(u.symbol, "")) for u in chain)
+        )
+        has_right = seq.endswith(right) or len(seq) >= len(left) + expected_vntr_len + len(right)
+        right_len = len(right) if has_right else 0
+
+    vntr_end = max(vntr_start, len(seq) - right_len)
+    return (vntr_start, vntr_end)
 
 
-def get_repeat_lengths(chain: list[RepeatUnit], config: dict[str, Any]) -> list[int]:
+def extract_vntr_region(
+    seq: str,
+    config: dict[str, Any],
+    chain: list[RepeatUnit] | None = None,
+    repeat_lengths: list[int] | None = None,
+) -> str:
+    """Extract the VNTR region from a simulated haplotype sequence.
+
+    Args:
+        seq: The full simulated haplotype sequence.
+        config: Configuration dict containing 'constants'.
+        chain: Repeat chain if available.
+        repeat_lengths: Optional precomputed repeat lengths.
+
+    Returns:
+        The VNTR region sequence.
     """
-    Calculate the nucleotide lengths of each repeat in the chain.
+    start, end = get_haplotype_vntr_bounds(seq, config, chain=chain, repeat_lengths=repeat_lengths)
+    return seq[start:end]
+
+
+def get_repeat_lengths(
+    chain: list[RepeatUnit],
+    config: dict[str, Any],
+    hap_mutated_units: list[tuple[int, str]] | dict[int, str] | None = None,
+    vntr_length: int | None = None,
+) -> list[int]:
+    """Calculate the nucleotide lengths of each repeat in the chain.
 
     Args:
         chain: List of RepeatUnit objects.
         config (Dict[str, Any]): Configuration dict containing the 'repeats' sequences.
+        hap_mutated_units: Mutated units for this haplotype as list of (rep_idx, seq) or dict.
+        vntr_length: Extracted VNTR region length to infer single-indel delta.
 
     Returns:
         List[int]: List of nucleotide lengths for each repeat.
     """
-    lengths = []
     repeats_dict = config.get("repeats", {})
-    for unit in chain:
-        repeat_seq = repeats_dict.get(unit.symbol, "")
-        lengths.append(len(repeat_seq))
+    lengths = [len(repeats_dict.get(unit.symbol, "")) for unit in chain]
+
+    if hap_mutated_units:
+        items = (
+            hap_mutated_units.items() if isinstance(hap_mutated_units, dict) else hap_mutated_units
+        )
+        for rep_idx, seq in items:
+            if 1 <= rep_idx <= len(lengths):
+                lengths[rep_idx - 1] = len(seq)
+    elif vntr_length is not None:
+        mutated_indices = [i for i, u in enumerate(chain) if u.mutated]
+        if len(mutated_indices) == 1 and vntr_length >= 0:
+            delta = vntr_length - sum(lengths)
+            if lengths[mutated_indices[0]] + delta >= 0:
+                lengths[mutated_indices[0]] += delta
+
     return lengths
 
 
@@ -127,7 +208,9 @@ def get_mutation_details(chain: list[RepeatUnit]) -> list[dict[str, Any]]:
 
 
 def generate_haplotype_stats(
-    simulation_results: list[HaplotypeResult], config: dict[str, Any]
+    simulation_results: list[HaplotypeResult],
+    config: dict[str, Any],
+    mutated_units: dict[int, list[tuple[int, str]]] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Generate statistics for each haplotype simulation result.
@@ -143,15 +226,28 @@ def generate_haplotype_stats(
     Args:
         simulation_results: List of HaplotypeResult objects.
         config (Dict[str, Any]): Configuration dictionary.
+        mutated_units: Mapping of haplotype index to mutated unit tuples.
 
     Returns:
         List[Dict[str, Any]]: A list of dictionaries, one per haplotype, containing
                               statistics.
     """
     hap_stats = []
-    for hr in simulation_results:
-        vntr_region = extract_vntr_region(hr.sequence, config)
-        repeat_lengths = get_repeat_lengths(hr.chain, config)
+    for idx, hr in enumerate(simulation_results):
+        hr_lengths = getattr(hr, "_repeat_lengths", None)
+        vntr_region = extract_vntr_region(
+            hr.sequence, config, chain=hr.chain, repeat_lengths=hr_lengths
+        )
+        hap_mut = (mutated_units or {}).get(idx + 1)
+        if hap_mut is None and hr_lengths is not None:
+            repeat_lengths = list(hr_lengths)
+        else:
+            repeat_lengths = get_repeat_lengths(
+                hr.chain,
+                config,
+                hap_mutated_units=hap_mut,
+                vntr_length=len(vntr_region),
+            )
         hap_stat = {
             "repeat_count": len(hr.chain),
             "vntr_length": len(vntr_region),
@@ -225,6 +321,7 @@ def generate_simulation_statistics(
     vntr_coverage: dict[str, Any] | None = None,
     applied_snp_info: dict[int, list[dict[str, Any]]] | None = None,
     provenance_info: dict[str, Any] | None = None,
+    mutated_units: dict[int, list[tuple[int, str]]] | None = None,
 ) -> dict[str, Any]:
     """
     Generate a comprehensive simulation statistics report.
@@ -251,6 +348,8 @@ def generate_simulation_statistics(
             index (0-based) to list of successfully applied SNPs. Defaults to None.
         provenance_info (Optional[Dict[str, Any]]): Provenance metadata (version, fingerprint,
             seed, timestamps). Defaults to None. (New in v0.28.0)
+        mutated_units (Optional[Dict[int, List[Tuple[int, str]]]]): Mapping of haplotype index
+            to mutated units. Defaults to None.
 
     Returns:
         Dict[str, Any]: Comprehensive simulation statistics.
@@ -267,7 +366,12 @@ def generate_simulation_statistics(
     else:
         runtime = end_time - start_time
 
-    haplotype_stats = generate_haplotype_stats(simulation_results, config)
+    if mutated_units is None and mutation_info and "mutated_units" in mutation_info:
+        mutated_units = mutation_info["mutated_units"]
+
+    haplotype_stats = generate_haplotype_stats(
+        simulation_results, config, mutated_units=mutated_units
+    )
     overall_stats = generate_overall_stats(haplotype_stats)
 
     # Get the reference assembly to include in the report

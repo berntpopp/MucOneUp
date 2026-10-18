@@ -197,6 +197,70 @@ class TestGetVntrBoundaries:
         # End should differ based on VNTR length
         assert boundaries[0]["end"] < boundaries[1]["end"]
 
+    def test_get_vntr_boundaries_chain_not_ending_in_9_without_right_flank(self):
+        """Test VNTR boundaries when chain ends early without right flank (assemble_sequence)."""
+        config = {
+            "constants": {"hg38": {"left": "AAAA", "right": "TTTT"}},
+            "reference_assembly": "hg38",
+            "repeats": {"1": "CCCC", "2": "GGGG"},
+        }
+        seq = "AAAACCCCGGGG"
+        chain = [RepeatUnit("1"), RepeatUnit("2")]
+        results = [HaplotypeResult(seq, chain)]
+
+        boundaries = get_vntr_boundaries(results, config)
+        assert len(boundaries) == 1
+        assert boundaries[0]["start"] == 4
+        assert boundaries[0]["end"] == len(seq)
+
+    def test_get_vntr_boundaries_chain_not_ending_in_9_with_right_flank(self):
+        """Test VNTR boundaries when chain ends early but has right flank appended (simulate_single_haplotype)."""
+        config = {
+            "constants": {"hg38": {"left": "AAAA", "right": "TTTT"}},
+            "reference_assembly": "hg38",
+            "repeats": {"1": "CCCC", "2": "GGGG"},
+        }
+        seq = "AAAACCCCGGGGTTTT"
+        chain = [RepeatUnit("1"), RepeatUnit("2")]
+        results = [HaplotypeResult(seq, chain)]
+
+        boundaries = get_vntr_boundaries(results, config)
+        assert len(boundaries) == 1
+        assert boundaries[0]["start"] == 4
+        assert boundaries[0]["end"] == len(seq) - 4
+
+    def test_get_vntr_boundaries_chain_not_ending_in_9_with_insertion_no_right_flank(self):
+        """Test VNTR boundaries when chain ends early without right flank and has 2-bp insertion."""
+        config = {
+            "constants": {"hg38": {"left": "AAAA", "right": "TTTT"}},
+            "reference_assembly": "hg38",
+            "repeats": {"1": "CCCC", "2": "GGGG"},
+        }
+        seq = "AAAACCCCCCGGGG"
+        chain = [RepeatUnit("1"), RepeatUnit("2")]
+        hr = HaplotypeResult(seq, chain)
+        hr._repeat_lengths = [6, 4]
+        boundaries = get_vntr_boundaries([hr], config)
+        assert len(boundaries) == 1
+        assert boundaries[0]["start"] == 4
+        assert boundaries[0]["end"] == len(seq)
+
+    def test_get_vntr_boundaries_empty_right_flank(self):
+        """Test VNTR boundaries when right flank is empty string."""
+        config = {
+            "constants": {"hg38": {"left": "AAAA", "right": ""}},
+            "reference_assembly": "hg38",
+            "repeats": {"1": "CCCC", "9": "GGGG"},
+        }
+        seq = "AAAACCCCGGGG"
+        chain = [RepeatUnit("1"), RepeatUnit("9")]
+        results = [HaplotypeResult(seq, chain)]
+
+        boundaries = get_vntr_boundaries(results, config)
+        assert len(boundaries) == 1
+        assert boundaries[0]["start"] == 4
+        assert boundaries[0]["end"] == len(seq)
+
 
 @pytest.mark.unit
 class TestGenerateRandomSnps:

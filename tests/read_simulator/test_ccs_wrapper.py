@@ -254,3 +254,22 @@ class TestValidateCcsParameters:
         # Assert
         mock_warning.assert_called_once()
         assert "Very high min_passes value" in str(mock_warning.call_args)
+
+    def test_validates_threads(self):
+        """Test threads must be >= 1."""
+        with pytest.raises(ValueError, match="Invalid threads"):
+            validate_ccs_parameters(min_passes=3, min_rq=0.99, threads=0)
+
+    def test_min_rq_one_point_zero_does_not_raise_domain_error(self):
+        """min_rq=1.0 must not raise ValueError: math domain error."""
+        validate_ccs_parameters(min_passes=3, min_rq=1.0)
+
+    def test_run_ccs_validates_parameters_first(self, tmp_path):
+        """run_ccs_consensus must validate parameters before opening files."""
+        with pytest.raises(ValueError, match="Invalid min_passes"):
+            run_ccs_consensus(
+                ccs_cmd="ccs",
+                input_bam=str(tmp_path / "nonexistent.bam"),
+                output_bam=str(tmp_path / "out.bam"),
+                min_passes=0,
+            )

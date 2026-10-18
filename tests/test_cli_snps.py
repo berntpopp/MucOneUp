@@ -213,14 +213,11 @@ class TestIntegrateSNPsUnified:
         assert isinstance(modified_results[0], HaplotypeResult)
 
     @patch("muc_one_up.cli.snps.write_snps_to_file")
-    def test_random_snps_write_failure_continues(
-        self, mock_write: Mock, tmp_path: Path, minimal_config: dict, caplog
+    def test_random_snps_write_failure_raises(
+        self, mock_write: Mock, tmp_path: Path, minimal_config: dict
     ):
-        """Given write failure for SNP file, when integrating, then logs error but continues."""
-        import logging
-
-        # Set caplog to capture ERROR level logs
-        caplog.set_level(logging.ERROR)
+        """Given write failure for SNP file, when integrating, then raises SNPIntegrationError."""
+        from muc_one_up.exceptions import SNPIntegrationError
 
         # Mock write_snps_to_file to raise an exception
         mock_write.side_effect = Exception("Permission denied")
@@ -240,16 +237,10 @@ class TestIntegrateSNPsUnified:
         repeat = "ATCGATCGATCGATCGATCGATCG" * 10
         results = [_hr(f"{left}{repeat}{right}", ["1"])]
 
-        # Should not raise error, just log it
-        modified_results, _applied_snp_info = integrate_snps_unified(
-            args=args, config=minimal_config, results=results, skip_reference_check=False
-        )
-
-        # Verify error was logged
-        assert "Failed to write generated SNP file" in caplog.text
-
-        # Results should still be returned
-        assert len(modified_results) == 1
+        with pytest.raises(SNPIntegrationError, match="Failed to write generated SNP file"):
+            integrate_snps_unified(
+                args=args, config=minimal_config, results=results, skip_reference_check=False
+            )
 
     def test_preserves_chain_information(self, tmp_path: Path, minimal_config: dict):
         """Given SNP integration, when applying, then preserves chain information."""

@@ -23,6 +23,7 @@ from muc_one_up.simulation_statistics import (
     generate_haplotype_stats,
     generate_overall_stats,
     generate_simulation_statistics,
+    get_haplotype_vntr_bounds,
     get_mutation_details,
     get_repeat_lengths,
     write_statistics_report,
@@ -100,6 +101,96 @@ class TestExtractVntrRegion:
         extracted = extract_vntr_region("", minimal_config)
         assert extracted == ""
 
+    def test_extract_vntr_with_snps_in_flanks(self, minimal_config: dict):
+        """Test extract_vntr_region when SNPs mutate the left and right flanks."""
+        left = minimal_config["constants"]["hg38"]["left"]
+        right = minimal_config["constants"]["hg38"]["right"]
+        vntr = "ATCGATCGATCG"
+        # Mutate first base of left and last base of right
+        mutated_left = "C" + left[1:]
+        mutated_right = right[:-1] + "C"
+        seq = mutated_left + vntr + mutated_right
+        chain = [RU("1")]
+
+        extracted = extract_vntr_region(seq, minimal_config, chain=chain)
+        assert extracted == vntr
+
+    def test_extract_vntr_empty_right_flank(self):
+        """Test extract_vntr_region when right flank is empty string."""
+        config = {
+            "constants": {"hg38": {"left": "AAAA", "right": ""}},
+            "reference_assembly": "hg38",
+            "repeats": {"1": "CCCC"},
+        }
+        seq = "AAAACCCC"
+        extracted = extract_vntr_region(seq, config, chain=[RU("1")])
+        assert extracted == "CCCC"
+
+    def test_extract_vntr_chain_not_ending_in_9_without_right_flank(self):
+        """Test extract_vntr_region when chain terminates early without right flank."""
+        config = {
+            "constants": {"hg38": {"left": "AAAA", "right": "TTTT"}},
+            "reference_assembly": "hg38",
+            "repeats": {"1": "CCCC", "2": "GGGG"},
+        }
+        # Early termination (assemble_sequence style: no right flank)
+        seq = "AAAACCCCGGGG"
+        chain = [RU("1"), RU("2")]
+        extracted = extract_vntr_region(seq, config, chain=chain)
+        assert extracted == "CCCCGGGG"
+
+    def test_extract_vntr_chain_not_ending_in_9_with_right_flank(self):
+        """Test extract_vntr_region when chain terminates early but right flank was appended."""
+        config = {
+            "constants": {"hg38": {"left": "AAAA", "right": "TTTT"}},
+            "reference_assembly": "hg38",
+            "repeats": {"1": "CCCC", "2": "GGGG"},
+        }
+        # Early termination (simulate_single_haplotype style: right flank appended)
+        seq = "AAAACCCCGGGGTTTT"
+        chain = [RU("1"), RU("2")]
+        extracted = extract_vntr_region(seq, config, chain=chain)
+        assert extracted == "CCCCGGGG"
+
+    def test_extract_vntr_without_chain_intermediate_length(self):
+        """Test extract_vntr_region without chain on sequence between len(left) and len(left) + len(right)."""
+        config = {
+            "constants": {"hg38": {"left": "A" * 10, "right": "T" * 10}},
+            "reference_assembly": "hg38",
+        }
+        seq = "C" * 15
+        assert extract_vntr_region(seq, config) == seq
+
+    def test_extract_vntr_chain_not_ending_in_9_with_insertion_no_right_flank(self):
+        """Test extract_vntr_region when chain does not end in 9 and has a 2-bp insertion without right flank."""
+        config = {
+            "constants": {"hg38": {"left": "AAAA", "right": "TTTT"}},
+            "reference_assembly": "hg38",
+            "repeats": {"1": "CCCC", "2": "GGGG"},
+        }
+        seq = "AAAACCCCCCGGGG"
+        chain = [RU("1"), RU("2")]
+        assert extract_vntr_region(seq, config, chain=chain, repeat_lengths=[6, 4]) == "CCCCCCGGGG"
+        assert extract_vntr_region(seq, config, chain=chain) == "CCCCCCGGGG"
+
+
+@pytest.mark.unit
+class TestGetHaplotypeVntrBounds:
+    """Tests for get_haplotype_vntr_bounds helper."""
+
+    def test_bounds_no_constants(self):
+        config = {"constants": {}, "reference_assembly": "hg38"}
+        seq = "ATCGATCG"
+        assert get_haplotype_vntr_bounds(seq, config) == (0, len(seq))
+
+    def test_bounds_seq_shorter_than_left(self):
+        config = {
+            "constants": {"hg38": {"left": "AAAAAAAAAA", "right": "TTTTTTTTTT"}},
+            "reference_assembly": "hg38",
+        }
+        seq = "ATCG"
+        assert get_haplotype_vntr_bounds(seq, config, chain=[RU("1")]) == (0, len(seq))
+
 
 @pytest.mark.unit
 class TestGetRepeatLengths:
@@ -135,6 +226,41 @@ class TestGetRepeatLengths:
         """Test getting repeat lengths for empty chain."""
         lengths = get_repeat_lengths([], minimal_config)
         assert lengths == []
+
+    def test_repeat_lengths_with_hap_mutated_units_list(self, minimal_config: dict):
+        """Test repeat lengths when hap_mutated_units is a list of tuples."""
+        chain = [RU("1"), RU("2"), RU("X")]
+        # Mutate unit 2 (1-based) to length 15 (wildtype is 12)
+        hap_mut = [(2, "A" * 15)]
+        lengths = get_repeat_lengths(chain, minimal_config, hap_mutated_units=hap_mut)
+        assert lengths == [12, 15, 12]
+
+    def test_repeat_lengths_with_hap_mutated_units_dict(self, minimal_config: dict):
+        """Test repeat lengths when hap_mutated_units is a dict."""
+        chain = [RU("1"), RU("2"), RU("X")]
+        hap_mut = {2: "A" * 15}
+        lengths = get_repeat_lengths(chain, minimal_config, hap_mutated_units=hap_mut)
+        assert lengths == [12, 15, 12]
+
+    def test_repeat_lengths_inferred_from_vntr_length_single_indel(self, minimal_config: dict):
+        """Test single-indel repeat length inference from vntr_length (e.g. dupC +1bp)."""
+        chain = [RU("1"), RU("2"), RU("Xm")]
+        # Wildtype sum is 12 + 12 + 12 = 36. If vntr_length is 37 (e.g. dupC), mutated repeat is 13.
+        lengths = get_repeat_lengths(chain, minimal_config, vntr_length=37)
+        assert lengths == [12, 12, 13]
+
+    def test_repeat_lengths_inferred_whole_repeat_deletion(self, minimal_config: dict):
+        """Test whole-repeat deletion inference where mutated repeat length becomes 0."""
+        chain = [RU("1"), RU("2m"), RU("X")]
+        # Wildtype sum is 12 + 12 + 12 = 36. If repeat 2 is deleted, vntr_length is 24.
+        lengths = get_repeat_lengths(chain, minimal_config, vntr_length=24)
+        assert lengths == [12, 0, 12]
+
+    def test_repeat_lengths_inferred_zero_vntr_length(self, minimal_config: dict):
+        """Test repeat length inference when vntr_length is 0."""
+        chain = [RU("1m")]
+        lengths = get_repeat_lengths(chain, minimal_config, vntr_length=0)
+        assert lengths == [0]
 
 
 @pytest.mark.unit
@@ -285,6 +411,25 @@ class TestGenerateHaplotypeStats:
         assert summary["max"] == max(lengths)
         assert summary["average"] == sum(lengths) / len(lengths)
 
+    def test_haplotype_stats_diploid_only_hap1_mutated(self, minimal_config: dict):
+        """Test diploid stats where only haplotype 1 is mutated and haplotype 2 retains unmutated lengths."""
+        left = minimal_config["constants"]["hg38"]["left"]
+        right = minimal_config["constants"]["hg38"]["right"]
+        vntr1 = ("A" * 20) + minimal_config["repeats"]["2"]
+        vntr2 = minimal_config["repeats"]["1"] + minimal_config["repeats"]["2"]
+        seq1 = left + vntr1 + right
+        seq2 = left + vntr2 + right
+        simulation_results = [
+            HaplotypeResult(sequence=seq1, chain=[RU("1"), RU("2")]),
+            HaplotypeResult(sequence=seq2, chain=[RU("1"), RU("2")]),
+        ]
+        mutated_units = {1: [(1, "A" * 20)]}
+        stats = generate_haplotype_stats(
+            simulation_results, minimal_config, mutated_units=mutated_units
+        )
+        assert stats[0]["repeat_lengths"] == [20, 12]
+        assert stats[1]["repeat_lengths"] == [12, 12]
+
 
 @pytest.mark.unit
 class TestGenerateOverallStats:
@@ -401,6 +546,48 @@ class TestGenerateSimulationStatistics:
         )
 
         assert report["mutation_info"] == {}
+
+    def test_statistics_generation_with_mutated_units(self, minimal_config: dict):
+        """Test that generate_simulation_statistics reflects mutated repeat lengths."""
+        left = minimal_config["constants"]["hg38"]["left"]
+        right = minimal_config["constants"]["hg38"]["right"]
+        rep1_seq = minimal_config["repeats"]["1"]
+        rep2_mut_seq = minimal_config["repeats"]["2"] + "C"
+        seq = left + rep1_seq + rep2_mut_seq + right
+        chain = [RU("1"), RU("2m")]
+        results = [HaplotypeResult(sequence=seq, chain=chain)]
+
+        mutated_units = {1: [(2, rep2_mut_seq)]}
+        report = generate_simulation_statistics(
+            start_time=0.0,
+            end_time=1.0,
+            simulation_results=results,
+            config=minimal_config,
+            mutated_units=mutated_units,
+        )
+
+        lengths = report["haplotype_statistics"][0]["repeat_lengths"]
+        assert lengths == [12, 13]
+
+    def test_statistics_generation_inferred_indel_length(self, minimal_config: dict):
+        """Test that single-indel repeat length is inferred when mutated_units is omitted."""
+        left = minimal_config["constants"]["hg38"]["left"]
+        right = minimal_config["constants"]["hg38"]["right"]
+        rep1_seq = minimal_config["repeats"]["1"]
+        rep2_mut_seq = minimal_config["repeats"]["2"] + "C"
+        seq = left + rep1_seq + rep2_mut_seq + right
+        chain = [RU("1"), RU("2m")]
+        results = [HaplotypeResult(sequence=seq, chain=chain)]
+
+        report = generate_simulation_statistics(
+            start_time=0.0,
+            end_time=1.0,
+            simulation_results=results,
+            config=minimal_config,
+        )
+
+        lengths = report["haplotype_statistics"][0]["repeat_lengths"]
+        assert lengths == [12, 13]
 
 
 @pytest.mark.unit

@@ -12,6 +12,7 @@ from muc_one_up.read_simulator.molecules import HpEdit, Molecule
 from muc_one_up.read_simulator.read_truth import (
     TRUTH_COLUMNS,
     molecule_index,
+    parse_maf_files,
     parse_maf_read_templates,
     relabel_reads,
     template_id,
@@ -87,3 +88,40 @@ def test_relabel_fails_loudly_on_unknown_read(tmp_path: Path) -> None:
     fq.write_text("@stranger\nA\n+\nI\n")
     with pytest.raises(ReadSimulationError, match="stranger"):
         relabel_reads([fq], {}, _molecules(), "s", tmp_path / "o.fastq", tmp_path / "t.tsv.gz")
+
+
+def test_parse_maf_rejects_duplicate_read_name(tmp_path: Path) -> None:
+    maf = _write_gz(
+        tmp_path / "dup.maf.gz",
+        "a\ns m0000001 0 10 + 10 ACGT\ns ont_1 0 10 + 10 ACGT\n\n"
+        "a\ns m0000002 0 10 + 10 ACGT\ns ont_1 0 10 + 10 ACGT\n\n",
+    )
+    with pytest.raises(
+        ReadSimulationError, match="Duplicate read name 'ont_1' encountered in MAF input"
+    ):
+        parse_maf_read_templates(maf)
+
+
+def test_parse_maf_files_rejects_duplicate_across_files(tmp_path: Path) -> None:
+    maf1 = _write_gz(
+        tmp_path / "1.maf.gz",
+        "a\ns m0000001 0 10 + 10 ACGT\ns ont_1 0 10 + 10 ACGT\n\n",
+    )
+    maf2 = _write_gz(
+        tmp_path / "2.maf.gz",
+        "a\ns m0000002 0 10 + 10 ACGT\ns ont_1 0 10 + 10 ACGT\n\n",
+    )
+    with pytest.raises(
+        ReadSimulationError, match="Duplicate read name 'ont_1' encountered in MAF input"
+    ):
+        parse_maf_files([maf1, maf2])
+
+
+def test_parse_maf_files_combines_uncompressed_and_compressed(tmp_path: Path) -> None:
+    maf1 = tmp_path / "1.maf"
+    maf1.write_text("a\ns m0000001 0 10 + 10 ACGT\ns ont_1 0 10 + 10 ACGT\n\n")
+    maf2 = _write_gz(
+        tmp_path / "2.maf.gz",
+        "a\ns m0000002 0 10 + 10 ACGT\ns ont_2 0 10 + 10 ACGT\n\n",
+    )
+    assert parse_maf_files([maf1, maf2]) == {"ont_1": "m0000001", "ont_2": "m0000002"}

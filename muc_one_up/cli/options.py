@@ -46,11 +46,7 @@ class SimulationOptions:
     random_snp_region: str = "constants_only"
     random_snp_haplotypes: str = "all"
 
-    # Pipeline flags (set to None/False for pure simulate)
-    simulate_reads: str | None = None
-    output_orfs: bool = False
-    orf_min_aa: int = 100
-    orf_aa_prefix: str | None = None
+    # Pipeline flags
     track_read_source: bool = False
 
     @classmethod

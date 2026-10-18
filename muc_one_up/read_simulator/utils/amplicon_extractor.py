@@ -75,6 +75,10 @@ class AmpliconExtractor:
         records = list(SeqIO.parse(haplotype_fasta, "fasta"))
         if not records:
             raise AmpliconExtractionError(f"No sequences found in {haplotype_fasta}")
+        if len(records) > 1:
+            raise AmpliconExtractionError(
+                f"Expected single-record FASTA for amplicon extraction, got {len(records)} records in {haplotype_fasta}"
+            )
 
         record = records[0]
         template = str(record.seq)

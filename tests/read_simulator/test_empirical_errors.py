@@ -100,3 +100,26 @@ def test_n_runs_are_not_protected_and_lowercase_runs_are() -> None:
     c_runs = [read[i * 20 + 14 : i * 20 + 20] for i in range(500)]
     assert sum(run != "N" * 6 for run in n_runs) > 100  # exposed to base-level errors
     assert all(run == "c" * 6 for run in c_runs)  # protected like "CCCCCC"
+
+
+def test_hashable() -> None:
+    m1 = EmpiricalErrorModel(0.01, 0.01, 0.01, {1: 1.0}, {1: 1.0})
+    m2 = EmpiricalErrorModel(0.01, 0.01, 0.01, {1: 1.0}, {1: 1.0})
+    m3 = EmpiricalErrorModel(0.02, 0.01, 0.01, {1: 1.0}, {1: 1.0})
+    assert hash(m1) == hash(m2)
+    assert len({m1, m2, m3}) == 2
+
+
+def test_lowercase_mismatches_change_base() -> None:
+    """Lowercase bases must not produce no-op a -> A mismatches."""
+    seq = "acgt" * 250
+    mismatches_only = EmpiricalErrorModel(0.2, 0.0, 0.0, {1: 1.0}, {1: 1.0}, read_error_sigma=0.0)
+    for seed in range(10):
+        read, _ = apply_errors(seq, mismatches_only, random.Random(seed))
+        assert len(read) == len(seq)
+        diffs = [
+            (orig, mutated) for orig, mutated in zip(seq, read, strict=True) if orig != mutated
+        ]
+        assert len(diffs) > 100
+        for orig, mutated in diffs:
+            assert orig.upper() != mutated.upper()

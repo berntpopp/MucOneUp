@@ -139,13 +139,13 @@ def composition_similarity(mutant_seq: str, wildtype_seq: str, key_residues: lis
     comp_wt = compute_amino_acid_composition(wildtype_seq, key_residues)
     diff = sum(abs(comp_mut[aa] - comp_wt[aa]) for aa in key_residues)
     norm = sum(comp_wt[aa] for aa in key_residues)
-    return 1 - diff / norm if norm > 0 else 0.0
+    return max(0.0, 1 - diff / norm) if norm > 0 else 0.0
 
 
 def detect_toxic_protein_in_sequence(
     protein_seq: str,
-    left_const: str | None = None,
-    right_const: str | None = None,
+    left_const: str | list[str] | tuple[str, ...] | None = None,
+    right_const: str | list[str] | tuple[str, ...] | None = None,
     consensus: str = "RCHLGPGHQAGPGLHR",
     identity_threshold: float = 0.8,
     key_residues: list[str] | None = None,
@@ -172,14 +172,14 @@ def detect_toxic_protein_in_sequence(
 
     **Step 3: Composition Analysis**
       - The frequency of key residues (default: R, C, H) is computed for both the variable region and
-        a wild-type model (by default, the consensus motif repeated).
+        the expected toxic repeat motif reference model (by default, the consensus motif repeated).
       - A composition similarity score is computed such that values near 1 indicate high similarity to
-        the wild-type.
+        the expected toxic repeat motif reference.
 
     **Step 4: Combining Metrics**
-      - The overall deviation score is calculated as a weighted sum of the repeat score and the composition
+      - The overall score is calculated as a weighted sum of the repeat score and the composition
         similarity score.
-      - In this implementation, a higher overall score indicates a greater deviation from the wild-type,
+      - In this implementation, a higher overall score indicates higher similarity to the toxic model,
         and thus flags the protein as toxic.
       - If the overall score exceeds the specified toxic detection cutoff, the function flags the protein
         as toxic (toxic_flag = 1.0); otherwise, it is considered normal (toxic_flag = 0.0).
@@ -192,11 +192,12 @@ def detect_toxic_protein_in_sequence(
         identity_threshold (float): Identity threshold for a window to be considered a repeat.
         key_residues (Optional[List[str]]): List of key amino acids for composition analysis.
                                           Defaults to ['R', 'C', 'H'] if not provided.
-        expected_repeat_count (int): Expected number of repeats in the wild-type.
+        expected_repeat_count (int): Expected number of repeats.
         w_repeat (float): Weight for the repeat analysis score.
         w_composition (float): Weight for the composition similarity score.
-        wildtype_variable_region (Optional[str]): Wild-type variable region sequence. If not provided,
-                                                  it is approximated as the consensus motif repeated.
+        wildtype_variable_region (Optional[str]): Reference variable region sequence (expected toxic
+                                                  repeat motif reference; if not provided, it is
+                                                  approximated as the consensus motif repeated).
         toxic_detection_cutoff (float): Overall score cutoff above which the protein is flagged as toxic.
 
     Returns:
@@ -213,10 +214,23 @@ def detect_toxic_protein_in_sequence(
 
     # Extract the variable region by removing constant flanks if provided.
     variable_region = protein_seq
-    if left_const and protein_seq.startswith(left_const):
-        variable_region = protein_seq[len(left_const) :]
-    if right_const and variable_region.endswith(right_const):
-        variable_region = variable_region[: -len(right_const)]
+    if isinstance(left_const, str):
+        if left_const and protein_seq.startswith(left_const):
+            variable_region = protein_seq[len(left_const) :]
+    elif left_const:
+        for pfx in sorted((p for p in left_const if p), key=len, reverse=True):
+            if protein_seq.startswith(pfx):
+                variable_region = protein_seq[len(pfx) :]
+                break
+
+    if isinstance(right_const, str):
+        if right_const and variable_region.endswith(right_const):
+            variable_region = variable_region[: -len(right_const)]
+    elif right_const:
+        for sfx in sorted((s for s in right_const if s), key=len, reverse=True):
+            if variable_region.endswith(sfx):
+                variable_region = variable_region[: -len(sfx)]
+                break
 
     # --- Step 2: Repeat Analysis ---
     # Slide a window over the variable region and compute the identity with the consensus motif.
@@ -227,11 +241,14 @@ def detect_toxic_protein_in_sequence(
     repeat_score = avg_identity * min(repeat_count, expected_repeat_count) / expected_repeat_count
 
     # --- Step 3: Composition Analysis ---
-    # Define the wild-type variable region if not provided.
-    if wildtype_variable_region is None:
-        wildtype_variable_region = consensus * expected_repeat_count
-    # Compute the composition similarity between the variable region and the wild-type.
-    comp_sim = composition_similarity(variable_region, wildtype_variable_region, key_residues)
+    # Define the reference repeat motif sequence if not provided (expected toxic reference, not wild-type).
+    ref_seq = (
+        wildtype_variable_region
+        if wildtype_variable_region is not None
+        else consensus * expected_repeat_count
+    )
+    # Compute the composition similarity between the variable region and the toxic reference sequence.
+    comp_sim = composition_similarity(variable_region, ref_seq, key_residues)
 
     # --- Step 4: Combine Metrics ---
     overall_score = w_repeat * repeat_score + w_composition * comp_sim
@@ -251,8 +268,8 @@ def detect_toxic_protein_in_sequence(
 
 def scan_orf_fasta(
     orf_fasta_path: str,
-    left_const: str | None = None,
-    right_const: str | None = None,
+    left_const: str | list[str] | tuple[str, ...] | None = None,
+    right_const: str | list[str] | tuple[str, ...] | None = None,
     **detection_kwargs,
 ) -> dict[str, dict[str, float]]:
     """

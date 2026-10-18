@@ -59,18 +59,22 @@ def get_reference_info(fasta_path: str | Path) -> ReferenceInfo:
 
     from Bio import SeqIO
 
+    sequence_ids: list[str] = []
+    sequence_lengths: list[int] = []
+
     try:
-        sequences = list(SeqIO.parse(str(fasta_path), "fasta"))
+        with open(fasta_path) as f:
+            for seq in SeqIO.parse(f, "fasta"):
+                sequence_ids.append(seq.id)
+                sequence_lengths.append(len(seq.seq))
     except Exception as e:
         raise ValidationError(f"Failed to parse FASTA file {fasta_path}: {e}") from e
 
-    if not sequences:
+    if not sequence_ids:
         raise ValidationError(f"FASTA file is empty: {fasta_path}")
 
-    sequence_ids = [seq.id for seq in sequences]
-    sequence_lengths = [len(seq.seq) for seq in sequences]
     total_length = sum(sequence_lengths)
-    num_sequences = len(sequences)
+    num_sequences = len(sequence_ids)
     is_diploid = num_sequences == 2
 
     logging.debug(
@@ -166,16 +170,15 @@ def extract_haplotypes(
     if base_name is None:
         base_name = diploid_fasta.stem
 
-    # Parse sequences
-    from Bio import SeqIO
-
-    sequences = list(SeqIO.parse(str(diploid_fasta), "fasta"))
-    hap1_seq = sequences[0]
-    hap2_seq = sequences[1]
-
     # Create output paths
     hap1_path = output_dir / f"{base_name}_hap1.fa"
     hap2_path = output_dir / f"{base_name}_hap2.fa"
+
+    # Parse sequences
+    from Bio import SeqIO
+
+    with open(diploid_fasta) as f:
+        hap1_seq, hap2_seq = SeqIO.parse(f, "fasta")
 
     # Write haplotype files
     try:

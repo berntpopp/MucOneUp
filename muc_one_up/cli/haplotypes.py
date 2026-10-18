@@ -11,7 +11,9 @@ from ..simulate import simulate_diploid, simulate_from_chains
 from ..type_defs import HaplotypeResult
 
 
-def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[HaplotypeResult]:
+def generate_haplotypes(
+    args, config, fixed_conf, predefined_chains, rng=None
+) -> list[HaplotypeResult]:
     """
     Generate haplotypes based on simulation mode.
 
@@ -22,6 +24,7 @@ def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[Hap
         config: Configuration dictionary
         fixed_conf: Fixed length configuration or "from_structure"
         predefined_chains: Predefined chains from structure file (if any)
+        rng: Optional random number generator
 
     Returns:
         List of HaplotypeResult objects
@@ -29,8 +32,8 @@ def generate_haplotypes(args, config, fixed_conf, predefined_chains) -> list[Hap
     Raises:
         SimulationError: If simulation fails
     """
-    # Create explicit RNG from seed
-    rng = random.Random(args.seed) if args.seed is not None else None
+    if rng is None and getattr(args, "seed", None) is not None:
+        rng = random.Random(args.seed)
 
     try:
         if fixed_conf == "from_structure":

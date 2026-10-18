@@ -5,11 +5,10 @@ Single Responsibility: Orchestrate complete simulation iterations.
 """
 
 import logging
+import random
 import time
 
 from .analysis import (
-    run_orf_prediction,
-    run_read_simulation,
     write_simulation_statistics,
 )
 from .haplotypes import generate_haplotypes
@@ -32,13 +31,13 @@ def run_single_simulation_iteration(
     dual_mutation_mode,
     mutation_pair,
     structure_mutation_info,
+    rng=None,
 ):
     """Run complete simulation iteration with all processing steps.
 
     Orchestrates a single simulation iteration from haplotype generation
-    through mutation application, FASTA output, ORF prediction, read
-    simulation, and statistics generation. Handles both normal and dual
-    mutation modes.
+    through mutation application, FASTA output, and statistics generation.
+    Handles both normal and dual mutation modes.
 
     Args:
         args: SimulationOptions instance (or compatible namespace) with CLI arguments
@@ -51,6 +50,7 @@ def run_single_simulation_iteration(
         dual_mutation_mode: Boolean indicating dual simulation mode (normal + mutated)
         mutation_pair: Tuple of (normal_name, mutated_name) for dual mode
         structure_mutation_info: Mutation metadata from structure file comments
+        rng: Optional random number generator instance
 
     Returns:
         None (all outputs written to files)
@@ -66,8 +66,6 @@ def run_single_simulation_iteration(
         - Structure files (*.structure.txt)
         - Mutated units files (*.mutated_units.txt)
         - Statistics JSON (*.simulation_stats.json)
-        - Optional: ORF peptides (*.pep.fa)
-        - Optional: Read simulation BAM files
 
     Note:
         Single Responsibility: Orchestrate one complete simulation iteration.
@@ -75,14 +73,16 @@ def run_single_simulation_iteration(
         outputs, analysis) following SOLID principles.
     """
     iteration_start = time.time()
+    if rng is None and getattr(args, "seed", None) is not None:
+        rng = random.Random(args.seed)
 
     # Generate haplotypes
-    results = generate_haplotypes(args, config, fixed_conf, predefined_chains)
+    results = generate_haplotypes(args, config, fixed_conf, predefined_chains, rng=rng)
     logging.info("Haplotype simulation completed successfully for iteration %d.", sim_index)
 
     # Apply mutations
     results, mutated_results, mutated_units, mutation_positions = apply_mutation_pipeline(
-        args, config, results, args.mutation_name, dual_mutation_mode, mutation_pair
+        args, config, results, args.mutation_name, dual_mutation_mode, mutation_pair, rng=rng
     )
 
     # Write FASTA outputs (includes SNP integration)
@@ -98,6 +98,7 @@ def run_single_simulation_iteration(
         mutation_pair,
         mutation_positions,
         structure_mutation_info,
+        rng=rng,
     )
 
     # Write mutated units
@@ -117,51 +118,6 @@ def run_single_simulation_iteration(
         structure_mutation_info,
     )
 
-    # ORF prediction and toxic detection
-    run_orf_prediction(
-        args,
-        config,
-        out_dir,
-        out_base,
-        sim_index,
-        results,
-        mutated_results,
-        dual_mutation_mode,
-    )
-
-    # Build read source tracker(s) if requested
-    source_tracker = None
-    source_tracker_mut = None
-    if getattr(args, "track_read_source", False) and getattr(args, "simulate_reads", None):
-        from .source_tracking_setup import build_source_trackers
-
-        source_tracker, source_tracker_mut = build_source_trackers(
-            config=config,
-            results=results,
-            mutated_results=mutated_results,
-            mutation_positions=mutation_positions,
-            mutation_name=getattr(args, "mutation_name", None),
-            applied_snp_info_normal=applied_snp_info_normal,
-            applied_snp_info_mut=applied_snp_info_mut,
-            reference_assembly=getattr(args, "reference_assembly", None),
-            out_dir=out_dir,
-            out_base=out_base,
-            sim_index=sim_index,
-            dual_mutation_mode=dual_mutation_mode,
-        )
-
-    # Read simulation
-    run_read_simulation(
-        args,
-        config,
-        out_dir,
-        out_base,
-        sim_index,
-        dual_mutation_mode,
-        source_tracker=source_tracker,
-        source_tracker_mut=source_tracker_mut,
-    )
-
     # Statistics
     iteration_end = time.time()
     write_simulation_statistics(
@@ -179,4 +135,5 @@ def run_single_simulation_iteration(
         applied_snp_info_normal,
         applied_snp_info_mut,
         mutation_positions=mutation_positions,
+        mutated_units=mutated_units,
     )

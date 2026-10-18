@@ -74,6 +74,7 @@ from .pipeline_utils import (
     create_pipeline_metadata,
     resolve_pipeline_outputs,
 )
+from .utils.reference_utils import get_reference_info
 from .wrappers.ccs_wrapper import run_ccs_consensus, validate_ccs_parameters
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 from .wrappers.pbsim3_wrapper import run_pbsim3_simulation, validate_pbsim3_parameters
@@ -292,6 +293,7 @@ def simulate_pacbio_hifi_reads(
         validate_ccs_parameters(
             min_passes=min_passes,
             min_rq=min_rq,
+            threads=threads,
         )
     except ValueError as e:
         raise RuntimeError(f"Invalid PacBio parameters: {e}") from e
@@ -321,13 +323,15 @@ def simulate_pacbio_hifi_reads(
         logging.info("STAGE 1: Multi-pass CLR simulation with pbsim3")
         logging.info("=" * 80)
 
+        ref_info = get_reference_info(input_fa)
+
         clr_bams = run_pbsim3_simulation(
             pbsim3_cmd=pbsim3_cmd,
             samtools_cmd=samtools_cmd,
             reference=input_fa,
             model_type=model_type,
             model_file=model_file,
-            coverage=coverage,
+            coverage=coverage / ref_info.num_sequences,
             output_prefix=clr_prefix,
             pass_num=pass_num,
             accuracy_mean=accuracy_mean,
@@ -419,36 +423,28 @@ def simulate_pacbio_hifi_reads(
             threads=threads,
         )
 
-        # If no human reference provided, stop here and return FASTQ
-        if human_reference is None:
+        if human_reference is not None:
+            intermediate_files.append(hifi_fastq)
+
+            # ==========================================================================
+            # STAGE 4: Read Alignment (minimap2 with map-hifi preset)
+            # ==========================================================================
             logging.info("=" * 80)
-            logging.info("PacBio HiFi simulation complete (no alignment requested)")
-            logging.info(f"Final output: {hifi_fastq}")
+            logging.info("STAGE 4: Aligning HiFi reads with minimap2 (map-hifi preset)")
             logging.info("=" * 80)
 
-            # Clean up intermediate files (keep HiFi FASTQ as final output)
-            cleanup_intermediates(intermediate_files)
-
-            return hifi_fastq
-
-        intermediate_files.append(hifi_fastq)
-
-        # ==========================================================================
-        # STAGE 4: Read Alignment (minimap2 with map-hifi preset)
-        # ==========================================================================
-        logging.info("=" * 80)
-        logging.info("STAGE 4: Aligning HiFi reads with minimap2 (map-hifi preset)")
-        logging.info("=" * 80)
-
-        aligned_bam = align_reads_with_minimap2(
-            minimap2_cmd=minimap2_cmd,
-            samtools_cmd=samtools_cmd,
-            reference=human_reference,
-            reads_fastq=hifi_fastq,
-            output_bam=aligned_bam,
-            preset=MINIMAP2_PRESET_PACBIO_HIFI,  # Use HiFi-specific preset
-            threads=threads,
-        )
+            aligned_bam = align_reads_with_minimap2(
+                minimap2_cmd=minimap2_cmd,
+                samtools_cmd=samtools_cmd,
+                reference=human_reference,
+                reads_fastq=hifi_fastq,
+                output_bam=aligned_bam,
+                preset=MINIMAP2_PRESET_PACBIO_HIFI,  # Use HiFi-specific preset
+                threads=threads,
+            )
+            final_output = aligned_bam
+        else:
+            final_output = hifi_fastq
 
         # ==========================================================================
         # STAGE 5: Cleanup
@@ -468,7 +464,7 @@ def simulate_pacbio_hifi_reads(
             "PacBio HiFi simulation pipeline complete! (duration: %s)",
             str(duration).split(".")[0],  # Remove microseconds
         )
-        logging.info(f"Final output: {aligned_bam}")
+        logging.info(f"Final output: {final_output}")
 
         # Generate read source tracking manifest if tracker provided
         if source_tracker is not None:
@@ -494,7 +490,12 @@ def simulate_pacbio_hifi_reads(
 
             # Now clean up MAF files
             for maf_paths in maf_files_by_haplotype.values():
-                cleanup_intermediates(maf_paths)
+                for maf_f in maf_paths:
+                    Path(maf_f).unlink(missing_ok=True)
+
+        tools_used = ["pbsim3", "ccs", "samtools"]
+        if human_reference is not None:
+            tools_used.append("minimap2")
 
         # Write metadata file with tool versions and provenance
         metadata_file = create_pipeline_metadata(
@@ -504,12 +505,12 @@ def simulate_pacbio_hifi_reads(
             start_time=start_time,
             end_time=end_time,
             platform="PacBio",
-            tools_used=["pbsim3", "ccs", "minimap2", "samtools"],
+            tools_used=tools_used,
         )
         logging.info("Metadata file: %s", metadata_file)
         logging.info("=" * 80)
 
-        return aligned_bam
+        return final_output
 
     except (ExternalToolError, FileOperationError) as e:
         # Wrap tool-specific errors in RuntimeError with context

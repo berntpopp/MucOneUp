@@ -298,3 +298,27 @@ class TestDistributionEdgeCases:
 
         # Should have substantial spread
         assert max(samples) - min(samples) > 100
+
+    def test_sample_raises_value_error_when_min_greater_than_max(self):
+        """Test that min_repeats > max_repeats raises ValueError."""
+        length_model = {
+            "distribution": "normal",
+            "min_repeats": 50,
+            "max_repeats": 20,
+            "mean_repeats": 35,
+        }
+        with pytest.raises(
+            ValueError, match=r"min_repeats \(50\) cannot be greater than max_repeats \(20\)"
+        ):
+            sample_repeat_count(length_model)
+
+    def test_sample_raises_value_error_on_impossible_bounds(self):
+        """Test that impossible/unsamplable bounds raise ValueError after loop exhaustion."""
+        length_model = {
+            "distribution": "normal",
+            "min_repeats": 50,
+            "max_repeats": 50,
+            "mean_repeats": 10,
+        }
+        with pytest.raises(ValueError, match="Failed to sample repeat count"):
+            sample_repeat_count(length_model)

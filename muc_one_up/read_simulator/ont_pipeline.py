@@ -26,16 +26,15 @@ if TYPE_CHECKING:
 
 from ..exceptions import ConfigurationError
 from .assembly_context import AssemblyContext
+from .constants import MINIMAP2_PRESET_ONT
 from .pipeline_utils import (
     create_pipeline_metadata,
     resolve_human_reference,
     resolve_pipeline_outputs,
 )
 from .utils import is_diploid_reference, run_split_simulation
-from .wrappers.nanosim_wrapper import (
-    align_ont_reads_with_minimap2,
-    run_nanosim_simulation,
-)
+from .wrappers.minimap2_wrapper import align_reads_with_minimap2
+from .wrappers.nanosim_wrapper import run_nanosim_simulation
 
 
 def _resolve_simulation_mode(input_fa: str, ns_params: dict[str, Any]) -> tuple[bool, float, bool]:
@@ -306,13 +305,15 @@ def simulate_ont_reads_pipeline(
         logging.info("Aligning ONT reads to reference: %s", reference_for_alignment)
 
         try:
-            align_ont_reads_with_minimap2(
+            align_reads_with_minimap2(
                 minimap2_cmd=minimap2_cmd,
                 samtools_cmd=samtools_cmd,
-                human_reference=reference_for_alignment,
+                reference=reference_for_alignment,
                 reads_fastq=fastq_file,
                 output_bam=output_bam,
                 threads=int(threads),
+                preset=MINIMAP2_PRESET_ONT,
+                exclude_flags=4,
             )
             logging.info("Read alignment completed successfully")
         except Exception as e:
@@ -339,21 +340,7 @@ def simulate_ont_reads_pipeline(
 
         logging.info("Generating read source tracking manifest...")
 
-        if use_split_simulation:
-            # Parse each haplotype's reads separately using split-sim result
-            if result.hap1_fastq is None or result.hap2_fastq is None:
-                logging.warning(
-                    "Haplotype FASTQ paths are not available (keep_intermediate=False); "
-                    "falling back to merged FASTQ parsing. Per-haplotype read "
-                    "attribution will not be available in source tracking."
-                )
-                all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
-            else:
-                origins_hap1 = parse_nanosim_reads(result.hap1_fastq, haplotype_map=1)
-                origins_hap2 = parse_nanosim_reads(result.hap2_fastq, haplotype_map=2)
-                all_origins = origins_hap1 + origins_hap2
-        else:
-            all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
+        all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
 
         annotated = list(source_tracker.annotate_reads(all_origins))
         manifest_path = f"{output_prefix}_read_manifest.tsv.gz"

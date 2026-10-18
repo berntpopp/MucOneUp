@@ -183,6 +183,22 @@ class TestAmpliconExtractor:
         with pytest.raises(AmpliconExtractionError, match="No sequences found"):
             extractor.extract(str(fasta), str(output))
 
+    def test_multiple_records_fasta_raises(self, tmp_path, muc1_primers):
+        """FASTA with multiple records should raise AmpliconExtractionError."""
+        fasta = tmp_path / "multi_record.fa"
+        fasta.write_text(">hap1\nACGTACGT\n>hap2\nACGTACGT\n")
+        output = tmp_path / "amplicon.fa"
+
+        extractor = AmpliconExtractor(
+            forward_primer=muc1_primers["forward"],
+            reverse_primer=muc1_primers["reverse"],
+        )
+
+        with pytest.raises(
+            AmpliconExtractionError, match="Expected single-record FASTA for amplicon extraction"
+        ):
+            extractor.extract(str(fasta), str(output))
+
     def test_case_insensitive_matching(self, tmp_path, muc1_primers):
         """Primers should match regardless of case in the template."""
         from Bio.Seq import Seq

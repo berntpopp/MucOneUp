@@ -70,9 +70,66 @@ class TestExtractAndPrepare:
         assert prep.is_diploid is True
         assert len(prep.allele_templates) == 2
         assert len(prep.allele_coverages) == 2
-        assert sum(prep.allele_coverages) >= 2  # each allele gets at least 1
+        assert sum(prep.allele_coverages) == 100
+        assert prep.allele_coverages[0] >= 1
+        assert prep.allele_coverages[1] >= 1
         for t in prep.allele_templates:
             assert t.exists()
+
+    def test_diploid_total_coverage_less_than_two_raises(
+        self, diploid_fasta_with_primers, tmp_path, muc1_primers
+    ):
+        """Diploid simulation with total_coverage < 2 raises ValueError."""
+        from muc_one_up.read_simulator.amplicon_common import extract_and_prepare_amplicons
+
+        with pytest.raises(
+            ValueError, match="Diploid amplicon simulation requires total_coverage >= 2"
+        ):
+            extract_and_prepare_amplicons(
+                input_fa=str(diploid_fasta_with_primers),
+                forward_primer=muc1_primers["forward"],
+                reverse_primer=muc1_primers["reverse"],
+                total_coverage=1,
+                work_dir=tmp_path,
+            )
+
+    @pytest.mark.parametrize(
+        ("len1", "len2", "expected_coverages"),
+        [
+            (100, 5000, [2, 1]),
+            (5000, 100, [1, 2]),
+        ],
+    )
+    def test_extreme_pcr_bias_clamps_each_haplotype_to_at_least_one(
+        self, tmp_path, muc1_primers, len1, len2, expected_coverages
+    ):
+        """Extreme PCR bias clamping ensures both lower and upper bounds are exercised."""
+        from Bio.Seq import Seq
+
+        from muc_one_up.read_simulator.amplicon_common import extract_and_prepare_amplicons
+
+        fwd = muc1_primers["forward"]
+        rev_rc = str(Seq(muc1_primers["reverse"]).reverse_complement())
+
+        seq1 = "N" * 50 + fwd + ("A" * len1) + rev_rc + "N" * 50
+        seq2 = "N" * 50 + fwd + ("A" * len2) + rev_rc + "N" * 50
+
+        fasta = tmp_path / f"diploid_{len1}_{len2}.fa"
+        fasta.write_text(f">hap1\n{seq1}\n>hap2\n{seq2}\n")
+
+        work_dir = tmp_path / f"work_{len1}_{len2}"
+        work_dir.mkdir()
+
+        prep = extract_and_prepare_amplicons(
+            input_fa=str(fasta),
+            forward_primer=muc1_primers["forward"],
+            reverse_primer=muc1_primers["reverse"],
+            total_coverage=3,
+            work_dir=work_dir,
+            pcr_bias_config={"alpha": 0.01, "cycles": 30},
+        )
+        assert prep.allele_coverages == expected_coverages
+        assert sum(prep.allele_coverages) == 3
 
 
 class TestTruthTrackedHelpers:

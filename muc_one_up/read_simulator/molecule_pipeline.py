@@ -26,7 +26,7 @@ from ..exceptions import ReadSimulationError
 from .empirical_errors import EmpiricalErrorModel, apply_errors
 from .molecules import Molecule
 from .read_profiles import active_read_profile
-from .read_truth import parse_maf_read_templates, relabel_reads, template_id
+from .read_truth import parse_maf_files, relabel_reads, template_id
 from .wrappers.ccs_wrapper import run_ccs_consensus
 from .wrappers.pbsim3_wrapper import run_pbsim3_template_simulation
 from .wrappers.samtools_convert import convert_bam_to_fastq
@@ -80,9 +80,10 @@ class PbsimRun:
             difference_ratio=self.difference_ratio,
             id_prefix=_READ_PREFIX,
         )
-        mapping: dict[str, str] = {}
-        for maf in sorted(work_dir.glob(f"{prefix.name}*.maf.gz")):
-            mapping.update(parse_maf_read_templates(maf))
+        mafs = sorted(
+            {*work_dir.glob(f"{prefix.name}*.maf"), *work_dir.glob(f"{prefix.name}*.maf.gz")}
+        )
+        mapping = parse_maf_files(mafs)
         return _to_fastqs(outputs, self, work_dir, seed), mapping
 
 

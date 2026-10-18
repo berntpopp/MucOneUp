@@ -435,6 +435,117 @@ class TestSnapshotValidator:
         assert result["mutation_detected"] is False
         assert "PCR failed" in result["summary"]
 
+    def test_complete_workflow_custom_config(self):
+        """Test complete workflow with custom non-dupC config and primary_primer."""
+        custom_config = {
+            "snapshot_validation": {
+                "custom_mut": {
+                    "description": "Custom mutation validation",
+                    "pcr": {
+                        "forward_primer": "GGCCGGCCCCGGGCTCCACC",
+                        "reverse_primer": "TCCGGGGCCGAGGTGACA",
+                        "reverse_needs_rc": False,
+                        "max_products": 100,
+                        "size_range": {"min": 50, "max": 65},
+                    },
+                    "digest": {"enzyme": "MwoI", "recognition_site": "GCNNNNNNNGC"},
+                    "snapshot": {
+                        "primary_primer": "primer_custom",
+                        "primers": {
+                            "primer_custom": "AAATTTCCCGGG",
+                        },
+                        "fluorophore_map": {
+                            "A": {"color": "Green", "dye": "dR6G"},
+                            "C": {"color": "Black", "dye": "dTAMRA"},
+                            "G": {"color": "Blue", "dye": "dR110"},
+                            "T": {"color": "Red", "dye": "dROX"},
+                        },
+                    },
+                    "validation": {
+                        "mutant_pattern": "AAATTTCCCGGGG",
+                        "normal_pattern": "AAATTTCCCGGG",
+                        "mutant_extension": {
+                            "next_base": "G",
+                            "fluorophore": "Blue",
+                        },
+                    },
+                }
+            }
+        }
+        validator = SnapshotValidator(custom_config, "custom_mut")
+
+        template = (
+            "ATCGATCG" * 50
+            + "GGCCGGCCCCGGGCTCCACC"
+            + "AAATTTCCCGGGGTAGCCCAC"
+            + "TCCGGGGCCGAGGTGACA"
+            + "ATCGATCG" * 50
+        )
+
+        result = validator.validate_complete_workflow(template)
+
+        assert result["pcr_results"]["success"] is True
+        assert result["digest_results"]["survivor_count"] >= 1
+        assert result["expected_fluorescence"] == "Blue"
+        assert result["mutation_detected"] is True
+        assert result["snapshot_results"][0]["extension"]["fluorophore"] == "Blue"
+        assert result["snapshot_results"][0]["extension"]["next_base"] == "G"
+
+    def test_validate_complete_workflow_omitted_primary_primer_uses_custom_primer(self):
+        """Test validate_complete_workflow when primary_primer is omitted and only custom primer is defined."""
+        custom_config = {
+            "snapshot_validation": {
+                "custom_mut": {
+                    "description": "Custom mutation validation without primary_primer key",
+                    "pcr": {
+                        "forward_primer": "GGCCGGCCCCGGGCTCCACC",
+                        "reverse_primer": "TCCGGGGCCGAGGTGACA",
+                        "reverse_needs_rc": False,
+                        "max_products": 100,
+                        "size_range": {"min": 50, "max": 65},
+                    },
+                    "digest": {"enzyme": "MwoI", "recognition_site": "GCNNNNNNNGC"},
+                    "snapshot": {
+                        "primers": {
+                            "custom_primer_1": "AAATTTCCCGGG",
+                        },
+                        "fluorophore_map": {
+                            "A": {"color": "Green", "dye": "dR6G"},
+                            "C": {"color": "Black", "dye": "dTAMRA"},
+                            "G": {"color": "Blue", "dye": "dR110"},
+                            "T": {"color": "Red", "dye": "dROX"},
+                        },
+                    },
+                    "validation": {
+                        "mutant_pattern": "AAATTTCCCGGGG",
+                        "normal_pattern": "AAATTTCCCGGG",
+                        "mutant_extension": {
+                            "next_base": "G",
+                            "fluorophore": "Blue",
+                        },
+                    },
+                }
+            }
+        }
+        validator = SnapshotValidator(custom_config, "custom_mut")
+
+        template = (
+            "ATCGATCG" * 50
+            + "GGCCGGCCCCGGGCTCCACC"
+            + "AAATTTCCCGGGGTAGCCCAC"
+            + "TCCGGGGCCGAGGTGACA"
+            + "ATCGATCG" * 50
+        )
+
+        result = validator.validate_complete_workflow(template)
+
+        assert result["pcr_results"]["success"] is True
+        assert result["digest_results"]["survivor_count"] >= 1
+        assert result["expected_fluorescence"] == "Blue"
+        assert result["mutation_detected"] is True
+        assert result["snapshot_results"][0]["extension"]["fluorophore"] == "Blue"
+        assert result["snapshot_results"][0]["extension"]["next_base"] == "G"
+
 
 # Edge Cases and Error Handling
 class TestEdgeCases:

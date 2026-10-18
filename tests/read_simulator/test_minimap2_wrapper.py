@@ -139,6 +139,49 @@ class TestAlignReadsWithMinimap2:
         assert "-ax" in cmd
         assert "map-hifi" in cmd
 
+    def test_constructs_command_with_exclude_flags(self, mocker, tmp_path):
+        """Test that exclude_flags adds -F flag to samtools view command."""
+        ref_fa = tmp_path / "ref.fa"
+        reads_fastq = tmp_path / "reads.fastq"
+        output_bam = tmp_path / "aligned.bam"
+
+        ref_fa.write_text(">chr1\nACGT\n")
+        reads_fastq.write_text("@read1\nACGT\n+\nIIII\n")
+
+        run_calls = []
+
+        def mock_run(cmd, *args, **kwargs):
+            run_calls.append(cmd)
+            sam_path = tmp_path / "aligned.sam"
+            sam_path.write_text("SAM data")
+            output_bam.write_text("BAM data")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_command",
+            side_effect=mock_run,
+        )
+        mock_sort = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.sort_and_index_bam",
+            return_value=str(output_bam),
+        )
+
+        align_reads_with_minimap2(
+            minimap2_cmd="minimap2",
+            samtools_cmd="samtools",
+            reference=str(ref_fa),
+            reads_fastq=str(reads_fastq),
+            output_bam=str(output_bam),
+            threads=4,
+            exclude_flags=4,
+        )
+
+        assert len(run_calls) == 2
+        view_cmd = run_calls[1]
+        assert "view" in view_cmd
+        assert "-F" in view_cmd
+        assert "4" in view_cmd
+        assert mock_sort.called
+
     def test_validates_reference_exists(self, tmp_path):
         """Test that missing reference file is detected."""
         # Arrange

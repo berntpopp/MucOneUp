@@ -164,7 +164,7 @@ class TestONTOutputNaming:
             "muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation",
             return_value=reads_fq,
         )
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
         mocker.patch(
             "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference",
             return_value=False,
@@ -200,7 +200,7 @@ class TestONTOutputNaming:
             "muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation",
             return_value=reads_fq,
         )
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
         mocker.patch(
             "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference",
             return_value=False,

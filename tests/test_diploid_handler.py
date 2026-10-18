@@ -417,3 +417,26 @@ def test_run_split_simulation_result_structure(diploid_fasta, temp_dir):
 
     # Check merged FASTQ exists
     assert Path(result.merged_fastq).exists()
+
+
+def test_run_split_simulation_keep_intermediate_references_are_none(diploid_fasta, temp_dir):
+    """Test that hap1_reference and hap2_reference are None even when keep_intermediate=True."""
+    output_fastq = temp_dir / "merged.fastq"
+
+    def mock_sim_func(reference_fasta, output_prefix, coverage, seed, **params):
+        fastq_path = Path(f"{output_prefix}_aligned_reads.fastq")
+        create_mock_fastq(fastq_path, 10)
+        return str(fastq_path)
+
+    result = run_split_simulation(
+        diploid_fasta,
+        mock_sim_func,
+        {"coverage": 200},
+        output_fastq,
+        keep_intermediate=True,
+    )
+
+    assert result.hap1_fastq is not None
+    assert result.hap2_fastq is not None
+    assert result.hap1_reference is None
+    assert result.hap2_reference is None

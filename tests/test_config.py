@@ -1,6 +1,9 @@
 import json
 from pathlib import Path
 
+import pytest
+from jsonschema import ValidationError
+
 from muc_one_up.config import load_config
 
 
@@ -137,3 +140,173 @@ def test_seed_can_be_null(tmp_path):
     # Should not raise ValidationError
     config = load_config(str(config_file))
     assert config["read_simulation"]["seed"] is None
+
+
+def test_load_config_accepts_root_seed(tmp_path):
+    """Test that root-level seed is accepted by load_config."""
+    config_data = {
+        "seed": 42,
+        "repeats": {"1": "ACGACT"},
+        "constants": {"hg38": {"left": "A", "right": "T", "vntr_region": "chr1:1-100"}},
+        "probabilities": {},
+        "length_model": {
+            "distribution": "normal",
+            "min_repeats": 10,
+            "max_repeats": 100,
+            "mean_repeats": 50,
+            "median_repeats": 50,
+        },
+        "mutations": {},
+        "tools": {"samtools": "samtools"},
+        "read_simulation": {
+            "human_reference": "/ref/hg38.fa",
+            "threads": 4,
+        },
+    }
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(config_data))
+
+    loaded = load_config(str(config_file))
+    assert loaded["seed"] == 42
+
+    # Also test seed: null
+    config_data["seed"] = None
+    config_file.write_text(json.dumps(config_data))
+    loaded = load_config(str(config_file))
+    assert loaded["seed"] is None
+
+
+def test_load_config_accepts_root_reference_assembly(tmp_path):
+    """Test that root-level reference_assembly is accepted and validated by load_config."""
+    config_data = {
+        "reference_assembly": "hg38",
+        "repeats": {"1": "ACGACT"},
+        "constants": {"hg38": {"left": "A", "right": "T", "vntr_region": "chr1:1-100"}},
+        "probabilities": {},
+        "length_model": {
+            "distribution": "normal",
+            "min_repeats": 10,
+            "max_repeats": 100,
+            "mean_repeats": 50,
+            "median_repeats": 50,
+        },
+        "mutations": {},
+        "tools": {"samtools": "samtools"},
+        "read_simulation": {
+            "human_reference": "/ref/hg38.fa",
+            "threads": 4,
+        },
+    }
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(config_data))
+
+    loaded = load_config(str(config_file))
+    assert loaded["reference_assembly"] == "hg38"
+
+    config_data["reference_assembly"] = "hg19"
+    config_file.write_text(json.dumps(config_data))
+    loaded = load_config(str(config_file))
+    assert loaded["reference_assembly"] == "hg19"
+
+    # Invalid assembly should raise ValidationError
+    config_data["reference_assembly"] = "hg37"
+    config_file.write_text(json.dumps(config_data))
+    with pytest.raises(ValidationError):
+        load_config(str(config_file))
+
+
+def test_load_config_resolves_relative_paths(tmp_path, monkeypatch):
+    """Test that load_config resolves relative paths against config directory."""
+    ref_file = tmp_path / "reference.fa"
+    ref_file.write_text(">ref\nACGT\n")
+
+    config_data = {
+        "repeats": {"1": "ACGACT"},
+        "constants": {"hg38": {"left": "A", "right": "T", "vntr_region": "chr1:1-100"}},
+        "probabilities": {},
+        "length_model": {
+            "distribution": "normal",
+            "min_repeats": 10,
+            "max_repeats": 100,
+            "mean_repeats": 50,
+            "median_repeats": 50,
+        },
+        "mutations": {},
+        "tools": {"samtools": "samtools"},
+        "read_simulation": {
+            "human_reference": "reference.fa",
+            "threads": 4,
+        },
+    }
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(config_data))
+
+    monkeypatch.chdir("/tmp")
+    loaded = load_config(str(config_file))
+    assert loaded["read_simulation"]["human_reference"] == str(ref_file.resolve())
+
+
+def test_config_schema_accepts_snapshot_primary_primer_and_mutant_extension():
+    """Verify CONFIG_SCHEMA accepts snapshot.primary_primer and validation.mutant_extension."""
+    from jsonschema import validate
+
+    from muc_one_up.config import CONFIG_SCHEMA
+
+    snapshot_props = CONFIG_SCHEMA["properties"]["snapshot_validation"]["additionalProperties"][
+        "properties"
+    ]["snapshot"]["properties"]
+    assert "primary_primer" in snapshot_props
+    assert snapshot_props["primary_primer"] == {"type": "string"}
+
+    val_props = CONFIG_SCHEMA["properties"]["snapshot_validation"]["additionalProperties"][
+        "properties"
+    ]["validation"]["properties"]
+    assert "mutant_extension" in val_props
+    assert val_props["mutant_extension"] == {"type": "object"}
+
+    sample_config = {
+        "repeats": {"1": "ACGACT"},
+        "constants": {"hg38": {"left": "A", "right": "T", "vntr_region": "chr1:1-100"}},
+        "probabilities": {},
+        "length_model": {
+            "distribution": "normal",
+            "min_repeats": 10,
+            "max_repeats": 100,
+            "mean_repeats": 50,
+            "median_repeats": 50,
+        },
+        "mutations": {},
+        "tools": {"samtools": "samtools"},
+        "read_simulation": {
+            "human_reference": "/ref/hg38.fa",
+            "threads": 4,
+        },
+        "snapshot_validation": {
+            "test_assay": {
+                "pcr": {
+                    "forward_primer": "ACGT",
+                    "reverse_primer": "TGCA",
+                    "reverse_needs_rc": False,
+                    "max_products": 1,
+                    "size_range": {"min": 100, "max": 500},
+                },
+                "digest": {
+                    "enzyme": "EcoRI",
+                    "recognition_site": "GAATTC",
+                },
+                "snapshot": {
+                    "primary_primer": "ACTG",
+                    "primers": {"p1": "ACTG"},
+                    "fluorophore_map": {
+                        "dC": {"color": "blue", "dye": "FAM"},
+                    },
+                },
+                "validation": {
+                    "mutant_pattern": ".*",
+                    "normal_pattern": ".*",
+                    "mutant_extension": {"bases": "C"},
+                },
+            }
+        },
+    }
+    validate(instance=sample_config, schema=CONFIG_SCHEMA)
