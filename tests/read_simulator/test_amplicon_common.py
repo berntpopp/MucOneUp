@@ -93,6 +93,23 @@ class TestExtractAndPrepare:
                 work_dir=tmp_path,
             )
 
+    def test_polyploid_reference_raises_validation_error(self, tmp_path, muc1_primers):
+        """Polyploid input (>= 3 records) raises ValidationError."""
+        from muc_one_up.exceptions import ValidationError
+        from muc_one_up.read_simulator.amplicon_common import extract_and_prepare_amplicons
+
+        fasta = tmp_path / "triploid.fa"
+        fasta.write_text(">h1\nACGT\n>h2\nACGT\n>h3\nACGT\n")
+
+        with pytest.raises(ValidationError, match="maximum 2 allowed"):
+            extract_and_prepare_amplicons(
+                input_fa=str(fasta),
+                forward_primer=muc1_primers["forward"],
+                reverse_primer=muc1_primers["reverse"],
+                total_coverage=30,
+                work_dir=tmp_path,
+            )
+
     @pytest.mark.parametrize(
         ("len1", "len2", "expected_coverages"),
         [
@@ -204,3 +221,25 @@ class TestTruthTrackedHelpers:
 
         got = offtarget_intervals(["AACCGGT", "TTCCGG"], ["CCGG", "CCGG"])
         assert [(i.hap, i.start, i.seq) for i in got] == [(1, 0, "AA"), (1, 6, "T"), (2, 0, "TT")]
+
+
+class TestParseExpectedProductRange:
+    def test_none_returns_none(self):
+        from muc_one_up.read_simulator.amplicon_common import parse_expected_product_range
+
+        assert parse_expected_product_range(None) is None
+
+    def test_valid_list_returns_tuple(self):
+        from muc_one_up.read_simulator.amplicon_common import parse_expected_product_range
+
+        assert parse_expected_product_range([100, 200]) == (100, 200)
+        assert parse_expected_product_range((50, 150)) == (50, 150)
+
+    def test_invalid_length_raises_value_error(self):
+        from muc_one_up.read_simulator.amplicon_common import parse_expected_product_range
+
+        with pytest.raises(ValueError, match="must contain exactly 2 values"):
+            parse_expected_product_range([100])
+
+        with pytest.raises(ValueError, match="must contain exactly 2 values"):
+            parse_expected_product_range([100, 200, 300])

@@ -119,6 +119,43 @@ class TestAmpliconPipelineDiploid:
         )
 
         assert mock_pbsim3.call_count == 2
+        calls = mock_pbsim3.call_args_list
+        assert calls[0].kwargs["id_prefix"] == "hap1"
+        assert calls[1].kwargs["id_prefix"] == "hap2"
+
+    @patch("muc_one_up.read_simulator.amplicon_pipeline.cleanup_unless_kept")
+    @patch("muc_one_up.read_simulator.amplicon_pipeline.run_pbsim3_template_simulation")
+    @patch("muc_one_up.read_simulator.amplicon_pipeline.run_ccs_consensus")
+    @patch("muc_one_up.read_simulator.amplicon_pipeline.merge_bam_files")
+    @patch("muc_one_up.read_simulator.amplicon_pipeline.convert_bam_to_fastq")
+    @patch("muc_one_up.read_simulator.amplicon_pipeline.align_reads_with_minimap2")
+    def test_pipeline_propagates_tool_error_without_wrapping(
+        self,
+        mock_align,
+        mock_convert,
+        mock_merge,
+        mock_ccs,
+        mock_pbsim3,
+        mock_cleanup,
+        diploid_fasta_with_primers,
+        amplicon_config,
+        tmp_path,
+    ):
+        """Tool errors should propagate directly without being wrapped in RuntimeError."""
+        from muc_one_up.exceptions import ExternalToolError
+
+        mock_pbsim3.side_effect = ExternalToolError(
+            tool="pbsim3", exit_code=1, stderr="PBSIM3 failed"
+        )
+
+        with pytest.raises(ExternalToolError, match="PBSIM3 failed"):
+            simulate_amplicon_reads_pipeline(
+                config=amplicon_config,
+                input_fa=str(diploid_fasta_with_primers),
+                human_reference=str(tmp_path / "ref.fa"),
+            )
+
+        assert mock_cleanup.called
 
     @patch("muc_one_up.read_simulator.amplicon_pipeline.run_pbsim3_template_simulation")
     @patch("muc_one_up.read_simulator.amplicon_pipeline.run_ccs_consensus")

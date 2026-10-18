@@ -108,6 +108,44 @@ class TestOntAmpliconPipeline:
         # Verify pass_num=1 in all pbsim3 calls
         for call in mock_pbsim3.call_args_list:
             assert call.kwargs["pass_num"] == 1
+        assert mock_pbsim3.call_count == 2
+        calls = mock_pbsim3.call_args_list
+        assert calls[0].kwargs["id_prefix"] == "hap1"
+        assert calls[1].kwargs["id_prefix"] == "hap2"
+
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.run_pbsim3_template_simulation")
+    @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_unless_kept")
+    def test_pipeline_propagates_tool_error_without_wrapping(
+        self,
+        mock_cleanup,
+        mock_pbsim3,
+        mock_prep,
+        ont_amplicon_config,
+        tmp_path,
+    ):
+        """Tool errors should propagate directly without being wrapped in RuntimeError."""
+        from muc_one_up.exceptions import ExternalToolError
+        from muc_one_up.read_simulator.ont_amplicon_pipeline import (
+            simulate_ont_amplicon_pipeline,
+        )
+
+        mock_prep.return_value = _make_prep(tmp_path)
+        mock_pbsim3.side_effect = ExternalToolError(
+            tool="pbsim3", exit_code=1, stderr="PBSIM3 failed"
+        )
+
+        fasta = tmp_path / "input.fa"
+        fasta.write_text(">seq\nACGT\n")
+
+        with pytest.raises(ExternalToolError, match="PBSIM3 failed"):
+            simulate_ont_amplicon_pipeline(
+                ont_amplicon_config,
+                str(fasta),
+                human_reference=str(fasta),
+            )
+
+        assert mock_cleanup.called
 
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons")
     @patch("muc_one_up.read_simulator.ont_amplicon_pipeline.run_pbsim3_template_simulation")
