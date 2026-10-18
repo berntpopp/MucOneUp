@@ -25,6 +25,7 @@ Args:
 import argparse
 import json
 import logging
+import shlex
 import shutil
 import subprocess
 import sys
@@ -32,7 +33,10 @@ import tarfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import requests
+try:
+    import requests
+except ImportError:  # pragma: no cover
+    requests = None
 
 # Set up basic logging
 logging.basicConfig(
@@ -84,8 +88,12 @@ def get_ucsc_region_das(
     """
     segment = f"{chrom}:{start},{end}"
     # Construct the DAS URL (adjust if needed for specific servers/assemblies)
-    das_url = f"http://genome.ucsc.edu/cgi-bin/das/{assembly}/dna?segment={segment}"
+    das_url = f"https://genome.ucsc.edu/cgi-bin/das/{assembly}/dna?segment={segment}"
     logging.info(f"Fetching sequence from: {das_url}")
+
+    if requests is None:
+        logging.error("The 'requests' package is required to fetch sequences from UCSC DAS.")
+        return None
 
     try:
         # Use a reasonable timeout for the request
@@ -275,6 +283,9 @@ def download_nanosim_model(output_dir, force=False):
 
     # Download the model
     logging.info(f"Downloading NanoSim model from {model_url}")
+    if requests is None:
+        logging.error("The 'requests' package is required to download NanoSim models.")
+        return None
     try:
         response = requests.get(model_url, stream=True)
         response.raise_for_status()
@@ -294,7 +305,7 @@ def download_nanosim_model(output_dir, force=False):
 
         extract_path.mkdir(parents=True, exist_ok=True)
         with tarfile.open(tar_path) as tar:
-            tar.extractall(path=extract_path)
+            tar.extractall(path=extract_path, filter="data")
         logging.info(f"Extracted NanoSim model to {extract_path}")
         return extract_path
     except Exception as e:
@@ -302,13 +313,14 @@ def download_nanosim_model(output_dir, force=False):
         return None
 
 
-def create_minimap2_index(reference_path, output_dir, minimap2_cmd="minimap2"):
+def create_minimap2_index(reference_path, output_dir, minimap2_cmd="minimap2", preset="map-ont"):
     """Create a minimap2 index for the reference genome.
 
     Args:
         reference_path: Path to the reference genome FASTA
         output_dir: Directory to store the index
         minimap2_cmd: Command to run minimap2 (default: 'minimap2')
+        preset: Minimap2 preset (default: 'map-ont')
 
     Returns:
         Path to the created index file
@@ -320,7 +332,8 @@ def create_minimap2_index(reference_path, output_dir, minimap2_cmd="minimap2"):
         return None
 
     # Create index path
-    index_path = Path(output_dir) / f"{ref_path.name}.mmi"
+    index_name = f"{ref_path.name}.{preset}.mmi" if preset else f"{ref_path.name}.mmi"
+    index_path = Path(output_dir) / index_name
 
     # Check if index already exists
     if index_path.exists():
@@ -330,19 +343,16 @@ def create_minimap2_index(reference_path, output_dir, minimap2_cmd="minimap2"):
     # Create the index
     logging.info(f"Creating minimap2 index for {reference_path}")
     try:
-        # Convert paths to strings to avoid any path parsing issues
-        ref_path_str = str(ref_path)
-        index_path_str = str(index_path)
-
-        # Construct the command
-        # We use "mamba run" with env_nanosim to ensure correct environment
-        cmd = f"mamba run --no-capture-output -n env_nanosim {minimap2_cmd} -d {index_path_str} {ref_path_str}"
-        logging.info(f"Running command: {cmd}")
+        cmd = [*shlex.split(minimap2_cmd)]
+        if preset:
+            cmd.extend(["-x", preset])
+        cmd.extend(["-d", str(index_path), str(ref_path)])
+        logging.info(f"Running command: {' '.join(cmd)}")
 
         # Run the command
         subprocess.run(
             cmd,
-            shell=True,
+            shell=False,
             check=True,
             text=True,
             capture_output=True,
@@ -467,8 +477,8 @@ def main():
                 # Update the NanoSim training model path in config
                 if "nanosim_params" in config:
                     rel_path = nanosim_model_path.relative_to(Path(args.config).parent)
-                    config["nanosim_params"]["training_data_path"] = str(rel_path)
-                    logging.info(f"Updated config with NanoSim model path: {rel_path}")
+                    config["nanosim_params"]["training_data_path"] = str(rel_path / "training")
+                    logging.info(f"Updated config with NanoSim model path: {rel_path / 'training'}")
 
                     # Write the updated config
                     with Path(args.config).open("w") as f:
@@ -489,6 +499,7 @@ def main():
 
             # Get the human reference path from config
             human_reference = config.get("read_simulation", {}).get("human_reference")
+            minimap2_cmd = config.get("tools", {}).get("minimap2", "minimap2")
             if human_reference:
                 # Convert to absolute path
                 human_ref_path = Path(human_reference)
@@ -499,12 +510,15 @@ def main():
                 if not human_ref_path.exists():
                     logging.error(f"Human reference file not found: {human_ref_path}")
                 else:
-                    # Create the index
-                    index_path = create_minimap2_index(
-                        str(human_ref_path), str(human_ref_path.parent)
-                    )
-                if index_path:
-                    logging.info(f"Successfully created minimap2 index at {index_path}")
+                    for preset in ("map-ont", "map-hifi"):
+                        index_path = create_minimap2_index(
+                            str(human_ref_path),
+                            str(human_ref_path.parent),
+                            minimap2_cmd=minimap2_cmd,
+                            preset=preset,
+                        )
+                        if index_path:
+                            logging.info(f"Successfully created minimap2 index at {index_path}")
             else:
                 logging.warning(
                     "human_reference not found in config, could not create minimap2 index"
