@@ -69,7 +69,6 @@ if TYPE_CHECKING:
 
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
 from .pipeline_utils import (
-    cleanup_intermediates,
     cleanup_unless_kept,
     create_pipeline_metadata,
     resolve_pipeline_outputs,
@@ -80,7 +79,7 @@ from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 from .wrappers.pbsim3_wrapper import run_pbsim3_simulation, validate_pbsim3_parameters
 from .wrappers.samtools_wrapper import convert_bam_to_fastq, merge_bam_files
 
-__all__ = ["cleanup_intermediates", "simulate_pacbio_hifi_reads"]
+__all__ = ["simulate_pacbio_hifi_reads"]
 
 
 def _register_ccs_intermediates(bam_path: str, intermediate_files: list[str | None]) -> None:
@@ -147,85 +146,7 @@ def simulate_pacbio_hifi_reads(
 
     Orchestrates multi-pass CLR simulation, HiFi consensus generation,
     FASTQ conversion, and alignment to produce publication-ready HiFi reads.
-
-    Args:
-        config: Configuration dictionary containing:
-                - tools: {
-                    "pbsim3": path to pbsim executable,
-                    "ccs": path to ccs executable,
-                    "samtools": path to samtools executable,
-                    "minimap2": path to minimap2 executable
-                  }
-                - pacbio_params: {
-                    "model_type": "qshmm" or "errhmm",
-                    "model_file": path to .model file,
-                    "coverage": target coverage (e.g., 30),
-                    "pass_num": number of passes per molecule (≥2),
-                    "min_passes": minimum passes for CCS (≥1),
-                    "min_rq": minimum quality for HiFi (0.0-1.0),
-                    "threads": number of threads,
-                    "seed": random seed (optional),
-                    # Optional length/accuracy parameters with defaults
-                  }
-        input_fa: Input reference FASTA file (e.g., diploid haplotypes).
-                  Output files are generated in the same directory with
-                  names derived from input filename.
-        human_reference: Human reference genome for alignment (optional).
-                        If None, alignment step is skipped.
-
-    Returns:
-        Path to final output file:
-        - If human_reference provided: aligned, sorted, indexed BAM
-        - If human_reference is None: HiFi FASTQ file
-
-    Raises:
-        RuntimeError: If any pipeline stage fails (wraps underlying exceptions).
-
-    Example:
-        Full pipeline with alignment::
-
-            from muc_one_up.read_simulator.pacbio_pipeline import simulate_pacbio_hifi_reads
-
-            final_bam = simulate_pacbio_hifi_reads(
-                config={
-                    "tools": {
-                        "pbsim3": "pbsim",
-                        "ccs": "ccs",
-                        "samtools": "samtools",
-                        "minimap2": "minimap2"
-                    },
-                    "pacbio_params": {
-                        "model_type": "errhmm",
-                        "model_file": "/models/ERRHMM-SEQUEL.model",
-                        "coverage": 30,
-                        "pass_num": 3,
-                        "min_passes": 3,
-                        "min_rq": 0.99,
-                        "threads": 8,
-                        "seed": 42
-                    }
-                },
-                input_fa="vntr_diploid.fa",
-                human_reference="/ref/hg38.fa"
-            )
-
-        Simulation only (no alignment)::
-
-            hifi_fastq = simulate_pacbio_hifi_reads(
-                config=config,
-                input_fa="vntr_diploid.fa",
-                human_reference=None  # Skip alignment
-            )
-
-    Notes:
-        - All intermediate files are automatically cleaned up
-        - Progress is logged at INFO level
-        - Errors include detailed diagnostic messages
-        - Seed parameter enables reproducible simulations
-        - If alignment is skipped, HiFi FASTQ is the final output
-        - Pipeline is optimized for VNTR and complex genomic regions
     """
-    # Extract configuration
     from typing import cast
 
     from ..type_defs import PacbioConfig
@@ -233,13 +154,11 @@ def simulate_pacbio_hifi_reads(
     pacbio_params = cast(PacbioConfig, config.get("pacbio_params", {}))
     tools = config.get("tools", {})
 
-    # Extract tool commands
     pbsim3_cmd = tools.get("pbsim3", "pbsim")
     ccs_cmd = tools.get("ccs", "ccs")
     samtools_cmd = tools.get("samtools", "samtools")
     minimap2_cmd = tools.get("minimap2", "minimap2")
 
-    # Extract required parameters
     model_type = pacbio_params.get("model_type")
     model_file = pacbio_params.get("model_file")
     coverage = pacbio_params.get("coverage")
@@ -249,7 +168,6 @@ def simulate_pacbio_hifi_reads(
     threads = pacbio_params.get("threads", 4)
     seed = pacbio_params.get("seed")
 
-    # Extract optional length/accuracy parameters (use defaults from constants)
     from .constants import (
         DEFAULT_PBSIM3_ACCURACY_MEAN,
         DEFAULT_PBSIM3_ACCURACY_MIN,
@@ -268,7 +186,6 @@ def simulate_pacbio_hifi_reads(
     length_min = pacbio_params.get("length_min", DEFAULT_PBSIM3_LENGTH_MIN)
     length_max = pacbio_params.get("length_max", DEFAULT_PBSIM3_LENGTH_MAX)
 
-    # Validate required parameters are present
     required_params = {
         "model_type": model_type,
         "model_file": model_file,
@@ -284,15 +201,11 @@ def simulate_pacbio_hifi_reads(
             f"Missing required PacBio parameters in config: {', '.join(missing_params)}"
         )
 
-    # Narrow types for mypy — the raise above guarantees these are not None,
-    # but mypy cannot infer that. Using explicit checks instead of assert
-    # so they are not stripped by python -O.
     if model_type is None or model_file is None or coverage is None:
         raise RuntimeError("Required PacBio parameters missing")  # unreachable
     if pass_num is None or min_passes is None or min_rq is None:
         raise RuntimeError("Required PacBio parameters missing")  # unreachable
 
-    # Validate parameter ranges
     try:
         validate_pbsim3_parameters(
             coverage=coverage,
@@ -313,12 +226,10 @@ def simulate_pacbio_hifi_reads(
     except ValueError as e:
         raise RuntimeError(f"Invalid PacBio parameters: {e}") from e
 
-    # Derive output directory and base name
     output_dir_path, output_base = resolve_pipeline_outputs(
         input_fa, config.get("read_simulation", {}), output_config
     )
 
-    # Define intermediate and final file paths
     clr_prefix = str(output_dir_path / f"{output_base}_clr")
     clr_bam = f"{clr_prefix}.bam"
 
@@ -326,21 +237,24 @@ def simulate_pacbio_hifi_reads(
     hifi_fastq = str(output_dir_path / f"{output_base}_hifi.fastq")
     aligned_bam = str(output_dir_path / f"{output_base}_aligned.bam")
 
-    # Track intermediate files for cleanup
     intermediate_files: list[str | None] = []
-
-    # Start time for metadata
     start_time = datetime.now()
 
     try:
-        # ==========================================================================
-        # STAGE 1: Multi-pass CLR Simulation (pbsim3)
-        # ==========================================================================
         logging.info("=" * 80)
         logging.info("STAGE 1: Multi-pass CLR simulation with pbsim3")
         logging.info("=" * 80)
 
         ref_info = get_reference_info(input_fa)
+
+        # Register expected Stage 1 paths before pbsim3 runs so partial outputs are cleaned on failure
+        expected_bases = [f"{clr_prefix}_{i:04d}" for i in range(1, ref_info.num_sequences + 1)]
+        if ref_info.num_sequences == 1:
+            expected_bases.append(clr_prefix)
+        for base in expected_bases:
+            intermediate_files.extend(
+                [f"{base}.bam", f"{base}.sam", f"{base}.maf", f"{base}.maf.gz", f"{base}.ref"]
+            )
 
         clr_bams = run_pbsim3_simulation(
             pbsim3_cmd=pbsim3_cmd,
@@ -359,9 +273,9 @@ def simulate_pacbio_hifi_reads(
             length_min=length_min,
             length_max=length_max,
             seed=seed,
+            threads=threads,
         )
 
-        # Add CLR BAMs and related files to intermediate cleanup list
         intermediate_files.extend(clr_bams)
         maf_files_by_haplotype: dict[int, list[str]] = {}
         for hap_idx, clr_bam in enumerate(clr_bams, 1):
@@ -371,14 +285,10 @@ def simulate_pacbio_hifi_reads(
             intermediate_files.extend([maf_path, maf_gz_path, f"{base}.ref"])
             maf_files_by_haplotype[hap_idx] = [maf_path, maf_gz_path]
 
-        # ==========================================================================
-        # STAGE 2: HiFi Consensus Generation (CCS)
-        # ==========================================================================
         logging.info("=" * 80)
         logging.info("STAGE 2: HiFi consensus generation with CCS")
         logging.info("=" * 80)
 
-        # Register final merged hifi_bam and its CCS sidecars
         intermediate_files.append(hifi_bam)
         _register_ccs_intermediates(hifi_bam, intermediate_files)
 
@@ -404,7 +314,6 @@ def simulate_pacbio_hifi_reads(
             )
             hifi_bams.append(hifi_bam_result)
 
-        # Merge HiFi BAMs if multiple haplotypes (diploid/polyploid)
         if len(hifi_bams) > 1:
             logging.info(f"Merging {len(hifi_bams)} HiFi BAMs into: {hifi_bam}")
             hifi_bam = merge_bam_files(
@@ -414,12 +323,8 @@ def simulate_pacbio_hifi_reads(
                 threads=threads,
             )
         else:
-            # Single haplotype - hifi_bam already set correctly
             hifi_bam = hifi_bams[0]
 
-        # ==========================================================================
-        # STAGE 3: BAM → FASTQ Conversion (samtools)
-        # ==========================================================================
         logging.info("=" * 80)
         logging.info("STAGE 3: Converting HiFi BAM to FASTQ")
         logging.info("=" * 80)
@@ -431,7 +336,6 @@ def simulate_pacbio_hifi_reads(
             threads=threads,
         )
 
-        # Generate read source tracking manifest if tracker provided (before alignment / return)
         if source_tracker is not None:
             from .parsers.pacbio_parser import parse_pacbio_reads, reconcile_ccs_reads
 
@@ -446,8 +350,7 @@ def simulate_pacbio_hifi_reads(
                     )
                     all_origins.extend(origins)
 
-            if Path(hifi_fastq).exists():
-                all_origins = reconcile_ccs_reads(all_origins, hifi_fastq)
+            all_origins = reconcile_ccs_reads(all_origins, hifi_fastq)
 
             manifest_path = f"{output_dir_path / output_base!s}_read_manifest.tsv.gz"
             source_tracker.write_manifest(source_tracker.annotate_reads(all_origins), manifest_path)
@@ -458,9 +361,6 @@ def simulate_pacbio_hifi_reads(
         if human_reference is not None:
             intermediate_files.append(hifi_fastq)
 
-            # ==========================================================================
-            # STAGE 4: Read Alignment (minimap2 with map-hifi preset)
-            # ==========================================================================
             logging.info("=" * 80)
             logging.info("STAGE 4: Aligning HiFi reads with minimap2 (map-hifi preset)")
             logging.info("=" * 80)
@@ -471,30 +371,20 @@ def simulate_pacbio_hifi_reads(
                 reference=human_reference,
                 reads_fastq=hifi_fastq,
                 output_bam=aligned_bam,
-                preset=MINIMAP2_PRESET_PACBIO_HIFI,  # Use HiFi-specific preset
+                preset=MINIMAP2_PRESET_PACBIO_HIFI,
                 threads=threads,
             )
             final_output = aligned_bam
         else:
             final_output = hifi_fastq
 
-        # ==========================================================================
-        # STAGE 5: Cleanup
-        # ==========================================================================
-        logging.info("=" * 80)
-        logging.info("STAGE 5: Cleaning up intermediate files")
-        logging.info("=" * 80)
-
-        cleanup_unless_kept(config, intermediate_files)
-
-        # Calculate elapsed time and write metadata
         end_time = datetime.now()
         duration = end_time - start_time
 
         logging.info("=" * 80)
         logging.info(
             "PacBio HiFi simulation pipeline complete! (duration: %s)",
-            str(duration).split(".")[0],  # Remove microseconds
+            str(duration).split(".")[0],
         )
         logging.info(f"Final output: {final_output}")
 
@@ -502,7 +392,6 @@ def simulate_pacbio_hifi_reads(
         if human_reference is not None:
             tools_used.append("minimap2")
 
-        # Write metadata file with tool versions and provenance
         metadata_file = create_pipeline_metadata(
             output_dir=output_dir_path,
             output_base=output_base,
@@ -520,6 +409,9 @@ def simulate_pacbio_hifi_reads(
     finally:
         try:
             if "intermediate_files" in locals():
+                logging.info("=" * 80)
+                logging.info("STAGE 5: Cleaning up intermediate files")
+                logging.info("=" * 80)
                 cleanup_unless_kept(config, intermediate_files)
         except Exception as cleanup_error:
             logging.warning("Cleanup failed (non-fatal): %s", cleanup_error)

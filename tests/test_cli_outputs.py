@@ -1115,6 +1115,49 @@ class TestOutputsIntegration:
         assert translated[0]["position"] == snp_pos + 1
         assert translated[0]["ref_base"] == ref_base
 
+    def test_translate_snps_to_mutated_fallback_unequal_multi_repeat_indels(
+        self, mock_args, minimal_config: dict
+    ):
+        """Test fallback repeat-length inference with unequal indels (+1 on repeat 1, +3 on repeat 3)."""
+        left = minimal_config["constants"]["hg38"]["left"]
+        right = minimal_config["constants"]["hg38"]["right"]
+        norm_rep1 = minimal_config["repeats"]["1"]
+        rep2 = minimal_config["repeats"]["2"]
+        norm_rep3 = minimal_config["repeats"]["X"]
+
+        normal_seq = left + norm_rep1 + rep2 + norm_rep3 + right
+        normal_hr = _hr(normal_seq, ["1", "2", "X"])
+
+        # Repeat 1 has +1 insertion, Repeat 3 has +3 insertion (total delta = +4)
+        mut_rep1 = norm_rep1[:4] + "A" + norm_rep1[4:]
+        mut_rep2 = rep2
+        mut_rep3 = norm_rep3[:2] + "CCC" + norm_rep3[2:]
+        mut_seq = left + mut_rep1 + mut_rep2 + mut_rep3 + right
+
+        # Strip _repeat_lengths via from_tuple
+        mut_hr = HaplotypeResult.from_tuple(_hr(mut_seq, ["1m", "2", "Xm"]).as_tuple())
+        assert mut_hr._repeat_lengths is None
+
+        # SNP inside repeat 2 at offset 3 (must shift by +1, NOT +2)
+        snp_pos = len(left) + len(norm_rep1) + 3
+        ref_base = normal_seq[snp_pos]
+        applied_snps = {
+            0: [{"haplotype": 1, "position": snp_pos, "ref_base": ref_base, "alt_base": "T"}]
+        }
+
+        translated = _translate_snps_to_mutated(
+            args=mock_args,
+            config=minimal_config,
+            normal_results=[normal_hr],
+            mutated_results=[mut_hr],
+            applied_snp_info_normal=applied_snps,
+            mutation_positions=[MutationTarget(1, 1), MutationTarget(1, 3)],
+        )
+
+        assert len(translated) == 1
+        assert translated[0]["position"] == snp_pos + 1
+        assert translated[0]["ref_base"] == ref_base
+
     def test_single_mode_snp_coordinate_translation_across_insertion(
         self, tmp_path: Path, mock_args, minimal_config: dict
     ):
@@ -1171,6 +1214,58 @@ class TestOutputsIntegration:
         # Check sequence has the mutation applied at snp_pos + 1
         final_seq = out_results[0].sequence
         assert final_seq[snp_pos + 1] == alt_base
+
+    def test_single_mode_snp_upstream_of_insertion_in_same_repeat(
+        self, tmp_path: Path, mock_args, minimal_config: dict
+    ):
+        """Test that single-mode SNP upstream of an insertion in the same repeat is NOT shifted."""
+        left = minimal_config["constants"]["hg38"]["left"]
+        right = minimal_config["constants"]["hg38"]["right"]
+        norm_rep1 = minimal_config["repeats"]["1"]  # GGACGTACTT
+        rep2 = minimal_config["repeats"]["2"]
+
+        normal_seq = left + norm_rep1 + rep2 + right
+        normal_hr = _hr(normal_seq, ["1", "2"])
+
+        # Insertion at offset 6 in repeat 1 (GGACGTACTT -> GGACGTGACTT)
+        mut_rep1 = norm_rep1[:6] + "G" + norm_rep1[6:]
+        mut_seq = left + mut_rep1 + rep2 + right
+        mut_hr = _hr(mut_seq, ["1m", "2"])
+        mut_hr._repeat_lengths = [len(mut_rep1), len(rep2)]
+
+        # SNP at offset 3 in repeat 1 (upstream of offset 6 insertion)
+        snp_pos = len(left) + 3
+        ref_base = normal_seq[snp_pos]  # 'C'
+        alt_base = "T" if ref_base != "T" else "A"
+
+        snp_file = tmp_path / "snps_upstream.tsv"
+        snp_file.write_text(f"1\t{snp_pos}\t{ref_base}\t{alt_base}\n")
+
+        mock_args.snp_input_file = str(snp_file)
+        mock_args.random_snps = False
+        mock_args.mutation_name = "insG"
+        mock_args.mutation_targets = ["1,1"]
+
+        out_results, _, applied_normal, _ = write_fasta_outputs(
+            args=mock_args,
+            config=minimal_config,
+            out_dir=str(tmp_path),
+            out_base="test_single_upstream",
+            sim_index=1,
+            results=[mut_hr],
+            mutated_results=None,
+            dual_mutation_mode=False,
+            mutation_pair=None,
+            mutation_positions=[MutationTarget(1, 1)],
+            structure_mutation_info=None,
+            normal_results=[normal_hr],
+        )
+
+        # Upstream SNP inside the same repeat must remain at snp_pos (not snp_pos + 1)
+        assert applied_normal[0][0]["position"] == snp_pos
+        assert out_results[0].sequence[snp_pos] == alt_base
+        # And normal_hr must not have been mutated in-place
+        assert normal_hr.sequence == normal_seq
 
     def test_single_mode_snp_inside_deleted_span_omitted(
         self, tmp_path: Path, mock_args, minimal_config: dict

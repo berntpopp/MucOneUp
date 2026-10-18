@@ -490,20 +490,20 @@ class TestSimulateFragments:
         assert ">2 2;" in content  # Read 2, pair 2
 
     def test_simulate_fragments_slices_tendencies_by_coordinates(self, mocker, tmp_path):
-        """Test that tendency and rates are sliced by genomic coordinates [fstart:fend], not [0:frag_len]."""
+        """Test that tendency and rates are sliced by genomic coordinates [fstart:fend] for both strands."""
         ref_fa = tmp_path / "ref.fa"
         ref_fa.write_text(">chr1\n" + "A" * 10 + "C" * 10 + "G" * 10 + "T" * 10 + "\n")  # 40 bases
 
         syser = tmp_path / "test.syser"
         syser.write_text(
             "@chr1 forward\n"
-            + ("A" * 10 + "C" * 10 + "G" * 10 + "T" * 10)
+            + ("A" * 10 + "ABCDEFGHIJ" + "G" * 10 + "T" * 10)
             + "\n+\n"
-            + ("1" * 10 + "2" * 10 + "3" * 10 + "4" * 10)
+            + ("1" * 10 + "0123456789" + "3" * 10 + "4" * 10)
             + "\n@chr1 reverse\n"
-            + ("W" * 10 + "X" * 10 + "Y" * 10 + "Z" * 10)
+            + ("W" * 10 + "KLMNOPQRST" + "Y" * 10 + "Z" * 10)
             + "\n+\n"
-            + ("5" * 10 + "6" * 10 + "7" * 10 + "8" * 10)
+            + ("5" * 10 + "abcdefghij" + "7" * 10 + "8" * 10)
             + "\n"
         )
 
@@ -534,10 +534,10 @@ class TestSimulateFragments:
 
         content = output.read_text()
         # Sliced [10:20]:
-        # forward tendency is "C"*10, forward rate is "2"*10
-        # reverse tendency is "Y"*10, reverse rate is "7"*10
-        assert ">1 1;10;CCCCCCCCCC;2222222222\n" in content
-        assert ">1 2;10;YYYYYYYYYY;7777777777\n" in content
+        # forward tendency is "ABCDEFGHIJ", forward rate is "0123456789"
+        # reverse tendency is "KLMNOPQRST" reversed ("TSRQPONMLK"), reverse rate is "jihgfedcba"
+        assert ">1 1;10;ABCDEFGHIJ;0123456789\n" in content
+        assert ">1 2;10;TSRQPONMLK;jihgfedcba\n" in content
 
     def test_raises_on_missing_reference(self, tmp_path):
         """Test that missing reference FASTA raises FileOperationError."""

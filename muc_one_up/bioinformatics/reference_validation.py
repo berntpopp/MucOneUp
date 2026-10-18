@@ -89,10 +89,18 @@ def _validate_minimap2_indices(reference_path: FilePath) -> list[str]:
     Returns:
         List of warnings for missing indices
     """
+    ref_p = Path(reference_path)
     mmi_path = Path(f"{reference_path}.mmi")
+    preset_candidates = [
+        mmi_path,
+        Path(f"{reference_path}.map-ont.mmi"),
+        Path(f"{reference_path}.map-hifi.mmi"),
+        ref_p.with_name(f"{ref_p.stem}_ont.mmi"),
+        ref_p.with_name(f"{ref_p.stem}_hifi.mmi"),
+    ]
     warnings: list[str] = []
 
-    if not mmi_path.exists():
+    if not any(p.exists() for p in preset_candidates):
         warnings.append(
             f"Minimap2 index missing: {mmi_path}. Run: minimap2 -d {mmi_path} {reference_path}"
         )

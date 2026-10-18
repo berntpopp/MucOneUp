@@ -266,7 +266,7 @@ def _patch_pacbio(mocker, tmp_path):
         "muc_one_up.read_simulator.pacbio_pipeline.align_reads_with_minimap2",
         return_value=str(tmp_path / "aligned.bam"),
     )
-    mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
+    mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
     mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.create_pipeline_metadata")
 
 
@@ -532,10 +532,6 @@ def _patch_ont_amplicon(mocker, tmp_path):
     mocker.patch(
         "muc_one_up.read_simulator.ont_amplicon_pipeline.run_pbsim3_template_simulation",
         return_value=[str(ont_fq)],
-    )
-    mocker.patch(
-        "muc_one_up.read_simulator.ont_amplicon_pipeline.convert_bam_to_fastq",
-        return_value=str(ont_fq),
     )
     mocker.patch(
         "muc_one_up.read_simulator.ont_amplicon_pipeline.align_reads_with_minimap2",

@@ -69,16 +69,12 @@ docker run --rm ghcr.io/berntpopp/muconeup/muconeup:latest --version
 # Create local directories
 mkdir -p data output
 
-# Copy config to current directory
-cp config.json .
-
-# Run simulation (mount volumes)
+# Run simulation (mount output directory)
 docker run --rm \
   -v $(pwd)/output:/data \
-  -v $(pwd)/config.json:/app/config.json:ro \
   ghcr.io/berntpopp/muconeup/muconeup:latest \
   --config /app/config.json \
-  simulate --out-base /data/sample
+  simulate --out-dir /data --out-base sample
 ```
 
 ### Docker Compose
@@ -93,8 +89,7 @@ services:
     image: ghcr.io/berntpopp/muconeup/muconeup:latest
     volumes:
       - ./data:/data
-      - ./config.json:/app/config.json:ro
-    command: --config /app/config.json simulate --out-base /data/sample
+    command: --config /app/config.json simulate --out-dir /data --out-base sample
 ```
 
 Run:
@@ -393,7 +388,7 @@ muconeup --config config.json reads illumina \
 ls test_reads*
 # test_reads_R1.fastq.gz
 # test_reads_R2.fastq.gz
-# test_reads.illumina.bam
+# test_reads_downsampled.bam
 ```
 
 ---

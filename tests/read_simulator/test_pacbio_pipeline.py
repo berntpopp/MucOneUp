@@ -284,6 +284,7 @@ class TestPacBioHiFiPipeline:
         clr_bam = tmp_path / "input_clr_0001.bam"
         hifi_bam = tmp_path / "input_hifi.bam"
         hifi_fastq = tmp_path / "input_hifi.fastq"
+        hifi_fastq.write_text("")
 
         maf_file = tmp_path / "input_clr_0001.maf"
         maf_file.write_text("maf data")
@@ -307,7 +308,6 @@ class TestPacBioHiFiPipeline:
         mock_meta = mocker.patch(
             "muc_one_up.read_simulator.pacbio_pipeline.create_pipeline_metadata"
         )
-        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
 
         mock_tracker = mocker.Mock()
         mock_tracker.annotate_reads.return_value = []
@@ -576,6 +576,10 @@ class TestPacBioHiFiPipeline:
         hifi_bam2 = tmp_path / "input_hifi_0002.bam"
         hifi_bam = tmp_path / "input_hifi.bam"
         hifi_fastq = tmp_path / "input_hifi.fastq"
+        pbi_sidecar = tmp_path / "input_hifi_0001.bam.pbi"
+        maf_sidecar = tmp_path / "input_clr_0001.maf"
+        for p in (clr_bam1, clr_bam2, hifi_bam1, hifi_bam2, hifi_bam, pbi_sidecar, maf_sidecar):
+            p.write_bytes(b"DATA")
 
         mocker.patch(
             "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
@@ -601,6 +605,9 @@ class TestPacBioHiFiPipeline:
         simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
 
         assert mock_cleanup.called
+        assert clr_bam1.exists()
+        assert pbi_sidecar.exists()
+        assert maf_sidecar.exists()
         # Check that registered intermediate files contain sidecars for both individual HiFi BAMs and merged BAM
         registered_files = mock_cleanup.call_args[0][1]
         assert str(hifi_bam1) in registered_files
@@ -638,27 +645,24 @@ class TestPacBioHiFiPipeline:
             },
         }
         (tmp_path / "model.model").write_text("model data")
-        clr_bam = tmp_path / "input_clr.bam"
+        partial_sam = tmp_path / "input_clr_0001.sam"
+        partial_maf = tmp_path / "input_clr_0001.maf"
+
+        def fail_pbsim3(**kwargs):
+            partial_sam.write_text("@HD\tVN:1.6\n")
+            partial_maf.write_text("a\n")
+            raise RuntimeError("pbsim3 crashed partway")
 
         mocker.patch(
             "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
-            return_value=[str(clr_bam)],
+            side_effect=fail_pbsim3,
         )
-        # CCS fails mid-loop
-        mocker.patch(
-            "muc_one_up.read_simulator.pacbio_pipeline.run_ccs_consensus",
-            side_effect=RuntimeError("CCS crashed"),
-        )
-        mock_cleanup = mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
 
-        with pytest.raises(RuntimeError, match="CCS crashed"):
+        with pytest.raises(RuntimeError, match="pbsim3 crashed partway"):
             simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
 
-        # Verify cleanup_unless_kept was invoked in finally block
-        assert mock_cleanup.called
-        registered_files = mock_cleanup.call_args[0][1]
-        assert str(clr_bam) in registered_files
-        assert f"{str(clr_bam).removesuffix('.bam')}.maf" in registered_files
+        assert not partial_sam.exists()
+        assert not partial_maf.exists()
 
     def test_propagates_external_tool_error_directly(self, mocker, tmp_path):
         """Test Issue #150: ExternalToolError propagates directly without RuntimeError wrapping."""

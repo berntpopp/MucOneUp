@@ -231,6 +231,40 @@ class TestRunOrfAnalysisStandalone:
         assert call_kwargs["w_composition"] == 0.3
         assert call_kwargs["toxic_detection_cutoff"] == 0.65
 
+    def test_run_orf_analysis_supports_gzipped_fasta(self, tmp_path: Path):
+        """run_orf_analysis_standalone transparently parses .fa.gz files."""
+        import gzip
+
+        gz_fasta = tmp_path / "input.fa.gz"
+        with gzip.open(gz_fasta, "wt") as fh:
+            fh.write(">seq1\nATGAAACCCGGGTTTTAA\n")
+
+        run_orf_analysis_standalone(
+            input_fasta=str(gz_fasta),
+            out_dir=str(tmp_path),
+            out_base="gz_out",
+            orf_min_aa=1,
+        )
+
+        orf_output = tmp_path / "gz_out.orfs.fa"
+        assert orf_output.exists()
+        assert "MKPGF" in orf_output.read_text()
+
+    def test_run_orf_analysis_empty_fasta_raises_validation_error(self, tmp_path: Path):
+        """Empty or non-FASTA input raises ValidationError."""
+        from muc_one_up.exceptions import ValidationError
+
+        empty_fa = tmp_path / "empty.fa"
+        empty_fa.write_text("")
+
+        with pytest.raises(ValidationError, match="No valid FASTA records found"):
+            run_orf_analysis_standalone(
+                input_fasta=str(empty_fa),
+                out_dir=str(tmp_path),
+                out_base="empty_out",
+                orf_min_aa=1,
+            )
+
 
 class TestWriteSimulationStatistics:
     """Tests for write_simulation_statistics."""

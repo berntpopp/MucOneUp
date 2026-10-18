@@ -93,6 +93,11 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
     left_const = assembly_constants.get("left")
     right_const = assembly_constants.get("right")
 
+    if out_base is not None:
+        from ..config import validate_output_base
+
+        validate_output_base(out_base)
+
     # Warn if --out-base provided for multiple files
     if len(input_fastas) > 1 and out_base:
         logging.warning(
@@ -176,6 +181,11 @@ def stats(ctx, input_fastas, out_dir, out_base):
       # Glob pattern (shell expands)
       muconeup analyze stats sample.*.simulated.fa
     """
+    if out_base is not None:
+        from ..config import validate_output_base
+
+        validate_output_base(out_base)
+
     # Warn if --out-base provided for multiple files
     if len(input_fastas) > 1 and out_base:
         logging.warning(

@@ -8,6 +8,7 @@ Tests cover:
 - SNP file writing
 """
 
+import random
 from pathlib import Path
 
 import pytest
@@ -332,35 +333,58 @@ class TestGenerateRandomSnps:
         assert "Invalid region parameter" in str(exc_info.value)
 
     def test_generate_random_snps_constants_only_sorted_order(self):
-        """Test that constants_only region samples valid positions from constant flanks."""
+        """Test that constants_only region passes a strictly sorted population to rng.sample."""
         seq = "A" * 100 + "C" * 200 + "G" * 100  # 400 bp total
         boundaries = [{"start": 100, "end": 300}]
+        sampled_populations: list[list[int]] = []
+
+        class SpyRandom(random.Random):
+            def sample(self, population, k, *, counts=None):
+                pop_list = list(population)
+                sampled_populations.append(pop_list)
+                return super().sample(population, k, counts=counts)
+
+        spy_rng = SpyRandom(42)
         snps = generate_random_snps(
             [seq],
             density_per_kb=50.0,
             region="constants_only",
             vntr_boundaries=boundaries,
+            rng=spy_rng,
         )
         assert len(snps) > 0
+        assert len(sampled_populations) == 1
+        assert sampled_populations[0] == [*range(100), *range(300, 400)]
+        assert sampled_populations[0] == sorted(sampled_populations[0])
         for snp in snps:
-            # Positions must be in [0, 100) or [300, 400)
             assert snp["position"] < 100 or snp["position"] >= 300
 
     def test_generate_random_snps_large_sequence_no_memory_spike(self):
-        """Test that generate_random_snps does not allocate set(range(N)) on large sequences."""
+        """Test that generate_random_snps uses range() without materializing all positions."""
 
-        # A mock sequence of 5,000,000 bp
         class LazyLargeSequence:
-            def __len__(self):
+            def __init__(self) -> None:
+                self.accessed_indices: list[int] = []
+
+            def __len__(self) -> int:
                 return 5_000_000
 
-            def __getitem__(self, idx):
+            def __iter__(self):
+                raise AssertionError("Should not iterate full sequence")
+
+            def __getitem__(self, idx: int) -> str:
+                self.accessed_indices.append(idx)
                 return "A"
 
         large_seq = LazyLargeSequence()
-        # With zero density, target_count <= 0, should return immediately without allocating
-        snps = generate_random_snps([large_seq], density_per_kb=0.0)  # type: ignore[list-item]
-        assert snps == []
+        # density_per_kb=0.001 on 5,000,000 bp -> target_count = 5 SNPs
+        snps = generate_random_snps(
+            [large_seq],  # type: ignore[list-item]
+            density_per_kb=0.001,
+            rng=random.Random(42),
+        )
+        assert len(snps) == 5
+        assert len(large_seq.accessed_indices) == 5
 
 
 @pytest.mark.unit

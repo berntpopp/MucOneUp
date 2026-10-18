@@ -67,6 +67,8 @@ EXPECTED: dict[str, dict[str, Any]] = {
                 "<dir>/ont_hap1",
                 "--seed",
                 "43",
+                "--id-prefix",
+                "hap1",
             ],
             [
                 "pbsim",
@@ -86,6 +88,8 @@ EXPECTED: dict[str, dict[str, Any]] = {
                 "<dir>/ont_hap2",
                 "--seed",
                 "44",
+                "--id-prefix",
+                "hap2",
             ],
         ],
     },
@@ -113,6 +117,8 @@ EXPECTED: dict[str, dict[str, Any]] = {
                 "<dir>/clr_hap1",
                 "--seed",
                 "43",
+                "--id-prefix",
+                "hap1",
             ],
             [
                 "pbsim",
@@ -132,6 +138,8 @@ EXPECTED: dict[str, dict[str, Any]] = {
                 "<dir>/clr_hap2",
                 "--seed",
                 "44",
+                "--id-prefix",
+                "hap2",
             ],
             [
                 "ccs",

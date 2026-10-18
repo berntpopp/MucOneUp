@@ -297,26 +297,38 @@ def run_orf_analysis_standalone(
     Single implementation for standalone ORF analysis, used by the
     ``analyze orfs`` CLI command.
     """
+    import gzip
+
     from Bio import SeqIO
     from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
 
-    from ..exceptions import MucOneUpError
+    from ..exceptions import MucOneUpError, ValidationError
     from ..toxic_protein_detector import scan_orf_fasta
     from ..translate import dna_to_protein, find_orfs_in_memory, reverse_complement
+    from .config import validate_output_base
+
+    validate_output_base(out_base)
 
     fasta_path = Path(input_fasta)
     if not fasta_path.is_file():
         raise MucOneUpError(f"Input FASTA file not found: {input_fasta}")
 
+    try:
+        if str(fasta_path).endswith(".gz"):
+            with gzip.open(fasta_path, "rt") as handle:
+                records = list(SeqIO.parse(handle, "fasta"))
+        else:
+            records = list(SeqIO.parse(str(fasta_path), "fasta"))
+    except Exception as e:
+        raise MucOneUpError(f"Failed to parse input FASTA {input_fasta}: {e}") from e
+
+    if not records:
+        raise ValidationError(f"No valid FASTA records found in {input_fasta}")
+
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     orf_output = out_path / f"{out_base}.orfs.fa"
-
-    try:
-        records = list(SeqIO.parse(str(fasta_path), "fasta"))
-    except Exception as e:
-        raise MucOneUpError(f"Failed to parse input FASTA {input_fasta}: {e}") from e
 
     predicted_orfs: list[SeqRecord] = []
     for record in records:
@@ -366,35 +378,19 @@ def run_orf_analysis_standalone(
     if toxic_config:
         if "consensus_motif" in toxic_config:
             detection_kwargs["consensus"] = toxic_config["consensus_motif"]
-        elif "consensus" in toxic_config:
-            detection_kwargs["consensus"] = toxic_config["consensus"]
-
         if "identity_threshold" in toxic_config:
             detection_kwargs["identity_threshold"] = toxic_config["identity_threshold"]
-
         if "expected_repeat_count" in toxic_config:
             detection_kwargs["expected_repeat_count"] = toxic_config["expected_repeat_count"]
-
         if "key_residues" in toxic_config:
             detection_kwargs["key_residues"] = toxic_config["key_residues"]
-
         if "weights" in toxic_config and isinstance(toxic_config["weights"], dict):
             if "repeat" in toxic_config["weights"]:
                 detection_kwargs["w_repeat"] = toxic_config["weights"]["repeat"]
             if "composition" in toxic_config["weights"]:
                 detection_kwargs["w_composition"] = toxic_config["weights"]["composition"]
-        if "w_repeat" in toxic_config:
-            detection_kwargs["w_repeat"] = toxic_config["w_repeat"]
-        if "w_composition" in toxic_config:
-            detection_kwargs["w_composition"] = toxic_config["w_composition"]
-
         if "toxic_cutoff" in toxic_config:
             detection_kwargs["toxic_detection_cutoff"] = toxic_config["toxic_cutoff"]
-        elif "toxic_detection_cutoff" in toxic_config:
-            detection_kwargs["toxic_detection_cutoff"] = toxic_config["toxic_detection_cutoff"]
-
-        if "wildtype_variable_region" in toxic_config:
-            detection_kwargs["wildtype_variable_region"] = toxic_config["wildtype_variable_region"]
 
     stats = scan_orf_fasta(
         str(orf_output), left_const=left_pep, right_const=right_pep, **detection_kwargs

@@ -120,7 +120,7 @@ ls *.fa | parallel muconeup --config config.json reads ont {} --coverage 50
       -v $(pwd)/data:/data \
       ghcr.io/berntpopp/muconeup/muconeup:latest \
       --config /app/config.json \
-      simulate --out-base /data/sample
+      simulate --out-dir /data --out-base sample
     ```
 
 === "Development Setup"

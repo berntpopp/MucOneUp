@@ -179,11 +179,6 @@ def test_download_references_main_training_data_path_and_presets(tmp_path):
 
 def test_download_nanosim_model_uses_tar_data_filter(tmp_path):
     """download_nanosim_model must extract tar archives with filter='data'."""
-    tar_path = tmp_path / "dummy.tar.gz"
-    # Create a small valid tar.gz file
-    with tarfile.open(tar_path, "w:gz"):
-        pass
-
     mock_response = MagicMock()
     mock_response.iter_content.return_value = [b"chunk"]
 
@@ -200,6 +195,30 @@ def test_download_nanosim_model_uses_tar_data_filter(tmp_path):
 
         mock_tar.extractall.assert_called_once()
         assert mock_tar.extractall.call_args.kwargs.get("filter") == "data"
+
+
+def test_download_nanosim_model_flattens_nested_directory(tmp_path):
+    """download_nanosim_model flattens top-level model_name/ folder from upstream tarball."""
+    import io
+
+    model_name = "human_giab_hg002_sub1M_kitv14_dorado_v3.2.1"
+    tar_buf = io.BytesIO()
+    with tarfile.open(fileobj=tar_buf, mode="w:gz") as tar:
+        data = b"profile_data"
+        info = tarfile.TarInfo(name=f"{model_name}/training_model_profile")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    tar_bytes = tar_buf.getvalue()
+
+    mock_response = MagicMock()
+    mock_response.iter_content.return_value = [tar_bytes]
+
+    with patch("download_references.requests") as mock_requests:
+        mock_requests.get.return_value = mock_response
+        extract_dir = download_references.download_nanosim_model(output_dir=tmp_path, force=True)
+        assert extract_dir is not None
+        assert (extract_dir / "training_model_profile").is_file()
+        assert not (extract_dir / model_name).exists()
 
 
 def test_install_references_extract_tar_uses_data_filter(tmp_path):
@@ -263,8 +282,6 @@ def test_install_references_config_urls_and_checksums():
     for name, info in refs.items():
         url = info.get("url", "")
         assert url.startswith("https://"), f"{name} URL is not HTTPS: {url}"
-        assert not url.startswith("http://"), f"{name} uses unencrypted HTTP: {url}"
-        assert not url.startswith("ftp://"), f"{name} uses unencrypted FTP: {url}"
         assert "expected_md5" in info, f"{name} is missing expected_md5 checksum"
         assert len(info["expected_md5"]) == 32, f"{name} has invalid MD5 length"
 

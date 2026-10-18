@@ -253,6 +253,10 @@ def determine_simulation_mode(
                 "Single simulation iteration generated using a random choice from each fixed-length range."
             )
     else:
+        if "length_model" not in config or config["length_model"] is None:
+            raise ConfigurationError(
+                "Missing or null required configuration section for simulation: 'length_model'"
+            )
         simulation_configs = [None]  # Use random lengths if not provided
 
     return simulation_configs, predefined_chains, structure_mutation_info
@@ -287,7 +291,9 @@ def process_mutation_config(
                 "Using mutation information from structure file: %s",
                 args.mutation_name,
             )
-        if not getattr(args, "mutation_targets", None):
+        if not getattr(args, "mutation_targets", None) and (
+            args.mutation_name == structure_mutation_info["name"]
+        ):
             target_tuples = structure_mutation_info["targets"]
             args.mutation_targets = [f"{hap_idx},{rep_idx}" for hap_idx, rep_idx in target_tuples]
             logging.info(

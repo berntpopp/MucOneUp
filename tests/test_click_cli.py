@@ -74,15 +74,16 @@ def temp_config(tmp_path):
             "9": {},
         },
         "length_model": {
-            "distribution": "uniform",
+            "distribution": "normal",
             "min_repeats": 20,
             "max_repeats": 40,
+            "mean_repeats": 30,
         },
         "mutations": {
             "dupC": {
-                "allowed_repeats": ["X", "A", "B"],
+                "allowed_repeats": ["3", "6", "6p"],
                 "strict_mode": False,
-                "changes": [{"type": "insert", "position": 0, "sequence": "C"}],
+                "changes": [{"type": "insert", "position": 1, "sequence": "C"}],
             }
         },
         "reference_assembly": "hg38",

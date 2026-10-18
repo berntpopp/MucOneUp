@@ -14,6 +14,7 @@ from pathlib import Path
 from ...exceptions import FileOperationError
 from ..command_utils import build_tool_command
 from ..utils import run_command
+from ..utils.samtools import build_merge_args, build_sort_args
 
 
 def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, str]) -> str:
@@ -83,37 +84,23 @@ def sort_and_index_bam(
     Raises:
         SystemExit: If any samtools command fails.
     """
-    # Determine output filename
     if output_bam is None:
         output_bam = input_bam
 
     temp_bam = f"{output_bam}.sorting.bam"
 
-    # Sort the BAM file
-    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
-    sort_extra_args = [
-        "sort",
-        "-@",
-        threads,  # build_tool_command handles conversion
-    ]
-
-    if by_name:
-        sort_extra_args.append("-n")  # Sort by name
-
-    sort_extra_args.extend(["-o", temp_bam, input_bam])
-
-    sort_cmd = build_tool_command(samtools_exe, *sort_extra_args)
+    sort_cmd = build_tool_command(
+        samtools_exe,
+        *build_sort_args(input_bam, temp_bam, threads=threads, by_name=by_name),
+    )
 
     run_command(sort_cmd, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
-    # Replace original file with sorted version
     temp_bam_path = Path(temp_bam)
     output_bam_path = Path(output_bam)
     if temp_bam_path.exists():
         temp_bam_path.replace(output_bam_path)
 
-    # Index the BAM file (only if sorted by coordinate)
-    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     if not by_name:
         cmd = build_tool_command(samtools_exe, "index", output_bam)
         run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
@@ -130,65 +117,20 @@ def merge_bam_files(
 ) -> str:
     """
     Merge multiple BAM files into a single BAM file.
-
-    This function is used for combining haplotype-specific BAM files from
-    diploid simulations (e.g., pbsim3 creates separate BAMs for each haplotype).
-
-    Args:
-        samtools_cmd: Path to the samtools executable.
-        input_bams: List of input BAM file paths to merge.
-        output_bam: Output merged BAM file path.
-        threads: Number of threads to use (default: 4).
-        timeout: Timeout in seconds (default: 1800).
-
-    Returns:
-        Path to the output merged BAM file.
-
-    Raises:
-        ExternalToolError: If samtools merge command fails (propagated from run_command).
-        FileOperationError: If input BAMs don't exist or output BAM creation fails.
-
-    Example:
-        Merge diploid CLR BAMs from pbsim3::
-
-            from muc_one_up.read_simulator.wrappers.samtools_wrapper import merge_bam_files
-
-            merged_bam = merge_bam_files(
-                samtools_cmd="samtools",
-                input_bams=["sim_0001.bam", "sim_0002.bam"],
-                output_bam="sim_merged.bam",
-                threads=8
-            )
-
-    Notes:
-        - Validates all input BAMs exist before merging
-        - Validates output BAM is non-empty after merging
-        - Uses build_tool_command for safe command construction
-        - Lets ExternalToolError propagate (no catching/re-raising)
-        - Requires at least 2 input BAMs (raises error for single BAM)
     """
-    # Validate we have at least 2 BAMs to merge
     if len(input_bams) < 2:
         raise FileOperationError(
             f"merge_bam_files requires at least 2 input BAMs, got {len(input_bams)}"
         )
 
-    # Validate all input BAMs exist
     for input_bam in input_bams:
         input_bam_path = Path(input_bam)
         if not input_bam_path.exists():
             raise FileOperationError(f"Input BAM file not found: {input_bam}")
 
-    # Merge BAMs using samtools merge
-    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
     cmd = build_tool_command(
         samtools_cmd,
-        "merge",
-        "-f",  # Force overwrite if output exists
-        "-@",
-        threads,  # Threads (build_tool_command handles conversion)
-        output_bam,
-        *input_bams,  # Unpack list of input BAMs
+        *build_merge_args(output_bam, input_bams, threads=threads, force=True),
     )
 
     logging.info(f"Merging {len(input_bams)} BAM files into: {output_bam}")
@@ -197,7 +139,6 @@ def merge_bam_files(
 
     run_command(cmd, timeout=timeout, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
 
-    # Validate output BAM exists and is non-empty
     output_bam_path = Path(output_bam)
     if not output_bam_path.exists() or output_bam_path.stat().st_size == 0:
         raise FileOperationError(

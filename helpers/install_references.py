@@ -282,6 +282,11 @@ def process_reference(
                 extract_dir.mkdir(parents=True, exist_ok=True)
                 logging.info("Extracting %s to %s", target_path, extract_dir)
                 tar.extractall(path=extract_dir, filter="data")
+            nested_dir = extract_dir / extract_dir.name
+            if nested_dir.is_dir():
+                for child in nested_dir.iterdir():
+                    shutil.move(str(child), str(extract_dir / child.name))
+                nested_dir.rmdir()
             installed_path = extract_dir
             logging.info("Successfully extracted %s to %s", target_path.name, extract_dir)
     # If the file is gzip-compressed, check for extracted file and extract if needed.

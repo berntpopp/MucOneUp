@@ -134,10 +134,11 @@ muconeup --config config.json simulate \
 
 ```
 output/
-├── mutation_example.001.normal.fa
+├── mutation_example.001.normal.simulated.fa
 ├── mutation_example.001.normal.vntr_structure.txt
 ├── mutation_example.001.normal.simulation_stats.json
-├── mutation_example.001.mut.fa
+├── mutation_example.001.mut.simulated.fa
+├── mutation_example.001.mut.mutated_unit.fa
 ├── mutation_example.001.mut.vntr_structure.txt
 └── mutation_example.001.mut.simulation_stats.json
 ```
@@ -163,24 +164,7 @@ Note the `Xm` marker showing the mutated repeat position.
 
 ```bash
 # View mutation details in JSON
-jq '.mutations' output/mutation_example.001.mut.simulation_stats.json
-```
-
-**Example output:**
-
-```json
-{
-  "mutation_name": "dupC",
-  "targets": [[1, 25]],
-  "mutated_positions": {
-    "haplotype_1": [25]
-  },
-  "mutated_units": {
-    "haplotype_1": {
-      "25": "GCCCCACCCCTCCTCCCGCCGCGCCG"
-    }
-  }
-}
+jq '.mutation_info' output/mutation_example.001.mut.simulation_stats.json
 ```
 
 ---
@@ -195,7 +179,7 @@ Generate Illumina paired-end reads from your simulated haplotype:
 ```bash
 # Simulate 30× coverage Illumina reads
 muconeup --config config.json reads illumina \
-  output/mutation_example.001.mut.fa \
+  output/mutation_example.001.mut.simulated.fa \
   --coverage 30 \
   --out-dir output \
   --out-base reads
@@ -207,7 +191,7 @@ muconeup --config config.json reads illumina \
 output/
 ├── reads_R1.fastq.gz              # Forward reads
 ├── reads_R2.fastq.gz              # Reverse reads
-├── reads_downsampled.bam          # Aligned reads
+├── reads_downsampled.bam          # Aligned reads (or reads_vntr_biased.bam if VNTR capture efficiency is enabled)
 └── reads_downsampled.bam.bai      # BAM index
 ```
 
@@ -234,7 +218,7 @@ Predict ORFs and detect toxic protein features:
 
 ```bash
 muconeup --config config.json analyze orfs \
-  output/mutation_example.001.mut.fa \
+  output/mutation_example.001.mut.simulated.fa \
   --out-dir output \
   --out-base orfs \
   --orf-min-aa 100
@@ -259,11 +243,11 @@ cat output/orfs.orf_stats.json
 ```json
 {
   "haplotype_1_ORF.1": {
-    "repeat_count": 0,
-    "avg_repeat_identity": 0.0,
-    "repeat_score": 1.0,
-    "composition_similarity": 0.42,
-    "overall_score": 0.71,
+    "repeat_count": 12,
+    "avg_repeat_identity": 0.96,
+    "repeat_score": 0.96,
+    "composition_similarity": 0.89,
+    "overall_score": 0.93,
     "toxic_flag": 1.0
   }
 }
@@ -315,7 +299,7 @@ jq '.' output/complete_workflow.001.simulation_stats.json
 
 **Next steps:**
 
-- Run your variant caller on `output/complete_reads_downsampled.bam`
+- Run your variant caller on `output/complete_reads_downsampled.bam` (or `output/complete_reads_vntr_biased.bam` when VNTR capture efficiency is enabled in `config.json`)
 - Compare variant calls to ground truth in `simulation_stats.json`
 - Evaluate sensitivity and precision
 

@@ -252,31 +252,29 @@ class TestPacBioParser:
         assert reconciled[0].ref_start == 100
         assert reconciled[0].ref_end == 600
 
-    def test_reconcile_ccs_reads_missing_fastq_returns_unmodified(self, tmp_path):
-        """Missing FASTQ leaves origins unmodified for fallback."""
+    def test_reconcile_ccs_reads_missing_fastq_raises(self, tmp_path):
+        """Missing FASTQ raises FileOperationError instead of returning raw origins."""
+        from muc_one_up.exceptions import FileOperationError
         from muc_one_up.read_simulator.source_tracking import ReadOrigin
 
         raw_origins = [
             ReadOrigin(read_id="read_1", haplotype=1, ref_start=10, ref_end=20, strand="+"),
         ]
-        result = reconcile_ccs_reads(raw_origins, tmp_path / "nonexistent.fastq")
-        assert result == raw_origins
+        with pytest.raises(FileOperationError, match="HiFi FASTQ file not found"):
+            reconcile_ccs_reads(raw_origins, tmp_path / "nonexistent.fastq")
 
-    def test_parse_pacbio_reads_with_fastq_reconciliation(self, tmp_path):
-        """Test parse_pacbio_reads passes fastq_path to reconcile_ccs_reads."""
-        maf_content = (
-            "a\ns ref 100 50 + 5000 " + "A" * 50 + "\ns movie/1/0_50 0 50 + 50 " + "A" * 50 + "\n\n"
-            "a\ns ref 200 50 + 5000 " + "A" * 50 + "\ns movie/2/0_50 0 50 + 50 " + "A" * 50 + "\n\n"
-        )
-        maf_path = tmp_path / "sim.maf"
-        maf_path.write_text(maf_content)
+    def test_reconcile_ccs_reads_unmatched_read_raises(self, tmp_path):
+        """Unmatched surviving CCS read raises FileOperationError."""
+        from muc_one_up.exceptions import FileOperationError
+        from muc_one_up.read_simulator.source_tracking import ReadOrigin
 
         fastq = tmp_path / "hifi.fastq"
-        fastq.write_text("@movie/1/ccs\nACGT\n+\nIIII\n")
-
-        origins = parse_pacbio_reads([str(maf_path)], haplotype_index=1, fastq_path=fastq)
-        assert len(origins) == 1
-        assert origins[0].read_id == "movie/1/ccs"
+        fastq.write_text("@movie/99/ccs\nACGT\n+\nIIII\n")
+        raw_origins = [
+            ReadOrigin(read_id="movie/1/0_50", haplotype=1, ref_start=10, ref_end=60, strand="+"),
+        ]
+        with pytest.raises(FileOperationError, match="could not be reconciled"):
+            reconcile_ccs_reads(raw_origins, fastq)
 
 
 class TestIlluminaParser:

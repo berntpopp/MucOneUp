@@ -227,8 +227,10 @@ def generate_references(
         "--config",
         str(muconeup_config),
         "simulate",
+        "--out-dir",
+        str(refs_dir),
         "--out-base",
-        str(refs_dir / SAMPLE_BASE_NAME),
+        SAMPLE_BASE_NAME,
         "--fixed-lengths",
         str(VNTR_H1_LENGTH),
         "--fixed-lengths",
@@ -261,7 +263,7 @@ def generate_references(
                 logger.debug(f"  Moved: {file.name} -> {dir_variant}/")
 
                 # Track FASTA file
-                if file.suffix == ".fa":
+                if file.name.endswith(".simulated.fa"):
                     references[dir_variant] = dest
 
     if len(references) != 2:
@@ -281,7 +283,8 @@ def run_orf_analysis(fasta_path: Path, variant: str, muconeup_config: Path, log_
 
     output_dir = fasta_path.parent
     base_name = fasta_path.stem.replace(".simulated", "")
-    out_base = output_dir / f"{base_name}_toxic"
+    out_base_name = f"{base_name}_toxic"
+    out_base = output_dir / out_base_name
 
     cmd = [
         "muconeup",
@@ -291,8 +294,10 @@ def run_orf_analysis(fasta_path: Path, variant: str, muconeup_config: Path, log_
         "analyze",
         "orfs",
         str(fasta_path),
+        "--out-dir",
+        str(output_dir),
         "--out-base",
-        str(out_base),
+        out_base_name,
         "--orf-min-aa",
         "100",
         "--orf-aa-prefix",
@@ -379,24 +384,24 @@ def collect_and_organize_files(ref_fa: Path, variant_dir: Path, platform: str):
     # Platform-specific file patterns and rename mappings
     if platform == "illumina":
         patterns = [
-            f"{base}.simulated_R1.fastq.gz",
-            f"{base}.simulated_R2.fastq.gz",
-            f"{base}.simulated.bam",
-            f"{base}.simulated.bam.bai",
-            f"{base}.simulated_vntr_biased.bam",
-            f"{base}.simulated_vntr_biased.bam.bai",
-            f"{base}.simulated_vntr_biased_R1.fastq.gz",
-            f"{base}.simulated_vntr_biased_R2.fastq.gz",
+            f"{base}.simulated_reads_R1.fastq.gz",
+            f"{base}.simulated_reads_R2.fastq.gz",
+            f"{base}.simulated_reads_downsampled.bam",
+            f"{base}.simulated_reads_downsampled.bam.bai",
+            f"{base}.simulated_reads_vntr_biased.bam",
+            f"{base}.simulated_reads_vntr_biased.bam.bai",
+            f"{base}.simulated_reads_vntr_biased_R1.fastq.gz",
+            f"{base}.simulated_reads_vntr_biased_R2.fastq.gz",
         ]
         rename_map = {
-            f"{base}.simulated_R1.fastq.gz": "reads_R1.fastq.gz",
-            f"{base}.simulated_R2.fastq.gz": "reads_R2.fastq.gz",
-            f"{base}.simulated.bam": "aligned.bam",
-            f"{base}.simulated.bam.bai": "aligned.bam.bai",
-            f"{base}.simulated_vntr_biased.bam": "vntr_biased.bam",
-            f"{base}.simulated_vntr_biased.bam.bai": "vntr_biased.bam.bai",
-            f"{base}.simulated_vntr_biased_R1.fastq.gz": "vntr_biased_R1.fastq.gz",
-            f"{base}.simulated_vntr_biased_R2.fastq.gz": "vntr_biased_R2.fastq.gz",
+            f"{base}.simulated_reads_R1.fastq.gz": "reads_R1.fastq.gz",
+            f"{base}.simulated_reads_R2.fastq.gz": "reads_R2.fastq.gz",
+            f"{base}.simulated_reads_downsampled.bam": "aligned.bam",
+            f"{base}.simulated_reads_downsampled.bam.bai": "aligned.bam.bai",
+            f"{base}.simulated_reads_vntr_biased.bam": "vntr_biased.bam",
+            f"{base}.simulated_reads_vntr_biased.bam.bai": "vntr_biased.bam.bai",
+            f"{base}.simulated_reads_vntr_biased_R1.fastq.gz": "vntr_biased_R1.fastq.gz",
+            f"{base}.simulated_reads_vntr_biased_R2.fastq.gz": "vntr_biased_R2.fastq.gz",
         }
     elif platform == "ont":
         # ONT files have different naming: *_ont.bam, *_ont_merged.fastq (NOT gzipped!)

@@ -117,6 +117,69 @@ def extract_reads_by_region(
         raise SamtoolsError(f"Failed to extract reads: {e}") from e
 
 
+def build_downsample_args(
+    input_bam: str | Path,
+    output_bam: str | Path,
+    fraction: float,
+    seed: int,
+    *,
+    threads: int | None = None,
+    region_bed: str | Path | None = None,
+) -> list[str | int]:
+    """Build ``samtools view`` arguments for seeded BAM downsampling."""
+    args: list[str | int] = ["view", "-b", *subsample_args(fraction, seed)]
+    if region_bed is not None:
+        args.extend(["-L", str(region_bed)])
+    if threads is not None:
+        args.extend(["-@", threads])
+    args.extend(["-o", str(output_bam), str(input_bam)])
+    return args
+
+
+def build_merge_args(
+    output_bam: str | Path,
+    input_bams: list[str] | list[Path],
+    *,
+    threads: int = 1,
+    force: bool = True,
+) -> list[str | int]:
+    """Build ``samtools merge`` arguments."""
+    args: list[str | int] = ["merge"]
+    if force:
+        args.append("-f")
+    args.extend(["-@", threads, str(output_bam), *(str(bam) for bam in input_bams)])
+    return args
+
+
+def build_sort_args(
+    input_bam: str | Path,
+    output_bam: str | Path,
+    *,
+    threads: int = 1,
+    by_name: bool = False,
+) -> list[str | int]:
+    """Build ``samtools sort`` arguments."""
+    args: list[str | int] = ["sort", "-@", threads]
+    if by_name:
+        args.append("-n")
+    args.extend(["-o", str(output_bam), str(input_bam)])
+    return args
+
+
+def mean_depth_from_lines(lines: Any) -> tuple[float, int]:
+    """Compute (mean_coverage, num_positions) from ``samtools depth`` output lines."""
+    total_depth = 0
+    num_positions = 0
+    for line in lines:
+        parts = line.strip().split()
+        if len(parts) >= 3:
+            total_depth += int(parts[2])
+            num_positions += 1
+    if num_positions == 0:
+        return 0.0, 0
+    return total_depth / num_positions, num_positions
+
+
 def downsample_bam(
     input_bam: Path,
     output_bam: Path,
@@ -147,14 +210,7 @@ def downsample_bam(
 
     try:
         run_samtools(
-            [
-                "view",
-                *subsample_args(fraction, seed),
-                "-b",
-                str(input_bam),
-                "-o",
-                str(output_bam),
-            ],
+            [str(a) for a in build_downsample_args(input_bam, output_bam, fraction, seed)],
             samtools_cmd=samtools_cmd,
             capture=True,
         )
@@ -191,17 +247,15 @@ def merge_bams(
 
     logger.debug(f"Merging {len(input_bams)} BAM files into {output_bam}")
 
-    cmd = ["merge"]
-
-    if force:
-        cmd.append("-f")
-
-    cmd.extend(["-@", str(threads)])
-    cmd.append(str(output_bam))
-    cmd.extend([str(bam) for bam in input_bams])
-
     try:
-        run_samtools(cmd, samtools_cmd=samtools_cmd, capture=True)
+        run_samtools(
+            [
+                str(a)
+                for a in build_merge_args(output_bam, input_bams, threads=threads, force=force)
+            ],
+            samtools_cmd=samtools_cmd,
+            capture=True,
+        )
         logger.debug(f"Merged BAM written to {output_bam}")
 
     except ExternalToolError as e:
@@ -230,14 +284,7 @@ def sort_bam(
 
     try:
         run_samtools(
-            [
-                "sort",
-                "-@",
-                str(threads),
-                "-o",
-                str(output_bam),
-                str(input_bam),
-            ],
+            [str(a) for a in build_sort_args(input_bam, output_bam, threads=threads)],
             samtools_cmd=samtools_cmd,
             capture=True,
         )
@@ -307,14 +354,7 @@ def calculate_mean_coverage(
             logger.warning(f"No coverage data for {region_bed}")
             return 0.0
 
-        # Stream depth output with running totals to avoid materializing large lists
-        total_depth = 0
-        num_positions = 0
-        for line in stdout.strip().split("\n"):
-            total_depth += int(line.split()[2])
-            num_positions += 1
-
-        mean_cov = total_depth / num_positions if num_positions else 0.0
+        mean_cov, _ = mean_depth_from_lines(stdout.strip().split("\n"))
         logger.debug(f"Mean coverage: {mean_cov:.2f}x")
 
         return mean_cov
@@ -388,8 +428,3 @@ def get_read_count(bam_file: Path, samtools_cmd: str = "samtools") -> int:
         raise SamtoolsError(f"Failed to count reads: {e}") from e
     except ValueError as e:
         raise SamtoolsError(f"Invalid read count output: {result.stdout}") from e
-
-
-# Aliases for wrapper consolidation (#148)
-downsample_entire_bam = downsample_bam
-merge_bam_files = merge_bams

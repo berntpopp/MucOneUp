@@ -25,6 +25,7 @@ Args:
 import argparse
 import json
 import logging
+import os
 import shlex
 import shutil
 import subprocess
@@ -306,6 +307,11 @@ def download_nanosim_model(output_dir, force=False):
         extract_path.mkdir(parents=True, exist_ok=True)
         with tarfile.open(tar_path) as tar:
             tar.extractall(path=extract_path, filter="data")
+        nested_dir = extract_path / model_name
+        if nested_dir.is_dir():
+            for child in nested_dir.iterdir():
+                shutil.move(str(child), str(extract_path / child.name))
+            nested_dir.rmdir()
         logging.info(f"Extracted NanoSim model to {extract_path}")
         return extract_path
     except Exception as e:
@@ -476,9 +482,12 @@ def main():
 
                 # Update the NanoSim training model path in config
                 if "nanosim_params" in config:
-                    rel_path = nanosim_model_path.relative_to(Path(args.config).parent)
-                    config["nanosim_params"]["training_data_path"] = str(rel_path / "training")
-                    logging.info(f"Updated config with NanoSim model path: {rel_path / 'training'}")
+                    rel_training = os.path.relpath(
+                        Path(nanosim_model_path).resolve() / "training",
+                        Path(args.config).resolve().parent,
+                    )
+                    config["nanosim_params"]["training_data_path"] = rel_training
+                    logging.info(f"Updated config with NanoSim model path: {rel_training}")
 
                     # Write the updated config
                     with Path(args.config).open("w") as f:

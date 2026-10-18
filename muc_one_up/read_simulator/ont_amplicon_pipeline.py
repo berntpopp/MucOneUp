@@ -267,6 +267,7 @@ def _simulate_legacy_allele_fastqs(
             seed=hap_seed,
             difference_ratio=difference_ratio,
             id_prefix=f"hap{i}",
+            threads=threads,
         )
         allele_outputs.append(outputs)
         intermediate_files.extend(outputs)

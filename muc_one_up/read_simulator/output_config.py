@@ -15,18 +15,13 @@ class OutputConfig:
 
     def __post_init__(self) -> None:
         """Validate output configuration."""
-        if not self.out_base or not self.out_base.strip():
-            raise ValueError("out_base cannot be empty")
-        if (
-            "/" in self.out_base
-            or "\\" in self.out_base
-            or self.out_base in (".", "..")
-            or Path(self.out_base).name != self.out_base
-            or Path(self.out_base).is_absolute()
-        ):
-            raise ValueError(
-                f"Invalid out_base: '{self.out_base}'. Must be a single filename component without path separators or directory traversal."
-            )
+        from ..cli.config import validate_output_base
+        from ..exceptions import ValidationError
+
+        try:
+            validate_output_base(self.out_base)
+        except ValidationError as e:
+            raise ValueError(str(e)) from e
 
     def derive_path(self, suffix: str) -> Path:
         """Return out_dir / (out_base + suffix)."""

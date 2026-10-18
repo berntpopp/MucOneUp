@@ -431,17 +431,14 @@ def ont(
     elif "coverage" not in ns:
         ns["coverage"] = config["read_simulation"]["coverage"]
 
-    if threads is not None:
-        ns["num_threads"] = threads
-        config["read_simulation"]["threads"] = threads
-        config.setdefault("ont_amplicon_params", {})["threads"] = threads
-
     if simulator == "pbsim3-fragments":
         config = apply_cli_read_model(config, read_profile, "ont")
         config["read_simulation"]["simulator"] = "ont-fragments"
         fragment_seed = seed
         if fragment_seed is None and config.get("ont_fragment_params", {}).get("seed") is None:
-            fragment_seed = config.get("seed")
+            fragment_seed = config.get("ont_amplicon_params", {}).get("seed")
+            if fragment_seed is None:
+                fragment_seed = config.get("seed")
         fragment = {
             "n_reads": n_reads,
             "length_median": read_length_median,
@@ -455,6 +452,12 @@ def ont(
         }
     elif read_profile:
         raise click.ClickException("--read-profile requires --simulator pbsim3-fragments")
+
+    if threads is not None:
+        config.setdefault("nanosim_params", {})["num_threads"] = threads
+        config["read_simulation"]["threads"] = threads
+        config.setdefault("ont_amplicon_params", {})["threads"] = threads
+
     apply_tracking_and_alignment(config, track_read_source=False, no_align=no_align)
 
     _run_batch_simulation(

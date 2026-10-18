@@ -407,10 +407,18 @@ def simulate_fragments(
                 frag_len = len(frag_seq)
 
                 # Get systematic error profiles for this fragment sliced by coordinates
+                # Note: read_syser_file reverses reverse-strand strings on load, so genomic
+                # [fstart:fend] maps to [len - fend : len - fstart] in tendendict_r / ratesdict_r.
                 tendenseq_f_fixed = tendendict_f.get(chrom, "")[fstart:fend].ljust(frag_len, "N")
                 ratesseq_f_fixed = ratesdict_f.get(chrom, "")[fstart:fend].ljust(frag_len, "!")
-                tendenseq_r_fixed = tendendict_r.get(chrom, "")[fstart:fend].ljust(frag_len, "N")
-                ratesseq_r_fixed = ratesdict_r.get(chrom, "")[fstart:fend].ljust(frag_len, "!")
+                r_tenden = tendendict_r.get(chrom, "")
+                r_rates = ratesdict_r.get(chrom, "")
+                tendenseq_r_fixed = r_tenden[
+                    max(0, len(r_tenden) - fend) : max(0, len(r_tenden) - fstart)
+                ].ljust(frag_len, "N")
+                ratesseq_r_fixed = r_rates[
+                    max(0, len(r_rates) - fend) : max(0, len(r_rates) - fstart)
+                ].ljust(frag_len, "!")
 
                 # Write fragment read pair to FASTA with appropriate headers
                 # reseq expects format: >id 1;length;tendencies;rates

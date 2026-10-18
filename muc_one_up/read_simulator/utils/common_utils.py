@@ -456,7 +456,10 @@ def fix_field(field: str, desired_length: int, pad_char: str) -> str:
         return field + pad_char * (desired_length - len(field))
 
 
-def check_external_tools(tools: dict[str, str]) -> None:
+def check_external_tools(
+    tools: dict[str, str],
+    required_tools: list[str] | None = None,
+) -> None:
     """
     Check that all external tools required for read simulation are available.
 
@@ -466,17 +469,19 @@ def check_external_tools(tools: dict[str, str]) -> None:
 
     Args:
         tools: Dictionary mapping tool names to executable paths/commands.
+        required_tools: Optional subset of required tool keys to validate.
 
     Raises:
-        SystemExit: If any required tool is missing or misconfigured.
+        ValidationError: If any required tool is missing or misconfigured.
     """
-    required_tools = [
-        "reseq",
-        "faToTwoBit",
-        "samtools",
-        "pblat",
-        "bwa",
-    ]
+    if required_tools is None:
+        required_tools = [
+            "reseq",
+            "faToTwoBit",
+            "samtools",
+            "pblat",
+            "bwa",
+        ]
 
     # Check if tools dictionary has all required tools
     for tool in required_tools:

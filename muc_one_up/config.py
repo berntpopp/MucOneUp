@@ -691,6 +691,13 @@ def load_config_raw(config_path: str) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise ConfigurationError(f"Config file must contain a JSON object: {config_path}")
 
+    props = CONFIG_SCHEMA.get("properties", {})
+    for key, schema in props.items():
+        if key in config and schema.get("type") == "object" and not isinstance(config[key], dict):
+            raise ConfigurationError(
+                f"Configuration section '{key}' must be a JSON object, got {type(config[key]).__name__}"
+            )
+
     # Normalize constants format: convert flat format to nested format
     if (
         "constants" in config
@@ -741,7 +748,7 @@ def validate_simulation_config(config: dict[str, Any]) -> None:
         "mutations",
     ]
     for section in sections_to_validate:
-        if section in config and config[section] is not None:
+        if section in config:
             schema = props.get(section)
             if schema:
                 try:

@@ -245,7 +245,7 @@ def detect_toxic_protein_in_sequence(
     ref_seq = (
         wildtype_variable_region
         if wildtype_variable_region is not None
-        else consensus * expected_repeat_count
+        else consensus * max(1, int(expected_repeat_count))
     )
     # Compute the composition similarity between the variable region and the toxic reference sequence.
     comp_sim = composition_similarity(variable_region, ref_seq, key_residues)

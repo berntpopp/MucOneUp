@@ -331,6 +331,7 @@ def _simulate_legacy_hifi_fastq(
             seed=hap_seed,
             difference_ratio=difference_ratio,
             id_prefix=f"hap{i}",
+            threads=threads,
         )
         clr_bam_groups.append(bams)
         intermediate_files.extend(bams)

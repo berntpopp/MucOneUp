@@ -656,27 +656,17 @@ class TestStaleBamOverwritingAndThreads:
 
     def test_overwrites_stale_bam_when_numbered_sam_exists(self, tmp_path):
         """When numbered SAM is produced and numbered BAM already exists, BAM is overwritten."""
-        template_fa = tmp_path / "template.fa"
-        template_fa.write_text(">copy\nACGT\n")
-        model_file = tmp_path / "test.model"
-        model_file.write_text("model")
-        prefix = str(tmp_path / "out")
+        from muc_one_up.read_simulator.wrappers.pbsim3_wrapper import _collect_pbsim3_bams
 
+        prefix = str(tmp_path / "out")
         stale_bam = tmp_path / "out_0001.bam"
         stale_bam.write_bytes(b"STALE_BAM_CONTENT")
+        fresh_sam = tmp_path / "out_0001.sam"
+        fresh_sam.write_text("@HD\tVN:1.6\n")
 
-        with (
-            patch("muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command") as mock_run,
-            patch(
-                "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.convert_sam_to_bam"
-            ) as mock_convert,
-        ):
-
-            def mock_run_cmd(*args, **kwargs):
-                (tmp_path / "out_0001.sam").write_text("@HD\tVN:1.6\n")
-                return MagicMock(returncode=0)
-
-            mock_run.side_effect = mock_run_cmd
+        with patch(
+            "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.convert_sam_to_bam"
+        ) as mock_convert:
 
             def create_bam(samtools_cmd, input_sam, output_bam, threads, timeout):
                 Path(output_bam).write_bytes(b"FRESH_BAM_CONTENT")
@@ -684,13 +674,9 @@ class TestStaleBamOverwritingAndThreads:
 
             mock_convert.side_effect = create_bam
 
-            result = run_pbsim3_template_simulation(
-                pbsim3_cmd="pbsim",
-                samtools_cmd="samtools",
-                template_fasta=str(template_fa),
-                model_type="errhmm",
-                model_file=str(model_file),
+            result = _collect_pbsim3_bams(
                 output_prefix=prefix,
+                samtools_cmd="samtools",
                 threads=8,
             )
 
@@ -698,6 +684,7 @@ class TestStaleBamOverwritingAndThreads:
             assert mock_convert.call_args[1]["threads"] == 8
             assert result == [str(stale_bam)]
             assert stale_bam.read_bytes() == b"FRESH_BAM_CONTENT"
+            assert not fresh_sam.exists()
 
     def test_overwrites_stale_bam_when_single_sam_exists(self, mocker, tmp_path):
         """When single SAM is produced and BAM already exists, BAM is overwritten."""

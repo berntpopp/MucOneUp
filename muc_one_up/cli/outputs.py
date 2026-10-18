@@ -27,6 +27,85 @@ def _format_targets(targets: Any) -> list[tuple[int, int]]:
     ]
 
 
+def _indel_match_score(norm_rep: str, cand_rep: str) -> tuple[int, int]:
+    """Score how well cand_rep matches norm_rep as a single-indel/mutation derivative."""
+    lcp = 0
+    min_len = min(len(norm_rep), len(cand_rep))
+    while lcp < min_len and norm_rep[lcp] == cand_rep[lcp]:
+        lcp += 1
+    lcs = 0
+    while (
+        lcs < min_len - lcp
+        and norm_rep[len(norm_rep) - 1 - lcs] == cand_rep[len(cand_rep) - 1 - lcs]
+    ):
+        lcs += 1
+    covered = lcp + lcs
+    return (1 if covered == min_len else 0, covered)
+
+
+def _infer_target_repeat_lengths(
+    normal_seq: str,
+    mut_seq: str,
+    left_len: int,
+    norm_lengths: list[int],
+    mut_lengths: list[int],
+    targets: list[int],
+    delta: int,
+) -> None:
+    """Infer mutated repeat lengths in-place when _repeat_lengths and mutated_units are absent."""
+    sorted_targets = sorted(set(targets))
+    if len(sorted_targets) == 1:
+        mut_lengths[sorted_targets[0]] += delta - (sum(mut_lengths) - sum(norm_lengths))
+        return
+
+    for idx, t_i in enumerate(sorted_targets):
+        if idx == len(sorted_targets) - 1:
+            rem_disc = delta - (sum(mut_lengths) - sum(norm_lengths))
+            mut_lengths[t_i] += rem_disc
+            break
+
+        t_next = sorted_targets[idx + 1]
+        norm_start = left_len + sum(norm_lengths[:t_i])
+        norm_rep = normal_seq[norm_start : norm_start + norm_lengths[t_i]]
+        unmut_start = norm_start + norm_lengths[t_i]
+        unmut_end = left_len + sum(norm_lengths[:t_next])
+        unmut_seq = normal_seq[unmut_start:unmut_end]
+        next_norm_rep = normal_seq[unmut_end : unmut_end + norm_lengths[t_next]]
+
+        mut_start = left_len + sum(mut_lengths[:t_i])
+        max_cand_len = len(mut_seq) - mut_start - len(unmut_seq)
+        best_len: int | None = None
+        best_score = (-1, -1, -1, -1)
+
+        for cand_len in range(1, max_cand_len + 1):
+            if mut_seq[mut_start + cand_len : mut_start + cand_len + len(unmut_seq)] != unmut_seq:
+                continue
+            cand_rep = mut_seq[mut_start : mut_start + cand_len]
+            s1_full, s1_cov = _indel_match_score(norm_rep, cand_rep)
+            next_mut_start = mut_start + cand_len + len(unmut_seq)
+            if idx + 1 == len(sorted_targets) - 1:
+                rem_after_next = sum(norm_lengths[t_next + 1 :]) + (
+                    len(normal_seq) - left_len - sum(norm_lengths)
+                )
+                next_cand_end = len(mut_seq) - rem_after_next
+                next_cand_rep = mut_seq[next_mut_start : max(next_mut_start, next_cand_end)]
+                s2_full, s2_cov = _indel_match_score(next_norm_rep, next_cand_rep)
+            else:
+                next_prefix = mut_seq[next_mut_start : next_mut_start + len(next_norm_rep)]
+                s2_full, s2_cov = _indel_match_score(next_norm_rep, next_prefix)
+            score = (s1_full + s2_full, s1_cov + s2_cov, s1_full, s1_cov)
+            if score > best_score:
+                best_score = score
+                best_len = cand_len
+
+        if best_len is not None:
+            mut_lengths[t_i] = best_len
+        else:
+            rem_targets = len(sorted_targets) - idx
+            rem_disc = delta - (sum(mut_lengths) - sum(norm_lengths))
+            mut_lengths[t_i] += rem_disc // rem_targets
+
+
 def _translate_snps_to_mutated(
     args: Any,
     config: dict[str, Any],
@@ -36,6 +115,7 @@ def _translate_snps_to_mutated(
     mutation_positions: Any = None,
     orig_normal_seqs: list[str] | None = None,
     orig_mut_seqs: list[str] | None = None,
+    mutated_units: dict[int, list[tuple[int, str]]] | None = None,
 ) -> list[dict[str, Any]]:
     """Translate applied SNP coordinates from normal sequence to mutated sequence across indels.
 
@@ -69,28 +149,32 @@ def _translate_snps_to_mutated(
             mut_lengths = [
                 len(config["repeats"][ru.symbol]) for ru in mutated_results[hap_idx].chain
             ]
-            mut_indices = [
-                i
-                for i, ru in enumerate(mutated_results[hap_idx].chain)
-                if getattr(ru, "mutated", False)
-            ]
-            targets = mut_indices
-            if not targets:
-                hap_targets = [
-                    t
-                    for t in _format_targets(
-                        mutation_positions or getattr(args, "mutation_targets", None)
-                    )
-                    if t[0] == hap_idx + 1
-                ]
-                targets = [t[1] - 1 for t in hap_targets if 0 <= t[1] - 1 < len(mut_lengths)]
+            if mutated_units and (hap_idx + 1) in mutated_units:
+                for rep_idx, unit_seq in mutated_units[hap_idx + 1]:
+                    if 1 <= rep_idx <= len(mut_lengths):
+                        mut_lengths[rep_idx - 1] = len(unit_seq)
 
             discrepancy = delta - (sum(mut_lengths) - sum(norm_lengths))
-            if discrepancy != 0 and targets:
-                base = discrepancy // len(targets)
-                rem = discrepancy % len(targets)
-                for idx, t_i in enumerate(targets):
-                    mut_lengths[t_i] += base + (1 if idx < rem else 0)
+            if discrepancy != 0:
+                mut_indices = [
+                    i
+                    for i, ru in enumerate(mutated_results[hap_idx].chain)
+                    if getattr(ru, "mutated", False)
+                ]
+                targets = mut_indices
+                if not targets:
+                    hap_targets = [
+                        t
+                        for t in _format_targets(
+                            mutation_positions or getattr(args, "mutation_targets", None)
+                        )
+                        if t[0] == hap_idx + 1
+                    ]
+                    targets = [t[1] - 1 for t in hap_targets if 0 <= t[1] - 1 < len(mut_lengths)]
+                if targets:
+                    _infer_target_repeat_lengths(
+                        normal_seq, mut_seq, left_len, norm_lengths, mut_lengths, targets, delta
+                    )
 
         repeat_slices: list[tuple[int, int, int, int]] = []
         norm_cur = left_len
@@ -170,6 +254,7 @@ def write_fasta_outputs(
     structure_mutation_info,
     rng=None,
     normal_results=None,
+    mutated_units=None,
 ):
     """
     Write FASTA output files.
@@ -202,6 +287,7 @@ def write_fasta_outputs(
                 mutation_positions=mutation_positions,
                 orig_normal_seqs=orig_normal_seqs,
                 orig_mut_seqs=orig_mut_seqs,
+                mutated_units=mutated_units,
             )
 
             mutated_results, applied_snp_info_mut = integrate_snps_unified(
@@ -238,15 +324,15 @@ def write_fasta_outputs(
             haplotype_comments: list[str | None] = [None] * len(results)
 
             if structure_mutation_info or args.mutation_name:
-                mutation_name = (
-                    structure_mutation_info["name"]
-                    if structure_mutation_info
-                    else args.mutation_name
-                )
-                if structure_mutation_info:
+                mutation_name = args.mutation_name or structure_mutation_info["name"]
+                if mutation_positions or args.mutation_targets:
+                    mutation_targets = _format_targets(mutation_positions or args.mutation_targets)
+                elif structure_mutation_info and (
+                    not args.mutation_name or args.mutation_name == structure_mutation_info["name"]
+                ):
                     mutation_targets = structure_mutation_info["targets"]
                 else:
-                    mutation_targets = _format_targets(args.mutation_targets or mutation_positions)
+                    mutation_targets = []
 
                 for hap_idx, _rep_idx in mutation_targets:
                     if 1 <= hap_idx <= len(results):
@@ -256,8 +342,9 @@ def write_fasta_outputs(
 
             # Apply SNPs
             if getattr(args, "snp_input_file", None) and normal_results is not None:
+                orig_normal_seqs = [hr.sequence for hr in normal_results]
                 _, applied_snp_info_normal = integrate_snps_unified(
-                    args, config, normal_results, rng=rng
+                    args, config, list(normal_results), rng=rng
                 )
                 translated_snps = _translate_snps_to_mutated(
                     args=args,
@@ -266,6 +353,8 @@ def write_fasta_outputs(
                     mutated_results=results,
                     applied_snp_info_normal=applied_snp_info_normal,
                     mutation_positions=mutation_positions,
+                    orig_normal_seqs=orig_normal_seqs,
+                    mutated_units=mutated_units,
                 )
                 results, applied_snp_info = integrate_snps_unified(
                     args,
@@ -355,20 +444,23 @@ def write_structure_files(
         struct_out = numbered_filename(out_dir, out_base, sim_index, "vntr_structure.txt")
         try:
             with Path(struct_out).open("w") as struct_fh:
-                if structure_mutation_info:
-                    struct_fh.write(
-                        f"# Mutation Applied: {structure_mutation_info['name']} (Targets: {structure_mutation_info['targets']})\n"
-                    )
-                elif args.mutation_name:
-                    target_tuples = _format_targets(mutation_positions or args.mutation_targets)
+                if structure_mutation_info or args.mutation_name:
+                    mutation_name = args.mutation_name or structure_mutation_info["name"]
+                    if mutation_positions or args.mutation_targets:
+                        target_tuples = _format_targets(mutation_positions or args.mutation_targets)
+                    elif structure_mutation_info and (
+                        not args.mutation_name
+                        or args.mutation_name == structure_mutation_info["name"]
+                    ):
+                        target_tuples = structure_mutation_info["targets"]
+                    else:
+                        target_tuples = []
                     if target_tuples:
                         struct_fh.write(
-                            f"# Mutation Applied: {args.mutation_name} (Targets: {target_tuples})\n"
+                            f"# Mutation Applied: {mutation_name} (Targets: {target_tuples})\n"
                         )
                     else:
-                        struct_fh.write(
-                            f"# Mutation Applied: {args.mutation_name} (Target: random)\n"
-                        )
+                        struct_fh.write(f"# Mutation Applied: {mutation_name} (Target: random)\n")
 
                 for i, hr in enumerate(results, start=1):
                     chain_str = "-".join(str(ru) for ru in hr.chain)

@@ -83,15 +83,15 @@ def simulate_reads_pipeline(
     assembly_ctx = AssemblyContext.from_configs(config, _rs_raw)
 
     # Validate and log tools
-    check_external_tools(tools)
-    logger.info("=" * 60)
-    logger.info("Tool Version Information")
-    logger.info("=" * 60)
     tools_to_check = (
         ["reseq", "faToTwoBit", "samtools", "pblat"]
         if rs_config.get("skip_alignment")
         else ["reseq", "faToTwoBit", "samtools", "pblat", "bwa"]
     )
+    check_external_tools(tools, required_tools=tools_to_check)
+    logger.info("=" * 60)
+    logger.info("Tool Version Information")
+    logger.info("=" * 60)
     tools_subset = {k: v for k, v in tools.items() if k in tools_to_check}
     tool_versions = capture_tool_versions(tools_subset)
     log_tool_versions(tool_versions)
@@ -175,11 +175,7 @@ def simulate_reads_pipeline(
         start_time=start_time,
         end_time=end_time,
         platform="Illumina",
-        tools_used=(
-            ["reseq", "faToTwoBit", "pblat", "bwa", "samtools"]
-            if align_result
-            else ["reseq", "faToTwoBit", "pblat"]
-        ),
+        tools_used=tools_to_check,
     )
 
     # Stage 12c: Cleanup
