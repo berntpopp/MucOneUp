@@ -4,34 +4,35 @@ import ast
 import inspect
 
 import muc_one_up.cli.analysis as analysis_module
-import muc_one_up.cli.click_main as cli_module
 
 
 def test_no_raw_json_load_in_cli_commands():
-    """CLI commands must not use json.load() to read config files.
+    """CLI commands must not use json.load() or json.loads() to read config files.
 
-    All config loading must go through config.load_config() which normalizes
-    flat constants into the nested assembly-aware shape.
+    All config loading must go through config.load_config() or load_config_raw()
+    which normalizes flat constants into the nested assembly-aware shape.
     """
-    source = inspect.getsource(cli_module)
-    tree = ast.parse(source)
+    from pathlib import Path
 
-    violations = []
-    for node in ast.walk(tree):
-        # Look for calls like json.load(f)
-        if isinstance(node, ast.Call):
-            func = node.func
-            if (
-                isinstance(func, ast.Attribute)
-                and func.attr == "load"
-                and isinstance(func.value, ast.Name)
-                and func.value.id == "json"
-            ):
-                violations.append(node.lineno)
+    cli_dir = Path(__file__).resolve().parent.parent / "muc_one_up" / "cli"
+    violations: list[str] = []
+
+    for py_file in sorted(cli_dir.rglob("*.py")):
+        tree = ast.parse(py_file.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                if (
+                    isinstance(func, ast.Attribute)
+                    and func.attr in ("load", "loads")
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id == "json"
+                ):
+                    violations.append(f"{py_file.name}:{node.lineno}")
 
     assert violations == [], (
-        f"Found json.load() calls at lines {violations} in click_main.py. "
-        f"Use config.load_config() instead to ensure constants normalization."
+        f"Found raw json.load/loads calls in CLI modules: {violations}. "
+        f"Use config.load_config() or load_config_raw() instead to ensure normalization."
     )
 
 

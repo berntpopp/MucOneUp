@@ -134,3 +134,28 @@ def test_run_orf_finder_in_memory(tmp_path):
     # second line => the peptide
     pep = lines[1]
     assert len(pep) >= 2  # 'MP' is 2 length
+
+
+def test_predict_orfs_in_haplotypes_respects_min_len():
+    """Test that predict_orfs_in_haplotypes respects min_len when min_len > orf_min_aa * 3."""
+    # Sequence with a 60 nt (20 AA) ORF: ATG + 18 GCA codons + TAA
+    dna_seq = "ATG" + "GCA" * 18 + "TAA"
+    results = [
+        HaplotypeResult(dna_seq, [RepeatUnit("mock")]),
+    ]
+
+    # When min_len (90) > orf_min_aa * 3 (15), the 60 nt ORF should be excluded
+    haplotype_orfs = predict_orfs_in_haplotypes(
+        results,
+        min_len=90,
+        orf_min_aa=5,
+    )
+    assert len(haplotype_orfs["haplotype_1"]) == 0
+
+    # When min_len is smaller (e.g. 30), the 60 nt ORF should be found
+    haplotype_orfs_found = predict_orfs_in_haplotypes(
+        results,
+        min_len=30,
+        orf_min_aa=5,
+    )
+    assert len(haplotype_orfs_found["haplotype_1"]) == 1

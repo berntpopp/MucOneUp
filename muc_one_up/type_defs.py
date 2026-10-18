@@ -10,7 +10,7 @@ Following SOLID principles:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, TypedDict
 
@@ -56,6 +56,7 @@ class HaplotypeResult:
 
     sequence: str
     chain: list[RepeatUnit]
+    _repeat_lengths: list[int] | None = field(default=None, repr=False, compare=False)
 
     def chain_strs(self) -> list[str]:
         """Return chain as legacy string list (e.g., ['1', 'Xm', '9'])."""

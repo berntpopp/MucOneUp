@@ -14,9 +14,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...exceptions import FileOperationError
+from ...exceptions import FileOperationError, ValidationError
 from ..command_utils import build_tool_command
 from ..utils import run_command, run_pipeline
+from ..utils.fastq_utils import count_fastq_reads
 
 
 def convert_sam_to_bam(
@@ -415,8 +416,11 @@ def convert_bam_to_paired_fastq(
     if opts.validate_pairs:
         logging.info("  Validating read pair integrity...")
 
-        r1_reads = _count_fastq_reads(output_fq1_path)
-        r2_reads = _count_fastq_reads(output_fq2_path)
+        try:
+            r1_reads = count_fastq_reads(output_fq1_path)
+            r2_reads = count_fastq_reads(output_fq2_path)
+        except ValidationError as e:
+            raise FileOperationError(f"Failed to count reads in FASTQ: {e}") from e
 
         if r1_reads != r2_reads:
             raise FileOperationError(
@@ -436,34 +440,3 @@ def convert_bam_to_paired_fastq(
     )
 
     return str(output_fq1), str(output_fq2)
-
-
-def _count_fastq_reads(fastq_path: Path) -> int:
-    """Count reads in FASTQ file (handles gzip compression).
-
-    Args:
-        fastq_path: Path to FASTQ file (.fq, .fastq, .fq.gz, .fastq.gz)
-
-    Returns:
-        Number of reads in file
-
-    Raises:
-        FileOperationError: If file cannot be read or is invalid
-
-    Notes:
-        - Automatically detects gzip compression based on file extension
-        - Assumes standard FASTQ format (4 lines per read)
-        - Fast implementation using line counting
-    """
-    import gzip
-
-    # Determine opener based on file extension
-    opener = gzip.open if str(fastq_path).endswith(".gz") else open
-
-    try:
-        with opener(fastq_path, "rt") as f:
-            # Count lines and divide by 4 (FASTQ format: header, seq, +, qual)
-            line_count = sum(1 for _ in f)
-            return line_count // 4
-    except Exception as e:
-        raise FileOperationError(f"Failed to count reads in {fastq_path}: {e}") from e

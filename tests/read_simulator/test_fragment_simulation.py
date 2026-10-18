@@ -19,7 +19,6 @@ import pytest
 
 from muc_one_up.exceptions import FileOperationError
 from muc_one_up.read_simulator.fragment_simulation import (
-    comp,
     get_insert_length,
     pick_fragment,
     pick_on_match,
@@ -28,6 +27,7 @@ from muc_one_up.read_simulator.fragment_simulation import (
     read_syser_file,
     simulate_fragments,
 )
+from muc_one_up.read_simulator.utils.sequence_utils import reverse_complement
 
 
 class TestReadFastaToDict:
@@ -287,14 +287,24 @@ class TestGetInsertLength:
 
         mock_gauss.assert_called_with(300, 50)
 
+    def test_fixed_length_smaller_than_lower_raises(self):
+        """Test that fixed length (sigma <= 0) smaller than lower raises ValueError immediately."""
+        with pytest.raises(ValueError, match="Mean fragment size"):
+            get_insert_length(100, 0, 150)
+
+    def test_exhausted_rejection_loop_raises(self, mocker):
+        """Test that exhausting 1,000,000 iterations raises ValueError."""
+        mocker.patch("random.gauss", return_value=50)
+        with pytest.raises(ValueError, match="Could not sample insert length"):
+            get_insert_length(50, 10, 200)
+
 
 class TestPickFragment:
     """Test fragment picking based on PSL match."""
 
     def test_calculates_fragment_coordinates(self, mocker):
-        """Test that fragment coordinates are calculated correctly."""
-        # Mock random.randint to return fixed offset
-        mocker.patch("random.randint", return_value=50)
+        """Test that fragment coordinates are calculated correctly within bounds."""
+        mock_randint = mocker.patch("random.randint", return_value=800)
 
         match = ("chr1", 1000, 1100, "+")  # plen = 100
         ins = 300  # desired insert length
@@ -306,18 +316,16 @@ class TestPickFragment:
 
         assert chrom == "chr1"
         assert strand == "+"
-        # min_overlap = 100 * 0.5 = 50
-        # space = 300 + 100 - 50 = 350
-        # offset = 50 (mocked)
-        # fstart = 1000 - 50 = 950
-        # fend = 950 + 300 = 1250
-        assert fstart == 950
-        assert fend == 1250
+        # min_overlap = ceil(100 * 0.5) = 50
+        # lower = max(0, 1000 + 50 - 300) = 750
+        # upper = 1100 - 50 = 1050
+        mock_randint.assert_called_once_with(750, 1050)
+        assert fstart == 800
+        assert fend == 1100
 
     def test_prevents_negative_start_coordinate(self, mocker):
-        """Test that fragment start is never negative."""
-        # Mock large offset that would make start negative
-        mocker.patch("random.randint", return_value=5000)
+        """Test that lower bound is clamped to 0 when match is near chromosome start."""
+        mock_randint = mocker.patch("random.randint", return_value=0)
 
         match = ("chr1", 100, 200, "+")
         ins = 300
@@ -327,12 +335,16 @@ class TestPickFragment:
 
         _chrom, fstart, fend, _strand = result
 
-        assert fstart == 0  # Clamped to 0
-        assert fend == 300  # 0 + ins
+        # min_overlap = 50
+        # lower = max(0, 100 + 50 - 300) = 0
+        # upper = 200 - 50 = 150
+        mock_randint.assert_called_once_with(0, 150)
+        assert fstart == 0
+        assert fend == 300
 
     def test_preserves_strand_information(self, mocker):
         """Test that strand is preserved from match."""
-        mocker.patch("random.randint", return_value=0)
+        mocker.patch("random.randint", return_value=800)
 
         match_plus = ("chr1", 1000, 1100, "+")
         match_minus = ("chr2", 2000, 2100, "-")
@@ -343,38 +355,82 @@ class TestPickFragment:
         assert result_plus[3] == "+"
         assert result_minus[3] == "-"
 
+    @pytest.mark.parametrize("seed", range(50))
+    def test_overlap_guaranteed_across_seeds(self, seed: int):
+        """Regression test for #142: overlap >= ceil(plen * bind) across seeds."""
+        import math
+        import random
+
+        match = ("chr1", 1000, 1100, "+")
+        ins = 300
+        bind = 0.5
+        rng = random.Random(seed)
+
+        _chrom, fstart, fend, _strand = pick_fragment(match, ins, bind, rng=rng)
+        overlap = min(fend, 1100) - max(fstart, 1000)
+        min_overlap = math.ceil(100 * bind)
+        assert overlap >= min_overlap
+
+    def test_regression_seed_5(self):
+        """Specific regression test for seed 5 which previously yielded zero overlap."""
+        import random
+
+        match = ("chr1", 1000, 1100, "+")
+        ins = 300
+        bind = 0.5
+        rng = random.Random(5)
+
+        _chrom, fstart, fend, _strand = pick_fragment(match, ins, bind, rng=rng)
+        overlap = min(fend, 1100) - max(fstart, 1000)
+        assert overlap >= 50
+
+    def test_ins_smaller_than_min_overlap_raises(self):
+        """Test that ins < min_overlap raises ValueError."""
+        match = ("chr1", 1000, 1100, "+")
+        with pytest.raises(
+            ValueError,
+            match=r"Insert size \(40\) is smaller than minimum required probe overlap \(50\)",
+        ):
+            pick_fragment(match, 40, 0.5)
+
+    @pytest.mark.parametrize("invalid_bind", [-0.1, 1.1])
+    def test_rejects_out_of_range_bind(self, invalid_bind: float):
+        """Regression test: bind must be in [0.0, 1.0]."""
+        match = ("chr1", 1000, 1100, "+")
+        with pytest.raises(ValueError, match=r"bind must be between 0\.0 and 1\.0"):
+            pick_fragment(match, 300, invalid_bind)
+
 
 class TestComp:
-    """Test DNA complement function."""
+    """Test DNA reverse complement function (replacing legacy comp)."""
 
     def test_complements_uppercase_bases(self):
-        """Test complementation of uppercase DNA bases."""
-        assert comp("ACGT") == "TGCA"
-        assert comp("AAAA") == "TTTT"
-        assert comp("CCCC") == "GGGG"
+        """Test reverse complementation of uppercase DNA bases."""
+        assert reverse_complement("ACGT") == "ACGT"
+        assert reverse_complement("AAAA") == "TTTT"
+        assert reverse_complement("CCCC") == "GGGG"
 
     def test_complements_lowercase_bases(self):
-        """Test complementation of lowercase DNA bases."""
-        assert comp("acgt") == "tgca"
-        assert comp("aaaa") == "tttt"
+        """Test reverse complementation of lowercase DNA bases."""
+        assert reverse_complement("acgt") == "acgt"
+        assert reverse_complement("aaaa") == "tttt"
 
     def test_preserves_case(self):
         """Test that case is preserved in output."""
-        assert comp("AcGt") == "TgCa"
+        assert reverse_complement("AcGt") == "aCgT"
 
     def test_handles_n_bases(self):
         """Test that N bases (ambiguous) map to N."""
-        assert comp("ACNGT") == "TGNCA"
-        assert comp("nnn") == "nnn"
+        assert reverse_complement("ACNGT") == "ACNGT"
+        assert reverse_complement("nnn") == "nnn"
 
     def test_preserves_unknown_characters(self):
         """Test that unknown characters pass through unchanged."""
-        # According to COMP_MAP, only ACGTN are defined
-        assert comp("ACGTX") == "TGCAX"  # X not in map, preserved
+        assert reverse_complement("ACGTX") == "XACGT"
 
     def test_handles_empty_sequence(self):
         """Test empty sequence returns empty string."""
-        assert comp("") == ""
+        assert reverse_complement("") == ""
 
 
 class TestSimulateFragments:
@@ -533,6 +589,41 @@ class TestSimulateFragments:
 
         assert output.exists()
         # Fragment should be generated (though possibly truncated)
+
+    @pytest.mark.parametrize("invalid_bind", [-0.1, 1.1])
+    def test_simulate_fragments_rejects_invalid_bind(self, tmp_path, invalid_bind: float):
+        """Test that invalid bind fraction raises FileOperationError."""
+        ref_fa = tmp_path / "ref.fa"
+        ref_fa.write_text(">chr1\nACGT\n")
+        output = tmp_path / "fragments.fa"
+        with pytest.raises(FileOperationError, match="Invalid bind fraction"):
+            simulate_fragments(str(ref_fa), "syser", "psl", 1, 20, 2, 10, invalid_bind, str(output))
+
+    def test_simulate_fragments_succeeds_when_min_fragment_below_min_overlap(self, tmp_path):
+        """Regression test: simulate_fragments succeeds when min_fragment < min_overlap."""
+        ref_fa = tmp_path / "ref.fa"
+        ref_fa.write_text(">chr1\n" + "ACGT" * 500 + "\n")  # 2000 bases
+
+        syser = tmp_path / "test.syser"
+        syser.write_text(
+            "@chr1 forward\n" + "N" * 2000 + "\n+\n" + "!" * 2000 + "\n"
+            "@chr1 reverse\n" + "N" * 2000 + "\n+\n" + "!" * 2000 + "\n"
+        )
+
+        psl = tmp_path / "test.psl"
+        # Probe match length = 300 bp (100 to 400 on chr1)
+        psl.write_text(
+            "300\t0\t0\t0\t0\t0\t0\t0\t+\tprobe\t300\t0\t300\tchr1\t2000\t100\t400\t1\t300\t0\t100\n"
+        )
+
+        output = tmp_path / "fragments.fa"
+        # probe 300 bp, bind=0.5 -> min_overlap=150; fragment_size=250, fragment_sd=35, min_fragment=20
+        simulate_fragments(
+            str(ref_fa), str(syser), str(psl), 10, 250, 35, 20, 0.5, str(output), seed=42
+        )
+        assert output.exists()
+        content = output.read_text()
+        assert ">1 1;" in content
 
 
 class TestFragmentSimulationSeeding:

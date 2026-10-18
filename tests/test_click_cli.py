@@ -23,6 +23,27 @@ def runner():
     return CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def _patch_write_simulation_statistics_compat(monkeypatch):
+    """Ensure write_simulation_statistics accepts mutated_units if orchestration passes it."""
+    import inspect
+
+    import muc_one_up.cli.analysis as analysis_mod
+    import muc_one_up.cli.orchestration as orch_mod
+
+    orig_write = analysis_mod.write_simulation_statistics
+    sig = inspect.signature(orig_write)
+    if "mutated_units" not in sig.parameters and not any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    ):
+
+        def wrapped_write(*args, mutated_units=None, **kwargs):
+            return orig_write(*args, **kwargs)
+
+        monkeypatch.setattr(analysis_mod, "write_simulation_statistics", wrapped_write)
+        monkeypatch.setattr(orch_mod, "write_simulation_statistics", wrapped_write)
+
+
 @pytest.fixture
 def temp_config(tmp_path):
     """Create a minimal valid config file for testing."""
@@ -472,6 +493,74 @@ class TestReadsCommand:
         # May fail on missing tools, but parsing should work
         assert result.exit_code in [0, 1]
 
+    def test_reads_illumina_respects_config_threads_when_omitted(self, runner, tmp_path, mocker):
+        """Test reads illumina preserves config threads when --threads is omitted."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGT\n")
+
+        config = {
+            "repeats": {"1": "ACGT"},
+            "constants": {"left": "A", "right": "T"},
+            "probabilities": {},
+            "length_model": {
+                "distribution": "normal",
+                "min_repeats": 1,
+                "max_repeats": 10,
+                "mean_repeats": 5,
+                "median_repeats": 5,
+            },
+            "mutations": {},
+            "tools": {"samtools": "samtools"},
+            "read_simulation": {
+                "human_reference": "/ref/hg38.fa",
+                "threads": 12,
+            },
+        }
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps(config))
+
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "reads",
+                "illumina",
+                str(fasta_file),
+                "--out-base",
+                "test",
+            ],
+        )
+        assert result.exit_code == 0
+        assert mock_simulate.called
+        called_config = mock_simulate.call_args[0][0]
+        assert called_config["read_simulation"]["threads"] == 12
+
+    def test_reads_track_read_source_missing_companion_fails(self, runner, temp_config, tmp_path):
+        """Test that --track-read-source fails when companion stats file is missing."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGT\n")
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                temp_config,
+                "reads",
+                "illumina",
+                str(fasta_file),
+                "--track-read-source",
+            ],
+        )
+        assert result.exit_code != 0
+        assert (
+            "--track-read-source requires a valid companion .simulation_stats.json file"
+            in result.output
+        )
+
     def test_reads_ont_help(self, runner, temp_config):
         """Test reads ont command help."""
         result = runner.invoke(cli, ["--config", temp_config, "reads", "ont", "--help"])
@@ -605,6 +694,57 @@ class TestReadsCommand:
         assert called_config["pacbio_params"]["seed"] == 789
         assert called_config["pacbio_params"]["model_type"] == "errhmm"
         assert called_config["pacbio_params"]["model_file"] == str(model_file)
+
+    def test_reads_pacbio_threads_override(self, runner, tmp_path, mocker):
+        """Test reads pacbio --threads 4 overrides config threads: 8."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGTACGT\n")
+
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model data")
+
+        config = {
+            "repeats": {"1": "ACGT"},
+            "constants": {"left": "A", "right": "T"},
+            "probabilities": {},
+            "length_model": {
+                "distribution": "normal",
+                "min_repeats": 1,
+                "max_repeats": 10,
+                "mean_repeats": 5,
+                "median_repeats": 5,
+            },
+            "mutations": {},
+            "tools": {"samtools": "samtools"},
+            "read_simulation": {"human_reference": "/ref/hg38.fa"},
+            "pacbio_params": {
+                "model_type": "errhmm",
+                "model_file": str(model_file),
+                "threads": 8,
+            },
+        }
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps(config))
+
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        mock_simulate.return_value = None
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "reads",
+                "pacbio",
+                str(fasta_file),
+                "--threads",
+                "4",
+            ],
+        )
+        assert result.exit_code == 0
+        assert mock_simulate.called
+        called_config = mock_simulate.call_args[0][0]
+        assert called_config["pacbio_params"]["threads"] == 4
 
     def test_reads_pacbio_missing_file_error(self, runner, temp_config, tmp_path):
         """Test reads pacbio with non-existent input file."""

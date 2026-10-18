@@ -226,6 +226,109 @@ class TestPacBioHiFiPipeline:
         # Verify result is FASTQ (not aligned BAM)
         assert result == str(hifi_fastq)
 
+    def test_diploid_reference_divides_pbsim3_coverage(self, mocker, tmp_path):
+        """Test that coverage passed to pbsim3 is divided by number of sequences."""
+        input_fa = tmp_path / "input_diploid.fa"
+        input_fa.write_text(">hap1\nACGTACGTACGT\n>hap2\nACGTACGTACGT\n")
+
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+            },
+        }
+        (tmp_path / "model.model").write_text("model data")
+        clr_bam = tmp_path / "input_diploid_clr.bam"
+        hifi_bam = tmp_path / "input_diploid_hifi.bam"
+        hifi_fastq = tmp_path / "input_diploid_hifi.fastq"
+
+        mock_pbsim3 = mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation"
+        )
+        mock_pbsim3.return_value = [str(clr_bam)]
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_ccs_consensus",
+            return_value=str(hifi_bam),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.convert_bam_to_fastq",
+            return_value=str(hifi_fastq),
+        )
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
+
+        simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
+
+        assert mock_pbsim3.called
+        assert mock_pbsim3.call_args[1]["coverage"] == 15.0
+
+    def test_pipeline_without_alignment_executes_source_tracker_and_metadata(
+        self, mocker, tmp_path
+    ):
+        """Test pipeline generates source tracking manifest and metadata even when human_reference is None."""
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGTACGTACGT\n")
+
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+            },
+        }
+        (tmp_path / "model.model").write_text("model data")
+        clr_bam = tmp_path / "input_clr_0001.bam"
+        hifi_bam = tmp_path / "input_hifi.bam"
+        hifi_fastq = tmp_path / "input_hifi.fastq"
+
+        maf_file = tmp_path / "input_clr_0001.maf"
+        maf_file.write_text("maf data")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
+            return_value=[str(clr_bam)],
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_ccs_consensus",
+            return_value=str(hifi_bam),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.convert_bam_to_fastq",
+            return_value=str(hifi_fastq),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.parsers.pacbio_parser.parse_pacbio_reads",
+            return_value=[],
+        )
+        mock_meta = mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.create_pipeline_metadata"
+        )
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
+
+        mock_tracker = mocker.Mock()
+        mock_tracker.annotate_reads.return_value = []
+
+        result = simulate_pacbio_hifi_reads(
+            config=config,
+            input_fa=str(input_fa),
+            human_reference=None,
+            source_tracker=mock_tracker,
+        )
+
+        assert result == str(hifi_fastq)
+        assert mock_tracker.write_manifest.called
+        assert not maf_file.exists()
+        assert mock_meta.called
+        assert mock_meta.call_args[1]["tools_used"] == ["pbsim3", "ccs", "samtools"]
+
     def test_validates_missing_parameters(self, tmp_path):
         """Test that missing required parameters raise RuntimeError."""
         # Arrange
@@ -272,6 +375,29 @@ class TestPacBioHiFiPipeline:
 
         # Act & Assert
         with pytest.raises(RuntimeError, match="Invalid PacBio parameters"):
+            simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa))
+
+    def test_validates_threads_parameter_via_ccs(self, tmp_path):
+        """Test that invalid threads (e.g. 0) is rejected by early CCS validation."""
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGTACGTACGT\n")
+
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+                "threads": 0,  # Invalid threads! Must be >= 1
+            },
+        }
+
+        (tmp_path / "model.model").write_text("model data")
+
+        with pytest.raises(RuntimeError, match="Invalid PacBio parameters: Invalid threads"):
             simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa))
 
     def test_uses_default_parameters(self, mocker, tmp_path):

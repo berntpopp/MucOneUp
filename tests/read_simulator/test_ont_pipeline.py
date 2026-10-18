@@ -147,7 +147,7 @@ class TestOutputPathGeneration:
         mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
         mock_nanosim.return_value = str(tmp_path / "test_sample_ont_reads.fastq")
 
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
         result = simulate_ont_reads_pipeline(config, str(input_fa))
@@ -186,7 +186,7 @@ class TestOutputPathGeneration:
         mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
         mock_nanosim.return_value = str(custom_dir / "input_ont_reads.fastq")
 
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
         result = simulate_ont_reads_pipeline(config, str(input_fa))
@@ -224,7 +224,7 @@ class TestWrapperIntegration:
         mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
         mock_nanosim.return_value = str(tmp_path / "input_ont_reads.fastq")
 
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
         simulate_ont_reads_pipeline(config, str(input_fa))
@@ -269,7 +269,7 @@ class TestWrapperIntegration:
         mock_nanosim.return_value = fastq_output
 
         mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
+            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
         )
 
         # Act: Provide human_reference
@@ -281,7 +281,7 @@ class TestWrapperIntegration:
 
         assert call_kwargs["minimap2_cmd"] == "/path/to/minimap2"
         assert call_kwargs["samtools_cmd"] == "/path/to/samtools"
-        assert call_kwargs["human_reference"] == str(human_ref)
+        assert call_kwargs["reference"] == str(human_ref)
         assert call_kwargs["reads_fastq"] == fastq_output
         assert call_kwargs["threads"] == 16
         assert call_kwargs["output_bam"].endswith("input_ont.bam")
@@ -308,7 +308,7 @@ class TestWrapperIntegration:
         mock_nanosim.return_value = str(tmp_path / "reads.fastq")
 
         mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
+            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
         )
 
         # Act: Don't provide human_reference
@@ -316,7 +316,7 @@ class TestWrapperIntegration:
 
         # Assert: input_fa should be used as reference
         call_kwargs = mock_align.call_args[1]
-        assert call_kwargs["human_reference"] == str(input_fa)
+        assert call_kwargs["reference"] == str(input_fa)
 
 
 class TestDefaultParameters:
@@ -345,7 +345,7 @@ class TestDefaultParameters:
         mock_nanosim.return_value = str(tmp_path / "reads.fastq")
 
         mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
+            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
         )
 
         # Act
@@ -383,7 +383,7 @@ class TestDefaultParameters:
         mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
         mock_nanosim.return_value = str(tmp_path / "reads.fastq")
 
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
         simulate_ont_reads_pipeline(config, str(input_fa))
@@ -414,7 +414,7 @@ class TestDefaultParameters:
         mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
         mock_nanosim.return_value = str(tmp_path / "reads.fastq")
 
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
         simulate_ont_reads_pipeline(config, str(input_fa))
@@ -475,7 +475,7 @@ class TestErrorHandling:
 
         # Mock alignment to fail
         mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
+            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
         )
         mock_align.side_effect = Exception("Alignment failed")
 
@@ -508,7 +508,7 @@ class TestReturnValue:
         mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
         mock_nanosim.return_value = str(tmp_path / "reads.fastq")
 
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
         result = simulate_ont_reads_pipeline(config, str(input_fa))
@@ -563,7 +563,7 @@ class TestDiploidSplitSimulation:
         )
 
         # Mock alignment
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
         result = simulate_ont_reads_pipeline(config, str(input_fa))
@@ -616,7 +616,7 @@ class TestDiploidSplitSimulation:
         )
 
         # Mock alignment
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
         with caplog.at_level("INFO"):
@@ -659,7 +659,7 @@ class TestDiploidSplitSimulation:
         mock_nanosim.return_value = str(tmp_path / "reads.fastq")
 
         # Mock alignment
-        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2")
+        mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
         with caplog.at_level("INFO"):
@@ -721,7 +721,7 @@ class TestSkipAlignment:
             "muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation", return_value=fastq
         )
         mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
+            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
         )
         out = simulate_ont_reads_pipeline(config, str(input_fa))
         assert not mock_align.called

@@ -10,25 +10,13 @@ sequencing via ReSeq.
 """
 
 import logging
+import math
 import random
 from pathlib import Path
 
 # Import exceptions
 from ..exceptions import FileOperationError
-
-# Map for DNA complementation
-COMP_MAP = {
-    "A": "T",
-    "T": "A",
-    "G": "C",
-    "C": "G",
-    "N": "N",
-    "a": "t",
-    "t": "a",
-    "g": "c",
-    "c": "g",
-    "n": "n",
-}
+from .utils.sequence_utils import reverse_complement
 
 
 def read_fasta_to_dict(fasta_file: str) -> dict[str, str]:
@@ -240,11 +228,18 @@ def get_insert_length(mu: float, sigma: float, lower: int, rng: random.Random | 
     Returns:
         Integer insert length.
     """
+    if sigma <= 0 and int(mu) < lower:
+        raise ValueError(
+            f"Mean fragment size ({mu}) is smaller than minimum required length ({lower}) with sigma={sigma}"
+        )
     _rng = rng or random
-    while True:
+    for _ in range(1_000_000):
         length = int(_rng.gauss(mu, sigma))
         if length >= lower:
             return length
+    raise ValueError(
+        f"Could not sample insert length >= {lower} from Gaussian(mu={mu}, sigma={sigma}) after 1,000,000 attempts"
+    )
 
 
 def pick_fragment(
@@ -265,43 +260,28 @@ def pick_fragment(
     Returns:
         Tuple (chrom, fragment_start, fragment_end, strand).
     """
+    if not (0.0 <= bind <= 1.0):
+        raise ValueError(f"bind must be between 0.0 and 1.0, got {bind}")
+
     chrom, mstart, mend, strand = match
 
-    # Calculate probe length and minimum base overlap
     plen = mend - mstart
-    min_overlap = int(plen * bind)
+    min_overlap = math.ceil(plen * bind)
+    if plen <= 0 or ins < min_overlap:
+        raise ValueError(
+            f"Insert size ({ins}) is smaller than minimum required probe overlap ({min_overlap})"
+        )
 
-    # Calculate available space for fragment
-    space = ins + plen - min_overlap
-
-    # Pick a random offset within the available space
-    offset = (rng or random).randint(0, space)
-
-    # Calculate fragment boundaries
-    f_start = mstart - offset
-    if f_start < 0:
-        f_start = 0
+    lower = max(0, mstart + min_overlap - ins)
+    upper = mend - min_overlap
+    if lower > upper:
+        raise ValueError(
+            f"Invalid fragment bounds [{lower}, {upper}] for match {match}, ins={ins}, bind={bind}"
+        )
+    f_start = (rng or random).randint(lower, upper)
     f_end = f_start + ins
 
     return (chrom, f_start, f_end, strand)
-
-
-def comp(sequence: str) -> str:
-    """
-    Return the complement of a DNA sequence (preserving case).
-
-    Args:
-        sequence: DNA sequence.
-
-    Returns:
-        Complemented sequence.
-    """
-    comp_seq = []
-    for base in sequence:
-        comp_base = COMP_MAP.get(base, base)
-        comp_seq.append(comp_base)
-
-    return "".join(comp_seq)
 
 
 def simulate_fragments(
@@ -335,6 +315,9 @@ def simulate_fragments(
     Raises:
         SystemExit: If the simulation fails or produces invalid output.
     """
+    if not (0.0 <= bind <= 1.0):
+        raise FileOperationError(f"Invalid bind fraction: {bind}")
+
     # Create local RNG for reproducibility if seed provided
     rng = random.Random(seed) if seed is not None else None
     if seed is not None:
@@ -390,7 +373,10 @@ def simulate_fragments(
                 match = pick_on_match(matches, rng=rng)
 
                 # Determine fragment length from Gaussian distribution
-                ins = get_insert_length(fragment_size, fragment_sd, min_fragment, rng=rng)
+                min_overlap = math.ceil((match[2] - match[1]) * bind)
+                ins = get_insert_length(
+                    fragment_size, fragment_sd, max(min_fragment, min_overlap), rng=rng
+                )
 
                 # Pick a fragment location
                 fragment = pick_fragment(match, ins, bind, rng=rng)
@@ -417,7 +403,7 @@ def simulate_fragments(
 
                 # Get fragment sequence
                 frag_seq = chrom_seq[fstart:fend]
-                frag_seq_rc = comp(frag_seq[::-1])  # Reverse complement
+                frag_seq_rc = reverse_complement(frag_seq)
                 frag_len = len(frag_seq)
 
                 # Get systematic error profiles for this fragment

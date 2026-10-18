@@ -43,7 +43,6 @@ References:
 """
 
 import logging
-import math
 from pathlib import Path
 
 from ...exceptions import FileOperationError
@@ -134,6 +133,9 @@ def run_ccs_consensus(
         - Output BAM contains HiFi reads ready for alignment
         - CCS automatically sorts output by read name
     """
+    # Validate parameters
+    validate_ccs_parameters(min_passes=min_passes, min_rq=min_rq, threads=threads)
+
     # Validate input BAM exists
     input_bam_path = Path(input_bam)
     if not input_bam_path.exists():
@@ -167,7 +169,7 @@ def run_ccs_consensus(
     logging.info(f"  Input CLR BAM: {input_bam}")
     logging.info(f"  Output HiFi BAM: {output_bam}")
     logging.info(f"  Min passes: {min_passes}")
-    logging.info(f"  Min accuracy (RQ): {min_rq} (Q{int(-10 * math.log10(1 - min_rq))})")
+    logging.info(f"  Min accuracy (RQ): {min_rq}")
     logging.info(f"  Threads: {threads}")
     if seed is not None:
         logging.info(f"  Note: Seed {seed} provided but CCS does not support --seed parameter")
@@ -205,6 +207,7 @@ def run_ccs_consensus(
 def validate_ccs_parameters(
     min_passes: int,
     min_rq: float,
+    threads: int = DEFAULT_CCS_THREADS,
 ) -> None:
     """
     Validate CCS consensus parameters before running.
@@ -212,6 +215,7 @@ def validate_ccs_parameters(
     Args:
         min_passes: Minimum number of passes required.
         min_rq: Minimum predicted accuracy (0.0-1.0).
+        threads: Number of threads (default: DEFAULT_CCS_THREADS).
 
     Raises:
         ValueError: If any parameter is outside valid range.
@@ -227,9 +231,14 @@ def validate_ccs_parameters(
     Notes:
         - min_passes must be ≥ 1 (typically ≥3 for HiFi)
         - min_rq must be in range [0.0, 1.0]
+        - threads must be ≥ 1
         - Called automatically by run_ccs_consensus
         - Can be used for early validation in CLI/config parsing
     """
+    # Validate threads
+    if threads < 1:
+        raise ValueError(f"Invalid threads: {threads}. Must be ≥ 1")
+
     # Validate min_passes
     if min_passes < 1:
         raise ValueError(f"Invalid min_passes: {min_passes}. Must be ≥ 1")
@@ -252,60 +261,4 @@ def validate_ccs_parameters(
 
     # Warn if min_rq is very high (may reduce yield)
     if min_rq > 0.999:
-        logging.warning(
-            f"Very high min_rq value: {min_rq} (Q{int(-10 * math.log10(1 - min_rq))}). "
-            f"This may result in very low yield."
-        )
-
-
-def estimate_hifi_yield(
-    clr_bam_size: int,
-    min_passes: int,
-    min_rq: float,
-) -> float:
-    """
-    Estimate HiFi yield from multi-pass CLR BAM parameters.
-
-    Provides rough estimate of expected HiFi reads based on CLR BAM size
-    and filtering parameters. Useful for validating parameter choices.
-
-    Args:
-        clr_bam_size: Size of input multi-pass CLR BAM in bytes.
-        min_passes: Minimum number of passes required.
-        min_rq: Minimum predicted accuracy threshold.
-
-    Returns:
-        Estimated yield as fraction of input (0.0-1.0).
-
-    Example:
-        Estimate yield before CCS run::
-
-            from pathlib import Path
-            from muc_one_up.read_simulator.wrappers.ccs_wrapper import estimate_hifi_yield
-
-            clr_size = Path("sim_clr.bam").stat().st_size
-            estimated_yield = estimate_hifi_yield(clr_size, min_passes=3, min_rq=0.99)
-            print(f"Estimated HiFi yield: {estimated_yield * 100:.1f}% of CLR data")
-
-    Notes:
-        - Rough estimate only, actual yield varies by data quality
-        - Higher min_passes and min_rq reduce yield
-        - Typical HiFi yield: 50-80% of CLR data for standard parameters
-        - Very strict filtering may yield <10% of input data
-    """
-    # Base yield estimate (typical CCS conversion rate)
-    base_yield = 0.65  # 65% typical yield for standard parameters
-
-    # Adjust for min_passes (higher = more stringent = lower yield)
-    pass_penalty = max(0.0, (min_passes - 3) * 0.1)  # -10% per pass above 3
-
-    # Adjust for min_rq (higher = more stringent = lower yield)
-    rq_penalty = max(0.0, (min_rq - 0.99) * 5.0)  # -5% per 0.01 increase above 0.99
-
-    # Calculate adjusted yield
-    adjusted_yield = base_yield * (1.0 - pass_penalty) * (1.0 - rq_penalty)
-
-    # Clamp to reasonable range [0.05, 0.95]
-    adjusted_yield = max(0.05, min(0.95, adjusted_yield))
-
-    return adjusted_yield
+        logging.warning(f"Very high min_rq value: {min_rq}. This may result in very low yield.")

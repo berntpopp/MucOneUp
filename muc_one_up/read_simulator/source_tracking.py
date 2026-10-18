@@ -24,10 +24,12 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+from bisect import bisect_left, bisect_right
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from ..simulation_statistics import extract_vntr_region, get_repeat_lengths
 from ..type_defs import HaplotypeResult, MutationTarget, RepeatUnit
 
 logger = logging.getLogger(__name__)
@@ -152,6 +154,7 @@ def build_coordinate_map(
     mutation_positions: list[tuple[int, int]],
     mutation_name: str | None,
     snp_info: list[dict[str, object]] | None,
+    repeat_lengths: list[int] | None = None,
 ) -> RepeatCoordinateMap:
     """Build a coordinate map from a haplotype repeat chain.
 
@@ -164,6 +167,7 @@ def build_coordinate_map(
         mutation_name: Name of the mutation applied, or None.
         snp_info: List of SNP dicts with 'position', 'ref_base', 'alt_base' keys,
             or None if no SNPs.
+        repeat_lengths: Optional list of nucleotide lengths for each repeat in chain.
 
     Returns:
         RepeatCoordinateMap for this haplotype.
@@ -183,8 +187,11 @@ def build_coordinate_map(
                 f"{haplotype} at index {repeat_index} in build_coordinate_map. "
                 f"Available symbols: {sorted(repeats_dict.keys())}"
             )
-        seq = repeats_dict[unit.symbol]
-        region_len = len(seq)
+        if repeat_lengths is not None and i < len(repeat_lengths):
+            region_len = repeat_lengths[i]
+        else:
+            seq = repeats_dict[unit.symbol]
+            region_len = len(seq)
 
         is_mutated = repeat_index in mutated_indices or unit.mutated
         region = RepeatRegion(
@@ -214,12 +221,12 @@ def build_coordinate_map(
             ref_base = str(snp.get("ref_base", ""))
             alt_base = str(snp.get("alt_base", ""))
 
-            # Determine which repeat region this SNP falls within
+            # Determine which repeat region this SNP falls within via binary search
             repeat_idx: int | None = None
-            for region in regions:
-                if region.start <= pos < region.end:
-                    repeat_idx = region.index
-                    break
+            if regions:
+                idx = bisect_right(regions, pos, key=lambda r: r.start) - 1
+                if 0 <= idx < len(regions) and regions[idx].start <= pos < regions[idx].end:
+                    repeat_idx = regions[idx].index
 
             snp_positions.append(
                 SNPPosition(
@@ -229,6 +236,7 @@ def build_coordinate_map(
                     repeat_index=repeat_idx,
                 )
             )
+        snp_positions.sort(key=lambda s: s.position)
 
     return RepeatCoordinateMap(
         haplotype=haplotype,
@@ -237,6 +245,45 @@ def build_coordinate_map(
         vntr_end=vntr_end,
         snp_positions=snp_positions,
     )
+
+
+def _compute_repeat_lengths(
+    results: list[HaplotypeResult],
+    config: dict[str, Any],
+    mutated_units: dict[int, list[tuple[int, str]]] | None = None,
+    reference_assembly: str | None = None,
+) -> dict[int, list[int]]:
+    """Compute repeat lengths for each haplotype in simulation results."""
+    effective_config = (
+        {**config, "reference_assembly": reference_assembly} if reference_assembly else config
+    )
+    repeat_lengths: dict[int, list[int]] = {}
+    for i, hr in enumerate(results, start=1):
+        hr_lengths = getattr(hr, "_repeat_lengths", None)
+        hap_mut = (mutated_units or {}).get(i)
+        if hap_mut is None and hr_lengths is not None:
+            repeat_lengths[i] = list(hr_lengths)
+        else:
+            seq = getattr(hr, "sequence", None)
+            vntr_len = (
+                len(
+                    extract_vntr_region(
+                        seq,
+                        effective_config,
+                        chain=hr.chain,
+                        repeat_lengths=hr_lengths,
+                    )
+                )
+                if seq is not None
+                else None
+            )
+            repeat_lengths[i] = get_repeat_lengths(
+                hr.chain,
+                effective_config,
+                hap_mutated_units=hap_mut,
+                vntr_length=vntr_len,
+            )
+    return repeat_lengths
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +306,7 @@ class ReadSourceTracker:
         mutation_positions: list[tuple[int, int]] | None = None,
         mutation_name: str | None = None,
         snp_info: dict[int, list[dict[str, object]]] | None = None,
+        repeat_lengths: dict[int, list[int]] | None = None,
     ) -> None:
         """Initialise the tracker and build coordinate maps.
 
@@ -271,6 +319,7 @@ class ReadSourceTracker:
             mutation_name: Name of the applied mutation, or None.
             snp_info: Mapping of 0-based haplotype index to list of SNP dicts.
                 Keys are converted to 1-based internally.
+            repeat_lengths: Mapping of 1-based haplotype number to list of repeat lengths.
         """
         if mutation_positions is None:
             mutation_positions = []
@@ -285,6 +334,7 @@ class ReadSourceTracker:
         self.coordinate_maps: dict[int, RepeatCoordinateMap] = {}
         for hap_num, chain in repeat_chains.items():
             hap_snps = snp_info_1based.get(hap_num)
+            hap_lengths = (repeat_lengths or {}).get(hap_num)
             self.coordinate_maps[hap_num] = build_coordinate_map(
                 haplotype=hap_num,
                 chain=chain,
@@ -293,6 +343,7 @@ class ReadSourceTracker:
                 mutation_positions=mutation_positions,
                 mutation_name=mutation_name,
                 snp_info=hap_snps,
+                repeat_lengths=hap_lengths,
             )
 
     @classmethod
@@ -304,6 +355,7 @@ class ReadSourceTracker:
         mutation_name: str | None = None,
         applied_snp_info: Mapping[int, list] | Sequence[list] | None = None,
         reference_assembly: str | None = None,
+        mutated_units: dict[int, list[tuple[int, str]]] | None = None,
     ) -> ReadSourceTracker:
         """Build a tracker from simulation results and config.
 
@@ -318,6 +370,7 @@ class ReadSourceTracker:
             applied_snp_info: SNP info per 0-based haplotype index, as the mapping returned
                 by ``integrate_snps_unified`` or a list indexed by haplotype.
             reference_assembly: Override for reference assembly (defaults to config value).
+            mutated_units: Mapping of 1-based haplotype index to mutated repeat unit tuples.
 
         Returns:
             Configured ReadSourceTracker instance.
@@ -358,6 +411,13 @@ class ReadSourceTracker:
                 if snp_list:
                     snp_info_dict[int(i)] = list(snp_list)
 
+        repeat_lengths = _compute_repeat_lengths(
+            results,
+            config,
+            mutated_units=mutated_units,
+            reference_assembly=ref_assembly,
+        )
+
         return cls(
             repeat_chains=repeat_chains,
             repeats_dict=repeats_dict,
@@ -365,6 +425,7 @@ class ReadSourceTracker:
             mutation_positions=mut_positions,
             mutation_name=mut_name,
             snp_info=snp_info_dict if snp_info_dict else None,
+            repeat_lengths=repeat_lengths,
         )
 
     def annotate_reads(self, origins: Iterable[ReadOrigin]) -> Iterator[AnnotatedRead]:
@@ -398,26 +459,36 @@ class ReadSourceTracker:
                 origin.ref_start < coord_map.vntr_end and origin.ref_end > coord_map.vntr_start
             )
 
-            # Find overlapping repeat regions
+            # Find overlapping repeat regions via binary search
             overlapping_indices: list[int] = []
             overlaps_mutation = False
             mutation_name_found = ""
 
-            for region in coord_map.regions:
-                # Interval overlap check
-                if origin.ref_start < region.end and origin.ref_end > region.start:
+            if coord_map.regions:
+                first_idx = bisect_right(coord_map.regions, origin.ref_start, key=lambda r: r.end)
+                last_idx = bisect_left(coord_map.regions, origin.ref_end, key=lambda r: r.start)
+
+                for k in range(first_idx, last_idx):
+                    region = coord_map.regions[k]
                     overlapping_indices.append(region.index)
                     if region.is_mutated:
                         overlaps_mutation = True
-                        if region.mutation_name:
+                        if region.mutation_name and not mutation_name_found:
                             mutation_name_found = region.mutation_name
 
             repeat_units = ",".join(str(idx) for idx in overlapping_indices)
 
-            # Check SNP overlap
-            overlaps_snp = any(
-                origin.ref_start <= snp.position < origin.ref_end for snp in coord_map.snp_positions
-            )
+            # Check SNP overlap via binary search
+            overlaps_snp = False
+            if coord_map.snp_positions:
+                snp_idx = bisect_left(
+                    coord_map.snp_positions, origin.ref_start, key=lambda s: s.position
+                )
+                if (
+                    snp_idx < len(coord_map.snp_positions)
+                    and coord_map.snp_positions[snp_idx].position < origin.ref_end
+                ):
+                    overlaps_snp = True
 
             yield AnnotatedRead(
                 read_id=origin.read_id,
@@ -528,6 +599,7 @@ class ReadSourceTracker:
             return None
 
         repeat_chains: dict[int, list[RepeatUnit]] = {}
+        repeat_lengths: dict[int, list[int]] = {}
         for key, hap_data in haplotypes_section.items():
             # Parse "haplotype_N" -> N
             if not key.startswith("haplotype_"):
@@ -540,7 +612,16 @@ class ReadSourceTracker:
             if not chain_str or not isinstance(chain_str, str):
                 logger.warning("Missing repeat_chain for %s in %s", key, stats_path)
                 return None
-            repeat_chains[hap_num] = [RepeatUnit.from_str(s) for s in chain_str.split("-")]
+            chain = [RepeatUnit.from_str(s) for s in chain_str.split("-")]
+            repeat_chains[hap_num] = chain
+
+            raw_lengths = hap_data.get("repeat_lengths")
+            if (
+                isinstance(raw_lengths, list)
+                and len(raw_lengths) == len(chain)
+                and all(isinstance(x, int) for x in raw_lengths)
+            ):
+                repeat_lengths[hap_num] = raw_lengths
 
         if not repeat_chains:
             logger.warning("No haplotype chains found in %s", stats_path)
@@ -588,6 +669,7 @@ class ReadSourceTracker:
             mutation_positions=mutation_positions,
             mutation_name=mutation_name,
             snp_info=snp_info if snp_info else None,
+            repeat_lengths=repeat_lengths if repeat_lengths else None,
         )
 
 
@@ -596,6 +678,7 @@ def companion_stats_fields(
     config: dict[str, Any],
     mutation_positions: list[MutationTarget] | None = None,
     mutation_name: str | None = None,
+    mutated_units: dict[int, list[tuple[int, str]]] | None = None,
 ) -> dict[str, Any]:
     """Build the simulation_stats.json fields read by ``from_companion_files``.
 
@@ -604,6 +687,7 @@ def companion_stats_fields(
         config: Configuration dict providing 'repeats' and 'constants'.
         mutation_positions: Applied mutation targets (1-based), if any.
         mutation_name: Name of the applied mutation, if any.
+        mutated_units: Mutated units per 1-based haplotype, if any.
 
     Returns:
         Dict with 'haplotypes', 'config' and 'mutation_details' keys.
@@ -613,11 +697,21 @@ def companion_stats_fields(
     if mutation_name and targets:
         mutation_details = {"mutation_name": mutation_name, "targets": targets}
 
+    repeat_lengths = _compute_repeat_lengths(
+        results,
+        config,
+        mutated_units=mutated_units,
+    )
+    haplotypes = {
+        f"haplotype_{i}": {
+            "repeat_chain": "-".join(str(ru) for ru in hr.chain),
+            "repeat_lengths": repeat_lengths[i],
+        }
+        for i, hr in enumerate(results, start=1)
+    }
+
     return {
-        "haplotypes": {
-            f"haplotype_{i}": {"repeat_chain": "-".join(str(ru) for ru in hr.chain)}
-            for i, hr in enumerate(results, start=1)
-        },
+        "haplotypes": haplotypes,
         "config": {
             "repeats": config.get("repeats", {}),
             "constants": config.get("constants", {}),

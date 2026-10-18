@@ -44,13 +44,15 @@ class TestBWAWrapperCommandConstruction:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        mock_pipeline = mocker.patch(_PIPELINE, return_value=_ok_result())
+        def mock_pipeline_cmd(cmds, **kwargs):
+            out.write_bytes(b"SORTED_BAM_DATA")
+            return _ok_result()
 
-        # Mock run_command for sort and index - create output files
+        mock_pipeline = mocker.patch(_PIPELINE, side_effect=mock_pipeline_cmd)
+
+        # Mock run_command for index - create bai file
         def mock_run_cmd(cmd, **kwargs):
-            if "sort" in cmd:
-                out.write_bytes(b"SORTED_BAM_DATA")
-            elif "index" in cmd:
+            if "index" in cmd:
                 Path(str(out) + ".bai").write_bytes(b"INDEX_DATA")
             return _ok_result()
 
@@ -71,8 +73,8 @@ class TestBWAWrapperCommandConstruction:
         bwa_cmd = pipeline_cmds[0]
         assert bwa_cmd == ["bwa", "mem", "-t", "4", str(ref), str(r1), str(r2)]
 
-    def test_constructs_correct_samtools_view_command(self, mocker, tmp_path, tools_dict):
-        """Test that samtools view command is constructed correctly."""
+    def test_constructs_correct_samtools_sort_command(self, mocker, tmp_path, tools_dict):
+        """Test that samtools sort command is constructed correctly in pipeline."""
         ref = tmp_path / "ref.fa"
         r1 = tmp_path / "R1.fq"
         r2 = tmp_path / "R2.fq"
@@ -82,12 +84,14 @@ class TestBWAWrapperCommandConstruction:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        mock_pipeline = mocker.patch(_PIPELINE, return_value=_ok_result())
+        def mock_pipeline_cmd(cmds, **kwargs):
+            out.write_bytes(b"SORTED_BAM_DATA")
+            return _ok_result()
+
+        mock_pipeline = mocker.patch(_PIPELINE, side_effect=mock_pipeline_cmd)
 
         def mock_run_cmd(cmd, **kwargs):
-            if "sort" in cmd:
-                out.write_bytes(b"SORTED_BAM_DATA")
-            elif "index" in cmd:
+            if "index" in cmd:
                 Path(str(out) + ".bai").write_bytes(b"INDEX_DATA")
             return _ok_result()
 
@@ -95,12 +99,11 @@ class TestBWAWrapperCommandConstruction:
 
         align_reads(str(r1), str(r2), str(ref), str(out), tools_dict, threads=4)
 
-        # Verify samtools view command includes -o for direct file output
+        # Verify samtools sort command streams from stdin (-) to output_bam
         pipeline_cmds = mock_pipeline.call_args[0][0]
-        samtools_cmd = pipeline_cmds[1]
+        sort_cmd = pipeline_cmds[1]
 
-        unsorted_bam = str(out.parent / f"{out.stem}_unsorted.bam")
-        assert samtools_cmd == ["samtools", "view", "-bS", "-o", unsorted_bam, "-"]
+        assert sort_cmd == ["samtools", "sort", "-@", "4", "-o", str(out), "-"]
 
     def test_uses_correct_thread_count(self, mocker, tmp_path, tools_dict):
         """Test that thread count is correctly passed to BWA and samtools sort."""
@@ -113,15 +116,14 @@ class TestBWAWrapperCommandConstruction:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        mock_pipeline = mocker.patch(_PIPELINE, return_value=_ok_result())
+        def mock_pipeline_cmd(cmds, **kwargs):
+            out.write_bytes(b"SORTED_BAM_DATA")
+            return _ok_result()
 
-        run_cmd_calls = []
+        mock_pipeline = mocker.patch(_PIPELINE, side_effect=mock_pipeline_cmd)
 
         def mock_run_cmd(cmd, **kwargs):
-            run_cmd_calls.append(cmd)
-            if "sort" in cmd:
-                out.write_bytes(b"SORTED_BAM_DATA")
-            elif "index" in cmd:
+            if "index" in cmd:
                 Path(str(out) + ".bai").write_bytes(b"INDEX_DATA")
             return _ok_result()
 
@@ -135,8 +137,8 @@ class TestBWAWrapperCommandConstruction:
         t_index = bwa_cmd.index("-t")
         assert bwa_cmd[t_index + 1] == "8"
 
-        # samtools sort should have -@ 8
-        sort_cmd = run_cmd_calls[0]
+        # samtools sort should have -@ 8 in pipeline
+        sort_cmd = mock_pipeline.call_args[0][0][1]
         assert "-@" in sort_cmd
         at_index = sort_cmd.index("-@")
         assert sort_cmd[at_index + 1] == "8"
@@ -233,8 +235,8 @@ class TestBWAWrapperErrorHandling:
                 threads=4,
             )
 
-    def test_raises_error_when_sort_fails(self, mocker, tmp_path, tools_dict):
-        """Test that samtools sort failure is properly caught and reported."""
+    def test_raises_error_when_index_fails(self, mocker, tmp_path, tools_dict):
+        """Test that samtools index failure is properly caught and reported."""
         ref = tmp_path / "ref.fa"
         r1 = tmp_path / "R1.fq"
         r2 = tmp_path / "R2.fq"
@@ -245,14 +247,14 @@ class TestBWAWrapperErrorHandling:
 
         mocker.patch(_PIPELINE, return_value=_ok_result())
 
-        # run_command for sort raises ExternalToolError
+        # run_command for index raises ExternalToolError
         mocker.patch(
             _RUN_CMD,
             side_effect=ExternalToolError(
                 tool="command",
                 exit_code=1,
-                stderr="sort failed",
-                cmd="samtools sort",
+                stderr="index failed",
+                cmd="samtools index",
             ),
         )
 
@@ -281,12 +283,14 @@ class TestBWAWrapperOutputValidation:
         r1.write_text("@read1\nACGT\n+\nIIII")
         r2.write_text("@read1\nACGT\n+\nIIII")
 
-        mocker.patch(_PIPELINE, return_value=_ok_result())
+        def mock_pipeline_cmd(cmds, **kwargs):
+            out.write_bytes(b"SORTED_BAM_DATA")
+            return _ok_result()
+
+        mocker.patch(_PIPELINE, side_effect=mock_pipeline_cmd)
 
         def mock_run_cmd(cmd, **kwargs):
-            if "sort" in cmd:
-                out.write_bytes(b"SORTED_BAM_DATA")
-            elif "index" in cmd:
+            if "index" in cmd:
                 Path(str(out) + ".bai").write_bytes(b"INDEX_DATA")
             return _ok_result()
 

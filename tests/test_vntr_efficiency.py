@@ -13,7 +13,7 @@ Tests cover:
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import pytest
 
@@ -66,6 +66,8 @@ class TestVNTREfficiencyModelInit:
         assert model.vntr_region == DEFAULT_VNTR_REGION
         assert model.capture_bed is None
         assert model.flanking_size == 10000
+        assert model.samtools_cmd == "samtools"
+        mock_check.assert_called_once_with(samtools_cmd="samtools")
 
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.check_samtools_available")
     def test_custom_initialization(self, mock_check, custom_vntr_region, temp_dir):
@@ -81,6 +83,7 @@ class TestVNTREfficiencyModelInit:
             vntr_region=custom_vntr_region,
             capture_bed=capture_bed,
             flanking_size=5000,
+            samtools_cmd="custom-samtools",
         )
 
         assert model.penalty_factor == 0.5
@@ -89,6 +92,8 @@ class TestVNTREfficiencyModelInit:
         assert model.vntr_region == custom_vntr_region
         assert model.capture_bed == capture_bed
         assert model.flanking_size == 5000
+        assert model.samtools_cmd == "custom-samtools"
+        mock_check.assert_called_once_with(samtools_cmd="custom-samtools")
 
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.check_samtools_available")
     def test_invalid_penalty_factor(self, mock_check):
@@ -184,20 +189,6 @@ class TestVNTREfficiencyModelOperations:
     """Tests for individual model operations."""
 
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.check_samtools_available")
-    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.extract_reads_by_region")
-    def test_extract_reads(self, mock_extract, mock_check, temp_dir):
-        """Test read extraction wrapper."""
-        mock_check.return_value = True
-        input_bam = temp_dir / "input.bam"
-        region_bed = temp_dir / "region.bed"
-        output_bam = temp_dir / "output.bam"
-
-        model = VNTREfficiencyModel()
-        model._extract_reads(input_bam, region_bed, output_bam)
-
-        mock_extract.assert_called_once_with(input_bam, region_bed, output_bam)
-
-    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.check_samtools_available")
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.downsample_bam")
     def test_downsample_reads(self, mock_downsample, mock_check, temp_dir):
         """Test downsampling wrapper."""
@@ -208,7 +199,9 @@ class TestVNTREfficiencyModelOperations:
         model = VNTREfficiencyModel(penalty_factor=0.39, seed=42)
         model._downsample_reads(input_bam, output_bam, 0.5)
 
-        mock_downsample.assert_called_once_with(input_bam, output_bam, 0.5, 42)
+        mock_downsample.assert_called_once_with(
+            input_bam, output_bam, 0.5, 42, samtools_cmd="samtools"
+        )
 
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.check_samtools_available")
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.merge_bams")
@@ -224,15 +217,19 @@ class TestVNTREfficiencyModelOperations:
         model = VNTREfficiencyModel(threads=8)
         model._merge_and_sort(bam1, bam2, merged_bam, sorted_bam)
 
-        mock_merge.assert_called_once_with([bam1, bam2], merged_bam, threads=8)
-        mock_sort.assert_called_once_with(merged_bam, sorted_bam, threads=8)
+        mock_merge.assert_called_once_with(
+            [bam1, bam2], merged_bam, threads=8, samtools_cmd="samtools"
+        )
+        mock_sort.assert_called_once_with(
+            merged_bam, sorted_bam, threads=8, samtools_cmd="samtools"
+        )
 
 
 class TestVNTREfficiencyModelStatistics:
     """Tests for statistics calculation."""
 
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.check_samtools_available")
-    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.get_bam_read_count")
+    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.get_read_count")
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.calculate_mean_coverage")
     def test_calculate_statistics(self, mock_coverage, mock_count, mock_check, temp_dir):
         """Test coverage statistics calculation."""
@@ -257,9 +254,21 @@ class TestVNTREfficiencyModelStatistics:
         assert stats["output_reads"] == 6000
         assert stats["reads_removed"] == 4000
         assert stats["retention_fraction"] == 0.6
+        mock_count.assert_has_calls(
+            [
+                call(input_bam, samtools_cmd="samtools"),
+                call(output_bam, samtools_cmd="samtools"),
+            ]
+        )
+        mock_coverage.assert_has_calls(
+            [
+                call(output_bam, vntr_bed, samtools_cmd="samtools"),
+                call(output_bam, non_vntr_bed, samtools_cmd="samtools"),
+            ]
+        )
 
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.check_samtools_available")
-    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.get_bam_read_count")
+    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.get_read_count")
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.calculate_mean_coverage")
     def test_statistics_zero_coverage(self, mock_coverage, mock_count, mock_check, temp_dir):
         """Test statistics with zero non-VNTR coverage."""
@@ -279,7 +288,7 @@ class TestVNTREfficiencyModelStatistics:
         assert stats["coverage_ratio"] == 0.0
 
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.check_samtools_available")
-    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.get_bam_read_count")
+    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.get_read_count")
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.calculate_mean_coverage")
     def test_statistics_zero_input_reads(self, mock_coverage, mock_count, mock_check, temp_dir):
         """Test statistics with zero input reads."""
@@ -317,6 +326,7 @@ class TestVNTREfficiencyModelApplyBias:
 
         with pytest.raises(VNTREfficiencyError, match="Input BAM is corrupted"):
             model.apply_efficiency_bias(input_bam, output_bam, temp_work_dir)
+        mock_validate.assert_called_once_with(input_bam, samtools_cmd="samtools")
 
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.check_samtools_available")
     def test_missing_input_bam(self, mock_check, temp_dir):
@@ -339,7 +349,7 @@ class TestVNTREfficiencyModelApplyBias:
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.downsample_bam")
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.merge_bams")
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.sort_bam")
-    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.get_bam_read_count")
+    @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.get_read_count")
     @patch("muc_one_up.read_simulator.vntr_efficiency.samtools.calculate_mean_coverage")
     @patch("muc_one_up.read_simulator.vntr_efficiency.bed")
     def test_complete_workflow(
@@ -384,14 +394,49 @@ class TestVNTREfficiencyModelApplyBias:
         stats = model.apply_efficiency_bias(input_bam, output_bam, temp_work_dir)
 
         # Verify all steps called
-        mock_validate.assert_called_once()
+        mock_validate.assert_called_once_with(input_bam, samtools_cmd="samtools")
         mock_bed.create_vntr_bed.assert_called_once()
         mock_bed.create_flanking_beds.assert_called_once()
-        assert mock_extract.call_count == 2  # VNTR + non-VNTR
-        mock_downsample.assert_called_once()
-        mock_merge.assert_called_once()
-        mock_sort.assert_called_once()
-        mock_index.assert_called_once()
+        assert mock_extract.call_count == 2
+        mock_extract.assert_has_calls(
+            [
+                call(
+                    input_bam,
+                    vntr_bed,
+                    temp_work_dir / "vntr_reads.bam",
+                    unselected_bam=temp_work_dir / "remainder.bam",
+                    exclude_flags=2304,
+                    samtools_cmd="samtools",
+                ),
+                call(
+                    temp_work_dir / "remainder.bam",
+                    non_vntr_bed,
+                    temp_work_dir / "non_vntr_reads.bam",
+                    exclude_flags=2304,
+                    samtools_cmd="samtools",
+                ),
+            ]
+        )
+        mock_downsample.assert_called_once_with(
+            temp_work_dir / "vntr_reads.bam",
+            temp_work_dir / "vntr_downsampled.bam",
+            0.39,
+            42,
+            samtools_cmd="samtools",
+        )
+        mock_merge.assert_called_once_with(
+            [temp_work_dir / "vntr_downsampled.bam", temp_work_dir / "non_vntr_reads.bam"],
+            temp_work_dir / "merged.bam",
+            threads=8,
+            samtools_cmd="samtools",
+        )
+        mock_sort.assert_called_once_with(
+            temp_work_dir / "merged.bam",
+            output_bam,
+            threads=8,
+            samtools_cmd="samtools",
+        )
+        mock_index.assert_called_once_with(output_bam, samtools_cmd="samtools")
 
         # Verify statistics
         assert stats["vntr_coverage"] == 150.0

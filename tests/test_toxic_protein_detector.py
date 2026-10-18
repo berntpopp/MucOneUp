@@ -164,6 +164,16 @@ class TestCompositionSimilarity:
         # Score = 1 - 2/6 / 1.0 = 1 - 1/3 = 2/3
         assert similarity == pytest.approx(2 / 3)
 
+    def test_clamped_to_zero_when_divergence_exceeds_norm(self):
+        """Test that composition similarity is clamped to 0.0 when diff > norm."""
+        mutant = "R" * 40
+        wildtype = "RCHLGPGHQAGPGLHR"
+        residues = ["R", "C", "H"]
+
+        similarity = composition_similarity(mutant, wildtype, residues)
+
+        assert similarity == 0.0
+
 
 class TestDetectToxicProteinInSequence:
     """Test main toxic protein detection function."""
@@ -323,3 +333,46 @@ class TestScanOrfFasta:
 
         # Should return empty dict
         assert results == {}
+
+    def test_multi_orf_flank_stripping_order_independence(self, tmp_path):
+        """Two ORFs with differing constant flanks (e.g. from different reading frames
+        or SNPs) produce identical toxicity scores regardless of their order in the FASTA.
+        """
+        motif = "RCHLGPGHQAGPGLHR"
+        var1 = motif * 3
+        var2 = motif * 2
+
+        flank1_left = "LEFTONE"
+        flank1_right = "RIGHTONE"
+        flank2_left = "LEFTTWO"
+        flank2_right = "RIGHTTWO"
+
+        orf1_seq = f"{flank1_left}{var1}{flank1_right}"
+        orf2_seq = f"{flank2_left}{var2}{flank2_right}"
+
+        fasta_order1 = tmp_path / "order1.fa"
+        fasta_order1.write_text(f">ORF1\n{orf1_seq}\n>ORF2\n{orf2_seq}\n")
+
+        fasta_order2 = tmp_path / "order2.fa"
+        fasta_order2.write_text(f">ORF2\n{orf2_seq}\n>ORF1\n{orf1_seq}\n")
+
+        left_candidates = [flank1_left, flank2_left]
+        right_candidates = [flank1_right, flank2_right]
+
+        res1 = scan_orf_fasta(
+            str(fasta_order1),
+            left_const=left_candidates,
+            right_const=right_candidates,
+            consensus=motif,
+        )
+        res2 = scan_orf_fasta(
+            str(fasta_order2),
+            left_const=left_candidates,
+            right_const=right_candidates,
+            consensus=motif,
+        )
+
+        assert res1["ORF1"] == res2["ORF1"]
+        assert res1["ORF2"] == res2["ORF2"]
+        assert res1["ORF1"]["repeat_count"] == 3
+        assert res1["ORF2"]["repeat_count"] == 2

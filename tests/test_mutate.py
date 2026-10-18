@@ -1,6 +1,10 @@
 import pytest
 
-from muc_one_up.mutate import apply_mutations, validate_allowed_repeats
+from muc_one_up.mutate import (
+    apply_changes_to_repeat,
+    apply_mutations,
+    validate_allowed_repeats,
+)
 from muc_one_up.type_defs import HaplotypeResult, MutationTarget, RepeatUnit
 
 
@@ -303,21 +307,6 @@ class TestMutateErrorConditions:
         with pytest.raises(ValueError, match="Unknown mutation type 'unknown_op'"):
             apply_mutations(mutation_config, results, "unknownType", [MutationTarget(1, 1)])
 
-    def test_chain_not_ending_with_9(self, mutation_config):
-        """Test sequence assembly when chain doesn't end with '9'."""
-        from muc_one_up.mutate import rebuild_haplotype_sequence
-
-        mutation_config["repeats"]["A"] = "AAAAA"
-        chain = ["X", "A"]  # Doesn't end with "9"
-
-        seq = rebuild_haplotype_sequence(chain, mutation_config)
-
-        # Should not include right constant
-        left = mutation_config["constants"]["hg38"]["left"]
-        right = mutation_config["constants"]["hg38"]["right"]
-        assert seq.startswith(left)
-        assert not seq.endswith(right)  # Right constant not added
-
     def test_multi_repeat_offset_calculation(self, mutation_config):
         """Test mutation targeting later repeats in chain (offset calculation)."""
         mutation_config["repeats"]["A"] = "AAAAA"
@@ -398,3 +387,279 @@ class TestMutationAliasing:
         # Original chain must still be "C", not mutated
         assert results[0].chain[0].symbol == "C"
         assert results[0].chain[0].mutated is False
+
+
+def test_multiple_length_changing_mutations_order_independence():
+    """Verify that multiple length-changing mutations on the same haplotype
+    in both ascending and descending target order produce the exact expected
+    DNA sequence without coordinate drift (#134).
+    """
+    config = {
+        "repeats": {"1": "AAAA", "2": "CCCC", "3": "GGGG"},
+        "constants": {"hg38": {"left": "LL", "right": "RR"}},
+        "mutations": {
+            "dup": {
+                "allowed_repeats": ["1", "2", "3"],
+                "strict_mode": True,
+                "changes": [{"type": "insert", "start": 2, "end": 2, "sequence": "IN"}],
+            },
+            "del": {
+                "allowed_repeats": ["1", "2", "3"],
+                "strict_mode": True,
+                "changes": [{"type": "delete", "start": 2, "end": 3, "sequence": ""}],
+            },
+        },
+    }
+    init_seq = "LLAAAACCCCGGGGRR"
+
+    # Testing insertions on repeat 1 and repeat 3:
+    # Repeat 1: "AAAA" with insert at pos 2 -> "A" + "IN" + "AAA" = "AINAAA"
+    # Repeat 2: "CCCC"
+    # Repeat 3: "GGGG" with insert at pos 2 -> "G" + "IN" + "GGG" = "GINGGG"
+    expected_dup_seq = "LLAINAAACCCCGINGGGRR"
+
+    # Ascending target order: repeat 1 then repeat 3
+    results_asc = [
+        HaplotypeResult(
+            sequence=init_seq,
+            chain=[RepeatUnit("1"), RepeatUnit("2"), RepeatUnit("3")],
+        )
+    ]
+    updated_asc, _ = apply_mutations(
+        config=config,
+        results=results_asc,
+        mutation_name="dup",
+        targets=[MutationTarget(1, 1), MutationTarget(1, 3)],
+    )
+    assert updated_asc[0].sequence == expected_dup_seq
+
+    # Descending target order: repeat 3 then repeat 1
+    results_desc = [
+        HaplotypeResult(
+            sequence=init_seq,
+            chain=[RepeatUnit("1"), RepeatUnit("2"), RepeatUnit("3")],
+        )
+    ]
+    updated_desc, _ = apply_mutations(
+        config=config,
+        results=results_desc,
+        mutation_name="dup",
+        targets=[MutationTarget(1, 3), MutationTarget(1, 1)],
+    )
+    assert updated_desc[0].sequence == expected_dup_seq
+    assert updated_asc[0].sequence == updated_desc[0].sequence
+
+    # Testing mixed length changes: deletion on adjacent repeats in ascending vs descending
+    # Repeat 1: "AAAA" -> "AA" (delete bases 2..3)
+    # Repeat 2: "CCCC" -> "CC" (delete bases 2..3)
+    expected_del_seq = "LLAACCGGGGRR"
+
+    res_del_asc = [
+        HaplotypeResult(
+            sequence=init_seq,
+            chain=[RepeatUnit("1"), RepeatUnit("2"), RepeatUnit("3")],
+        )
+    ]
+    updated_del_asc, _ = apply_mutations(
+        config=config,
+        results=res_del_asc,
+        mutation_name="del",
+        targets=[MutationTarget(1, 1), MutationTarget(1, 2)],
+    )
+    assert updated_del_asc[0].sequence == expected_del_seq
+
+    res_del_desc = [
+        HaplotypeResult(
+            sequence=init_seq,
+            chain=[RepeatUnit("1"), RepeatUnit("2"), RepeatUnit("3")],
+        )
+    ]
+    updated_del_desc, _ = apply_mutations(
+        config=config,
+        results=res_del_desc,
+        mutation_name="del",
+        targets=[MutationTarget(1, 2), MutationTarget(1, 1)],
+    )
+    assert updated_del_desc[0].sequence == expected_del_seq
+    assert updated_del_asc[0].sequence == updated_del_desc[0].sequence
+
+
+def test_non_strict_symbol_conversion_preserves_earlier_indel():
+    """Verify that non-strict repeat symbol conversion at a second target
+    preserves an indel mutation already applied at an earlier target on the same haplotype (#134).
+    """
+    config = {
+        "repeats": {"X": "XXXX", "C": "CCCC"},
+        "constants": {"hg38": {"left": "LL", "right": "RR"}},
+        "mutations": {
+            "dupNonStrict": {
+                "allowed_repeats": ["X"],
+                "strict_mode": False,
+                "changes": [{"type": "insert", "start": 2, "end": 2, "sequence": "IN"}],
+            },
+        },
+    }
+    init_seq = "LLXXXXCCCCRR"
+    results = [
+        HaplotypeResult(
+            sequence=init_seq,
+            chain=[RepeatUnit("X"), RepeatUnit("C")],
+        )
+    ]
+
+    # Target 1: repeat 1 has allowed symbol 'X' -> mutates to 'XINXXX' (len 6, +2 bases)
+    # Target 2: repeat 2 has disallowed symbol 'C' -> auto-converts to 'X' ('XXXX'), then mutates to 'XINXXX'
+    # Auto-conversion must NOT reassemble and wipe repeat 1's insertion!
+    updated, _ = apply_mutations(
+        config=config,
+        results=results,
+        mutation_name="dupNonStrict",
+        targets=[MutationTarget(1, 1), MutationTarget(1, 2)],
+    )
+    assert updated[0].sequence == "LLXINXXXXINXXXRR"
+    assert updated[0].chain[0].symbol == "X"
+    assert updated[0].chain[0].mutated is True
+    assert updated[0].chain[1].symbol == "X"
+    assert updated[0].chain[1].mutated is True
+
+
+def test_two_mutations_on_same_repeat_preserves_edits():
+    """Verify that applying two mutations to the same (haplotype_index, repeat_index)
+    preserves the first edit and applies the second on top of it (#134).
+    """
+    config = {
+        "repeats": {"1": "ABCDE"},
+        "constants": {"hg38": {"left": "LL", "right": "RR"}},
+        "mutations": {
+            "ins": {
+                "allowed_repeats": ["1"],
+                "strict_mode": True,
+                "changes": [{"type": "insert", "start": 2, "end": 2, "sequence": "Z"}],
+            },
+            "rep": {
+                "allowed_repeats": ["1"],
+                "strict_mode": True,
+                "changes": [{"type": "replace", "start": 1, "end": 1, "sequence": "W"}],
+            },
+        },
+    }
+    init_seq = "LLABCDERR"
+    results = [HaplotypeResult(sequence=init_seq, chain=[RepeatUnit("1")])]
+
+    # Target 1 inserts "Z" at 2: "ABCDE" -> "AZBCDE"
+    # Target 2 inserts "Z" at 2 again on top of the modified repeat: "AZBCDE" -> "AZZBCDE"
+    updated, mutated_units = apply_mutations(
+        config=config,
+        results=results,
+        mutation_name="ins",
+        targets=[MutationTarget(1, 1), MutationTarget(1, 1)],
+    )
+    assert updated[0].sequence == "LLAZZBCDERR"
+    assert mutated_units[1] == [(1, "AZZBCDE")]
+
+    # Sequential calls with different mutations on the same repeat:
+    # First: replace at 1 with 'W' ("ABCDE" -> "WBCDE")
+    # Second: replace at 5 with 'Z' ("WBCDE" -> "WBCDZ")
+    res1, _ = apply_mutations(config, results, "rep", [MutationTarget(1, 1)])
+    assert res1[0].sequence == "LLWBCDERR"
+
+    config["mutations"]["rep5"] = {
+        "allowed_repeats": ["1"],
+        "strict_mode": True,
+        "changes": [{"type": "replace", "start": 5, "end": 5, "sequence": "Z"}],
+    }
+    res2, _ = apply_mutations(config, res1, "rep5", [MutationTarget(1, 1)])
+    assert res2[0].sequence == "LLWBCDZRR"
+
+
+def test_apply_mutations_sequential_calls_tracks_repeat_lengths():
+    """Calling apply_mutations twice sequentially where call 1 inserts into repeat 1
+    and call 2 mutates repeat 2 correctly offsets repeat 2 bounds ([AAAA][CCCC] -> [AGAAA][TCCC]).
+    """
+    config = {
+        "repeats": {"1": "AAAA", "2": "CCCC"},
+        "constants": {"hg38": {"left": "LL", "right": "RR"}},
+        "mutations": {
+            "ins": {
+                "allowed_repeats": ["1"],
+                "strict_mode": True,
+                "changes": [{"type": "insert", "start": 2, "end": 2, "sequence": "G"}],
+            },
+            "sub": {
+                "allowed_repeats": ["2"],
+                "strict_mode": True,
+                "changes": [{"type": "replace", "start": 1, "end": 1, "sequence": "T"}],
+            },
+        },
+    }
+    init_seq = "LLAAAACCCCRR"
+    results = [HaplotypeResult(sequence=init_seq, chain=[RepeatUnit("1"), RepeatUnit("2")])]
+
+    # Call 1: insert into repeat 1: "AAAA" -> "AGAAA" (length grows from 4 to 5)
+    res1, units1 = apply_mutations(config, results, "ins", [MutationTarget(1, 1)])
+    assert res1[0].sequence == "LLAGAAACCCCRR"
+    assert res1[0]._repeat_lengths == [5, 4]
+    assert units1[1] == [(1, "AGAAA")]
+
+    # Call 2: mutate repeat 2 on res1: "CCCC" -> "TCCC"
+    res2, units2 = apply_mutations(config, res1, "sub", [MutationTarget(1, 2)])
+    assert res2[0].sequence == "LLAGAAATCCCRR"
+    assert res2[0]._repeat_lengths == [5, 4]
+    assert units2[1] == [(2, "TCCC")]
+
+    # Also test fallback delta inference when _repeat_lengths is stripped/None
+    res1_stripped = [HaplotypeResult(sequence=res1[0].sequence, chain=res1[0].chain)]
+    assert res1_stripped[0]._repeat_lengths is None
+    res2_fallback, units2_fb = apply_mutations(config, res1_stripped, "sub", [MutationTarget(1, 2)])
+    assert res2_fallback[0].sequence == "LLAGAAATCCCRR"
+    assert res2_fallback[0]._repeat_lengths == [5, 4]
+    assert units2_fb[1] == [(2, "TCCC")]
+
+
+def test_apply_changes_to_repeat_multi_operation_updates_bounds():
+    """Multi-operation mutation in apply_changes_to_repeat validates bounds
+    against the updated length after prior insertions/deletions.
+    """
+    config = {
+        "repeats": {"1": "AAAA"},
+        "constants": {"hg38": {"left": "LL", "right": "RR"}},
+    }
+    chain = [RepeatUnit("1")]
+    seq = "LLAAAARR"
+
+    # Growth: insert 4 chars so repeat length grows from 4 to 8,
+    # then modify at position 7 (which would fail if length was still 4).
+    changes_grow = [
+        {"type": "insert", "start": 2, "end": 2, "sequence": "XYZW"},
+        {"type": "replace", "start": 7, "end": 8, "sequence": "TT"},
+    ]
+    new_seq, _, mutated = apply_changes_to_repeat(
+        seq=seq,
+        chain=chain,
+        repeat_index=0,
+        changes=changes_grow,
+        config=config,
+        mutation_name="grow_test",
+        start=2,
+        stop=6,
+    )
+    assert mutated == "AXYZWATT"
+    assert new_seq == "LLAXYZWATTRR"
+
+    # Shrink: delete 3 chars so repeat length shrinks from 4 to 1,
+    # then an operation at position 3 should fail bounds validation against length 1.
+    changes_shrink = [
+        {"type": "delete", "start": 2, "end": 4, "sequence": ""},
+        {"type": "replace", "start": 3, "end": 3, "sequence": "C"},
+    ]
+    with pytest.raises(ValueError, match=r"Replace out of bounds.*repeat length=1"):
+        apply_changes_to_repeat(
+            seq=seq,
+            chain=chain,
+            repeat_index=0,
+            changes=changes_shrink,
+            config=config,
+            mutation_name="shrink_test",
+            start=2,
+            stop=6,
+        )

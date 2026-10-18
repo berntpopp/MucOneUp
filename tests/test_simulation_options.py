@@ -23,9 +23,6 @@ class TestSimulationOptions:
         assert opts.reference_assembly == "hg38"
         assert opts.output_structure is False
         assert opts.fixed_lengths is None
-        assert opts.simulate_reads is None
-        assert opts.output_orfs is False
-        assert opts.orf_min_aa == 100
         assert opts.track_read_source is False
 
     def test_from_click_kwargs(self):

@@ -11,6 +11,7 @@ truth manifest.
 from __future__ import annotations
 
 import gzip
+import itertools
 from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import IO
@@ -51,7 +52,7 @@ def parse_maf_read_templates(maf_path: Path) -> dict[str, str]:
     mapping: dict[str, str] = {}
     block: list[str] = []
     with _open_text(Path(maf_path)) as handle:
-        for line in [*handle, "\n"]:
+        for line in itertools.chain(handle, ("\n",)):
             if line.startswith("s "):
                 block.append(line.split()[1])
             elif block:
@@ -59,8 +60,26 @@ def parse_maf_read_templates(maf_path: Path) -> dict[str, str]:
                     raise ReadSimulationError(
                         f"Unexpected MAF block in {maf_path}: expected template and read, got {block}"
                     )
-                mapping[block[1]] = block[0]
+                read_name = block[1]
+                if read_name in mapping:
+                    raise ReadSimulationError(
+                        f"Duplicate read name '{read_name}' encountered in MAF input"
+                    )
+                mapping[read_name] = block[0]
                 block = []
+    return mapping
+
+
+def parse_maf_files(maf_paths: Iterable[Path]) -> dict[str, str]:
+    """Combine read -> template mappings from multiple MAF files."""
+    mapping: dict[str, str] = {}
+    for maf_path in maf_paths:
+        for read_name, tmpl in parse_maf_read_templates(Path(maf_path)).items():
+            if read_name in mapping:
+                raise ReadSimulationError(
+                    f"Duplicate read name '{read_name}' encountered in MAF input"
+                )
+            mapping[read_name] = tmpl
     return mapping
 
 

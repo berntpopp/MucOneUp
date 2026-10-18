@@ -16,6 +16,7 @@ from muc_one_up.read_simulator.molecules import (
     homopolymer_runs,
     reverse_complement,
 )
+from muc_one_up.read_simulator.read_profiles import load_read_profile
 
 UNIT = "GCCCACGGTGTCACCTCGGCCCCGGACACCAGGCCGGCCCCGGGCTCCACCGCCCCCCCA"  # X: C7 at 52-58
 AMP_A = UNIT * 30
@@ -103,6 +104,21 @@ class TestMoleculeModel:
     def test_from_dict_validates_ranges(self, key: str, value: float) -> None:
         with pytest.raises(ValueError, match=key):
             MoleculeModel.from_dict({key: value})
+
+    def test_hashable(self) -> None:
+        m1 = MoleculeModel()
+        m2 = MoleculeModel()
+        assert hash(m1) == hash(m2)
+        st1 = StutterTable.from_dict({"C7|+": {"0": 1.0}})
+        st2 = StutterTable.from_dict({"C7|+": {"0": 1.0}})
+        assert hash(st1) == hash(st2)
+        m3 = MoleculeModel(stutter=st1)
+        m4 = MoleculeModel(stutter=st2)
+        assert hash(m3) == hash(m4)
+        assert len({m1, m2, m3, m4}) == 2
+        p1 = load_read_profile("ont_r10_sup_amplicon_v1")
+        p2 = load_read_profile("ont_r10_sup_amplicon_v1")
+        assert hash(p1) == hash(p2)
 
 
 class TestAmpliconMolecules:

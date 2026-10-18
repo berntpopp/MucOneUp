@@ -14,8 +14,9 @@ from muc_one_up.read_simulator.source_tracking import (
     ReadSourceTracker,
     RepeatRegion,
     build_coordinate_map,
+    companion_stats_fields,
 )
-from muc_one_up.type_defs import RepeatUnit
+from muc_one_up.type_defs import HaplotypeResult, RepeatUnit
 
 RU = RepeatUnit.from_str  # shorthand for tests
 
@@ -484,3 +485,187 @@ class TestTrackerFromCompanionFiles:
             json.dump(stats, f)
         result = ReadSourceTracker.from_companion_files(stats_path)
         assert result is None
+
+    def test_reconstruct_with_repeat_lengths_shifts_coordinates(self, tmp_path):
+        """Test reconstructing tracker from stats containing repeat_lengths shifts coordinates."""
+        stats = {
+            "haplotypes": {
+                "haplotype_1": {
+                    "repeat_chain": "1-2-3",
+                    "repeat_lengths": [10, 11, 10],  # unit 2 is 11bp (+1)
+                },
+            },
+            "mutation_details": {"mutation_name": "dupC", "targets": [[1, 2]]},
+            "config": {
+                "repeats": {"1": "A" * 10, "2": "C" * 10, "3": "G" * 10},
+                "constants": {"hg38": {"left": "T" * 50}},
+            },
+            "reference_assembly": "hg38",
+        }
+        stats_path = str(tmp_path / "shifted.simulation_stats.json")
+        with open(stats_path, "w") as f:
+            json.dump(stats, f)
+
+        tracker = ReadSourceTracker.from_companion_files(stats_path)
+        assert tracker is not None
+        regions = tracker.coordinate_maps[1].regions
+        assert len(regions) == 3
+        # Unit 1: 50..60 (len 10)
+        assert regions[0].start == 50 and regions[0].end == 60
+        # Unit 2: 60..71 (len 11)
+        assert regions[1].start == 60 and regions[1].end == 71
+        # Unit 3: 71..81 (shifted by +1!)
+        assert regions[2].start == 71 and regions[2].end == 81
+
+
+class TestTrackerMutatedRepeatLengthsAndBisect:
+    """Tests for mutated repeat length tracking and bisect search in ReadSourceTracker."""
+
+    def test_from_simulation_results_with_mutated_units_shifts_coordinates(self):
+        """from_simulation_results with mutated_units correctly shifts downstream repeat coordinates."""
+        config = {
+            "repeats": {"1": "A" * 10, "2": "C" * 10, "3": "G" * 10},
+            "constants": {"hg38": {"left": "T" * 50, "right": "A" * 50}},
+            "reference_assembly": "hg38",
+        }
+        results = [
+            HaplotypeResult(
+                sequence="T" * 50 + "A" * 10 + "C" * 11 + "G" * 10 + "A" * 50,
+                chain=[RU("1"), RU("2m"), RU("3")],
+            )
+        ]
+        mutated_units = {1: [(2, "C" * 11)]}
+
+        tracker = ReadSourceTracker.from_simulation_results(
+            results=results,
+            config=config,
+            mutated_units=mutated_units,
+        )
+
+        regions = tracker.coordinate_maps[1].regions
+        assert regions[0].start == 50 and regions[0].end == 60
+        assert regions[1].start == 60 and regions[1].end == 71
+        assert regions[2].start == 71 and regions[2].end == 81
+
+    def test_from_simulation_results_inferred_indel_length_shifts_coordinates(self):
+        """from_simulation_results without mutated_units infers single-indel length from sequence."""
+        config = {
+            "repeats": {"1": "A" * 10, "2": "C" * 10, "3": "G" * 10},
+            "constants": {"hg38": {"left": "T" * 50, "right": "A" * 50}},
+            "reference_assembly": "hg38",
+        }
+        results = [
+            HaplotypeResult(
+                sequence="T" * 50 + "A" * 10 + "C" * 11 + "G" * 10 + "A" * 50,
+                chain=[RU("1"), RU("2m"), RU("3")],
+            )
+        ]
+
+        tracker = ReadSourceTracker.from_simulation_results(
+            results=results,
+            config=config,
+        )
+
+        regions = tracker.coordinate_maps[1].regions
+        assert regions[0].start == 50 and regions[0].end == 60
+        assert regions[1].start == 60 and regions[1].end == 71
+        assert regions[2].start == 71 and regions[2].end == 81
+
+    def test_from_simulation_results_reference_assembly_override(self):
+        """from_simulation_results respects reference_assembly override with different flank lengths."""
+        config = {
+            "repeats": {"1": "A" * 10, "2": "C" * 10},
+            "constants": {
+                "hg38": {"left": "T" * 50, "right": "A" * 50},
+                "chm13": {"left": "T" * 20, "right": "A" * 20},
+            },
+            "reference_assembly": "hg38",
+        }
+        seq = "T" * 20 + "A" * 10 + "C" * 11 + "A" * 20
+        results = [
+            HaplotypeResult(
+                sequence=seq,
+                chain=[RU("1"), RU("2m")],
+            )
+        ]
+
+        tracker = ReadSourceTracker.from_simulation_results(
+            results=results,
+            config=config,
+            reference_assembly="chm13",
+        )
+
+        regions = tracker.coordinate_maps[1].regions
+        assert regions[0].start == 20 and regions[0].end == 30
+        assert regions[1].start == 30 and regions[1].end == 41
+        assert tracker.coordinate_maps[1].vntr_start == 20
+        assert tracker.coordinate_maps[1].vntr_end == 41
+
+    def test_from_simulation_results_diploid_only_hap1_mutated(self):
+        """from_simulation_results preserves unmutated repeat lengths for haplotype 2."""
+        config = {
+            "repeats": {"1": "A" * 10, "2": "C" * 10},
+            "constants": {"hg38": {"left": "T" * 50, "right": "A" * 50}},
+            "reference_assembly": "hg38",
+        }
+        seq1 = "T" * 50 + "A" * 15 + "C" * 10 + "A" * 50
+        seq2 = "T" * 50 + "A" * 10 + "C" * 10 + "A" * 50
+        results = [
+            HaplotypeResult(sequence=seq1, chain=[RU("1"), RU("2")]),
+            HaplotypeResult(sequence=seq2, chain=[RU("1"), RU("2")]),
+        ]
+        tracker = ReadSourceTracker.from_simulation_results(
+            results=results,
+            config=config,
+            mutated_units={1: [(1, "A" * 15)]},
+        )
+        assert [r.length for r in tracker.coordinate_maps[1].regions] == [15, 10]
+        assert [r.length for r in tracker.coordinate_maps[2].regions] == [10, 10]
+
+    def test_companion_stats_fields_records_repeat_lengths(self):
+        """companion_stats_fields includes repeat_lengths matching mutated unit lengths."""
+        config = {
+            "repeats": {"1": "A" * 10, "2": "C" * 10, "3": "G" * 10},
+            "constants": {"hg38": {"left": "T" * 50, "right": "A" * 50}},
+            "reference_assembly": "hg38",
+        }
+        results = [
+            HaplotypeResult(
+                sequence="T" * 50 + "A" * 10 + "C" * 11 + "G" * 10 + "A" * 50,
+                chain=[RU("1"), RU("2m"), RU("3")],
+            )
+        ]
+        fields = companion_stats_fields(results, config, mutated_units={1: [(2, "C" * 11)]})
+        assert fields["haplotypes"]["haplotype_1"]["repeat_lengths"] == [10, 11, 10]
+
+    def test_annotate_reads_unsorted_snps_detected_via_bisect(self):
+        """annotate_reads correctly detects SNPs when snp_info is provided in unsorted order."""
+        repeats = {"1": "A" * 50, "2": "C" * 50}
+        chain = [RU("1"), RU("2")]
+        # Left const 100 bp, repeats 100..150, 150..200
+        # Provide unsorted SNPs at 180, 50, 120
+        snp_info = {
+            0: [
+                {"position": 180, "ref_base": "C", "alt_base": "G"},
+                {"position": 50, "ref_base": "T", "alt_base": "A"},
+                {"position": 120, "ref_base": "A", "alt_base": "T"},
+            ]
+        }
+        tracker = ReadSourceTracker(
+            repeat_chains={1: chain},
+            repeats_dict=repeats,
+            left_const_len=100,
+            snp_info=snp_info,
+        )
+
+        origins = [
+            ReadOrigin("r1", 1, 45, 55, "+"),
+            ReadOrigin("r2", 1, 115, 125, "+"),
+            ReadOrigin("r3", 1, 175, 185, "+"),
+            ReadOrigin("r4", 1, 60, 90, "+"),
+        ]
+        annotated = list(tracker.annotate_reads(origins))
+        assert annotated[0].overlaps_snp is True
+        assert annotated[1].overlaps_snp is True
+        assert annotated[2].overlaps_snp is True
+        assert annotated[3].overlaps_snp is False

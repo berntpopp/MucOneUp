@@ -6,7 +6,6 @@ and mutation configuration processing.
 """
 
 import itertools
-import json
 import logging
 import random
 from pathlib import Path
@@ -86,8 +85,9 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
         ConfigurationError: If config cannot be loaded or is invalid
     """
     try:
-        with Path(args.config).open() as fh:
-            config = json.load(fh)
+        from ..config import load_config_raw
+
+        config = load_config_raw(args.config)
         logging.info("Configuration loaded from %s", args.config)
 
         if args.reference_assembly:
@@ -102,9 +102,13 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
         # Record the CLI seed so provenance metadata reports it (extract_seed).
         if getattr(args, "seed", None) is not None:
             config["seed"] = args.seed
+        elif config.get("seed") is not None:
+            args.seed = config["seed"]
+    except ConfigurationError:
+        raise
     except FileNotFoundError as e:
         raise ConfigurationError(f"Config file not found: {args.config}") from e
-    except json.JSONDecodeError as e:
+    except Exception as e:
         raise ConfigurationError(f"Invalid JSON in config file {args.config}: {e}") from e
 
     out_dir = args.out_dir
@@ -114,7 +118,9 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
     return config, out_dir, out_base
 
 
-def determine_simulation_mode(args, config) -> tuple[list[Any], list | None, dict | None]:
+def determine_simulation_mode(
+    args, config, rng: random.Random | None = None
+) -> tuple[list[Any], list | None, dict | None]:
     """
     Determine simulation mode and return appropriate configurations.
 
@@ -123,6 +129,7 @@ def determine_simulation_mode(args, config) -> tuple[list[Any], list | None, dic
     Args:
         args: Parsed command-line arguments
         config: Configuration dictionary
+        rng: Optional random.Random instance for deterministic simulation
 
     Returns:
         Tuple of (simulation_configs, predefined_chains, structure_mutation_info)
@@ -193,7 +200,8 @@ def determine_simulation_mode(args, config) -> tuple[list[Any], list | None, dic
                 len(simulation_configs),
             )
         else:
-            simulation_configs = [[random.choice(lst) for lst in fixed_matrix]]
+            _rng = rng if rng is not None else random
+            simulation_configs = [[_rng.choice(lst) for lst in fixed_matrix]]
             logging.info(
                 "Single simulation iteration generated using a random choice from each fixed-length range."
             )

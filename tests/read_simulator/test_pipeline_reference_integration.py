@@ -201,7 +201,7 @@ class TestONTPipelineReferenceIntegration:
         mock_nanosim.return_value = str(tmp_path / "reads.fastq")
 
         mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
+            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
         )
 
         # Mock diploid check to avoid split-simulation complexity
@@ -219,7 +219,7 @@ class TestONTPipelineReferenceIntegration:
         # Verify align was called with reference from reference_genomes
         assert mock_align.called
         call_args = mock_align.call_args
-        assert call_args[1]["human_reference"] == str(ref_file)
+        assert call_args[1]["reference"] == str(ref_file)
 
     def test_fallback_to_input_fa_on_error(self, tmp_path, mocker):
         """Test ONT pipeline falls back to input_fa when reference loading fails."""
@@ -243,7 +243,7 @@ class TestONTPipelineReferenceIntegration:
         mock_nanosim.return_value = str(tmp_path / "reads.fastq")
 
         mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
+            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
         )
         mocker.patch(
             "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference", return_value=False
@@ -259,7 +259,7 @@ class TestONTPipelineReferenceIntegration:
         # Verify fallback to input_fa
         assert mock_align.called
         call_args = mock_align.call_args
-        assert call_args[1]["human_reference"] == str(input_fa)
+        assert call_args[1]["reference"] == str(input_fa)
 
     def test_uses_user_provided_reference(self, tmp_path, mocker):
         """Test ONT pipeline uses user-provided reference when specified."""
@@ -285,7 +285,7 @@ class TestONTPipelineReferenceIntegration:
         mock_nanosim.return_value = str(tmp_path / "reads.fastq")
 
         mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_ont_reads_with_minimap2"
+            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
         )
         mocker.patch(
             "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference", return_value=False
@@ -301,4 +301,4 @@ class TestONTPipelineReferenceIntegration:
         # Verify user-provided reference is used
         assert mock_align.called
         call_args = mock_align.call_args
-        assert call_args[1]["human_reference"] == str(user_ref)
+        assert call_args[1]["reference"] == str(user_ref)

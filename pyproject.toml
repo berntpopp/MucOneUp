@@ -30,6 +30,7 @@ dependencies = [
     "jsonschema>=3.2.0,<5.0",
     "rfc8785>=0.1.2",  # RFC 8785 JSON Canonicalization Scheme for config fingerprinting
     "biopython>=1.80",  # Required for FASTA I/O in read simulation and CLI
+    "numpy>=1.24.0",
 ]
 
 [project.optional-dependencies]
@@ -158,10 +159,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
-
-[[tool.mypy.overrides]]
-module = "muc_one_up.bioinformatics.validation"
-warn_unreachable = false  # False positive with regex pattern matching
 
 [[tool.mypy.overrides]]
 module = "rfc8785"

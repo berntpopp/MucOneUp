@@ -300,7 +300,7 @@ def predict_orfs_in_haplotypes(
         [('haplotype_1_ORF1', 'MTRV...', 245, 1523, '+', 'len=1278')]
     """
     haplotype_orfs = {}
-    min_nt_length = orf_min_aa * 3
+    min_nt_length = max(min_len, orf_min_aa * 3)
 
     for i, hr in enumerate(results, start=1):
         dna_seq = hr.sequence

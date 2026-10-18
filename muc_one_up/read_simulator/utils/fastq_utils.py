@@ -152,10 +152,8 @@ def count_fastq_reads(fastq_path: str | Path) -> int:
         read_count = line_count // 4
 
         if line_count % 4 != 0:
-            logging.warning(
-                "FASTQ file %s has %d lines (not divisible by 4), may be truncated or malformed",
-                Path(fastq_path).name,
-                line_count,
+            raise ValidationError(
+                f"FASTQ file {fastq_path} has {line_count} lines, which is not a multiple of 4"
             )
 
         logging.debug(
@@ -166,6 +164,8 @@ def count_fastq_reads(fastq_path: str | Path) -> int:
         )
         return read_count
 
+    except ValidationError:
+        raise
     except Exception as e:
         raise ValidationError(f"Error counting reads in {fastq_path}: {e}") from e
     finally:

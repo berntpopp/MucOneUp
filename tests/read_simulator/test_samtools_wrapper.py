@@ -17,10 +17,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from muc_one_up.exceptions import FileOperationError
+from muc_one_up.exceptions import FileOperationError, ValidationError
 from muc_one_up.read_simulator.utils.common_utils import RunResult
+from muc_one_up.read_simulator.utils.fastq_utils import count_fastq_reads
 from muc_one_up.read_simulator.wrappers.samtools_wrapper import (
-    _count_fastq_reads,
     calculate_target_coverage,
     calculate_vntr_coverage,
     convert_bam_to_fastq,
@@ -594,14 +594,14 @@ class TestConvertBamToFastq:
 
 
 class TestCountFastqReads:
-    """Test _count_fastq_reads helper function."""
+    """Test count_fastq_reads helper function."""
 
     def test_counts_reads_in_uncompressed_fastq(self, tmp_path):
         """Test counting reads in uncompressed FASTQ."""
         fastq = tmp_path / "test.fq"
         fastq.write_text("@read1\nACGT\n+\nIIII\n@read2\nTGCA\n+\nJJJJ\n@read3\nAAAA\n+\nKKKK\n")
 
-        count = _count_fastq_reads(fastq)
+        count = count_fastq_reads(fastq)
 
         assert count == 3
 
@@ -615,7 +615,7 @@ class TestCountFastqReads:
         with gzip.open(fastq_gz, "wt") as f:
             f.write(content)
 
-        count = _count_fastq_reads(fastq_gz)
+        count = count_fastq_reads(fastq_gz)
 
         assert count == 2
 
@@ -624,16 +624,16 @@ class TestCountFastqReads:
         fastq = tmp_path / "empty.fq"
         fastq.write_text("")
 
-        count = _count_fastq_reads(fastq)
+        count = count_fastq_reads(fastq)
 
         assert count == 0
 
     def test_raises_error_for_missing_file(self, tmp_path):
-        """Test that missing file raises FileOperationError."""
+        """Test that missing file raises ValidationError."""
         missing_fastq = tmp_path / "nonexistent.fq"
 
-        with pytest.raises(FileOperationError, match="Failed to count reads"):
-            _count_fastq_reads(missing_fastq)
+        with pytest.raises(ValidationError, match="not found"):
+            count_fastq_reads(missing_fastq)
 
 
 class TestSortAndIndexBam:

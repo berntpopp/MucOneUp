@@ -116,24 +116,3 @@ def test_simulate_delegates_to_centralized_assembly():
         config["constants"]["hg38"],
     )
     assert result == "MOCKED"
-
-
-def test_mutate_delegates_to_centralized_assembly():
-    """mutate.rebuild_haplotype_sequence should delegate to assemble_sequence."""
-    from unittest.mock import patch
-
-    from muc_one_up.mutate import rebuild_haplotype_sequence
-
-    config = {
-        "repeats": {"1": "ACGT", "9": "TGCA"},
-        "constants": {"hg38": {"left": "L", "right": "R"}},
-        "reference_assembly": "hg38",
-    }
-    with patch("muc_one_up.mutate.assemble_sequence", return_value="MOCKED") as mock:
-        result = rebuild_haplotype_sequence(["1", "9"], config)
-    mock.assert_called_once_with(
-        [RepeatUnit("1"), RepeatUnit("9")],
-        config["repeats"],
-        config["constants"]["hg38"],
-    )
-    assert result == "MOCKED"

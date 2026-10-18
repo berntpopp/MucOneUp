@@ -156,7 +156,7 @@ class TestRunPbsim3Simulation:
         model_file.write_text("data")
 
         # Act & Assert
-        with pytest.raises(FileOperationError, match="pass_num ≥ 2"):
+        with pytest.raises(ValueError, match="Invalid pass_num"):
             run_pbsim3_simulation(
                 pbsim3_cmd="pbsim",
                 samtools_cmd="samtools",
@@ -167,6 +167,38 @@ class TestRunPbsim3Simulation:
                 output_prefix="out",
                 pass_num=1,  # Too low!
             )
+
+    def test_globs_only_four_digit_bam_files(self, mocker, tmp_path):
+        """Narrow globs should only match 4-digit numbered BAM files."""
+        ref_fa = tmp_path / "ref.fa"
+        model_file = tmp_path / "model.model"
+        ref_fa.write_text(">chr1\nACGT\n")
+        model_file.write_text("data")
+
+        out_prefix = tmp_path / "out"
+        valid_bam = tmp_path / "out_0001.bam"
+        invalid_bam = tmp_path / "out_extra.bam"
+        invalid_bam.write_bytes(b"BAM_DATA_EXTRA")
+
+        def mock_run_cmd(*args, **kwargs):
+            valid_bam.write_bytes(b"BAM_DATA_VALID")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command",
+            side_effect=mock_run_cmd,
+        )
+
+        res = run_pbsim3_simulation(
+            pbsim3_cmd="pbsim",
+            samtools_cmd="samtools",
+            reference=str(ref_fa),
+            model_type="qshmm",
+            model_file=str(model_file),
+            coverage=30.0,
+            output_prefix=str(out_prefix),
+            pass_num=3,
+        )
+        assert res == [str(valid_bam)]
 
     def test_handles_sam_to_bam_conversion(self, mocker, tmp_path):
         """Test that SAM output is automatically converted to BAM."""
@@ -258,6 +290,72 @@ class TestRunPbsim3Simulation:
                 output_prefix=str(output_prefix),
             )
 
+    def test_diploid_low_coverage_per_haplotype_accepted(self, mocker, tmp_path):
+        """Diploid simulation with total coverage=0.1 passes 0.05 to pbsim3 without error."""
+        ref_fa = tmp_path / "ref.fa"
+        model_file = tmp_path / "model.model"
+        ref_fa.write_text(">chr1\nACGT\n")
+        model_file.write_text("data")
+        output_bam = tmp_path / "out.bam"
+
+        def mock_run_cmd(*args, **kwargs):
+            output_bam.write_bytes(b"BAM_DATA")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command",
+            side_effect=mock_run_cmd,
+        )
+
+        res = run_pbsim3_simulation(
+            pbsim3_cmd="pbsim",
+            samtools_cmd="samtools",
+            reference=str(ref_fa),
+            model_type="qshmm",
+            model_file=str(model_file),
+            coverage=0.05,  # 0.1 / 2 for diploid
+            output_prefix=str(tmp_path / "out"),
+            pass_num=3,
+        )
+        assert res == [str(output_bam)]
+
+    def test_cleans_stale_numbered_outputs_before_run(self, mocker, tmp_path):
+        """Pre-existing numbered BAMs from previous diploid run should be cleaned."""
+        ref_fa = tmp_path / "ref.fa"
+        model_file = tmp_path / "model.model"
+        ref_fa.write_text(">chr1\nACGT\n")
+        model_file.write_text("data")
+
+        out_prefix = tmp_path / "out"
+        stale_0001 = tmp_path / "out_0001.bam"
+        stale_0002 = tmp_path / "out_0002.bam"
+        stale_0001.write_bytes(b"STALE1")
+        stale_0002.write_bytes(b"STALE2")
+
+        single_bam = tmp_path / "out.bam"
+
+        def mock_run_cmd(*args, **kwargs):
+            # Verify stale files were deleted before run_command executes
+            assert not stale_0001.exists()
+            assert not stale_0002.exists()
+            single_bam.write_bytes(b"FRESH_HAPLOID_BAM")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command",
+            side_effect=mock_run_cmd,
+        )
+
+        res = run_pbsim3_simulation(
+            pbsim3_cmd="pbsim",
+            samtools_cmd="samtools",
+            reference=str(ref_fa),
+            model_type="qshmm",
+            model_file=str(model_file),
+            coverage=30.0,
+            output_prefix=str(out_prefix),
+            pass_num=3,
+        )
+        assert res == [str(single_bam)]
+
 
 class TestValidatePbsim3Parameters:
     """Test validate_pbsim3_parameters validation logic."""
@@ -288,6 +386,20 @@ class TestValidatePbsim3Parameters:
                 length_min=5000,
                 length_max=30000,
             )
+
+    def test_custom_min_coverage_allows_low_coverage(self):
+        """Test custom min_coverage allows low per-haplotype coverage (e.g. 0.05)."""
+        validate_pbsim3_parameters(
+            coverage=0.05,
+            pass_num=3,
+            accuracy_mean=0.85,
+            accuracy_sd=0.05,
+            accuracy_min=0.75,
+            length_mean=15000,
+            length_min=5000,
+            length_max=30000,
+            min_coverage=0.05,
+        )
 
     def test_validates_accuracy_range(self):
         """Test accuracy parameters must be 0.0-1.0."""
@@ -458,16 +570,18 @@ class TestRunPbsim3TemplateSimulation:
         model_file.write_text("model")
         prefix = str(tmp_path / "out")
 
-        # Simulate pbsim3 producing numbered SAM files
-        (tmp_path / "out_0001.sam").write_text("@HD\tVN:1.6\n")
-
         with (
             patch("muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command") as mock_run,
             patch(
                 "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.convert_sam_to_bam"
             ) as mock_convert,
         ):
-            mock_run.return_value = MagicMock(returncode=0)
+
+            def mock_run_cmd(*args, **kwargs):
+                (tmp_path / "out_0001.sam").write_text("@HD\tVN:1.6\n")
+                return MagicMock(returncode=0)
+
+            mock_run.side_effect = mock_run_cmd
 
             # convert_sam_to_bam should create the BAM
             def create_bam(samtools_cmd, input_sam, output_bam, threads, timeout):

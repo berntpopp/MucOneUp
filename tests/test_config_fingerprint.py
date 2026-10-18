@@ -192,15 +192,13 @@ class TestComputeConfigFingerprint:
         """Test config with infinity values."""
         config = {"value": float("inf")}
         fp = compute_config_fingerprint(config)
-        # rfc8785 may handle this or raise - either is acceptable
-        assert fp.startswith("sha256:") or fp.startswith("error:")
+        assert fp == "error:fingerprint_failed:FloatDomainError"
 
     def test_handles_nan(self):
         """Test config with NaN values."""
         config = {"value": float("nan")}
         fp = compute_config_fingerprint(config)
-        # rfc8785 may handle this or raise - either is acceptable
-        assert fp.startswith("sha256:") or fp.startswith("error:")
+        assert fp == "error:fingerprint_failed:FloatDomainError"
 
     def test_handles_unicode(self):
         """Test unicode characters are handled correctly."""

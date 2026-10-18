@@ -110,7 +110,7 @@ class TestAlignAndRefine:
 
         mock_model = mocker.MagicMock()
         mock_model.apply_efficiency_bias.return_value = {"reads_kept": 100}
-        mocker.patch(
+        mock_vntr_cls = mocker.patch(
             f"{MODULE}.VNTREfficiencyModel",
             return_value=mock_model,
         )
@@ -143,9 +143,56 @@ class TestAlignAndRefine:
         assert len(result.intermediate_bams) == 1
         # The original aligned BAM should be the intermediate
         assert result.intermediate_bams[0].endswith(f"{output_base}.bam")
+        mock_vntr_cls.assert_called_once_with(
+            penalty_factor=0.39,
+            seed=42,
+            threads=4,
+            vntr_region=None,
+            capture_bed=None,
+            flanking_size=10000,
+            samtools_cmd="samtools",
+        )
 
-    def test_vntr_failure_falls_back_to_original_bam(self, mocker, tmp_path, tools, assembly_ctx):
-        """If VNTR model raises, continue with the original aligned BAM."""
+    def test_vntr_seed_defaults_when_config_seed_is_none(
+        self, mocker, tmp_path, tools, assembly_ctx
+    ):
+        """When seed is explicitly None in config, vntr_seed defaults to 42."""
+        mocker.patch(f"{MODULE}.align_reads")
+        mocker.patch("shutil.rmtree")
+
+        mock_model = mocker.MagicMock()
+        mock_model.apply_efficiency_bias.return_value = {"reads_kept": 100}
+        mock_vntr_cls = mocker.patch(
+            f"{MODULE}.VNTREfficiencyModel",
+            return_value=mock_model,
+        )
+
+        rs_config = {
+            "threads": 4,
+            "seed": None,
+            "vntr_capture_efficiency": {
+                "enabled": True,
+                "seed": None,
+                "output_fastq": {"enabled": False},
+                "validation": {"report_statistics": False},
+            },
+        }
+
+        align_and_refine(
+            tools=tools,
+            rs_config=rs_config,
+            r1=str(tmp_path / "r1.fastq.gz"),
+            r2=str(tmp_path / "r2.fastq.gz"),
+            human_ref="/ref/hg38.fa",
+            output_dir=tmp_path,
+            output_base="test_sample",
+            assembly_ctx=assembly_ctx,
+        )
+
+        assert mock_vntr_cls.call_args[1]["seed"] == 42
+
+    def test_vntr_failure_propagates_error(self, mocker, tmp_path, tools, assembly_ctx):
+        """If VNTR model raises, the error propagates without falling back."""
         mocker.patch(f"{MODULE}.align_reads")
 
         mocker.patch(
@@ -159,20 +206,43 @@ class TestAlignAndRefine:
         }
 
         output_base = "test_sample"
-        result = align_and_refine(
-            tools=tools,
-            rs_config=rs_config_vntr,
-            r1=str(tmp_path / "r1.fastq.gz"),
-            r2=str(tmp_path / "r2.fastq.gz"),
-            human_ref="/ref/hg38.fa",
-            output_dir=tmp_path,
-            output_base=output_base,
-            assembly_ctx=assembly_ctx,
-        )
+        with pytest.raises(RuntimeError, match="vntr failed"):
+            align_and_refine(
+                tools=tools,
+                rs_config=rs_config_vntr,
+                r1=str(tmp_path / "r1.fastq.gz"),
+                r2=str(tmp_path / "r2.fastq.gz"),
+                human_ref="/ref/hg38.fa",
+                output_dir=tmp_path,
+                output_base=output_base,
+                assembly_ctx=assembly_ctx,
+            )
 
-        # Falls back: final_bam is the original aligned BAM
-        assert result.final_bam.endswith(f"{output_base}.bam")
-        assert result.intermediate_bams == []
+    def test_raises_configuration_error_when_downsample_seed_is_none(
+        self, mocker, tmp_path, tools, assembly_ctx
+    ):
+        """ConfigurationError raised when downsample_seed is None."""
+        mocker.patch(f"{MODULE}.align_reads")
+
+        rs_config = {
+            "threads": 4,
+            "downsample_seed": None,
+        }
+
+        with pytest.raises(
+            ConfigurationError,
+            match=r"downsample_seed cannot be None \(null\); specify an integer seed",
+        ):
+            align_and_refine(
+                tools=tools,
+                rs_config=rs_config,
+                r1=str(tmp_path / "r1.fastq.gz"),
+                r2=str(tmp_path / "r2.fastq.gz"),
+                human_ref="/ref/hg38.fa",
+                output_dir=tmp_path,
+                output_base="test_sample",
+                assembly_ctx=assembly_ctx,
+            )
 
     def test_downsampling_vntr_mode_two_step(self, mocker, tmp_path, tools, assembly_ctx):
         """VNTR mode uses two-step: downsample entire BAM then VNTR region."""

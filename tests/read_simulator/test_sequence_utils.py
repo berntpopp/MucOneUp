@@ -57,9 +57,28 @@ class TestFindPrimerBindingSites:
         sites = find_primer_binding_sites("", "ACGT")
         assert sites == []
 
+    def test_empty_primer(self):
+        sites = find_primer_binding_sites("ACGT", "")
+        assert sites == []
+
     def test_primer_longer_than_template(self):
         sites = find_primer_binding_sites("ACG", "ACGTACGT")
         assert sites == []
+
+    def test_degenerate_primer_matching(self):
+        assert find_primer_binding_sites("AG", "AR") == [0]
+        assert find_primer_binding_sites("AA", "AR") == [0]
+        assert find_primer_binding_sites("AC", "AR") == []
+        assert find_primer_binding_sites("TTAACCGG", "WSN") == [3]
+
+    def test_degenerate_template_matching(self):
+        assert find_primer_binding_sites("AARCCCGGGTT", "AAR") == [0]
+
+    def test_degenerate_reverse_complement_search(self):
+        # Primer "AR": RC is "YT" ([CT]T)
+        assert find_primer_binding_sites("TT", "AR", search_reverse_complement=True) == [0]
+        assert find_primer_binding_sites("CT", "AR", search_reverse_complement=True) == [0]
+        assert find_primer_binding_sites("GT", "AR", search_reverse_complement=True) == []
 
 
 class TestReverseComplement:
@@ -76,3 +95,7 @@ class TestReverseComplement:
 
     def test_empty(self):
         assert reverse_complement("") == ""
+
+    def test_iupac_ambiguity_codes(self):
+        assert reverse_complement("ACGTRYMKSWBDHVN") == "NBDHVWSMKRYACGT"
+        assert reverse_complement("acgtrymkswbdhvn") == "nbdhvwsmkryacgt"

@@ -24,6 +24,8 @@ def integrate_snps_unified(
     config,
     results: list[HaplotypeResult],
     skip_reference_check: bool = False,
+    rng: Any = None,
+    predefined_snps: list[dict[str, Any]] | None = None,
 ) -> tuple[list[HaplotypeResult], dict]:
     """
     Unified SNP integration function - eliminates duplication.
@@ -36,6 +38,8 @@ def integrate_snps_unified(
         config: Configuration dictionary
         results: List of HaplotypeResult objects
         skip_reference_check: Skip reference base validation (for mutated sequences)
+        rng: Optional random number generator for reproducible SNP generation
+        predefined_snps: Pre-translated or pre-parsed SNPs to apply directly
 
     Returns:
         Tuple of (modified_results, applied_snp_info)
@@ -51,7 +55,9 @@ def integrate_snps_unified(
     current_sequences = [hr.sequence for hr in results]
 
     # Check for SNP integration options
-    if args.snp_input_file:
+    if predefined_snps is not None:
+        snps_from_source = predefined_snps
+    elif args.snp_input_file:
         try:
             snps_from_source = parse_snp_file(args.snp_input_file)
             logging.info(f"Read {len(snps_from_source)} SNPs from {args.snp_input_file}")
@@ -77,6 +83,7 @@ def integrate_snps_unified(
             args.random_snp_region,
             args.random_snp_haplotypes,
             vntr_bounds,
+            rng=rng,
         )
         snps_from_source = generated_snp_list_for_output
         logging.info(f"Generated {len(snps_from_source)} random SNPs")
@@ -88,7 +95,9 @@ def integrate_snps_unified(
                 f"Wrote {len(generated_snp_list_for_output)} SNPs to {args.random_snp_output_file}"
             )
         except Exception as e:
-            logging.error(f"Failed to write generated SNP file: {e}")
+            raise SNPIntegrationError(
+                f"Failed to write generated SNP file {args.random_snp_output_file}: {e}"
+            ) from e
 
     # Apply SNPs if we have any from either source
     if snps_from_source:

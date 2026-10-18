@@ -5,7 +5,6 @@ from __future__ import annotations
 import random
 
 from muc_one_up.distribution import sample_repeat_count
-from muc_one_up.probabilities import pick_next_repeat
 from muc_one_up.simulate import simulate_diploid
 
 
@@ -46,30 +45,6 @@ class TestDistributionRNG:
         }
         result = sample_repeat_count(length_model)
         assert 20 <= result <= 60
-
-
-class TestProbabilitiesRNG:
-    def test_pick_next_repeat_accepts_rng(self):
-        """pick_next_repeat should accept an rng parameter."""
-        rng = random.Random(42)
-        probs = {"1": {"2": 0.5, "3": 0.5}, "2": {}, "3": {}}
-        result = pick_next_repeat(probs, "1", rng=rng)
-        assert result in ("2", "3")
-
-    def test_pick_next_repeat_reproducible_with_rng(self):
-        """Same RNG seed should produce same sequence of results."""
-        probs = {"1": {"2": 0.5, "3": 0.5}, "2": {}, "3": {}}
-        rng_a = random.Random(42)
-        results_a = [pick_next_repeat(probs, "1", rng=rng_a) for _ in range(10)]
-        rng_b = random.Random(42)
-        results_b = [pick_next_repeat(probs, "1", rng=rng_b) for _ in range(10)]
-        assert results_a == results_b
-
-    def test_pick_next_repeat_defaults_to_global_random(self):
-        """Without rng parameter, should still work (backward compat)."""
-        probs = {"1": {"2": 1.0}, "2": {}}
-        result = pick_next_repeat(probs, "1")
-        assert result == "2"
 
 
 class TestSimulateRNG:

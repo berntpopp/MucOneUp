@@ -25,7 +25,7 @@ from muc_one_up.read_simulator.utils.samtools import (
     check_samtools_available,
     downsample_bam,
     extract_reads_by_region,
-    get_bam_read_count,
+    get_read_count,
     index_bam,
     merge_bams,
     sort_bam,
@@ -159,6 +159,24 @@ class TestExtractReadsByRegion:
         cmd = mock_run.call_args[0][0]
         assert "-F" in cmd
         assert "256" in cmd
+
+    @patch(MOCK_TARGET)
+    def test_extract_reads_with_unselected_bam(
+        self, mock_run, mock_bam_file, mock_bed_file, temp_dir
+    ):
+        """Test read extraction specifying unselected_bam includes -U option."""
+        output_bam = temp_dir / "output.bam"
+        unselected_bam = Path("/tmp/unselected.bam")
+        mock_run.return_value = _ok()
+
+        extract_reads_by_region(
+            mock_bam_file, mock_bed_file, output_bam, unselected_bam=unselected_bam
+        )
+
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert "-U" in cmd
+        assert "/tmp/unselected.bam" in cmd
 
 
 def _option_value(cmd: list[str], option: str) -> str:
@@ -379,7 +397,7 @@ class TestCalculateMeanCoverage:
             calculate_mean_coverage(mock_bam_file, mock_bed_file)
 
 
-class TestGetBamReadCount:
+class TestGetReadCount:
     """Tests for read counting."""
 
     @patch(MOCK_TARGET)
@@ -387,7 +405,7 @@ class TestGetBamReadCount:
         """Test successful read counting."""
         mock_run.return_value = _ok(stdout="12345\n")
 
-        count = get_bam_read_count(mock_bam_file)
+        count = get_read_count(mock_bam_file)
 
         assert count == 12345
         mock_run.assert_called_once()
@@ -404,7 +422,7 @@ class TestGetBamReadCount:
         )
 
         with pytest.raises(SamtoolsError, match="Failed to count reads"):
-            get_bam_read_count(mock_bam_file)
+            get_read_count(mock_bam_file)
 
     @patch(MOCK_TARGET)
     def test_read_count_invalid_output(self, mock_run, mock_bam_file):
@@ -412,4 +430,4 @@ class TestGetBamReadCount:
         mock_run.return_value = _ok(stdout="invalid\n")
 
         with pytest.raises(SamtoolsError, match="Invalid read count output"):
-            get_bam_read_count(mock_bam_file)
+            get_read_count(mock_bam_file)

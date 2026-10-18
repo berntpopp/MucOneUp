@@ -78,7 +78,10 @@ def _run_batch_simulation(
 
         # Build source tracker from companion files if requested
         source_tracker = None
-        if track_read_source:
+        if (
+            track_read_source
+            and config.get("read_simulation", {}).get("simulator") != "ont-fragments"
+        ):
             from ...read_simulator.source_tracking import ReadSourceTracker
 
             # Derive stats path: input may be "base.001.simulated.fa" but stats
@@ -94,11 +97,14 @@ def _run_batch_simulation(
                 stats_path = str(input_p.with_suffix(".simulation_stats.json"))
             source_tracker = ReadSourceTracker.from_companion_files(stats_path)
             if source_tracker is None:
-                logging.warning("Could not reconstruct read source tracker from %s", stats_path)
-            else:
-                coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
-                source_tracker.write_coordinate_map(coord_map_path)
-                logging.info("Repeat coordinate map written: %s", coord_map_path)
+                raise click.ClickException(
+                    f"--track-read-source requires a valid companion .simulation_stats.json file "
+                    f"(created with `muconeup simulate --track-read-source`). Could not reconstruct "
+                    f"read source tracker from {stats_path}"
+                )
+            coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
+            source_tracker.write_coordinate_map(coord_map_path)
+            logging.info("Repeat coordinate map written: %s", coord_map_path)
 
         # Run simulation for this file
         simulate_reads_pipeline(
@@ -245,9 +251,8 @@ def reads():
 @click.option(
     "--threads",
     type=int,
-    default=8,
-    show_default=True,
-    help="Number of threads.",
+    default=None,
+    help="Thread count (overrides config).",
 )
 @click.option(
     "--read-number",
@@ -289,7 +294,8 @@ def illumina(
 
     config = load_config_raw(str(ctx.obj["config_path"]))
     _setup_read_config(config, "illumina", coverage, seed)
-    config["read_simulation"]["threads"] = threads
+    if threads is not None:
+        config["read_simulation"]["threads"] = threads
     if read_number is not None:
         config["read_simulation"]["read_number"] = read_number
 
@@ -427,9 +433,8 @@ def ont(
 @click.option(
     "--threads",
     type=int,
-    default=4,
-    show_default=True,
-    help="Number of threads.",
+    default=None,
+    help="Thread count for alignment and CCS consensus (overrides config).",
 )
 @click.option(
     "--model-file",
@@ -541,7 +546,7 @@ def pacbio(
         model_type,
         model_file,
         seed,
-        threads=threads if threads != 4 else None,
+        threads=threads,
         pass_num=pass_num,
         min_passes=min_passes,
         min_rq=min_rq,

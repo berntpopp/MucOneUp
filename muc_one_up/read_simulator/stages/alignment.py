@@ -20,7 +20,7 @@ from typing import Any
 from ...exceptions import ConfigurationError
 from ..assembly_context import AssemblyContext
 from ..wrappers.bwa_wrapper import align_reads
-from ..wrappers.samtools_wrapper import (
+from ..wrappers.samtools_coverage import (
     calculate_target_coverage,
     calculate_vntr_coverage,
     downsample_bam,
@@ -71,6 +71,9 @@ def align_and_refine(
             values (``vntr_region`` or ``sample_target_bed``) are absent, or
             ``downsample_mode`` is invalid.
     """
+    if "downsample_seed" in rs_config and rs_config["downsample_seed"] is None:
+        raise ConfigurationError("downsample_seed cannot be None (null); specify an integer seed")
+
     threads: int = rs_config.get("threads", 4)
     intermediate_bams: list[str] = []
     intermediate_files: list[str] = []
@@ -89,96 +92,92 @@ def align_and_refine(
     vntr_config = rs_config.get("vntr_capture_efficiency", {})
     vntr_enabled = vntr_config.get("enabled", True)  # enabled by default
 
+    raw_vntr_seed = vntr_config.get("seed")
+    if raw_vntr_seed is None:
+        raw_vntr_seed = rs_config.get("seed")
+    vntr_seed: int = 42 if raw_vntr_seed is None else int(raw_vntr_seed)
+
     if vntr_enabled:
         logger.info("10. Applying VNTR capture efficiency bias")
-        try:
-            penalty_factor: float = vntr_config.get("penalty_factor", 0.39)
-            vntr_seed: int = vntr_config.get("seed", rs_config.get("seed", 42))
-            vntr_region = vntr_config.get("vntr_region")
-            capture_bed = vntr_config.get("capture_bed")
-            flanking_size: int = vntr_config.get("flanking_size", 10000)
+        penalty_factor: float = vntr_config.get("penalty_factor", 0.39)
+        vntr_region = vntr_config.get("vntr_region")
+        capture_bed = vntr_config.get("capture_bed")
+        flanking_size: int = vntr_config.get("flanking_size", 10000)
 
-            vntr_model = VNTREfficiencyModel(
-                penalty_factor=penalty_factor,
-                seed=vntr_seed,
-                threads=threads,
-                vntr_region=vntr_region,
-                capture_bed=Path(capture_bed) if capture_bed else None,
-                flanking_size=flanking_size,
+        vntr_model = VNTREfficiencyModel(
+            penalty_factor=penalty_factor,
+            seed=vntr_seed,
+            threads=threads,
+            vntr_region=vntr_region,
+            capture_bed=Path(capture_bed) if capture_bed else None,
+            flanking_size=flanking_size,
+            samtools_cmd=tools.get("samtools", "samtools"),
+        )
+
+        # Track pre-bias BAM as intermediate before replacement
+        intermediate_bams.append(current_bam)
+
+        vntr_biased_bam = str(output_dir / f"{output_base}_vntr_biased.bam")
+
+        with tempfile.TemporaryDirectory(
+            prefix=f"_vntr_efficiency_{output_base}_", dir=str(output_dir)
+        ) as temp_dir_str:
+            temp_dir = Path(temp_dir_str)
+
+            vntr_stats = vntr_model.apply_efficiency_bias(
+                input_bam=Path(current_bam),
+                output_bam=Path(vntr_biased_bam),
+                temp_dir=temp_dir,
             )
 
-            # Track pre-bias BAM as intermediate before replacement
-            intermediate_bams.append(current_bam)
+        # Optionally save statistics JSON
+        if vntr_config.get("validation", {}).get("report_statistics", True):
+            stats_file = str(output_dir / f"{output_base}_vntr_efficiency_stats.json")
+            with open(stats_file, "w") as fh:
+                json.dump(vntr_stats, fh, indent=2)
+            logger.info("  VNTR efficiency statistics saved to %s", stats_file)
 
-            vntr_biased_bam = str(output_dir / f"{output_base}_vntr_biased.bam")
+        current_bam = vntr_biased_bam
+        logger.info("  VNTR efficiency bias applied successfully")
 
-            with tempfile.TemporaryDirectory(
-                prefix=f"_vntr_efficiency_{output_base}_", dir=str(output_dir)
-            ) as temp_dir_str:
-                temp_dir = Path(temp_dir_str)
+        # Optionally generate FASTQ from the VNTR-biased BAM
+        vntr_fastq_config = vntr_config.get("output_fastq", {})
+        vntr_fastq_enabled: bool = vntr_fastq_config.get("enabled", True)
 
-                vntr_stats = vntr_model.apply_efficiency_bias(
-                    input_bam=Path(current_bam),
-                    output_bam=Path(vntr_biased_bam),
-                    temp_dir=temp_dir,
+        if vntr_fastq_enabled:
+            logger.info("  Generating FASTQ files from VNTR-biased BAM")
+            try:
+                from ..wrappers.samtools_convert import (
+                    FastqConversionOptions,
+                    convert_bam_to_paired_fastq,
                 )
 
-            # Optionally save statistics JSON
-            if vntr_config.get("validation", {}).get("report_statistics", True):
-                stats_file = str(output_dir / f"{output_base}_vntr_efficiency_stats.json")
-                with open(stats_file, "w") as fh:
-                    json.dump(vntr_stats, fh, indent=2)
-                logger.info("  VNTR efficiency statistics saved to %s", stats_file)
+                vntr_base = Path(vntr_biased_bam).stem
+                vntr_fq1 = str(output_dir / f"{vntr_base}_R1.fastq.gz")
+                vntr_fq2 = str(output_dir / f"{vntr_base}_R2.fastq.gz")
 
-            current_bam = vntr_biased_bam
-            logger.info("  VNTR efficiency bias applied successfully")
+                opts = FastqConversionOptions(
+                    output_singleton=vntr_fastq_config.get("singleton_file"),
+                    preserve_read_names=vntr_fastq_config.get("preserve_read_names", True),
+                    validate_pairs=True,
+                    threads=threads,
+                    timeout=1800,
+                )
 
-            # Optionally generate FASTQ from the VNTR-biased BAM
-            vntr_fastq_config = vntr_config.get("output_fastq", {})
-            vntr_fastq_enabled: bool = vntr_fastq_config.get("enabled", True)
-
-            if vntr_fastq_enabled:
-                logger.info("  Generating FASTQ files from VNTR-biased BAM")
-                try:
-                    from ..wrappers.samtools_wrapper import (
-                        FastqConversionOptions,
-                        convert_bam_to_paired_fastq,
-                    )
-
-                    vntr_base = Path(vntr_biased_bam).stem
-                    vntr_fq1 = str(output_dir / f"{vntr_base}_R1.fastq.gz")
-                    vntr_fq2 = str(output_dir / f"{vntr_base}_R2.fastq.gz")
-
-                    opts = FastqConversionOptions(
-                        output_singleton=vntr_fastq_config.get("singleton_file"),
-                        preserve_read_names=vntr_fastq_config.get("preserve_read_names", True),
-                        validate_pairs=True,
-                        threads=threads,
-                        timeout=1800,
-                    )
-
-                    fq1_out, fq2_out = convert_bam_to_paired_fastq(
-                        samtools_cmd=tools["samtools"],
-                        input_bam=vntr_biased_bam,
-                        output_fq1=vntr_fq1,
-                        output_fq2=vntr_fq2,
-                        options=opts,
-                    )
-                    logger.info("  VNTR-biased FASTQ R1: %s", Path(fq1_out).name)
-                    logger.info("  VNTR-biased FASTQ R2: %s", Path(fq2_out).name)
-                except Exception as fastq_err:
-                    logger.warning("  Failed to generate VNTR-biased FASTQ files: %s", fastq_err)
-                    logger.warning("  Continuing with BAM output only")
-            else:
-                logger.info("  Skipping VNTR-biased FASTQ generation (disabled in config)")
-
-        except Exception as exc:
-            logger.error("VNTR efficiency modeling failed: %s", exc)
-            logger.warning("Continuing with original BAM file (no bias applied)")
-            # Undo the intermediate_bams append if it was done before the failure
-            if intermediate_bams and intermediate_bams[-1] == aligned_bam:
-                intermediate_bams.pop()
-            current_bam = aligned_bam
+                fq1_out, fq2_out = convert_bam_to_paired_fastq(
+                    samtools_cmd=tools["samtools"],
+                    input_bam=vntr_biased_bam,
+                    output_fq1=vntr_fq1,
+                    output_fq2=vntr_fq2,
+                    options=opts,
+                )
+                logger.info("  VNTR-biased FASTQ R1: %s", Path(fq1_out).name)
+                logger.info("  VNTR-biased FASTQ R2: %s", Path(fq2_out).name)
+            except Exception as fastq_err:
+                logger.warning("  Failed to generate VNTR-biased FASTQ files: %s", fastq_err)
+                logger.warning("  Continuing with BAM output only")
+        else:
+            logger.info("  Skipping VNTR-biased FASTQ generation (disabled in config)")
     else:
         logger.info("10. Skipping VNTR capture efficiency (disabled in config)")
 
@@ -188,6 +187,8 @@ def align_and_refine(
     target_coverage = rs_config.get("coverage")
     if target_coverage:
         logger.info("11. Downsampling to target coverage")
+        raw_ds_seed = rs_config.get("downsample_seed")
+        ds_seed: int = (vntr_seed + 1) if raw_ds_seed is None else int(raw_ds_seed)
         mode: str = rs_config.get("downsample_mode", "vntr").strip().lower()
 
         if mode == "vntr":
@@ -234,7 +235,7 @@ def align_and_refine(
                     current_bam,
                     step1_bam,
                     fraction1,
-                    rs_config.get("downsample_seed", 42),
+                    ds_seed,
                     threads,
                 )
                 current_bam = step1_bam
@@ -292,7 +293,7 @@ def align_and_refine(
                 # Use a different seed than step 1 — samtools -s uses hash-based
                 # subsampling, so reads passing at seed X with a lower fraction
                 # will always pass at the same seed with a higher fraction.
-                step2_seed = rs_config.get("downsample_seed", 42) + 1
+                step2_seed = ds_seed + 1
                 downsample_bam(
                     tools["samtools"],
                     current_bam,
@@ -368,7 +369,7 @@ def align_and_refine(
                     current_bam,
                     downsampled_bam,
                     fraction,
-                    rs_config.get("downsample_seed", 42),
+                    ds_seed,
                     threads,
                 )
                 current_bam = downsampled_bam

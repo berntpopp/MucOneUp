@@ -107,6 +107,10 @@ def extract_and_prepare_amplicons(
     pcr_model = PCRBiasModel.from_config(pcr_bias_config or {})
 
     if diploid:
+        if total_coverage < 2:
+            raise ValueError(
+                f"Diploid amplicon simulation requires total_coverage >= 2, got {total_coverage}"
+            )
         logging.info("STAGE 3: Computing PCR bias coverage split")
         n1, n2 = pcr_model.compute_coverage_split(
             total_coverage,
@@ -114,7 +118,8 @@ def extract_and_prepare_amplicons(
             amplicon_results[1].length,
             seed=seed,
         )
-        allele_counts = [max(1, n1), max(1, n2)]
+        count1 = min(max(1, n1), total_coverage - 1)
+        allele_counts = [count1, total_coverage - count1]
         if n1 == 0 or n2 == 0:
             logging.warning(
                 "PCR bias produced 0 reads for one allele at coverage=%d. "

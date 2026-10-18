@@ -4,7 +4,7 @@ Covers: run_single_simulation_iteration — call ordering, data flow,
 dual mutation mode, source tracker construction.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -48,8 +48,6 @@ def _mock_delegates():
         ) as m_fasta,
         patch(f"{PATCH_PREFIX}.write_mutated_units") as m_units,
         patch(f"{PATCH_PREFIX}.write_structure_files") as m_struct,
-        patch(f"{PATCH_PREFIX}.run_orf_prediction") as m_orf,
-        patch(f"{PATCH_PREFIX}.run_read_simulation") as m_reads,
         patch(f"{PATCH_PREFIX}.write_simulation_statistics") as m_stats,
     ):
         yield {
@@ -58,8 +56,6 @@ def _mock_delegates():
             "write_fasta_outputs": m_fasta,
             "write_mutated_units": m_units,
             "write_structure_files": m_struct,
-            "run_orf_prediction": m_orf,
-            "run_read_simulation": m_reads,
             "write_simulation_statistics": m_stats,
         }
 
@@ -172,14 +168,48 @@ class TestRunSingleSimulationIteration:
         stats_call = _mock_delegates["write_simulation_statistics"].call_args
         assert stats_call[0][10] is mutation_pair
 
-    def test_source_tracker_not_created_when_disabled(
+    def test_rng_threaded_to_delegates(
         self, mock_simulation_options, minimal_config, _mock_delegates
     ):
-        """No source tracker when track_read_source is False."""
+        """rng is passed to generate_haplotypes, apply_mutation_pipeline, and write_fasta_outputs."""
+        import random
+
         from muc_one_up.cli.orchestration import run_single_simulation_iteration
 
-        mock_simulation_options.track_read_source = False
-        mock_simulation_options.simulate_reads = None
+        test_rng = random.Random(12345)
+
+        run_single_simulation_iteration(
+            args=mock_simulation_options,
+            config=minimal_config,
+            out_dir=mock_simulation_options.out_dir,
+            out_base="test",
+            sim_index=1,
+            fixed_conf=None,
+            predefined_chains=None,
+            dual_mutation_mode=False,
+            mutation_pair=None,
+            structure_mutation_info=None,
+            rng=test_rng,
+        )
+
+        assert _mock_delegates["generate_haplotypes"].call_args[1]["rng"] is test_rng
+        assert _mock_delegates["apply_mutation_pipeline"].call_args[1]["rng"] is test_rng
+        assert _mock_delegates["write_fasta_outputs"].call_args[1]["rng"] is test_rng
+
+    def test_mutated_units_passed_to_statistics(
+        self, mock_simulation_options, minimal_config, _mock_delegates
+    ):
+        """mutated_units from apply_mutation_pipeline is forwarded to write_simulation_statistics."""
+        from muc_one_up.cli.orchestration import run_single_simulation_iteration
+
+        results = _make_haplotype_results()
+        mutated_units = {1: [(2, "ATCG_MUT")]}
+        _mock_delegates["apply_mutation_pipeline"].return_value = (
+            results,
+            results,
+            mutated_units,
+            [MutationTarget(1, 2)],
+        )
 
         run_single_simulation_iteration(
             args=mock_simulation_options,
@@ -194,99 +224,9 @@ class TestRunSingleSimulationIteration:
             structure_mutation_info=None,
         )
 
-        reads_call = _mock_delegates["run_read_simulation"].call_args
-        assert reads_call[1]["source_tracker"] is None
-        assert reads_call[1]["source_tracker_mut"] is None
-
-    def test_source_tracker_created_when_enabled(
-        self, mock_simulation_options, minimal_config, _mock_delegates
-    ):
-        """Source tracker constructed when track_read_source=True and simulate_reads set."""
-        from muc_one_up.cli.orchestration import run_single_simulation_iteration
-
-        mock_simulation_options.track_read_source = True
-        mock_simulation_options.simulate_reads = "illumina"
-
-        mock_tracker_instance = MagicMock()
-        with patch(
-            "muc_one_up.read_simulator.source_tracking.ReadSourceTracker.from_simulation_results",
-            return_value=mock_tracker_instance,
-        ) as mock_factory:
-            run_single_simulation_iteration(
-                args=mock_simulation_options,
-                config=minimal_config,
-                out_dir=mock_simulation_options.out_dir,
-                out_base="test",
-                sim_index=1,
-                fixed_conf=None,
-                predefined_chains=None,
-                dual_mutation_mode=False,
-                mutation_pair=None,
-                structure_mutation_info=None,
-            )
-
-        # Factory was called
-        mock_factory.assert_called_once()
-        # Coordinate map was written
-        mock_tracker_instance.write_coordinate_map.assert_called_once()
-
-        # run_read_simulation got a non-None source_tracker
-        reads_call = _mock_delegates["run_read_simulation"].call_args
-        assert reads_call[1]["source_tracker"] is not None
-
-    def test_source_tracker_dual_mode_creates_two(
-        self, mock_simulation_options, minimal_config, _mock_delegates
-    ):
-        """Dual mode with tracking creates separate normal and mutated trackers."""
-        from muc_one_up.cli.orchestration import run_single_simulation_iteration
-
-        mock_simulation_options.track_read_source = True
-        mock_simulation_options.simulate_reads = "illumina"
-        mock_simulation_options.mutation_name = "normal,dupC"
-
-        mutated_results = _make_haplotype_results()
-        _mock_delegates["apply_mutation_pipeline"].return_value = (
-            _make_haplotype_results(),
-            mutated_results,
-            None,
-            [MutationTarget(1, 1)],
-        )
-        _mock_delegates["write_fasta_outputs"].return_value = (
-            _make_haplotype_results(),
-            mutated_results,
-            None,
-            None,
-        )
-
-        mock_instance_1 = MagicMock()
-        mock_instance_2 = MagicMock()
-        with patch(
-            "muc_one_up.read_simulator.source_tracking.ReadSourceTracker.from_simulation_results",
-            side_effect=[mock_instance_1, mock_instance_2],
-        ) as mock_factory:
-            run_single_simulation_iteration(
-                args=mock_simulation_options,
-                config=minimal_config,
-                out_dir=mock_simulation_options.out_dir,
-                out_base="test",
-                sim_index=1,
-                fixed_conf=None,
-                predefined_chains=None,
-                dual_mutation_mode=True,
-                mutation_pair=("normal", "dupC"),
-                structure_mutation_info=None,
-            )
-
-        # Two trackers created via factory
-        assert mock_factory.call_count == 2
-        # Both wrote coordinate maps
-        mock_instance_1.write_coordinate_map.assert_called_once()
-        mock_instance_2.write_coordinate_map.assert_called_once()
-
-        # run_read_simulation got both trackers
-        reads_call = _mock_delegates["run_read_simulation"].call_args
-        assert reads_call[1]["source_tracker"] is not None
-        assert reads_call[1]["source_tracker_mut"] is not None
+        stats_call = _mock_delegates["write_simulation_statistics"].call_args
+        assert stats_call[1]["mutated_units"] == mutated_units
+        assert stats_call[1]["mutation_positions"] == [MutationTarget(1, 2)]
 
     def test_statistics_receive_timing(
         self, mock_simulation_options, minimal_config, _mock_delegates
@@ -313,3 +253,47 @@ class TestRunSingleSimulationIteration:
         assert isinstance(iteration_start, float)
         assert isinstance(iteration_end, float)
         assert iteration_start <= iteration_end
+
+
+class TestSeededSeriesReproducibility:
+    """Tests for seed reproducibility across series iterations (#139)."""
+
+    def test_seeded_series_iterations_reproducible_across_runs(
+        self, mock_simulation_options, minimal_config
+    ):
+        """Sharing RNG across iterations produces different haplotypes per iteration,
+        but repeating the run with the same seed reproduces the exact sequence series.
+        """
+        import random
+
+        from muc_one_up.cli.haplotypes import generate_haplotypes
+
+        mock_simulation_options.num_haplotypes = 2
+        mock_simulation_options.seed = 42
+
+        # Run 1: seed=42, 2 iterations
+        rng1 = random.Random(42)
+        iter1_run1 = generate_haplotypes(
+            mock_simulation_options, minimal_config, None, None, rng=rng1
+        )
+        iter2_run1 = generate_haplotypes(
+            mock_simulation_options, minimal_config, None, None, rng=rng1
+        )
+
+        # Iterations within the same run must differ (RNG advances)
+        assert iter1_run1[0].sequence != iter2_run1[0].sequence
+
+        # Run 2: same seed=42, 2 iterations
+        rng2 = random.Random(42)
+        iter1_run2 = generate_haplotypes(
+            mock_simulation_options, minimal_config, None, None, rng=rng2
+        )
+        iter2_run2 = generate_haplotypes(
+            mock_simulation_options, minimal_config, None, None, rng=rng2
+        )
+
+        # Matching iterations across identical-seed runs must be identical
+        assert iter1_run1[0].sequence == iter1_run2[0].sequence
+        assert iter2_run1[0].sequence == iter2_run2[0].sequence
+        assert iter1_run1[1].sequence == iter1_run2[1].sequence
+        assert iter2_run1[1].sequence == iter2_run2[1].sequence

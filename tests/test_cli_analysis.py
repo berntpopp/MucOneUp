@@ -1,373 +1,153 @@
 """Tests for muc_one_up.cli.analysis module.
 
-Covers: _run_toxic_detection, run_orf_prediction, run_read_simulation,
-write_simulation_statistics.
+Covers: write_simulation_statistics, run_orf_analysis_standalone,
+and _translate_dna_flanks.
 """
 
 import json
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
+from muc_one_up.cli.analysis import (
+    _is_dna,
+    _translate_dna_flanks,
+    run_orf_analysis_standalone,
+    write_simulation_statistics,
+)
 
-# ============================================================================
-# _run_toxic_detection tests
-# ============================================================================
+
+class TestTranslateDnaFlanks:
+    """Tests for DNA flank detection and peptide translation helper."""
+
+    def test_is_dna_helper(self):
+        assert _is_dna("ATGAAACCC") is True
+        assert _is_dna("ACGTN") is True
+        assert _is_dna("MKPGF") is False
+        assert _is_dna("A") is False
+        assert _is_dna(None) is False
+
+    def test_non_dna_strings_passed_as_is(self):
+        """Peptide strings are not translated and returned directly."""
+        left, right = _translate_dna_flanks("MKP", "GF")
+        assert left == "MKP"
+        assert right == "GF"
+
+    def test_none_constants_return_none(self):
+        """None constants return None."""
+        left, right = _translate_dna_flanks(None, None)
+        assert left is None
+        assert right is None
+
+    def test_dna_constants_translated(self):
+        """DNA sequences are translated into candidate peptides."""
+        left, right = _translate_dna_flanks("ATGAAACCC", "GGGTTTTAA")
+        assert left == "MKP"
+        assert right == "GF"
+
+    def test_dna_constants_matched_against_orf_output(self, tmp_path: Path):
+        """Active frame is selected by matching predicted ORF sequences."""
+        orf_file = tmp_path / "test.orfs.fa"
+        right_dna = "AGTTTAA"
+        orf_file.write_text(">seq1\nMKPV\n")
+
+        left, right = _translate_dna_flanks("ATGAAACCC", right_dna, orf_file)
+        assert left == "MKP"
+        assert right == "V"
+
+    def test_orfipy_header_coordinates_strip_left_flank(self, tmp_path: Path):
+        """When orfipy header specifies start < len(left_const), prefix AA count is computed."""
+        orf_file = tmp_path / "test.orfs.fa"
+        left_dna = "ATGAAACCCTTT"
+        orf_file.write_text(">seq1 [3-30](+) type:complete\nKPFAAA\n")
+
+        left, _ = _translate_dna_flanks(left_dna, None, orf_file)
+        assert left == "KPF"
+
+    def test_multi_orf_dna_constants_matched_both_frames(self, tmp_path: Path):
+        """When multiple ORFs in the FASTA have different matched frames/coordinates,
+        _translate_dna_flanks returns lists of matched candidate flanks.
+        """
+        orf_file = tmp_path / "multi.orfs.fa"
+        left_dna = "ATGAAACCCTTT"
+        right_dna = "AGTTTAA"
+        orf_file.write_text(
+            ">seq1 [3-30](+) type:complete\nKPFAAAAV\n>seq2 [0-30](+) type:complete\nMKPFAAAASL\n"
+        )
+        left, right = _translate_dna_flanks(left_dna, right_dna, orf_file)
+        assert isinstance(left, list)
+        assert set(left) == {"KPF", "MKPF"}
+        assert isinstance(right, list)
+        assert set(right) == {"V", "SL"}
+
+    def test_multi_orf_order_independent_toxicity_scores(self, tmp_path: Path):
+        """Verifies that two ORFs in different reading frames / coordinates produce
+        identical scan_orf_fasta toxicity scores regardless of record order.
+        """
+        from muc_one_up.toxic_protein_detector import scan_orf_fasta
+
+        left_dna = "ATGAAACCCTTT"
+        right_dna = "AGTTTAA"
+        motif = "RCHLGPGHQAGPGLHR"
+
+        seq1 = f"KPF{motif * 3}V"
+        seq2 = f"MKPF{motif * 2}SL"
+
+        f1 = tmp_path / "order1.fa"
+        f1.write_text(
+            f">orf1 [3-99](+) type:complete\n{seq1}\n>orf2 [0-99](+) type:complete\n{seq2}\n"
+        )
+        f2 = tmp_path / "order2.fa"
+        f2.write_text(
+            f">orf2 [0-99](+) type:complete\n{seq2}\n>orf1 [3-99](+) type:complete\n{seq1}\n"
+        )
+
+        left1, right1 = _translate_dna_flanks(left_dna, right_dna, f1)
+        left2, right2 = _translate_dna_flanks(left_dna, right_dna, f2)
+
+        res1 = scan_orf_fasta(str(f1), left_const=left1, right_const=right1, consensus=motif)
+        res2 = scan_orf_fasta(str(f2), left_const=left2, right_const=right2, consensus=motif)
+
+        assert res1["orf1 [3-99](+) type:complete"] == res2["orf1 [3-99](+) type:complete"]
+        assert res1["orf2 [0-99](+) type:complete"] == res2["orf2 [0-99](+) type:complete"]
+        assert res1["orf1 [3-99](+) type:complete"]["repeat_count"] == 3
+        assert res2["orf2 [0-99](+) type:complete"]["repeat_count"] == 2
 
 
-class TestRunToxicDetection:
-    """Tests for the _run_toxic_detection helper."""
+class TestRunOrfAnalysisStandalone:
+    """Tests for run_orf_analysis_standalone."""
 
-    def test_extracts_config_parameters(self, minimal_config):
-        """Custom toxic_protein_detection values are forwarded to scan_orf_fasta."""
-        from muc_one_up.cli.analysis import _run_toxic_detection
+    def test_run_orf_analysis_translates_dna_constants(self, tmp_path: Path):
+        """Standalone ORF analysis translates DNA constants before calling scan_orf_fasta."""
+        fasta_file = tmp_path / "input.fa"
+        fasta_file.write_text(">seq1\nATGAAACCCGGGTTTTAA\n")
 
-        minimal_config["toxic_protein_detection"] = {
-            "consensus_motif": "CUSTOM",
-            "identity_threshold": 0.9,
-            "key_residues": ["A", "B"],
-            "expected_repeat_count": 5,
-            "weights": {"repeat": 0.7, "composition": 0.3},
-            "toxic_cutoff": 0.6,
-        }
+        orf_output = tmp_path / "test.orfs.fa"
+        orf_output.write_text(">seq1\nMKPGF\n")
 
-        with patch(
-            "muc_one_up.toxic_protein_detector.scan_orf_fasta", return_value={}
-        ) as mock_scan:
-            _run_toxic_detection("/fake/orfs.fa", minimal_config)
+        with (
+            patch("muc_one_up.read_simulator.utils.common_utils.run_command"),
+            patch(
+                "muc_one_up.toxic_protein_detector.scan_orf_fasta", return_value={"score": 0.1}
+            ) as mock_scan,
+        ):
+            run_orf_analysis_standalone(
+                input_fasta=str(fasta_file),
+                out_dir=str(tmp_path),
+                out_base="test",
+                orf_min_aa=1,
+                orf_aa_prefix=None,
+                left_const="ATGAAACCC",
+                right_const="GGGTTTTAA",
+            )
 
         mock_scan.assert_called_once()
-        kwargs = mock_scan.call_args
-        assert kwargs[1]["consensus"] == "CUSTOM"
-        assert kwargs[1]["identity_threshold"] == 0.9
-        assert kwargs[1]["key_residues"] == ["A", "B"]
-        assert kwargs[1]["expected_repeat_count"] == 5
-        assert kwargs[1]["w_repeat"] == 0.7
-        assert kwargs[1]["w_composition"] == 0.3
-        assert kwargs[1]["toxic_detection_cutoff"] == 0.6
+        call_kwargs = mock_scan.call_args[1]
+        assert call_kwargs["left_const"] == "MKP"
+        assert call_kwargs["right_const"] == "GF"
 
-    def test_uses_defaults_when_toxic_config_missing(self, minimal_config):
-        """Default detection parameters used when toxic_protein_detection absent."""
-        from muc_one_up.cli.analysis import _run_toxic_detection
-
-        # Ensure no toxic config
-        minimal_config.pop("toxic_protein_detection", None)
-
-        with patch(
-            "muc_one_up.toxic_protein_detector.scan_orf_fasta", return_value={}
-        ) as mock_scan:
-            _run_toxic_detection("/fake/orfs.fa", minimal_config)
-
-        kwargs = mock_scan.call_args[1]
-        assert kwargs["consensus"] == "RCHLGPGHQAGPGLHR"
-        assert kwargs["identity_threshold"] == 0.8
-        assert kwargs["toxic_detection_cutoff"] == 0.5
-
-    def test_uses_correct_assembly_constants(self, minimal_config):
-        """Left and right constants from the correct reference assembly are passed."""
-        from muc_one_up.cli.analysis import _run_toxic_detection
-
-        with patch(
-            "muc_one_up.toxic_protein_detector.scan_orf_fasta", return_value={}
-        ) as mock_scan:
-            _run_toxic_detection("/fake/orfs.fa", minimal_config)
-
-        call_args = mock_scan.call_args
-        expected_left = minimal_config["constants"]["hg38"]["left"]
-        expected_right = minimal_config["constants"]["hg38"]["right"]
-        assert call_args[1]["left_const"] == expected_left
-        assert call_args[1]["right_const"] == expected_right
-
-
-# ============================================================================
-# run_orf_prediction tests
-# ============================================================================
-
-
-class TestRunOrfPrediction:
-    """Tests for run_orf_prediction."""
-
-    def test_skips_when_output_orfs_false(self, mock_simulation_options, minimal_config):
-        """No ORF work when output_orfs is False."""
-        from muc_one_up.cli.analysis import run_orf_prediction
-
-        mock_simulation_options.output_orfs = False
-
-        with patch("muc_one_up.translate.run_orf_finder_in_memory") as mock_orf:
-            run_orf_prediction(
-                mock_simulation_options,
-                minimal_config,
-                str(Path(mock_simulation_options.out_dir)),
-                "test",
-                1,
-                [],
-                None,
-                False,
-            )
-            mock_orf.assert_not_called()
-
-    def test_single_mode_calls_orf_finder_once(
-        self, mock_simulation_options, minimal_config, sample_haplotype_results, tmp_path
-    ):
-        """Single mode: one ORF call, one toxic detection, one stats file."""
-        from muc_one_up.cli.analysis import run_orf_prediction
-
-        mock_simulation_options.output_orfs = True
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        with (
-            patch("muc_one_up.translate.run_orf_finder_in_memory") as mock_orf,
-            patch("muc_one_up.cli.analysis._run_toxic_detection", return_value={"score": 0.5}),
-        ):
-            run_orf_prediction(
-                mock_simulation_options,
-                minimal_config,
-                out_dir,
-                "test",
-                1,
-                sample_haplotype_results,
-                None,
-                False,
-            )
-
-        mock_orf.assert_called_once()
-        # Stats file should have been written
-        stats_files = list(Path(out_dir).glob("*.orf_stats.txt"))
-        assert len(stats_files) == 1
-
-    def test_dual_mode_calls_orf_finder_twice(
-        self, mock_simulation_options, minimal_config, sample_haplotype_results, tmp_path
-    ):
-        """Dual mode: two ORF calls, two toxic detections, two stats files."""
-        from muc_one_up.cli.analysis import run_orf_prediction
-
-        mock_simulation_options.output_orfs = True
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        with (
-            patch("muc_one_up.translate.run_orf_finder_in_memory") as mock_orf,
-            patch("muc_one_up.cli.analysis._run_toxic_detection", return_value={"score": 0.5}),
-        ):
-            run_orf_prediction(
-                mock_simulation_options,
-                minimal_config,
-                out_dir,
-                "test",
-                1,
-                sample_haplotype_results,
-                sample_haplotype_results,
-                True,
-            )
-
-        assert mock_orf.call_count == 2
-        stats_files = list(Path(out_dir).glob("*.orf_stats.txt"))
-        assert len(stats_files) == 2
-
-    def test_orf_failure_raises_file_operation_error(
-        self, mock_simulation_options, minimal_config, sample_haplotype_results, tmp_path
-    ):
-        """FileOperationError raised when ORF finder fails."""
-        from muc_one_up.cli.analysis import run_orf_prediction
-        from muc_one_up.exceptions import FileOperationError
-
-        mock_simulation_options.output_orfs = True
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        with (
-            patch(
-                "muc_one_up.translate.run_orf_finder_in_memory",
-                side_effect=RuntimeError("ORF crash"),
-            ),
-            pytest.raises(FileOperationError, match="ORF finding failed"),
-        ):
-            run_orf_prediction(
-                mock_simulation_options,
-                minimal_config,
-                out_dir,
-                "test",
-                1,
-                sample_haplotype_results,
-                None,
-                False,
-            )
-
-    def test_toxic_import_error_raises_file_operation_error(
-        self, mock_simulation_options, minimal_config, sample_haplotype_results, tmp_path
-    ):
-        """FileOperationError raised when toxic_protein_detector can't be imported."""
-        from muc_one_up.cli.analysis import run_orf_prediction
-        from muc_one_up.exceptions import FileOperationError
-
-        mock_simulation_options.output_orfs = True
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        with (
-            patch("muc_one_up.translate.run_orf_finder_in_memory"),
-            patch(
-                "muc_one_up.cli.analysis._run_toxic_detection",
-                side_effect=ImportError("no module"),
-            ),
-            pytest.raises(FileOperationError, match="import"),
-        ):
-            run_orf_prediction(
-                mock_simulation_options,
-                minimal_config,
-                out_dir,
-                "test",
-                1,
-                sample_haplotype_results,
-                None,
-                False,
-            )
-
-
-# ============================================================================
-# run_read_simulation tests
-# ============================================================================
-
-
-class TestRunReadSimulation:
-    """Tests for run_read_simulation."""
-
-    def test_skips_when_simulate_reads_none(self, mock_simulation_options, minimal_config):
-        """No pipeline call when simulate_reads is None."""
-        from muc_one_up.cli.analysis import run_read_simulation
-
-        mock_simulation_options.simulate_reads = None
-
-        with patch("muc_one_up.read_simulation.simulate_reads") as mock_pipeline:
-            run_read_simulation(mock_simulation_options, minimal_config, ".", "test", 1, False)
-            mock_pipeline.assert_not_called()
-
-    def test_single_mode_calls_pipeline_once(
-        self, mock_simulation_options, minimal_config, tmp_path
-    ):
-        """Single mode: pipeline called once."""
-        from muc_one_up.cli.analysis import run_read_simulation
-
-        mock_simulation_options.simulate_reads = "illumina"
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        with patch("muc_one_up.read_simulation.simulate_reads") as mock_pipeline:
-            run_read_simulation(mock_simulation_options, minimal_config, out_dir, "test", 1, False)
-
-        mock_pipeline.assert_called_once()
-
-    def test_dual_mode_calls_pipeline_twice(
-        self, mock_simulation_options, minimal_config, tmp_path
-    ):
-        """Dual mode: pipeline called for normal and mutated."""
-        from muc_one_up.cli.analysis import run_read_simulation
-
-        mock_simulation_options.simulate_reads = "illumina"
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        with patch("muc_one_up.read_simulation.simulate_reads") as mock_pipeline:
-            run_read_simulation(mock_simulation_options, minimal_config, out_dir, "test", 1, True)
-
-        assert mock_pipeline.call_count == 2
-
-    def test_sets_simulator_in_config(self, mock_simulation_options, minimal_config, tmp_path):
-        """Config read_simulation.simulator is set to the requested type."""
-        from muc_one_up.cli.analysis import run_read_simulation
-
-        mock_simulation_options.simulate_reads = "ont"
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        with patch("muc_one_up.read_simulation.simulate_reads"):
-            run_read_simulation(mock_simulation_options, minimal_config, out_dir, "test", 1, False)
-
-        assert minimal_config["read_simulation"]["simulator"] == "ont"
-
-    def test_failure_raises_read_simulation_error(
-        self, mock_simulation_options, minimal_config, tmp_path
-    ):
-        """ReadSimulationError raised when pipeline fails."""
-        from muc_one_up.cli.analysis import run_read_simulation
-        from muc_one_up.exceptions import ReadSimulationError
-
-        mock_simulation_options.simulate_reads = "illumina"
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        with (
-            patch(
-                "muc_one_up.read_simulation.simulate_reads",
-                side_effect=RuntimeError("pipeline crash"),
-            ),
-            pytest.raises(ReadSimulationError),
-        ):
-            run_read_simulation(mock_simulation_options, minimal_config, out_dir, "test", 1, False)
-
-    def test_dual_mode_passes_source_trackers(
-        self, mock_simulation_options, minimal_config, tmp_path
-    ):
-        """Dual mode forwards source_tracker and source_tracker_mut."""
-        from muc_one_up.cli.analysis import run_read_simulation
-
-        mock_simulation_options.simulate_reads = "illumina"
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        tracker_normal = MagicMock()
-        tracker_mut = MagicMock()
-
-        with patch("muc_one_up.read_simulation.simulate_reads") as mock_pipeline:
-            run_read_simulation(
-                mock_simulation_options,
-                minimal_config,
-                out_dir,
-                "test",
-                1,
-                True,
-                source_tracker=tracker_normal,
-                source_tracker_mut=tracker_mut,
-            )
-
-        # First call (normal) should use tracker_normal
-        assert mock_pipeline.call_args_list[0][1]["source_tracker"] == tracker_normal
-        # Second call (mutated) should use tracker_mut
-        assert mock_pipeline.call_args_list[1][1]["source_tracker"] == tracker_mut
-
-    def test_dual_mode_falls_back_to_source_tracker_when_mut_none(
-        self, mock_simulation_options, minimal_config, tmp_path
-    ):
-        """Dual mode uses source_tracker for mutated when source_tracker_mut is None."""
-        from muc_one_up.cli.analysis import run_read_simulation
-
-        mock_simulation_options.simulate_reads = "illumina"
-        out_dir = str(tmp_path / "out")
-        Path(out_dir).mkdir()
-
-        tracker = MagicMock()
-
-        with patch("muc_one_up.read_simulation.simulate_reads") as mock_pipeline:
-            run_read_simulation(
-                mock_simulation_options,
-                minimal_config,
-                out_dir,
-                "test",
-                1,
-                True,
-                source_tracker=tracker,
-                source_tracker_mut=None,
-            )
-
-        # Second call should fall back to tracker
-        assert mock_pipeline.call_args_list[1][1]["source_tracker"] == tracker
-
-
-# ============================================================================
-# write_simulation_statistics tests
-# ============================================================================
+        stats_file = tmp_path / "test.orf_stats.json"
+        assert stats_file.exists()
 
 
 class TestWriteSimulationStatistics:
@@ -377,8 +157,6 @@ class TestWriteSimulationStatistics:
         self, mock_simulation_options, minimal_config, sample_haplotype_results, tmp_path
     ):
         """Single mode produces one stats JSON."""
-        from muc_one_up.cli.analysis import write_simulation_statistics
-
         out_dir = str(tmp_path / "out")
         Path(out_dir).mkdir()
 
@@ -411,8 +189,6 @@ class TestWriteSimulationStatistics:
         self, mock_simulation_options, minimal_config, sample_haplotype_results, tmp_path
     ):
         """Dual mode produces normal + mut stats JSONs."""
-        from muc_one_up.cli.analysis import write_simulation_statistics
-
         out_dir = str(tmp_path / "out")
         Path(out_dir).mkdir()
 
@@ -446,8 +222,6 @@ class TestWriteSimulationStatistics:
         self, mock_simulation_options, minimal_config, sample_haplotype_results, tmp_path
     ):
         """Graceful degradation when provenance collection fails."""
-        from muc_one_up.cli.analysis import write_simulation_statistics
-
         out_dir = str(tmp_path / "out")
         Path(out_dir).mkdir()
 
@@ -458,7 +232,6 @@ class TestWriteSimulationStatistics:
             "muc_one_up.cli.analysis.collect_provenance_metadata",
             side_effect=RuntimeError("provenance crash"),
         ):
-            # Should not raise
             write_simulation_statistics(
                 mock_simulation_options,
                 minimal_config,
@@ -482,8 +255,6 @@ class TestWriteSimulationStatistics:
         self, mock_simulation_options, minimal_config, sample_haplotype_results, tmp_path
     ):
         """Mutation info included in stats when mutation_name set."""
-        from muc_one_up.cli.analysis import write_simulation_statistics
-
         mock_simulation_options.mutation_name = "dupC"
         mock_simulation_options.mutation_targets = ["1,3"]
         out_dir = str(tmp_path / "out")
@@ -510,6 +281,41 @@ class TestWriteSimulationStatistics:
 
         stats_files = list(Path(out_dir).glob("*.simulation_stats.json"))
         data = json.loads(stats_files[0].read_text())
-        # Should contain mutation information somewhere in the stats
         stats_text = json.dumps(data)
         assert "dupC" in stats_text or "mutation" in stats_text
+
+    def test_passes_mutated_units_to_simulation_statistics_and_companion(
+        self, mock_simulation_options, minimal_config, sample_haplotype_results, tmp_path
+    ):
+        """mutated_units is passed to generate_simulation_statistics and companion fields."""
+        out_dir = str(tmp_path / "out")
+        Path(out_dir).mkdir()
+
+        mutated_units = {1: [(2, "ATCG_MUT")]}
+        mock_simulation_options.track_read_source = True
+        mock_simulation_options.mutation_name = "dupC"
+
+        with (
+            patch("muc_one_up.cli.analysis.generate_simulation_statistics") as mock_gen,
+            patch("muc_one_up.cli.analysis._add_companion_fields") as mock_comp,
+        ):
+            mock_gen.return_value = {}
+            write_simulation_statistics(
+                mock_simulation_options,
+                minimal_config,
+                out_dir,
+                "test",
+                1,
+                0.0,
+                1.0,
+                sample_haplotype_results,
+                None,
+                False,
+                None,
+                None,
+                None,
+                mutated_units=mutated_units,
+            )
+
+        assert mock_gen.call_args[1]["mutated_units"] == mutated_units
+        assert mock_comp.call_args[1]["mutated_units"] == mutated_units
