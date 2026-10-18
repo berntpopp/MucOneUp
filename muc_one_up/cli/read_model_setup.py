@@ -7,8 +7,6 @@ from typing import Any
 
 import click
 
-from ..read_simulator.read_profiles import apply_read_profile, load_read_profile
-
 
 def apply_cli_read_model(
     config: dict[str, Any], read_profile: str | None, platform: str
@@ -21,6 +19,8 @@ def apply_cli_read_model(
     ref = read_profile or (config.get("read_model") or {}).get("profile")
     if not ref:
         return config
+    from ..read_simulator.read_profiles import apply_read_profile, load_read_profile
+
     try:
         profile = load_read_profile(str(ref))
     except ValueError as exc:
@@ -65,6 +65,8 @@ def resolve_amplicon_platform(
     ref = read_profile or (config.get("read_model") or {}).get("profile")
     if not ref:
         return "pacbio"
+    from ..read_simulator.read_profiles import load_read_profile
+
     try:
         return load_read_profile(str(ref)).platform
     except ValueError as exc:

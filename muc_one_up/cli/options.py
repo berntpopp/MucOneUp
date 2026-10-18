@@ -108,7 +108,7 @@ def shared_read_options(func: Any) -> Any:
     )(func)
     func = click.option(
         "--coverage",
-        type=int,
+        type=float,
         default=None,
         help="Target sequencing coverage (overrides config if provided, defaults to config value or 30x).",
     )(func)
@@ -154,4 +154,14 @@ def no_align_option(func: Any) -> Any:
         is_flag=True,
         default=False,
         help="Skip alignment to read_simulation.human_reference and output FASTQ only.",
+    )(func)
+
+
+def threads_option(func: Any) -> Any:
+    """Add ``--threads`` (thread count override)."""
+    return click.option(
+        "--threads",
+        type=int,
+        default=None,
+        help="Thread count (overrides config).",
     )(func)

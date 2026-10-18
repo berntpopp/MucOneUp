@@ -11,7 +11,7 @@ import click
 from ...read_simulator.constants import DEFAULT_ONT_MIN_READ_LENGTH, VALID_PCR_PRESETS
 from .._common import require_config
 from ..error_handling import cli_error_handler
-from ..options import no_align_option, read_profile_option, shared_read_options
+from ..options import no_align_option, read_profile_option, shared_read_options, threads_option
 from ..read_model_setup import (
     apply_cli_read_model,
     apply_tracking_and_alignment,
@@ -120,9 +120,9 @@ def _run_batch_simulation(
 def _setup_read_config(
     config: dict[str, Any],
     simulator_type: str,
-    coverage: int | None,
-    seed: int | None,
-    seed_config_key: str = "read_simulation",
+    coverage: float | None,
+    seed: int | None = None,
+    seed_config_key: str | None = "read_simulation",
 ) -> None:
     """Initialize read_simulation config section with shared defaults.
 
@@ -131,7 +131,7 @@ def _setup_read_config(
         simulator_type: One of "illumina", "ont", "pacbio"
         coverage: CLI --coverage value (None if not provided)
         seed: CLI --seed value (None if not provided)
-        seed_config_key: Config section to store seed in
+        seed_config_key: Config section to store seed in (None to skip seed setup)
     """
     if "read_simulation" not in config:
         config["read_simulation"] = {}
@@ -142,11 +142,17 @@ def _setup_read_config(
     elif "coverage" not in config.get("read_simulation", {}):
         config["read_simulation"]["coverage"] = 30
 
-    if seed is not None:
-        if seed_config_key not in config:
-            config[seed_config_key] = {}
-        config[seed_config_key]["seed"] = seed
-        logging.info(f"Using random seed: {seed} (results will be reproducible)")
+    if seed_config_key is not None:
+        if seed is not None:
+            if seed_config_key not in config:
+                config[seed_config_key] = {}
+            config[seed_config_key]["seed"] = seed
+            logging.info(f"Using random seed: {seed} (results will be reproducible)")
+        elif config.get(seed_config_key, {}).get("seed") is None and config.get("seed") is not None:
+            if seed_config_key not in config:
+                config[seed_config_key] = {}
+            config[seed_config_key]["seed"] = config["seed"]
+            logging.info(f"Using random seed: {config['seed']} (results will be reproducible)")
 
 
 def _apply_ont_amplicon_params(
@@ -173,6 +179,9 @@ def _apply_ont_amplicon_params(
     if seed is not None:
         params["seed"] = seed
         logging.info("Using random seed: %d (results will be reproducible)", seed)
+    elif params.get("seed") is None and config.get("seed") is not None:
+        params["seed"] = config["seed"]
+        logging.info("Using random seed: %d (results will be reproducible)", config["seed"])
 
     # Default to QSHMM-ONT-HQ.model if missing or explicitly null
     if not params.get("model_file"):
@@ -221,6 +230,9 @@ def _apply_pacbio_params(
     if seed is not None:
         params["seed"] = seed
         logging.info("Using random seed: %d (results will be reproducible)", seed)
+    elif params.get("seed") is None and config.get("seed") is not None:
+        params["seed"] = config["seed"]
+        logging.info("Using random seed: %d (results will be reproducible)", config["seed"])
 
     required = ["model_type", "model_file"]
     missing = [p for p in required if p not in params]
@@ -261,11 +273,21 @@ def reads():
     help="Number of fragment pairs to generate (overrides config read_number). "
     "More fragments allow higher coverage. Default: 100000 from config.",
 )
+@no_align_option
 @shared_read_options
 @click.pass_context
 @cli_error_handler
 def illumina(
-    ctx, input_fastas, out_dir, out_base, coverage, threads, read_number, seed, track_read_source
+    ctx,
+    input_fastas,
+    out_dir,
+    out_base,
+    coverage,
+    threads,
+    read_number,
+    seed,
+    track_read_source,
+    no_align,
 ):
     """Simulate Illumina short reads from one or more FASTA files.
 
@@ -298,6 +320,7 @@ def illumina(
         config["read_simulation"]["threads"] = threads
     if read_number is not None:
         config["read_simulation"]["read_number"] = read_number
+    apply_tracking_and_alignment(config, track_read_source=track_read_source, no_align=no_align)
 
     _run_batch_simulation(
         config, input_fastas, out_dir, out_base, "_reads", "Illumina", track_read_source
@@ -336,6 +359,7 @@ def illumina(
     default=None,
     help="pbsim3-fragments: FASTA with 'left'/'right' records added around each haplotype.",
 )
+@threads_option
 @read_profile_option
 @no_align_option
 @shared_read_options
@@ -357,6 +381,7 @@ def ont(
     read_length_sigma,
     flank_fasta,
     read_profile,
+    threads,
 ):
     """Simulate Oxford Nanopore long reads from one or more FASTA files.
 
@@ -406,15 +431,23 @@ def ont(
     elif "coverage" not in ns:
         ns["coverage"] = config["read_simulation"]["coverage"]
 
+    if threads is not None:
+        ns["num_threads"] = threads
+        config["read_simulation"]["threads"] = threads
+        config.setdefault("ont_amplicon_params", {})["threads"] = threads
+
     if simulator == "pbsim3-fragments":
         config = apply_cli_read_model(config, read_profile, "ont")
         config["read_simulation"]["simulator"] = "ont-fragments"
+        fragment_seed = seed
+        if fragment_seed is None and config.get("ont_fragment_params", {}).get("seed") is None:
+            fragment_seed = config.get("seed")
         fragment = {
             "n_reads": n_reads,
             "length_median": read_length_median,
             "length_sigma": read_length_sigma,
             "flank_fasta": flank_fasta,
-            "seed": seed,
+            "seed": fragment_seed,
         }
         config["ont_fragment_params"] = {
             **config.get("ont_fragment_params", {}),
@@ -540,7 +573,7 @@ def pacbio(
 
     config = load_config_raw(str(ctx.obj["config_path"]))
 
-    _setup_read_config(config, "pacbio", coverage, seed, seed_config_key="pacbio_params")
+    _setup_read_config(config, "pacbio", coverage, seed_config_key=None)
     _apply_pacbio_params(
         config,
         model_type,
@@ -551,6 +584,10 @@ def pacbio(
         min_passes=min_passes,
         min_rq=min_rq,
     )
+    if coverage is not None:
+        config["pacbio_params"]["coverage"] = coverage
+    elif "coverage" not in config["pacbio_params"]:
+        config["pacbio_params"]["coverage"] = config["read_simulation"]["coverage"]
 
     apply_tracking_and_alignment(config, track_read_source=False, no_align=no_align)
 
@@ -591,6 +628,7 @@ def pacbio(
     help="Sequencing platform for amplicon simulation. Default: the read profile's "
     "platform when a profile is used, otherwise pacbio.",
 )
+@threads_option
 @read_profile_option
 @no_align_option
 @shared_read_options
@@ -611,6 +649,7 @@ def amplicon(
     track_read_source,
     read_profile,
     no_align,
+    threads,
 ):
     """Simulate amplicon reads from one or more FASTA files.
 
@@ -669,12 +708,17 @@ def amplicon(
     config = load_config_raw(str(ctx.obj["config_path"]))
     platform = resolve_amplicon_platform(config, platform, read_profile)
     config = apply_cli_read_model(config, read_profile, platform)
-    _setup_read_config(config, "amplicon", coverage, seed)
+    coverage_int = round(coverage) if coverage is not None else None
+    _setup_read_config(config, "amplicon", coverage_int, seed_config_key=None)
     apply_tracking_and_alignment(config, track_read_source, no_align)
 
     if platform == "ont":
         config["read_simulation"]["simulator"] = "ont-amplicon"
     config["read_simulation"]["assay_type"] = "amplicon"
+
+    if threads is not None:
+        config.setdefault("ont_amplicon_params", {})["threads"] = threads
+        config.setdefault("pacbio_params", {})["threads"] = threads
 
     # Ensure amplicon_params has primers (a read profile can create the section
     # through its PCR overlay, so check the primers themselves).
@@ -694,7 +738,7 @@ def amplicon(
     if platform == "ont":
         _apply_ont_amplicon_params(config, model_type, model_file, seed)
     else:
-        _apply_pacbio_params(config, model_type, model_file, seed)
+        _apply_pacbio_params(config, model_type, model_file, seed, threads=threads)
 
     # Apply PCR bias overrides
     if "pcr_bias" not in config["amplicon_params"]:

@@ -10,6 +10,7 @@ Tests cover:
 """
 
 import json
+import logging
 
 import pytest
 from click.testing import CliRunner
@@ -1359,3 +1360,286 @@ class TestSeedParameter:
         # Check that log message appears in output or logs
         # The logging.info call should have executed
         assert mock_simulate.called
+
+
+class TestIssue149ReadsFixes:
+    """Regression tests for Issue #149 fixes."""
+
+    def test_reads_pacbio_coverage_propagation(self, runner, tmp_path, mocker):
+        """CLI --coverage propagates to config['pacbio_params']['coverage']."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model data")
+
+        config = {
+            "repeats": {"1": "ACGT"},
+            "constants": {"left": "A", "right": "T"},
+            "probabilities": {},
+            "length_model": {"distribution": "normal", "min_repeats": 1, "max_repeats": 10},
+            "pacbio_params": {
+                "model_type": "errhmm",
+                "model_file": str(model_file),
+                "coverage": 30,
+            },
+        }
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps(config))
+
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads", return_value=None)
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "reads",
+                "pacbio",
+                str(fasta_file),
+                "--coverage",
+                "75.5",
+            ],
+        )
+        assert result.exit_code == 0
+        called_config = mock_simulate.call_args[0][0]
+        assert called_config["pacbio_params"]["coverage"] == 75.5
+        assert called_config["read_simulation"]["coverage"] == 75.5
+
+    def test_reads_float_coverage_accepted(self, runner, temp_config, tmp_path, mocker):
+        """Click accepts float coverage like 0.5 without integer parse errors."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGT\n")
+
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads", return_value=None)
+
+        # Illumina
+        result = runner.invoke(
+            cli,
+            ["--config", temp_config, "reads", "illumina", str(fasta_file), "--coverage", "0.5"],
+        )
+        assert result.exit_code == 0
+        called_config = mock_simulate.call_args[0][0]
+        assert called_config["read_simulation"]["coverage"] == 0.5
+
+        # Amplicon converts to int(round(coverage))
+        model_file = tmp_path / "test.model"
+        model_file.write_text("data")
+        config = {
+            "repeats": {"1": "ACGT"},
+            "constants": {"left": "A", "right": "T"},
+            "probabilities": {},
+            "length_model": {"distribution": "normal", "min_repeats": 1, "max_repeats": 10},
+            "amplicon_params": {"forward_primer": "AC", "reverse_primer": "GT"},
+            "pacbio_params": {"model_type": "errhmm", "model_file": str(model_file)},
+        }
+        cfg_path = tmp_path / "amp_config.json"
+        cfg_path.write_text(json.dumps(config))
+
+        result_amp = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(cfg_path),
+                "reads",
+                "amplicon",
+                str(fasta_file),
+                "--coverage",
+                "10.6",
+            ],
+        )
+        assert result_amp.exit_code == 0
+        amp_config = mock_simulate.call_args[0][0]
+        assert amp_config["read_simulation"]["coverage"] == 11
+        assert isinstance(amp_config["read_simulation"]["coverage"], int)
+
+    def test_reads_commands_inherit_top_level_seed(self, runner, tmp_path, mocker):
+        """When CLI --seed is omitted, commands inherit top-level config['seed']."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model data")
+
+        config = {
+            "seed": 999,
+            "repeats": {"1": "ACGT"},
+            "constants": {"left": "A", "right": "T"},
+            "probabilities": {},
+            "length_model": {"distribution": "normal", "min_repeats": 1, "max_repeats": 10},
+            "pacbio_params": {
+                "model_type": "errhmm",
+                "model_file": str(model_file),
+            },
+            "amplicon_params": {"forward_primer": "AC", "reverse_primer": "GT"},
+        }
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps(config))
+
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads", return_value=None)
+
+        # Illumina inherits root seed
+        res = runner.invoke(
+            cli, ["--config", str(config_path), "reads", "illumina", str(fasta_file)]
+        )
+        assert res.exit_code == 0
+        cfg = mock_simulate.call_args[0][0]
+        assert cfg["read_simulation"]["seed"] == 999
+
+        # ONT inherits root seed
+        res = runner.invoke(cli, ["--config", str(config_path), "reads", "ont", str(fasta_file)])
+        assert res.exit_code == 0
+        cfg = mock_simulate.call_args[0][0]
+        assert cfg["nanosim_params"]["seed"] == 999
+
+        # ONT pbsim3-fragments inherits root seed
+        res = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "reads",
+                "ont",
+                str(fasta_file),
+                "--simulator",
+                "pbsim3-fragments",
+            ],
+        )
+        assert res.exit_code == 0
+        cfg = mock_simulate.call_args[0][0]
+        assert cfg["ont_fragment_params"]["seed"] == 999
+
+        # PacBio inherits root seed
+        res = runner.invoke(cli, ["--config", str(config_path), "reads", "pacbio", str(fasta_file)])
+        assert res.exit_code == 0
+        cfg = mock_simulate.call_args[0][0]
+        assert cfg["pacbio_params"]["seed"] == 999
+
+        # Amplicon inherits root seed
+        res = runner.invoke(
+            cli, ["--config", str(config_path), "reads", "amplicon", str(fasta_file)]
+        )
+        assert res.exit_code == 0
+        cfg = mock_simulate.call_args[0][0]
+        assert cfg["pacbio_params"]["seed"] == 999
+
+    def test_no_duplicate_seed_logging(self, runner, tmp_path, mocker):
+        """Passing --seed to pacbio or amplicon logs 'Using random seed' exactly once."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model data")
+
+        config = {
+            "repeats": {"1": "ACGT"},
+            "constants": {"left": "A", "right": "T"},
+            "probabilities": {},
+            "length_model": {"distribution": "normal", "min_repeats": 1, "max_repeats": 10},
+            "pacbio_params": {
+                "model_type": "errhmm",
+                "model_file": str(model_file),
+            },
+            "amplicon_params": {"forward_primer": "AC", "reverse_primer": "GT"},
+        }
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps(config))
+
+        mocker.patch("muc_one_up.read_simulation.simulate_reads", return_value=None)
+        spy_info = mocker.spy(logging, "info")
+
+        res = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "reads",
+                "pacbio",
+                str(fasta_file),
+                "--seed",
+                "42",
+            ],
+        )
+        assert res.exit_code == 0
+        seed_calls_pb = [c for c in spy_info.call_args_list if "Using random seed" in str(c)]
+        assert len(seed_calls_pb) == 1
+
+        spy_info.reset_mock()
+        res = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_path),
+                "reads",
+                "amplicon",
+                str(fasta_file),
+                "--seed",
+                "42",
+            ],
+        )
+        assert res.exit_code == 0
+        seed_calls_amp = [c for c in spy_info.call_args_list if "Using random seed" in str(c)]
+        assert len(seed_calls_amp) == 1
+
+    def test_threads_and_no_align_flags(self, runner, tmp_path, mocker):
+        """ONT/Amplicon support --threads and Illumina supports --no-align."""
+        fasta_file = tmp_path / "test.fa"
+        fasta_file.write_text(">test\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model data")
+
+        config = {
+            "repeats": {"1": "ACGT"},
+            "constants": {"left": "A", "right": "T"},
+            "probabilities": {},
+            "length_model": {"distribution": "normal", "min_repeats": 1, "max_repeats": 10},
+            "pacbio_params": {
+                "model_type": "errhmm",
+                "model_file": str(model_file),
+            },
+            "amplicon_params": {"forward_primer": "AC", "reverse_primer": "GT"},
+            "read_simulation": {"human_reference": "/ref/hg38.fa"},
+        }
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps(config))
+
+        mock_simulate = mocker.patch("muc_one_up.read_simulation.simulate_reads", return_value=None)
+
+        # Illumina --no-align
+        result = runner.invoke(
+            cli,
+            ["--config", str(config_path), "reads", "illumina", str(fasta_file), "--no-align"],
+        )
+        assert result.exit_code == 0
+        cfg = mock_simulate.call_args[0][0]
+        assert cfg["read_simulation"]["skip_alignment"] is True
+        assert "human_reference" not in cfg["read_simulation"]
+
+        # ONT --threads 8
+        result = runner.invoke(
+            cli,
+            ["--config", str(config_path), "reads", "ont", str(fasta_file), "--threads", "8"],
+        )
+        assert result.exit_code == 0
+        cfg = mock_simulate.call_args[0][0]
+        assert cfg["nanosim_params"]["num_threads"] == 8
+        assert cfg["read_simulation"]["threads"] == 8
+        assert cfg["ont_amplicon_params"]["threads"] == 8
+
+        # Amplicon --threads 8
+        result = runner.invoke(
+            cli,
+            ["--config", str(config_path), "reads", "amplicon", str(fasta_file), "--threads", "8"],
+        )
+        assert result.exit_code == 0
+        cfg = mock_simulate.call_args[0][0]
+        assert cfg["pacbio_params"]["threads"] == 8
+        assert cfg["ont_amplicon_params"]["threads"] == 8
+
+    def test_read_model_setup_does_not_eagerly_import_read_profiles(self):
+        """Importing read_model_setup does not eagerly import read_profiles."""
+        import sys
+
+        sys.modules.pop("muc_one_up.read_simulator.read_profiles", None)
+        sys.modules.pop("muc_one_up.cli.read_model_setup", None)
+
+        import muc_one_up.cli.read_model_setup  # noqa: F401
+
+        assert "muc_one_up.read_simulator.read_profiles" not in sys.modules

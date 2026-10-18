@@ -66,3 +66,21 @@ class TestApplyPacbioParams:
         assert config["pacbio_params"]["pass_num"] == 5
         assert config["pacbio_params"]["min_passes"] == 3
         assert config["pacbio_params"]["min_rq"] == 0.999
+
+    def test_inherits_top_level_seed(self, caplog):
+        """Falls back to top-level config['seed'] when CLI seed is None."""
+        from muc_one_up.cli.commands.reads import _apply_pacbio_params
+
+        config = {"seed": 99}
+        with caplog.at_level(logging.INFO):
+            _apply_pacbio_params(config, model_type="qshmm", model_file="/m", seed=None)
+        assert config["pacbio_params"]["seed"] == 99
+        assert "99" in caplog.text
+
+    def test_does_not_override_existing_section_seed_with_root_seed(self):
+        """Existing pacbio_params.seed takes precedence over top-level seed when CLI seed is None."""
+        from muc_one_up.cli.commands.reads import _apply_pacbio_params
+
+        config = {"seed": 99, "pacbio_params": {"seed": 77}}
+        _apply_pacbio_params(config, model_type="qshmm", model_file="/m", seed=None)
+        assert config["pacbio_params"]["seed"] == 77

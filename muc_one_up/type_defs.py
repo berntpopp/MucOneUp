@@ -169,10 +169,11 @@ class ReadSimulationConfig(TypedDict, total=False):
     fragment_sd: int
     min_fragment: int
     threads: int
-    coverage: int
+    coverage: float
     seed: int | None
     aligner: str
     keep_intermediate_files: bool
+    skip_alignment: bool
 
 
 class NanosimConfig(TypedDict, total=False):
