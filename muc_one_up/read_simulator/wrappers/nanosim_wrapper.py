@@ -10,6 +10,7 @@ command construction, execution, and error handling.
 import logging
 from pathlib import Path
 
+from ...exceptions import ExternalToolError
 from ..command_utils import build_tool_command
 from ..utils import run_command
 
@@ -128,6 +129,8 @@ def run_nanosim_simulation(
 
         return output_fastq
 
+    except ExternalToolError:
+        raise
     except Exception as e:
         logging.error("[NanoSim] Unexpected error during execution: %s", e)
         msg = str(e)

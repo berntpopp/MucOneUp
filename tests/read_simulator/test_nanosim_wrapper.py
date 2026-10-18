@@ -18,6 +18,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from muc_one_up.exceptions import ExternalToolError
 from muc_one_up.read_simulator.wrappers.nanosim_wrapper import run_nanosim_simulation
 
 
@@ -269,6 +270,25 @@ class TestRunNanoSimSimulation:
         # Act & Assert
         with pytest.raises(RuntimeError, match="Expected output file not found"):
             run_nanosim_simulation("nanosim", str(ref_fa), str(output_prefix), str(model), 30.0)
+
+    def test_propagates_external_tool_error(self, mocker, tmp_path):
+        """Test that ExternalToolError propagates directly and is not wrapped in RuntimeError."""
+        ref_fa = tmp_path / "ref.fa"
+        model = tmp_path / "model"
+        output_prefix = tmp_path / "output"
+        ref_fa.write_text(">chr1\nACGT\n")
+        model.mkdir()
+
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.nanosim_wrapper.run_command",
+            side_effect=ExternalToolError(tool="nanosim", exit_code=1, stderr="fail"),
+        )
+
+        with pytest.raises(ExternalToolError) as exc_info:
+            run_nanosim_simulation("nanosim", str(ref_fa), str(output_prefix), str(model), 30.0)
+
+        assert exc_info.value.tool == "nanosim"
+        assert exc_info.value.exit_code == 1
 
 
 def test_run_nanosim_with_seed(mocker, tmp_path):

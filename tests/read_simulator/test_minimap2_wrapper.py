@@ -13,6 +13,8 @@ These tests verify that our wrapper correctly:
 5. Cleans up intermediate files
 """
 
+from pathlib import Path
+
 import pytest
 
 from muc_one_up.exceptions import FileOperationError
@@ -31,7 +33,7 @@ class TestAlignReadsWithMinimap2:
     """Test align_reads_with_minimap2 preset handling and command construction."""
 
     def test_constructs_command_with_ont_preset(self, mocker, tmp_path):
-        """Test minimap2 command with map-ont preset."""
+        """Test minimap2 command with map-ont preset and streaming pipeline."""
         # Arrange
         ref_fa = tmp_path / "ref.fa"
         reads_fastq = tmp_path / "reads.fastq"
@@ -40,31 +42,17 @@ class TestAlignReadsWithMinimap2:
         ref_fa.write_text(">chr1\nACGT\n")
         reads_fastq.write_text("@read1\nACGT\n+\nIIII\n")
 
-        # Mock dependencies
+        def mock_pipeline_cmd(cmds, **kwargs):
+            output_bam.write_bytes(b"BAM data")
+
+        mock_pipeline = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_pipeline",
+            side_effect=mock_pipeline_cmd,
+        )
         mock_run_cmd = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_command"
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_command",
+            side_effect=lambda *a, **k: Path(f"{output_bam}.bai").write_bytes(b"BAI"),
         )
-        mock_convert = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.convert_sam_to_bam"
-        )
-        mock_sort = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.sort_and_index_bam"
-        )
-
-        # Create SAM file when run_command is called
-        def create_sam(*args, **kwargs):
-            sam_path = tmp_path / "aligned.sam"
-            sam_path.write_text("SAM data")
-
-        mock_run_cmd.side_effect = create_sam
-
-        # Create BAM when convert is called
-        def create_bam(*args, **kwargs):
-            output_bam.write_text("BAM data")
-            return str(output_bam)
-
-        mock_convert.side_effect = create_bam
-        mock_sort.return_value = str(output_bam)
 
         # Act
         result = align_reads_with_minimap2(
@@ -77,16 +65,24 @@ class TestAlignReadsWithMinimap2:
             threads=4,
         )
 
-        # Assert: Command includes ONT preset
-        cmd = mock_run_cmd.call_args[0][0]
-        assert "-ax" in cmd
-        assert "map-ont" in cmd
-        assert str(ref_fa) in cmd
-        assert str(reads_fastq) in cmd
+        # Assert: Command includes ONT preset and @RG
+        assert mock_pipeline.call_count == 1
+        pipeline_cmds = mock_pipeline.call_args[0][0]
+        minimap2_cmd = pipeline_cmds[0]
+        assert "-ax" in minimap2_cmd
+        assert "map-ont" in minimap2_cmd
+        assert "-R" in minimap2_cmd
+        r_idx = minimap2_cmd.index("-R")
+        assert (
+            minimap2_cmd[r_idx + 1] == f"@RG\\tID:{output_bam.stem}\\tSM:{output_bam.stem}\\tPL:ONT"
+        )
+        assert str(ref_fa) in minimap2_cmd
+        assert str(reads_fastq) in minimap2_cmd
 
-        # Verify conversion and sorting were called
-        assert mock_convert.called
-        assert mock_sort.called
+        sort_cmd = pipeline_cmds[1]
+        assert sort_cmd == ["samtools", "sort", "-@", "4", "-o", str(output_bam), "-"]
+
+        assert mock_run_cmd.called
         assert result == str(output_bam)
 
     def test_constructs_command_with_pacbio_hifi_preset(self, mocker, tmp_path):
@@ -99,30 +95,17 @@ class TestAlignReadsWithMinimap2:
         ref_fa.write_text(">chr1\nACGT\n")
         reads_fastq.write_text("@read1\nACGT\n+\nIIII\n")
 
-        # Mock dependencies
-        mock_run_cmd = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_command"
+        def mock_pipeline_cmd(cmds, **kwargs):
+            output_bam.write_bytes(b"BAM data")
+
+        mock_pipeline = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_pipeline",
+            side_effect=mock_pipeline_cmd,
         )
-        mock_convert = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.convert_sam_to_bam"
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_command",
+            side_effect=lambda *a, **k: Path(f"{output_bam}.bai").write_bytes(b"BAI"),
         )
-        mock_sort = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.sort_and_index_bam"
-        )
-
-        # Create files
-        def create_sam(*args, **kwargs):
-            sam_path = tmp_path / "aligned.sam"
-            sam_path.write_text("SAM data")
-
-        mock_run_cmd.side_effect = create_sam
-
-        def create_bam(*args, **kwargs):
-            output_bam.write_text("BAM data")
-            return str(output_bam)
-
-        mock_convert.side_effect = create_bam
-        mock_sort.return_value = str(output_bam)
 
         # Act
         align_reads_with_minimap2(
@@ -134,13 +117,54 @@ class TestAlignReadsWithMinimap2:
             preset=MINIMAP2_PRESET_PACBIO_HIFI,  # HiFi preset
         )
 
-        # Assert: Command includes HiFi preset
-        cmd = mock_run_cmd.call_args[0][0]
-        assert "-ax" in cmd
-        assert "map-hifi" in cmd
+        # Assert: Command includes HiFi preset and @RG
+        pipeline_cmds = mock_pipeline.call_args[0][0]
+        minimap2_cmd = pipeline_cmds[0]
+        assert "-ax" in minimap2_cmd
+        assert "map-hifi" in minimap2_cmd
+        assert "-R" in minimap2_cmd
+        r_idx = minimap2_cmd.index("-R")
+        assert (
+            minimap2_cmd[r_idx + 1]
+            == f"@RG\\tID:{output_bam.stem}\\tSM:{output_bam.stem}\\tPL:PACBIO"
+        )
+
+    def test_custom_platform_rg_header(self, mocker, tmp_path):
+        """Test custom platform parameter in @RG header."""
+        ref_fa = tmp_path / "ref.fa"
+        reads_fastq = tmp_path / "reads.fastq"
+        output_bam = tmp_path / "aligned.bam"
+        ref_fa.write_text(">chr1\nACGT\n")
+        reads_fastq.write_text("@read1\nACGT\n+\nIIII\n")
+
+        mock_pipeline = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_pipeline",
+            side_effect=lambda cmds, **k: output_bam.write_bytes(b"BAM data"),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_command",
+            side_effect=lambda *a, **k: Path(f"{output_bam}.bai").write_bytes(b"BAI"),
+        )
+
+        align_reads_with_minimap2(
+            "minimap2",
+            "samtools",
+            str(ref_fa),
+            str(reads_fastq),
+            str(output_bam),
+            preset=MINIMAP2_PRESET_ONT,
+            platform="CUSTOM_ONT",
+        )
+        minimap2_cmd = mock_pipeline.call_args[0][0][0]
+        assert "-R" in minimap2_cmd
+        r_idx = minimap2_cmd.index("-R")
+        assert (
+            minimap2_cmd[r_idx + 1]
+            == f"@RG\\tID:{output_bam.stem}\\tSM:{output_bam.stem}\\tPL:CUSTOM_ONT"
+        )
 
     def test_constructs_command_with_exclude_flags(self, mocker, tmp_path):
-        """Test that exclude_flags adds -F flag to samtools view command."""
+        """Test that exclude_flags adds intermediate samtools view -u -F flag to pipeline."""
         ref_fa = tmp_path / "ref.fa"
         reads_fastq = tmp_path / "reads.fastq"
         output_bam = tmp_path / "aligned.bam"
@@ -148,21 +172,16 @@ class TestAlignReadsWithMinimap2:
         ref_fa.write_text(">chr1\nACGT\n")
         reads_fastq.write_text("@read1\nACGT\n+\nIIII\n")
 
-        run_calls = []
+        def mock_pipeline_cmd(cmds, **kwargs):
+            output_bam.write_bytes(b"BAM data")
 
-        def mock_run(cmd, *args, **kwargs):
-            run_calls.append(cmd)
-            sam_path = tmp_path / "aligned.sam"
-            sam_path.write_text("SAM data")
-            output_bam.write_text("BAM data")
-
+        mock_pipeline = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_pipeline",
+            side_effect=mock_pipeline_cmd,
+        )
         mocker.patch(
             "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_command",
-            side_effect=mock_run,
-        )
-        mock_sort = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.sort_and_index_bam",
-            return_value=str(output_bam),
+            side_effect=lambda *a, **k: Path(f"{output_bam}.bai").write_bytes(b"BAI"),
         )
 
         align_reads_with_minimap2(
@@ -175,12 +194,12 @@ class TestAlignReadsWithMinimap2:
             exclude_flags=4,
         )
 
-        assert len(run_calls) == 2
-        view_cmd = run_calls[1]
-        assert "view" in view_cmd
-        assert "-F" in view_cmd
-        assert "4" in view_cmd
-        assert mock_sort.called
+        pipeline_cmds = mock_pipeline.call_args[0][0]
+        assert len(pipeline_cmds) == 3
+        view_cmd = pipeline_cmds[1]
+        assert view_cmd == ["samtools", "view", "-u", "-F", "4", "-"]
+        sort_cmd = pipeline_cmds[2]
+        assert sort_cmd == ["samtools", "sort", "-@", "4", "-o", str(output_bam), "-"]
 
     def test_validates_reference_exists(self, tmp_path):
         """Test that missing reference file is detected."""
@@ -217,7 +236,7 @@ class TestAlignReadsWithMinimap2:
             )
 
     def test_cleans_up_intermediate_sam(self, mocker, tmp_path):
-        """Test that intermediate SAM file is cleaned up."""
+        """Test that streaming pipeline produces output BAM without creating intermediate SAM."""
         # Arrange
         ref_fa = tmp_path / "ref.fa"
         reads_fastq = tmp_path / "reads.fastq"
@@ -227,29 +246,17 @@ class TestAlignReadsWithMinimap2:
         ref_fa.write_text(">chr1\nACGT\n")
         reads_fastq.write_text("@read1\nACGT\n+\nIIII\n")
 
-        # Mock dependencies
-        mock_run_cmd = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_command"
+        def mock_pipeline_cmd(cmds, **kwargs):
+            output_bam.write_bytes(b"BAM data")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_pipeline",
+            side_effect=mock_pipeline_cmd,
         )
-        mock_convert = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.convert_sam_to_bam"
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.run_command",
+            side_effect=lambda *a, **k: Path(f"{output_bam}.bai").write_bytes(b"BAI"),
         )
-        mock_sort = mocker.patch(
-            "muc_one_up.read_simulator.wrappers.minimap2_wrapper.sort_and_index_bam"
-        )
-
-        # Create SAM
-        def create_sam(*args, **kwargs):
-            output_sam.write_text("SAM data")
-
-        mock_run_cmd.side_effect = create_sam
-
-        def create_bam(*args, **kwargs):
-            output_bam.write_text("BAM data")
-            return str(output_bam)
-
-        mock_convert.side_effect = create_bam
-        mock_sort.return_value = str(output_bam)
 
         # Act
         align_reads_with_minimap2(
@@ -260,7 +267,7 @@ class TestAlignReadsWithMinimap2:
             output_bam=str(output_bam),
         )
 
-        # Assert: SAM was deleted
+        # Assert: SAM was never written to disk
         assert not output_sam.exists()
 
 
@@ -300,17 +307,21 @@ class TestPrebuiltIndexReuse:
         reads = tmp_path / "r.fastq"
         reads.write_text("@r\nACGT\n+\nIIII\n")
         out = tmp_path / "a.bam"
-        out.write_bytes(b"BAM")
         mod = "muc_one_up.read_simulator.wrappers.minimap2_wrapper"
-        run = mocker.patch(
-            f"{mod}.run_command", side_effect=lambda *a, **k: (tmp_path / "a.sam").write_text("SAM")
+
+        def mock_pipe(cmds, **kwargs):
+            out.write_bytes(b"BAM")
+
+        pipe = mocker.patch(f"{mod}.run_pipeline", side_effect=mock_pipe)
+        mocker.patch(
+            f"{mod}.run_command",
+            side_effect=lambda *a, **k: Path(f"{out}.bai").write_bytes(b"BAI"),
         )
-        mocker.patch(f"{mod}.convert_sam_to_bam", return_value=str(out))
-        mocker.patch(f"{mod}.sort_and_index_bam", return_value=str(out))
         align_reads_with_minimap2(
             "minimap2", "samtools", str(ref_fa), str(reads), str(out), MINIMAP2_PRESET_ONT, 2
         )
-        return [str(x) for x in run.call_args[0][0]], ref_fa
+        minimap2_cmd = pipe.call_args[0][0][0]
+        return [str(x) for x in minimap2_cmd], ref_fa
 
     def test_uses_fasta_without_index(self, mocker, tmp_path):
         cmd, ref = self._align(mocker, tmp_path, [])

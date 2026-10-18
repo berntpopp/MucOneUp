@@ -649,3 +649,98 @@ class TestTemplateErrorProfilePassthrough:
     def test_invalid_difference_ratio_rejected(self, tmp_path, ratio):
         with pytest.raises(FileOperationError, match="difference_ratio"):
             self._run(tmp_path, difference_ratio=ratio)
+
+
+class TestStaleBamOverwritingAndThreads:
+    """Tests for stale BAM overwriting and thread forwarding (#148)."""
+
+    def test_overwrites_stale_bam_when_numbered_sam_exists(self, tmp_path):
+        """When numbered SAM is produced and numbered BAM already exists, BAM is overwritten."""
+        template_fa = tmp_path / "template.fa"
+        template_fa.write_text(">copy\nACGT\n")
+        model_file = tmp_path / "test.model"
+        model_file.write_text("model")
+        prefix = str(tmp_path / "out")
+
+        stale_bam = tmp_path / "out_0001.bam"
+        stale_bam.write_bytes(b"STALE_BAM_CONTENT")
+
+        with (
+            patch("muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command") as mock_run,
+            patch(
+                "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.convert_sam_to_bam"
+            ) as mock_convert,
+        ):
+
+            def mock_run_cmd(*args, **kwargs):
+                (tmp_path / "out_0001.sam").write_text("@HD\tVN:1.6\n")
+                return MagicMock(returncode=0)
+
+            mock_run.side_effect = mock_run_cmd
+
+            def create_bam(samtools_cmd, input_sam, output_bam, threads, timeout):
+                Path(output_bam).write_bytes(b"FRESH_BAM_CONTENT")
+                return output_bam
+
+            mock_convert.side_effect = create_bam
+
+            result = run_pbsim3_template_simulation(
+                pbsim3_cmd="pbsim",
+                samtools_cmd="samtools",
+                template_fasta=str(template_fa),
+                model_type="errhmm",
+                model_file=str(model_file),
+                output_prefix=prefix,
+                threads=8,
+            )
+
+            mock_convert.assert_called_once()
+            assert mock_convert.call_args[1]["threads"] == 8
+            assert result == [str(stale_bam)]
+            assert stale_bam.read_bytes() == b"FRESH_BAM_CONTENT"
+
+    def test_overwrites_stale_bam_when_single_sam_exists(self, mocker, tmp_path):
+        """When single SAM is produced and BAM already exists, BAM is overwritten."""
+        ref_fa = tmp_path / "ref.fa"
+        model_file = tmp_path / "model.model"
+        output_prefix = tmp_path / "output"
+        output_sam = tmp_path / "output.sam"
+        output_bam = tmp_path / "output.bam"
+
+        ref_fa.write_text(">chr1\nACGT\n")
+        model_file.write_text("data")
+        output_bam.write_bytes(b"STALE_BAM_DATA")
+
+        def mock_run_cmd(cmd, **kwargs):
+            output_sam.write_text("SAM data")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.run_command",
+            side_effect=mock_run_cmd,
+        )
+
+        mock_convert = mocker.patch(
+            "muc_one_up.read_simulator.wrappers.pbsim3_wrapper.convert_sam_to_bam"
+        )
+
+        def side_effect_create_bam(samtools_cmd, input_sam, output_bam, threads, timeout):
+            Path(output_bam).write_bytes(b"FRESH_BAM_DATA")
+            return str(output_bam)
+
+        mock_convert.side_effect = side_effect_create_bam
+
+        result = run_pbsim3_simulation(
+            pbsim3_cmd="pbsim",
+            samtools_cmd="samtools",
+            reference=str(ref_fa),
+            model_type="qshmm",
+            model_file=str(model_file),
+            coverage=30.0,
+            output_prefix=str(output_prefix),
+            threads=6,
+        )
+
+        mock_convert.assert_called_once()
+        assert mock_convert.call_args[1]["threads"] == 6
+        assert result == [str(output_bam)]
+        assert output_bam.read_bytes() == b"FRESH_BAM_DATA"

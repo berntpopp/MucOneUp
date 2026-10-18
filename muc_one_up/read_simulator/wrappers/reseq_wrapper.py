@@ -16,7 +16,12 @@ from ..command_utils import build_tool_command
 from ..utils import run_command
 
 
-def replace_Ns(input_fa: str, output_fa: str, tools: dict[str, str]) -> None:
+def replace_Ns(
+    input_fa: str,
+    output_fa: str,
+    tools: dict[str, str],
+    seed: int | None = None,
+) -> None:
     """
     Replace Ns in the simulated FASTA using reseq replaceN.
 
@@ -24,18 +29,26 @@ def replace_Ns(input_fa: str, output_fa: str, tools: dict[str, str]) -> None:
         input_fa: Input FASTA filename.
         output_fa: Output FASTA filename.
         tools: Dictionary of tool commands.
+        seed: Random seed for reproducibility.
 
     Raises:
         SystemExit: If the command fails.
     """
     # From reseq help: replaceN expects -r for input and -R for output
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
-    cmd = build_tool_command(tools["reseq"], "replaceN", "-r", input_fa, "-R", output_fa)
+    cmd_args: list[str | int] = ["replaceN", "-r", input_fa, "-R", output_fa]
+    if seed is not None:
+        cmd_args.extend(["--seed", seed])
+    cmd = build_tool_command(tools["reseq"], *cmd_args)
     run_command(cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] ")
 
 
 def generate_systematic_errors(
-    input_fa: str, reseq_model: str, output_fq: str, tools: dict[str, str]
+    input_fa: str,
+    reseq_model: str,
+    output_fq: str,
+    tools: dict[str, str],
+    seed: int | None = None,
 ) -> None:
     """
     Generate systematic errors using reseq illuminaPE.
@@ -45,6 +58,7 @@ def generate_systematic_errors(
         reseq_model: Reseq model file.
         output_fq: Output FASTQ filename.
         tools: Dictionary of tool commands.
+        seed: Random seed for reproducibility.
 
     Raises:
         SystemExit: If the command fails or the output file is not created.
@@ -52,8 +66,7 @@ def generate_systematic_errors(
     # Based on the error and original code, this needs to be exactly like the original
     # ERROR: Either bamIn or statsIn option are mandatory.
     # Use build_tool_command to safely handle multi-word commands (conda/mamba)
-    cmd = build_tool_command(
-        tools["reseq"],
+    cmd_args: list[str | int] = [
         "illuminaPE",
         "-r",
         input_fa,  # Input reference fasta
@@ -62,7 +75,10 @@ def generate_systematic_errors(
         "--stopAfterEstimation",
         "--writeSysError",
         output_fq,  # Output FASTQ filename
-    )
+    ]
+    if seed is not None:
+        cmd_args.extend(["--seed", seed])
+    cmd = build_tool_command(tools["reseq"], *cmd_args)
     run_command(cmd, timeout=60, stderr_log_level=logging.INFO, stderr_prefix="[reseq] ")
 
     # Verify output exists and is non-empty
@@ -80,6 +96,7 @@ def create_reads(
     threads: int,
     tools: dict[str, str],
     timeout: int | None = 600,
+    seed: int | None = None,
 ) -> None:
     """
     Create reads from fragments using reseq/reseq2 seqToIllumina.
@@ -91,12 +108,12 @@ def create_reads(
         threads: Number of threads.
         tools: Dictionary of tool commands.
         timeout: Timeout in seconds (default: 10 minutes).
+        seed: Random seed for reproducibility.
 
     Raises:
         FileOperationError: If the command fails or the output file is not created.
     """
-    cmd = build_tool_command(
-        tools["reseq"],
+    cmd_args: list[str | int] = [
         "seqToIllumina",
         "-j",
         threads,
@@ -106,7 +123,10 @@ def create_reads(
         input_fragments,
         "-o",
         output_reads,
-    )
+    ]
+    if seed is not None:
+        cmd_args.extend(["--seed", seed])
+    cmd = build_tool_command(tools["reseq"], *cmd_args)
 
     run_command(
         cmd,

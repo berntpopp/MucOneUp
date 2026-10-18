@@ -431,3 +431,29 @@ class TestGetReadCount:
 
         with pytest.raises(SamtoolsError, match="Invalid read count output"):
             get_read_count(mock_bam_file)
+
+
+class TestSamtoolsErrorHierarchy:
+    """Tests for SamtoolsError exception hierarchy and consolidation (#148)."""
+
+    def test_samtools_error_inherits_from_external_tool_error(self):
+        """SamtoolsError must inherit from ExternalToolError and MucOneUpError."""
+        from muc_one_up.exceptions import MucOneUpError
+
+        assert issubclass(SamtoolsError, ExternalToolError)
+        assert issubclass(SamtoolsError, MucOneUpError)
+        err = SamtoolsError("Extraction failed: error message")
+        assert isinstance(err, ExternalToolError)
+        assert isinstance(err, MucOneUpError)
+        assert str(err) == "Extraction failed: error message"
+
+    def test_samtools_wrapper_reexports_consolidated_functions(self):
+        """samtools_wrapper re-exports consolidated utilities."""
+        import muc_one_up.read_simulator.wrappers.samtools_wrapper as st_wrap
+
+        assert hasattr(st_wrap, "SamtoolsError")
+        assert hasattr(st_wrap, "index_bam")
+        assert hasattr(st_wrap, "merge_bams")
+        assert hasattr(st_wrap, "sort_bam")
+        assert hasattr(st_wrap, "calculate_mean_coverage")
+        assert hasattr(st_wrap, "downsample_entire_bam")

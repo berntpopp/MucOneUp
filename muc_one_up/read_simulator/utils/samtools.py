@@ -17,10 +17,23 @@ from .common_utils import run_command
 logger = logging.getLogger(__name__)
 
 
-class SamtoolsError(Exception):
+class SamtoolsError(ExternalToolError):
     """Exception raised for samtools operation failures."""
 
-    pass
+    def __init__(
+        self,
+        message: str,
+        tool: str = "samtools",
+        exit_code: int = 1,
+        stderr: str = "",
+        stdout: str = "",
+        cmd: str = "",
+    ) -> None:
+        super().__init__(tool=tool, exit_code=exit_code, stderr=stderr, stdout=stdout, cmd=cmd)
+        self.message = message
+
+    def __str__(self) -> str:
+        return self.message
 
 
 def subsample_args(fraction: float, seed: int) -> list[str]:
@@ -375,3 +388,8 @@ def get_read_count(bam_file: Path, samtools_cmd: str = "samtools") -> int:
         raise SamtoolsError(f"Failed to count reads: {e}") from e
     except ValueError as e:
         raise SamtoolsError(f"Invalid read count output: {result.stdout}") from e
+
+
+# Aliases for wrapper consolidation (#148)
+downsample_entire_bam = downsample_bam
+merge_bam_files = merge_bams

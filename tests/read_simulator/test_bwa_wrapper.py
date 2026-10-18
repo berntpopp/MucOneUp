@@ -71,7 +71,41 @@ class TestBWAWrapperCommandConstruction:
         assert mock_pipeline.call_count == 1
         pipeline_cmds = mock_pipeline.call_args[0][0]
         bwa_cmd = pipeline_cmds[0]
-        assert bwa_cmd == ["bwa", "mem", "-t", "4", str(ref), str(r1), str(r2)]
+        expected_rg = f"@RG\\tID:{out.stem}\\tSM:{out.stem}\\tPL:ILLUMINA"
+        assert bwa_cmd == ["bwa", "mem", "-t", "4", "-R", expected_rg, str(ref), str(r1), str(r2)]
+
+    def test_custom_platform_rg_header(self, mocker, tmp_path, tools_dict):
+        """Test custom platform parameter in @RG header."""
+        ref = tmp_path / "ref.fa"
+        r1 = tmp_path / "R1.fq"
+        r2 = tmp_path / "R2.fq"
+        out = tmp_path / "out.bam"
+
+        ref.write_text(">chr1\nACGT")
+        r1.write_text("@read1\nACGT\n+\nIIII")
+        r2.write_text("@read1\nACGT\n+\nIIII")
+
+        def mock_pipeline_cmd(cmds, **kwargs):
+            out.write_bytes(b"SORTED_BAM_DATA")
+            return _ok_result()
+
+        mock_pipeline = mocker.patch(_PIPELINE, side_effect=mock_pipeline_cmd)
+
+        def mock_run_cmd(cmd, **kwargs):
+            if "index" in cmd:
+                Path(str(out) + ".bai").write_bytes(b"INDEX_DATA")
+            return _ok_result()
+
+        mocker.patch(_RUN_CMD, side_effect=mock_run_cmd)
+
+        align_reads(
+            str(r1), str(r2), str(ref), str(out), tools_dict, threads=4, platform="CUSTOM_PL"
+        )
+
+        bwa_cmd = mock_pipeline.call_args[0][0][0]
+        assert "-R" in bwa_cmd
+        r_index = bwa_cmd.index("-R")
+        assert bwa_cmd[r_index + 1] == f"@RG\\tID:{out.stem}\\tSM:{out.stem}\\tPL:CUSTOM_PL"
 
     def test_constructs_correct_samtools_sort_command(self, mocker, tmp_path, tools_dict):
         """Test that samtools sort command is constructed correctly in pipeline."""

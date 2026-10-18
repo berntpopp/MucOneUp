@@ -22,6 +22,7 @@ def align_reads(
     tools: dict[str, str],
     threads: int = 4,
     timeout: int | None = 300,
+    platform: str = "ILLUMINA",
 ) -> None:
     """
     Align paired-end reads with bwa mem, sort with samtools, and index the BAM file.
@@ -34,6 +35,7 @@ def align_reads(
         tools: Dictionary of tool commands.
         threads: Number of threads.
         timeout: Timeout in seconds for the alignment pipeline.
+        platform: Sequencing platform for @RG header (default: "ILLUMINA").
 
     Raises:
         FileOperationError: If input files not found or output files missing
@@ -44,8 +46,13 @@ def align_reads(
         if not Path(file).exists():
             raise FileOperationError(f"Input file not found for BWA alignment: {file}")
 
+    sample = Path(output_bam).stem
+    rg_header = f"@RG\\tID:{sample}\\tSM:{sample}\\tPL:{platform}"
+
     # Run alignment with BWA mem and stream directly to samtools sort
-    bwa_cmd = build_tool_command(tools["bwa"], "mem", "-t", threads, human_reference, read1, read2)
+    bwa_cmd = build_tool_command(
+        tools["bwa"], "mem", "-t", threads, "-R", rg_header, human_reference, read1, read2
+    )
     sort_cmd = build_tool_command(tools["samtools"], "sort", "-@", threads, "-o", output_bam, "-")
 
     logging.info("Running BWA mem | samtools sort pipeline")
