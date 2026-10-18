@@ -50,6 +50,8 @@ from typing import Any
 
 from jsonschema import ValidationError, validate
 
+from .exceptions import ConfigurationError
+
 #: JSON Schema for validating MucOneUp configuration files.
 #:
 #: Defines the complete structure and validation rules for configuration
@@ -686,8 +688,16 @@ def load_config_raw(config_path: str) -> dict[str, Any]:
     with Path(config_path).open() as fh:
         config = json.load(fh)
 
+    if not isinstance(config, dict):
+        raise ConfigurationError(f"Config file must contain a JSON object: {config_path}")
+
     # Normalize constants format: convert flat format to nested format
-    if "constants" in config and "left" in config["constants"] and "right" in config["constants"]:
+    if (
+        "constants" in config
+        and isinstance(config["constants"], dict)
+        and "left" in config["constants"]
+        and "right" in config["constants"]
+    ):
         ref_assembly = config.get("reference_assembly", "hg38")
         old_constants = config["constants"].copy()
         config["constants"] = {ref_assembly: old_constants}
@@ -696,7 +706,50 @@ def load_config_raw(config_path: str) -> dict[str, Any]:
     # Resolve relative paths relative to config file directory
     _resolve_config_paths(config, Path(config_path).parent.resolve())
 
-    return config  # type: ignore[no-any-return]
+    return config
+
+
+def validate_simulation_config(config: dict[str, Any]) -> None:
+    """Validate simulation-relevant configuration sections against CONFIG_SCHEMA.
+
+    Ensures that required sections for simulation ('repeats', 'constants',
+    'probabilities') are present and adhere to schema definitions, and validates
+    optional simulation sections ('length_model', 'mutations') if present.
+
+    Args:
+        config: Configuration dictionary
+
+    Raises:
+        ConfigurationError: If any required section is missing, null, or invalid.
+    """
+    if not isinstance(config, dict):
+        raise ConfigurationError("Configuration must be a dictionary")
+
+    required_sections = ["repeats", "constants", "probabilities"]
+    for section in required_sections:
+        if section not in config or config[section] is None:
+            raise ConfigurationError(
+                f"Missing or null required configuration section for simulation: '{section}'"
+            )
+
+    props = CONFIG_SCHEMA.get("properties", {})
+    sections_to_validate = [
+        "repeats",
+        "constants",
+        "probabilities",
+        "length_model",
+        "mutations",
+    ]
+    for section in sections_to_validate:
+        if section in config and config[section] is not None:
+            schema = props.get(section)
+            if schema:
+                try:
+                    validate(instance=config[section], schema=schema)
+                except ValidationError as e:
+                    raise ConfigurationError(
+                        f"Invalid configuration in section '{section}': {e.message}"
+                    ) from e
 
 
 # Known path fields organized by config section

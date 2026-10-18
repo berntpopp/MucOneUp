@@ -13,6 +13,21 @@ class OutputConfig:
     out_dir: Path
     out_base: str
 
+    def __post_init__(self) -> None:
+        """Validate output configuration."""
+        if not self.out_base or not self.out_base.strip():
+            raise ValueError("out_base cannot be empty")
+        if (
+            "/" in self.out_base
+            or "\\" in self.out_base
+            or self.out_base in (".", "..")
+            or Path(self.out_base).name != self.out_base
+            or Path(self.out_base).is_absolute()
+        ):
+            raise ValueError(
+                f"Invalid out_base: '{self.out_base}'. Must be a single filename component without path separators or directory traversal."
+            )
+
     def derive_path(self, suffix: str) -> Path:
         """Return out_dir / (out_base + suffix)."""
         return self.out_dir / f"{self.out_base}{suffix}"

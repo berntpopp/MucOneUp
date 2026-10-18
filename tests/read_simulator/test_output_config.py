@@ -97,3 +97,24 @@ class TestEnsureDir:
         cfg = OutputConfig(out_dir=tmp_path, out_base="test")
         cfg.ensure_dir()  # should not raise
         assert tmp_path.is_dir()
+
+
+class TestOutputConfigValidation:
+    """Test validation of out_base against path traversal and separators."""
+
+    @pytest.mark.parametrize(
+        "invalid_base",
+        [
+            "../escaped",
+            "..",
+            ".",
+            "/abs/path",
+            "folder/reads",
+            "folder\\reads",
+            "",
+            "   ",
+        ],
+    )
+    def test_invalid_out_base_raises(self, invalid_base: str) -> None:
+        with pytest.raises(ValueError, match="out_base"):
+            OutputConfig(out_dir=Path("/tmp"), out_base=invalid_base)

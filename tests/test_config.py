@@ -310,3 +310,46 @@ def test_config_schema_accepts_snapshot_primary_primer_and_mutant_extension():
         },
     }
     validate(instance=sample_config, schema=CONFIG_SCHEMA)
+
+
+def test_load_config_raw_rejects_non_dict_json(tmp_path):
+    """load_config_raw should raise ConfigurationError when JSON is not an object."""
+    from muc_one_up.config import load_config_raw
+    from muc_one_up.exceptions import ConfigurationError
+
+    array_config = tmp_path / "array.json"
+    array_config.write_text("[1, 2, 3]")
+
+    with pytest.raises(ConfigurationError, match="must contain a JSON object"):
+        load_config_raw(str(array_config))
+
+
+def test_validate_simulation_config_valid(minimal_config):
+    """validate_simulation_config succeeds on valid minimal_config."""
+    from muc_one_up.config import validate_simulation_config
+
+    validate_simulation_config(minimal_config)
+
+
+def test_validate_simulation_config_missing_required_section():
+    """validate_simulation_config raises ConfigurationError when a required section is missing."""
+    from muc_one_up.config import validate_simulation_config
+    from muc_one_up.exceptions import ConfigurationError
+
+    cfg = {"repeats": {"1": "ATCG"}, "probabilities": {}}
+    with pytest.raises(ConfigurationError, match="Missing or null required configuration section"):
+        validate_simulation_config(cfg)
+
+
+def test_validate_simulation_config_invalid_schema():
+    """validate_simulation_config raises ConfigurationError when section schema is invalid."""
+    from muc_one_up.config import validate_simulation_config
+    from muc_one_up.exceptions import ConfigurationError
+
+    cfg = {
+        "repeats": "not_a_dict",  # invalid
+        "constants": {"hg38": {"left": "A", "right": "T"}},
+        "probabilities": {},
+    }
+    with pytest.raises(ConfigurationError, match="Invalid configuration in section 'repeats'"):
+        validate_simulation_config(cfg)

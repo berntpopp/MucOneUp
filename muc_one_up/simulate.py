@@ -170,6 +170,9 @@ def simulate_diploid(
     Raises:
         IndexError: If fixed_lengths is provided but has wrong length
     """
+    if num_haplotypes < 1:
+        raise ValueError(f"num_haplotypes must be >= 1 (got {num_haplotypes})")
+
     if fixed_lengths is not None and len(fixed_lengths) != num_haplotypes:
         raise IndexError(
             f"fixed_lengths length ({len(fixed_lengths)}) must equal num_haplotypes ({num_haplotypes})"
@@ -232,12 +235,9 @@ def simulate_single_haplotype(
 
     reference_assembly = config.get("reference_assembly", "hg38")
     assembly_const: AssemblyConstants = config["constants"][reference_assembly]
-    left_const = assembly_const["left"]
-    right_const = assembly_const["right"]
     probabilities: ProbabilitiesDict = config["probabilities"]
     repeats_dict: dict[str, str] = config["repeats"]
 
-    parts = [left_const]
     repeat_chain: list[RepeatUnit] = []
     current_symbol = "1"
     total_repeats = 0
@@ -245,43 +245,28 @@ def simulate_single_haplotype(
 
     while True:
         repeat_chain.append(RepeatUnit(current_symbol))
-        parts.append(repeats_dict[current_symbol])
         total_repeats += 1
 
         if total_repeats == final_block_start:
             forced_6 = _rng.choice(["6", "6p"])
             logging.debug("Forcing terminal block: %s, 7, 8, 9", forced_6)
             repeat_chain.append(RepeatUnit(forced_6))
-            parts.append(repeats_dict[forced_6])
-            total_repeats += 1
-
             repeat_chain.append(RepeatUnit("7"))
-            parts.append(repeats_dict["7"])
-            total_repeats += 1
-
             repeat_chain.append(RepeatUnit("8"))
-            parts.append(repeats_dict["8"])
-            total_repeats += 1
-
             repeat_chain.append(RepeatUnit("9"))
-            parts.append(repeats_dict["9"])
-            total_repeats += 1
-
-            parts.append(right_const)
+            total_repeats += 4
             break
 
         if total_repeats >= target_length:
-            parts.append(right_const)
             break
 
         next_symbol = pick_next_symbol_no_end(probabilities, current_symbol, rng=rng)
         if next_symbol is None:
-            logging.debug("No valid next symbol; appending right constant.")
-            parts.append(right_const)
+            logging.debug("No valid next symbol; ending chain.")
             break
 
         current_symbol = next_symbol
 
-    assembled_seq = "".join(parts)
+    assembled_seq = assemble_sequence(repeat_chain, repeats_dict, assembly_const)
     logging.info("Simulated haplotype with %d repeats.", total_repeats)
     return HaplotypeResult(sequence=assembled_seq, chain=repeat_chain)
