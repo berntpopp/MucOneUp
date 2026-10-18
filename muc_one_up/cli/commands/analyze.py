@@ -130,6 +130,7 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
             orf_aa_prefix=orf_aa_prefix,
             left_const=left_const,
             right_const=right_const,
+            toxic_config=config.get("toxic_protein_detection"),
         )
 
     logging.info("ORF prediction completed for all %d file(s).", total_files)
@@ -167,13 +168,13 @@ def stats(ctx, input_fastas, out_dir, out_base):
     \b
     Examples:
       # Single file with custom output name
-      muconeup --config X analyze stats sample.001.fa --out-base my_stats
+      muconeup analyze stats sample.001.fa --out-base my_stats
 
       # Multiple files (auto-generated output names)
-      muconeup --config X analyze stats sample.001.fa sample.002.fa
+      muconeup analyze stats sample.001.fa sample.002.fa
 
       # Glob pattern (shell expands)
-      muconeup --config X analyze stats sample.*.simulated.fa
+      muconeup analyze stats sample.*.simulated.fa
     """
     # Warn if --out-base provided for multiple files
     if len(input_fastas) > 1 and out_base:
@@ -476,10 +477,9 @@ def snapshot_validate(ctx, input_fasta, mutation, output):
     else:
         click.echo(json.dumps(output_data, indent=2))
 
-    # Exit code: 0 if mutation detected, 1 if not
+    # Exit code: 0 on successful validation run
     if output_data["overall_detection"]:
         logging.info("Mutation %s DETECTED in sample", mutation.upper())
-        ctx.exit(0)
     else:
         logging.info("Mutation %s NOT detected in sample", mutation.upper())
-        ctx.exit(1)
+    ctx.exit(0)

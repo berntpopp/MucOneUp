@@ -239,7 +239,7 @@ def _translate_dna_flanks(
                         start_nt = int(m.group(1))
                         if start_nt < len(left_const):
                             aa_count = (len(left_const) - start_nt) // 3
-                            seq_str = str(rec.seq)
+                            seq_str = str(rec.seq).rstrip("*_")
                             if 0 < aa_count <= len(seq_str):
                                 candidate_left_prefixes.append(seq_str[:aa_count])
                 candidate_left_prefixes = sorted(
@@ -251,7 +251,7 @@ def _translate_dna_flanks(
             matched_left: list[str] = []
             matched_right: list[str] = []
             for rec in records:
-                seq_str = str(rec.seq)
+                seq_str = str(rec.seq).rstrip("*_")
                 if left_const and _is_dna(left_const):
                     for pfx in candidate_left_prefixes:
                         if seq_str.startswith(pfx):
@@ -287,74 +287,124 @@ def run_orf_analysis_standalone(
     out_dir: str,
     out_base: str,
     orf_min_aa: int,
-    orf_aa_prefix: str | None,
-    left_const: str | None,
-    right_const: str | None,
+    orf_aa_prefix: str | None = None,
+    left_const: str | None = None,
+    right_const: str | None = None,
+    toxic_config: dict[str, Any] | None = None,
 ) -> None:
     """Run ORF prediction and toxic protein detection on a FASTA file.
 
     Single implementation for standalone ORF analysis, used by the
     ``analyze orfs`` CLI command.
     """
-    from ..exceptions import ExternalToolError
-    from ..read_simulator.utils.common_utils import run_command
+    from Bio import SeqIO
+    from Bio.Seq import Seq
+    from Bio.SeqRecord import SeqRecord
 
-    orf_output = Path(out_dir) / f"{out_base}.orfs.fa"
+    from ..exceptions import MucOneUpError
+    from ..toxic_protein_detector import scan_orf_fasta
+    from ..translate import dna_to_protein, find_orfs_in_memory, reverse_complement
 
-    orf_filename = f"{out_base}.orfs.fa"
-    cmd = [
-        "orfipy",
-        input_fasta,
-        "--outdir",
-        str(out_dir),
-        "--pep",
-        orf_filename,
-        "--min",
-        str(orf_min_aa * 3),
-        "--start",
-        "ATG",
-    ]
+    fasta_path = Path(input_fasta)
+    if not fasta_path.is_file():
+        raise MucOneUpError(f"Input FASTA file not found: {input_fasta}")
+
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    orf_output = out_path / f"{out_base}.orfs.fa"
 
     try:
-        run_command(cmd, capture=True)
-    except ExternalToolError as e:
-        logging.error("orfipy failed for %s: %s", input_fasta, e)
-        return
-    except FileNotFoundError:
-        logging.error("orfipy not found — is it installed?")
-        return
+        records = list(SeqIO.parse(str(fasta_path), "fasta"))
+    except Exception as e:
+        raise MucOneUpError(f"Failed to parse input FASTA {input_fasta}: {e}") from e
+
+    predicted_orfs: list[SeqRecord] = []
+    for record in records:
+        dna_seq = str(record.seq).upper()
+        try:
+            orfs = find_orfs_in_memory(
+                seq=dna_seq,
+                min_len=orf_min_aa * 3,
+                max_len=1000000,
+                strand="b",
+                starts=["ATG"],
+                stops=["TAA", "TAG", "TGA"],
+                include_stop=False,
+            )
+        except Exception as e:
+            raise MucOneUpError(
+                f"ORF prediction failed for record '{record.id}' in {input_fasta}: {e}"
+            ) from e
+
+        orf_count = 0
+        for start, stop, strand, _desc in orfs:
+            orf_count += 1
+            if strand == "+":
+                dna_sub = dna_seq[start:stop]
+            else:
+                dna_sub = reverse_complement(dna_seq[start:stop])
+            peptide = dna_to_protein(dna_sub, include_stop=False)
+            if len(peptide) < orf_min_aa:
+                continue
+            if orf_aa_prefix and not peptide.startswith(orf_aa_prefix):
+                continue
+            orf_id = f"{record.id}_ORF.{orf_count}"
+            desc = f"[{start}-{stop}]({strand}) type:complete"
+            predicted_orfs.append(SeqRecord(Seq(peptide), id=orf_id, description=desc))
+
+    try:
+        SeqIO.write(predicted_orfs, str(orf_output), "fasta")
+    except Exception as e:
+        raise MucOneUpError(f"Failed to write ORF output to {orf_output}: {e}") from e
 
     logging.info("ORF prediction completed: %s", orf_output)
 
-    # Filter by amino acid prefix if specified
-    if orf_aa_prefix and orf_output.exists():
-        from Bio import SeqIO
-
-        filtered_orfs = []
-        total_orfs = 0
-
-        for record in SeqIO.parse(str(orf_output), "fasta"):
-            total_orfs += 1
-            if str(record.seq).startswith(orf_aa_prefix):
-                filtered_orfs.append(record)
-
-        SeqIO.write(filtered_orfs, str(orf_output), "fasta")
-        logging.info(
-            "Filtered ORFs by prefix '%s': %d/%d ORFs retained",
-            orf_aa_prefix,
-            len(filtered_orfs),
-            total_orfs,
-        )
-
     # Toxic protein detection
-    if orf_output.exists():
-        from ..toxic_protein_detector import scan_orf_fasta
+    left_pep, right_pep = _translate_dna_flanks(left_const, right_const, orf_output)
 
-        left_pep, right_pep = _translate_dna_flanks(left_const, right_const, orf_output)
-        stats = scan_orf_fasta(str(orf_output), left_const=left_pep, right_const=right_pep)
+    detection_kwargs: dict[str, Any] = {}
+    if toxic_config:
+        if "consensus_motif" in toxic_config:
+            detection_kwargs["consensus"] = toxic_config["consensus_motif"]
+        elif "consensus" in toxic_config:
+            detection_kwargs["consensus"] = toxic_config["consensus"]
 
-        stats_file = Path(out_dir) / f"{out_base}.orf_stats.json"
+        if "identity_threshold" in toxic_config:
+            detection_kwargs["identity_threshold"] = toxic_config["identity_threshold"]
+
+        if "expected_repeat_count" in toxic_config:
+            detection_kwargs["expected_repeat_count"] = toxic_config["expected_repeat_count"]
+
+        if "key_residues" in toxic_config:
+            detection_kwargs["key_residues"] = toxic_config["key_residues"]
+
+        if "weights" in toxic_config and isinstance(toxic_config["weights"], dict):
+            if "repeat" in toxic_config["weights"]:
+                detection_kwargs["w_repeat"] = toxic_config["weights"]["repeat"]
+            if "composition" in toxic_config["weights"]:
+                detection_kwargs["w_composition"] = toxic_config["weights"]["composition"]
+        if "w_repeat" in toxic_config:
+            detection_kwargs["w_repeat"] = toxic_config["w_repeat"]
+        if "w_composition" in toxic_config:
+            detection_kwargs["w_composition"] = toxic_config["w_composition"]
+
+        if "toxic_cutoff" in toxic_config:
+            detection_kwargs["toxic_detection_cutoff"] = toxic_config["toxic_cutoff"]
+        elif "toxic_detection_cutoff" in toxic_config:
+            detection_kwargs["toxic_detection_cutoff"] = toxic_config["toxic_detection_cutoff"]
+
+        if "wildtype_variable_region" in toxic_config:
+            detection_kwargs["wildtype_variable_region"] = toxic_config["wildtype_variable_region"]
+
+    stats = scan_orf_fasta(
+        str(orf_output), left_const=left_pep, right_const=right_pep, **detection_kwargs
+    )
+
+    stats_file = out_path / f"{out_base}.orf_stats.json"
+    try:
         with stats_file.open("w") as f:
             json.dump(stats, f, indent=4)
+    except Exception as e:
+        raise MucOneUpError(f"Failed to write toxic protein stats to {stats_file}: {e}") from e
 
-        logging.info("Toxic protein stats written: %s", stats_file)
+    logging.info("Toxic protein stats written: %s", stats_file)

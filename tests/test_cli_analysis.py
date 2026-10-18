@@ -9,12 +9,15 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from muc_one_up.cli.analysis import (
     _is_dna,
     _translate_dna_flanks,
     run_orf_analysis_standalone,
     write_simulation_statistics,
 )
+from muc_one_up.exceptions import MucOneUpError
 
 
 class TestTranslateDnaFlanks:
@@ -113,6 +116,17 @@ class TestTranslateDnaFlanks:
         assert res1["orf1 [3-99](+) type:complete"]["repeat_count"] == 3
         assert res2["orf2 [0-99](+) type:complete"]["repeat_count"] == 2
 
+    def test_flank_matching_with_trailing_stop_codon(self, tmp_path: Path):
+        """Trailing stop codons (* or _) in ORF peptides do not prevent right flank suffix matching."""
+        orf_file = tmp_path / "stop.orfs.fa"
+        left_dna = "ATGAAACCCTTT"
+        right_dna = "AGTTTAA"
+        orf_file.write_text(">seq1 [0-30](+) type:complete\nMKPFAAAASL*\n")
+
+        left, right = _translate_dna_flanks(left_dna, right_dna, orf_file)
+        assert left == "MKPF"
+        assert right == "SL"
+
 
 class TestRunOrfAnalysisStandalone:
     """Tests for run_orf_analysis_standalone."""
@@ -122,15 +136,9 @@ class TestRunOrfAnalysisStandalone:
         fasta_file = tmp_path / "input.fa"
         fasta_file.write_text(">seq1\nATGAAACCCGGGTTTTAA\n")
 
-        orf_output = tmp_path / "test.orfs.fa"
-        orf_output.write_text(">seq1\nMKPGF\n")
-
-        with (
-            patch("muc_one_up.read_simulator.utils.common_utils.run_command"),
-            patch(
-                "muc_one_up.toxic_protein_detector.scan_orf_fasta", return_value={"score": 0.1}
-            ) as mock_scan,
-        ):
+        with patch(
+            "muc_one_up.toxic_protein_detector.scan_orf_fasta", return_value={"score": 0.1}
+        ) as mock_scan:
             run_orf_analysis_standalone(
                 input_fasta=str(fasta_file),
                 out_dir=str(tmp_path),
@@ -148,6 +156,80 @@ class TestRunOrfAnalysisStandalone:
 
         stats_file = tmp_path / "test.orf_stats.json"
         assert stats_file.exists()
+
+    def test_run_orf_analysis_in_memory_no_log_leak(self, tmp_path: Path):
+        """Standalone ORF analysis runs in-memory and does not leak orfipy log files."""
+        fasta_file = tmp_path / "input.fa"
+        fasta_file.write_text(">seq1\nATGAAACCCGGGTTTTAA\n")
+
+        run_orf_analysis_standalone(
+            input_fasta=str(fasta_file),
+            out_dir=str(tmp_path),
+            out_base="sample",
+            orf_min_aa=1,
+            orf_aa_prefix=None,
+            left_const=None,
+            right_const=None,
+        )
+
+        orf_output = tmp_path / "sample.orfs.fa"
+        assert orf_output.exists()
+        content = orf_output.read_text()
+        assert ">seq1_ORF.1 [0-15](+) type:complete" in content
+        assert "MKPGF" in content
+
+        stats_file = tmp_path / "sample.orf_stats.json"
+        assert stats_file.exists()
+
+        # No orfipy log files in out_dir
+        log_files = list(tmp_path.glob("orfipy_*.log"))
+        assert len(log_files) == 0
+
+    def test_run_orf_analysis_raises_muconeup_error_on_missing_input(self, tmp_path: Path):
+        """Missing input file raises MucOneUpError."""
+        missing = tmp_path / "nonexistent.fa"
+        with pytest.raises(MucOneUpError, match="Input FASTA file not found"):
+            run_orf_analysis_standalone(
+                input_fasta=str(missing),
+                out_dir=str(tmp_path),
+                out_base="out",
+                orf_min_aa=1,
+            )
+
+    def test_run_orf_analysis_forwards_toxic_config(self, tmp_path: Path):
+        """toxic_protein_detection config keys are mapped and forwarded to scan_orf_fasta."""
+        fasta_file = tmp_path / "input.fa"
+        fasta_file.write_text(">seq1\nATGAAACCCGGGTTTTAA\n")
+
+        toxic_cfg = {
+            "consensus_motif": "CUSTOM_CONSENSUS",
+            "identity_threshold": 0.95,
+            "expected_repeat_count": 8,
+            "key_residues": ["R", "H"],
+            "weights": {"repeat": 0.7, "composition": 0.3},
+            "toxic_cutoff": 0.65,
+        }
+
+        with patch(
+            "muc_one_up.toxic_protein_detector.scan_orf_fasta", return_value={"score": 0.1}
+        ) as mock_scan:
+            run_orf_analysis_standalone(
+                input_fasta=str(fasta_file),
+                out_dir=str(tmp_path),
+                out_base="test_cfg",
+                orf_min_aa=1,
+                toxic_config=toxic_cfg,
+            )
+
+        mock_scan.assert_called_once()
+        call_kwargs = mock_scan.call_args[1]
+        assert call_kwargs["consensus"] == "CUSTOM_CONSENSUS"
+        assert call_kwargs["identity_threshold"] == 0.95
+        assert call_kwargs["expected_repeat_count"] == 8
+        assert call_kwargs["key_residues"] == ["R", "H"]
+        assert call_kwargs["w_repeat"] == 0.7
+        assert call_kwargs["w_composition"] == 0.3
+        assert call_kwargs["toxic_detection_cutoff"] == 0.65
 
 
 class TestWriteSimulationStatistics:

@@ -5,7 +5,7 @@ Tests cover:
 - Integration with Click CLI
 - Input validation and error handling
 - JSON output formatting
-- Exit codes (0 for detected, 1 for not detected)
+- Exit codes (0 on successful execution)
 """
 
 import json
@@ -164,7 +164,7 @@ class TestSnapshotValidateCommand:
             ],
         )
         # Should succeed
-        assert result.exit_code in [0, 1]  # 0=detected, 1=not detected
+        assert result.exit_code == 0
 
         # Extract JSON from output (skip log lines before and after)
         lines = result.output.strip().split("\n")
@@ -202,7 +202,7 @@ class TestSnapshotValidateCommand:
         )
 
         # Should succeed
-        assert result.exit_code in [0, 1]
+        assert result.exit_code == 0
 
         # Output file should exist and contain valid JSON
         assert output_file.exists()
@@ -227,34 +227,35 @@ class TestSnapshotValidateCommand:
             ],
         )
 
-        if result.exit_code in [0, 1]:
-            # Extract JSON from output (skip log lines before and after)
-            lines = result.output.strip().split("\n")
-            json_start = next(i for i, line in enumerate(lines) if line.strip().startswith("{"))
-            json_end = json_start
-            for i in range(len(lines) - 1, json_start - 1, -1):
-                if lines[i] == "}":
-                    json_end = i
-                    break
-            json_output = "\n".join(lines[json_start : json_end + 1])
-            output_data = json.loads(json_output)
+        assert result.exit_code == 0
+        # Extract JSON from output (skip log lines before and after)
+        lines = result.output.strip().split("\n")
+        json_start = next(i for i, line in enumerate(lines) if line.strip().startswith("{"))
+        json_end = json_start
+        for i in range(len(lines) - 1, json_start - 1, -1):
+            if lines[i] == "}":
+                json_end = i
+                break
+        json_output = "\n".join(lines[json_start : json_end + 1])
+        output_data = json.loads(json_output)
 
-            # Top-level keys
-            assert "mutation" in output_data
-            assert "input_file" in output_data
-            assert "haplotypes" in output_data
-            assert "overall_detection" in output_data
+        # Top-level keys
+        assert "mutation" in output_data
+        assert "input_file" in output_data
+        assert "haplotypes" in output_data
+        assert "overall_detection" in output_data
 
-            # Haplotype structure
-            for _hap_name, hap_data in output_data["haplotypes"].items():
-                assert "mutation_detected" in hap_data
-                assert "pcr_products" in hap_data
-                assert "digest_survivors" in hap_data
-                assert "summary" in hap_data
+        # Haplotype structure
+        for _hap_name, hap_data in output_data["haplotypes"].items():
+            assert "mutation_detected" in hap_data
+            assert "pcr_products" in hap_data
+            assert "digest_survivors" in hap_data
+            assert "summary" in hap_data
 
-    def test_exit_code_logic(self, runner, config_with_snapshot, sample_fasta):
-        """Test that exit codes follow specification (0=detected, 1=not detected)."""
-        result = runner.invoke(
+    def test_exit_code_logic(self, runner, config_with_snapshot, sample_fasta, tmp_path):
+        """Test that exit code is 0 on successful execution for negative and positive controls."""
+        # 1. Negative control (wild-type sample, mutation not detected)
+        result_neg = runner.invoke(
             cli,
             [
                 "--config",
@@ -266,24 +267,32 @@ class TestSnapshotValidateCommand:
                 "dupC",
             ],
         )
+        assert result_neg.exit_code == 0, "Exit code should be 0 on negative control"
+        lines_neg = result_neg.output.strip().split("\n")
+        json_start_neg = next(i for i, line in enumerate(lines_neg) if line.strip().startswith("{"))
+        json_end_neg = max(i for i, line in enumerate(lines_neg) if line.strip() == "}")
+        data_neg = json.loads("\n".join(lines_neg[json_start_neg : json_end_neg + 1]))
+        assert data_neg["overall_detection"] is False
 
-        # Should be either 0 (detected) or 1 (not detected), not error codes like 2
-        assert result.exit_code in [0, 1]
-
-        # Extract JSON from output (skip log lines before and after)
-        lines = result.output.strip().split("\n")
-        json_start = next(i for i, line in enumerate(lines) if line.strip().startswith("{"))
-        json_end = json_start
-        for i in range(len(lines) - 1, json_start - 1, -1):
-            if lines[i] == "}":
-                json_end = i
-                break
-        json_output = "\n".join(lines[json_start : json_end + 1])
-        output_data = json.loads(json_output)
-        overall_detection = output_data["overall_detection"]
-
-        # Exit code should match detection status
-        if overall_detection:
-            assert result.exit_code == 0, "Exit code should be 0 when mutation detected"
-        else:
-            assert result.exit_code == 1, "Exit code should be 1 when mutation not detected"
+        # 2. Positive control (mutant sample with 8C insertion, mutation detected)
+        mutant_fasta = tmp_path / "mutant.fa"
+        mutant_seq = "GGCCGGCCCCGGGCTCCACCGCCCCCCCCAGCCCACGGTTGTCACCTCGGCCCCGGA"
+        mutant_fasta.write_text(f">haplotype_1\n{mutant_seq}\n")
+        result_pos = runner.invoke(
+            cli,
+            [
+                "--config",
+                config_with_snapshot,
+                "analyze",
+                "snapshot-validate",
+                str(mutant_fasta),
+                "--mutation",
+                "dupC",
+            ],
+        )
+        assert result_pos.exit_code == 0, "Exit code should be 0 when mutation detected"
+        lines_pos = result_pos.output.strip().split("\n")
+        json_start_pos = next(i for i, line in enumerate(lines_pos) if line.strip().startswith("{"))
+        json_end_pos = max(i for i, line in enumerate(lines_pos) if line.strip() == "}")
+        data_pos = json.loads("\n".join(lines_pos[json_start_pos : json_end_pos + 1]))
+        assert data_pos["overall_detection"] is True
