@@ -90,12 +90,22 @@ class TestParseSnpFile:
     def test_parse_snp_file_invalid_haplotype(self, tmp_path: Path):
         """Test parsing file with invalid haplotype index raises ValueError."""
         snp_file = tmp_path / "snps.tsv"
-        snp_file.write_text("3\t100\tA\tG\n")  # Haplotype 3 (only 1 or 2 allowed)
+        snp_file.write_text("0\t100\tA\tG\n")  # Haplotype 0 (must be >= 1)
 
         with pytest.raises(ValueError) as exc_info:
             parse_snp_file(str(snp_file))
 
-        assert "Haplotype index must be 1 or 2" in str(exc_info.value)
+        assert "Haplotype index must be at least 1" in str(exc_info.value)
+
+    def test_parse_snp_file_polyploid_haplotype(self, tmp_path: Path):
+        """Test parsing file with haplotype index >= 3 is accepted for polyploid simulations."""
+        snp_file = tmp_path / "snps.tsv"
+        snp_file.write_text("3\t100\tA\tG\n4\t200\tC\tT\n")
+
+        snps = parse_snp_file(str(snp_file))
+        assert len(snps) == 2
+        assert snps[0]["haplotype"] == 3
+        assert snps[1]["haplotype"] == 4
 
     def test_parse_snp_file_negative_position(self, tmp_path: Path):
         """Test parsing file with negative position raises ValueError."""
@@ -320,6 +330,37 @@ class TestGenerateRandomSnps:
             generate_random_snps(sequences, density_per_kb=1.0, region="invalid")
 
         assert "Invalid region parameter" in str(exc_info.value)
+
+    def test_generate_random_snps_constants_only_sorted_order(self):
+        """Test that constants_only region samples valid positions from constant flanks."""
+        seq = "A" * 100 + "C" * 200 + "G" * 100  # 400 bp total
+        boundaries = [{"start": 100, "end": 300}]
+        snps = generate_random_snps(
+            [seq],
+            density_per_kb=50.0,
+            region="constants_only",
+            vntr_boundaries=boundaries,
+        )
+        assert len(snps) > 0
+        for snp in snps:
+            # Positions must be in [0, 100) or [300, 400)
+            assert snp["position"] < 100 or snp["position"] >= 300
+
+    def test_generate_random_snps_large_sequence_no_memory_spike(self):
+        """Test that generate_random_snps does not allocate set(range(N)) on large sequences."""
+
+        # A mock sequence of 5,000,000 bp
+        class LazyLargeSequence:
+            def __len__(self):
+                return 5_000_000
+
+            def __getitem__(self, idx):
+                return "A"
+
+        large_seq = LazyLargeSequence()
+        # With zero density, target_count <= 0, should return immediately without allocating
+        snps = generate_random_snps([large_seq], density_per_kb=0.0)  # type: ignore[list-item]
+        assert snps == []
 
 
 @pytest.mark.unit

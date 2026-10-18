@@ -11,7 +11,7 @@ into simulated haplotype sequences. It supports:
     - Tracking successfully applied SNPs for reporting
 
 The SNP file format is TSV with the following columns:
-    - haplotype_index (1-based): 1 or 2 for diploid
+    - haplotype_index (1-based): Haplotype index (>= 1)
     - position (0-based): Position in the haplotype sequence
     - ref_base: Expected reference base at position (used for validation)
     - alt_base: Alternative base to introduce
@@ -19,6 +19,7 @@ The SNP file format is TSV with the following columns:
 
 import logging
 import random as _random_module
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +35,7 @@ def parse_snp_file(filepath: str) -> list[dict[str, Any]]:
     Parse a tab-separated SNP file and return a list of SNP definitions.
 
     The file format should have the following columns:
-    - haplotype_index (1-based): 1 or 2 for diploid
+    - haplotype_index (1-based): Haplotype index (>= 1)
     - position (0-based): Position in the haplotype sequence
     - ref_base: Expected reference base at position
     - alt_base: Alternative base to introduce
@@ -70,9 +71,9 @@ def parse_snp_file(filepath: str) -> list[dict[str, Any]]:
                 # Validate and extract fields
                 try:
                     hap_idx = int(fields[0])
-                    if hap_idx not in [1, 2]:
+                    if hap_idx < 1:
                         raise ValueError(
-                            f"Line {line_num}: Haplotype index must be 1 or 2, found {hap_idx}"
+                            f"Line {line_num}: Haplotype index must be at least 1, found {hap_idx}"
                         )
 
                     position = int(fields[1])
@@ -207,7 +208,7 @@ def generate_random_snps(
         seq_length = len(sequence)
 
         # Determine target regions based on region parameter
-        valid_positions = set(range(seq_length))
+        valid_positions: Sequence[int] = range(seq_length)
 
         if region != "all" and vntr_boundaries and hap_idx < len(vntr_boundaries):
             boundaries = vntr_boundaries[hap_idx]
@@ -216,10 +217,10 @@ def generate_random_snps(
 
             if region == "constants_only":
                 # Keep only positions in constant regions
-                valid_positions = set(range(vntr_start)) | set(range(vntr_end, seq_length))
+                valid_positions = [*range(vntr_start), *range(vntr_end, seq_length)]
             elif region == "vntr_only":
                 # Keep only positions in VNTR region
-                valid_positions = set(range(vntr_start, vntr_end))
+                valid_positions = range(vntr_start, vntr_end)
 
         # Calculate number of SNPs to generate
         target_count = int(len(valid_positions) * rate_per_base)
@@ -231,21 +232,18 @@ def generate_random_snps(
         if target_count <= 0:
             continue
 
-        # Convert set to list for random sampling
-        valid_pos_list = list(valid_positions)
-
         # Generate unique random positions
-        if target_count >= len(valid_pos_list):
+        if target_count >= len(valid_positions):
             # If target count exceeds available positions, use all positions
-            positions = valid_pos_list
+            positions = list(valid_positions)
             logging.warning(
                 f"Requested SNP count ({target_count}) exceeds available "
-                f"positions ({len(valid_pos_list)})"
+                f"positions ({len(valid_positions)})"
             )
         else:
             # Sample without replacement
             _rng = rng if rng is not None else _random_module
-            positions = _rng.sample(valid_pos_list, target_count)
+            positions = _rng.sample(valid_positions, target_count)
 
         # Create SNP definitions
         for pos in positions:

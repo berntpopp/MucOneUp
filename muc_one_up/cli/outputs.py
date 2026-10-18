@@ -10,6 +10,7 @@ from typing import Any
 
 from ..exceptions import FileOperationError
 from ..fasta_writer import write_fasta
+from ..type_defs import HaplotypeResult
 from .config import numbered_filename
 from .snps import integrate_snps_unified
 
@@ -24,6 +25,122 @@ def _format_targets(targets: Any) -> list[tuple[int, int]]:
         else tuple(t)
         for t in (targets or [])
     ]
+
+
+def _translate_snps_to_mutated(
+    args: Any,
+    config: dict[str, Any],
+    normal_results: list[HaplotypeResult],
+    mutated_results: list[HaplotypeResult],
+    applied_snp_info_normal: dict[int, list[dict[str, Any]]],
+    mutation_positions: Any = None,
+    orig_normal_seqs: list[str] | None = None,
+    orig_mut_seqs: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Translate applied SNP coordinates from normal sequence to mutated sequence across indels.
+
+    Shared helper used by both dual mutation mode and single mutation mode.
+    """
+    translated_snps: list[dict[str, Any]] = []
+    ref_assembly = getattr(args, "reference_assembly", None)
+    if not isinstance(ref_assembly, str):
+        ref_assembly = config.get("reference_assembly", "hg38")
+    left_len = len(config.get("constants", {}).get(ref_assembly, {}).get("left", ""))
+
+    if orig_normal_seqs is None:
+        orig_normal_seqs = [hr.sequence for hr in normal_results]
+    if orig_mut_seqs is None:
+        orig_mut_seqs = [hr.sequence for hr in mutated_results]
+
+    for hap_idx, snps in applied_snp_info_normal.items():
+        if not snps or hap_idx >= len(mutated_results):
+            continue
+        normal_seq = orig_normal_seqs[hap_idx]
+        mut_seq = orig_mut_seqs[hap_idx]
+        delta = len(mut_seq) - len(normal_seq)
+
+        norm_lengths = getattr(normal_results[hap_idx], "_repeat_lengths", None) or [
+            len(config["repeats"][ru.symbol]) for ru in normal_results[hap_idx].chain
+        ]
+        mut_lengths = getattr(mutated_results[hap_idx], "_repeat_lengths", None)
+        if mut_lengths is not None and len(mut_lengths) == len(mutated_results[hap_idx].chain):
+            mut_lengths = list(mut_lengths)
+        else:
+            mut_lengths = [
+                len(config["repeats"][ru.symbol]) for ru in mutated_results[hap_idx].chain
+            ]
+            mut_indices = [
+                i
+                for i, ru in enumerate(mutated_results[hap_idx].chain)
+                if getattr(ru, "mutated", False)
+            ]
+            targets = mut_indices
+            if not targets:
+                hap_targets = [
+                    t
+                    for t in _format_targets(
+                        mutation_positions or getattr(args, "mutation_targets", None)
+                    )
+                    if t[0] == hap_idx + 1
+                ]
+                targets = [t[1] - 1 for t in hap_targets if 0 <= t[1] - 1 < len(mut_lengths)]
+
+            discrepancy = delta - (sum(mut_lengths) - sum(norm_lengths))
+            if discrepancy != 0 and targets:
+                base = discrepancy // len(targets)
+                rem = discrepancy % len(targets)
+                for idx, t_i in enumerate(targets):
+                    mut_lengths[t_i] += base + (1 if idx < rem else 0)
+
+        repeat_slices: list[tuple[int, int, int, int]] = []
+        norm_cur = left_len
+        mut_cur = left_len
+        for r_i in range(min(len(norm_lengths), len(mut_lengths))):
+            n_len = norm_lengths[r_i]
+            m_len = mut_lengths[r_i]
+            repeat_slices.append((norm_cur, norm_cur + n_len, mut_cur, mut_cur + m_len))
+            norm_cur += n_len
+            mut_cur += m_len
+
+        for snp in snps:
+            pos = snp["position"]
+            new_snp = dict(snp)
+            new_pos = pos
+            if pos < left_len:
+                new_pos = pos
+            elif pos >= left_len + sum(norm_lengths):
+                new_pos = pos + delta
+            else:
+                deleted = False
+                for norm_r_start, norm_r_end, mut_r_start, mut_r_end in repeat_slices:
+                    if norm_r_start <= pos < norm_r_end:
+                        rel_pos = pos - norm_r_start
+                        norm_rep = normal_seq[norm_r_start:norm_r_end]
+                        mut_rep = mut_seq[mut_r_start:mut_r_end]
+                        r_delta = len(mut_rep) - len(norm_rep)
+                        if r_delta == 0:
+                            new_pos = mut_r_start + rel_pos
+                        else:
+                            diff_idx = 0
+                            min_len = min(len(norm_rep), len(mut_rep))
+                            while diff_idx < min_len and norm_rep[diff_idx] == mut_rep[diff_idx]:
+                                diff_idx += 1
+                            if rel_pos < diff_idx:
+                                new_pos = mut_r_start + rel_pos
+                            elif r_delta < 0 and diff_idx <= rel_pos < diff_idx - r_delta:
+                                deleted = True
+                            else:
+                                new_pos = mut_r_start + rel_pos + r_delta
+                        break
+                if deleted:
+                    continue
+
+            new_snp["position"] = new_pos
+            if 0 <= new_pos < len(mut_seq):
+                new_snp["ref_base"] = mut_seq[new_pos].upper()
+            translated_snps.append(new_snp)
+
+    return translated_snps
 
 
 def generate_output_base(input_path: Path, suffix: str) -> str:
@@ -52,6 +169,7 @@ def write_fasta_outputs(
     mutation_positions,
     structure_mutation_info,
     rng=None,
+    normal_results=None,
 ):
     """
     Write FASTA output files.
@@ -75,106 +193,16 @@ def write_fasta_outputs(
             )
 
             # Translate SNPs for mutated variant
-            translated_snps: list[dict[str, Any]] = []
-            ref_assembly = getattr(args, "reference_assembly", None)
-            if not isinstance(ref_assembly, str):
-                ref_assembly = config.get("reference_assembly", "hg38")
-            left_len = len(config.get("constants", {}).get(ref_assembly, {}).get("left", ""))
-
-            for hap_idx, snps in applied_snp_info_normal.items():
-                if not snps or mutated_results is None or hap_idx >= len(mutated_results):
-                    continue
-                normal_seq = orig_normal_seqs[hap_idx]
-                mut_seq = orig_mut_seqs[hap_idx]
-                delta = len(mut_seq) - len(normal_seq)
-
-                norm_lengths = getattr(results[hap_idx], "_repeat_lengths", None) or [
-                    len(config["repeats"][ru.symbol]) for ru in results[hap_idx].chain
-                ]
-                mut_lengths = getattr(mutated_results[hap_idx], "_repeat_lengths", None)
-                if mut_lengths is not None and len(mut_lengths) == len(
-                    mutated_results[hap_idx].chain
-                ):
-                    mut_lengths = list(mut_lengths)
-                else:
-                    mut_lengths = [
-                        len(config["repeats"][ru.symbol]) for ru in mutated_results[hap_idx].chain
-                    ]
-                    if delta != sum(mut_lengths) - sum(norm_lengths):
-                        mut_indices = [
-                            i
-                            for i, ru in enumerate(mutated_results[hap_idx].chain)
-                            if getattr(ru, "mutated", False)
-                        ]
-                        if len(mut_indices) == 1:
-                            mut_lengths[mut_indices[0]] += delta - (
-                                sum(mut_lengths) - sum(norm_lengths)
-                            )
-                        elif not mut_indices:
-                            hap_targets = [
-                                t
-                                for t in _format_targets(
-                                    mutation_positions or getattr(args, "mutation_targets", None)
-                                )
-                                if t[0] == hap_idx + 1
-                            ]
-                            if len(hap_targets) == 1 and 0 <= hap_targets[0][1] - 1 < len(
-                                mut_lengths
-                            ):
-                                mut_lengths[hap_targets[0][1] - 1] += delta - (
-                                    sum(mut_lengths) - sum(norm_lengths)
-                                )
-
-                repeat_slices: list[tuple[int, int, int, int]] = []
-                norm_cur = left_len
-                mut_cur = left_len
-                for r_i in range(min(len(norm_lengths), len(mut_lengths))):
-                    n_len = norm_lengths[r_i]
-                    m_len = mut_lengths[r_i]
-                    repeat_slices.append((norm_cur, norm_cur + n_len, mut_cur, mut_cur + m_len))
-                    norm_cur += n_len
-                    mut_cur += m_len
-
-                for snp in snps:
-                    pos = snp["position"]
-                    new_snp = dict(snp)
-                    new_pos = pos
-                    if pos < left_len:
-                        new_pos = pos
-                    elif pos >= left_len + sum(norm_lengths):
-                        new_pos = pos + delta
-                    else:
-                        deleted = False
-                        for norm_r_start, norm_r_end, mut_r_start, mut_r_end in repeat_slices:
-                            if norm_r_start <= pos < norm_r_end:
-                                rel_pos = pos - norm_r_start
-                                norm_rep = normal_seq[norm_r_start:norm_r_end]
-                                mut_rep = mut_seq[mut_r_start:mut_r_end]
-                                r_delta = len(mut_rep) - len(norm_rep)
-                                if r_delta == 0:
-                                    new_pos = mut_r_start + rel_pos
-                                else:
-                                    diff_idx = 0
-                                    min_len = min(len(norm_rep), len(mut_rep))
-                                    while (
-                                        diff_idx < min_len
-                                        and norm_rep[diff_idx] == mut_rep[diff_idx]
-                                    ):
-                                        diff_idx += 1
-                                    if rel_pos < diff_idx:
-                                        new_pos = mut_r_start + rel_pos
-                                    elif r_delta < 0 and diff_idx <= rel_pos < diff_idx - r_delta:
-                                        deleted = True
-                                    else:
-                                        new_pos = mut_r_start + rel_pos + r_delta
-                                break
-                        if deleted:
-                            continue
-
-                    new_snp["position"] = new_pos
-                    if 0 <= new_pos < len(mut_seq):
-                        new_snp["ref_base"] = mut_seq[new_pos].upper()
-                    translated_snps.append(new_snp)
+            translated_snps = _translate_snps_to_mutated(
+                args=args,
+                config=config,
+                normal_results=results,
+                mutated_results=mutated_results or [],
+                applied_snp_info_normal=applied_snp_info_normal,
+                mutation_positions=mutation_positions,
+                orig_normal_seqs=orig_normal_seqs,
+                orig_mut_seqs=orig_mut_seqs,
+            )
 
             mutated_results, applied_snp_info_mut = integrate_snps_unified(
                 args,
@@ -227,7 +255,28 @@ def write_fasta_outputs(
                         )
 
             # Apply SNPs
-            results, applied_snp_info = integrate_snps_unified(args, config, results, rng=rng)
+            if getattr(args, "snp_input_file", None) and normal_results is not None:
+                _, applied_snp_info_normal = integrate_snps_unified(
+                    args, config, normal_results, rng=rng
+                )
+                translated_snps = _translate_snps_to_mutated(
+                    args=args,
+                    config=config,
+                    normal_results=normal_results,
+                    mutated_results=results,
+                    applied_snp_info_normal=applied_snp_info_normal,
+                    mutation_positions=mutation_positions,
+                )
+                results, applied_snp_info = integrate_snps_unified(
+                    args,
+                    config,
+                    results,
+                    skip_reference_check=True,
+                    rng=rng,
+                    predefined_snps=translated_snps,
+                )
+            else:
+                results, applied_snp_info = integrate_snps_unified(args, config, results, rng=rng)
 
             write_fasta(
                 [hr.sequence for hr in results],

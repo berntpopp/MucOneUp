@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **SNP integration & coordinate translation (#151)**:
+  - Eliminate unconditional `set(range(seq_length))` memory spike in `generate_random_snps` by passing `Sequence[int]` ranges directly.
+  - Preserve `HaplotypeResult._repeat_lengths` through `integrate_snps_unified`.
+  - Translate `--snp-input-file` coordinates across indel mutations in single-mutation mode and support multi-repeat indels in fallback repeat-length calculation via shared `_translate_snps_to_mutated`.
+  - Accept haplotype indices >= 3 in `parse_snp_file` for polyploid simulations.
+
 ## [0.47.0] - 2026-10-18
 
 ### Fixed
@@ -22,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Propagate exact mutated repeat lengths through `generate_simulation_statistics`, `write_simulation_statistics`, `ReadSourceTracker.from_simulation_results`, and `companion_stats_fields`; unify VNTR boundary calculation (`get_haplotype_vntr_bounds`) across `simulation_statistics` and `snp_integrator`, handling early-`9` termination without right flank and 0-bp repeat deletions.
 - **Configuration, CLI RNG threading & dual-mode SNPs (#139, #140)**:
   - Enforce single-CLI-entry config loading boundary; resolve relative NanoSim `training_data_path` prefixes; expand `CONFIG_SCHEMA` with `read_simulation`, `nanosim_params`, `pacbio_params`, `snapshot.primary_primer`, and `validation.mutant_extension`.
-  - Thread seeded `rng` across CLI simulation, mutation, and SNP integration (honoring both `--seed` and `config["seed"]`); implement exact per-repeat coordinate translation for dual-mode SNPs across indels and enforce 1-based SNP input coordinates.
+  - Thread seeded `rng` across CLI simulation, mutation, and SNP integration (honoring both `--seed` and `config["seed"]`); implement exact per-repeat coordinate translation for dual-mode SNPs across indels and enforce 0-based SNP input coordinates (with 1-based haplotype indices).
 - **Read simulator pipelines, truth tracking & wrappers (#129, #142, #143, #144, #145)**:
   - Guard negative start coordinates in `amplicon_Clip`, preserve diploid amplicon templates when only one haplotype extracts, make `StutterTable`, `MoleculeModel`, and `ReadProfile` hashable, and validate 2-record diploid FASTAs.
   - Compute minimum fragment probe overlap via `math.ceil(plen * bind)`, guard invalid `bind`/insert bounds, deduplicate `reverse_complement` and IUPAC primer matching (including ambiguous template bases) into `sequence_utils.py`, and fix `EmpiricalErrorModel` weighted sampling boundary.

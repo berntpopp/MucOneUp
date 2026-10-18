@@ -107,7 +107,9 @@ def integrate_snps_unified(
 
         # Replace original sequences with modified ones
         for i, hr in enumerate(results):
-            results[i] = HaplotypeResult(modified_sequences[i], hr.chain)
+            results[i] = HaplotypeResult(
+                modified_sequences[i], hr.chain, _repeat_lengths=hr._repeat_lengths
+            )
 
         logging.info(f"Applied {sum(len(v) for v in applied_snp_info.values())} SNPs to sequences")
 
