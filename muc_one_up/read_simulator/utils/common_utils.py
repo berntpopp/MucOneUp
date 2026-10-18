@@ -56,7 +56,7 @@ class RunResult:
 
 def run_command(
     cmd: list[str],
-    timeout: int | None = None,
+    timeout: float | None = None,
     stderr_log_level: int = logging.ERROR,
     stderr_prefix: str = "",
     capture: bool = False,
@@ -290,7 +290,7 @@ def run_pipeline(
     cmds: list[list[str]],
     *,
     capture: bool = True,
-    timeout: int | None = None,
+    timeout: float | None = None,
     cwd: Path | None = None,
 ) -> RunResult:
     """Run a pipeline of commands connected by pipes.

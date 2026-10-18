@@ -123,3 +123,13 @@ def test_lowercase_mismatches_change_base() -> None:
         assert len(diffs) > 100
         for orig, mutated in diffs:
             assert orig.upper() != mutated.upper()
+
+
+def test_quality_empty_and_tiled() -> None:
+    from muc_one_up.read_simulator.empirical_errors import _quality
+
+    rng = random.Random(42)
+    assert _quality(0.01, 0, MODEL, rng) == ""
+    q100 = _quality(0.01, 100, MODEL, rng)
+    assert len(q100) == 100
+    assert q100[:36] == q100[64:100]

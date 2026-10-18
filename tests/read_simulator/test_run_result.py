@@ -74,7 +74,7 @@ class TestRunCommandCapture:
             run_command(
                 [sys.executable, "-c", "import time; time.sleep(30)"],
                 capture=True,
-                timeout=1,
+                timeout=0.05,
             )
 
 

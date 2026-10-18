@@ -102,12 +102,12 @@ class TestSampleRepeatCount:
         }
 
         # First run with seed
-        random.seed(42)
-        samples1 = [sample_repeat_count(length_model) for _ in range(10)]
+        rng1 = random.Random(42)
+        samples1 = [sample_repeat_count(length_model, rng=rng1) for _ in range(10)]
 
         # Second run with same seed
-        random.seed(42)
-        samples2 = [sample_repeat_count(length_model) for _ in range(10)]
+        rng2 = random.Random(42)
+        samples2 = [sample_repeat_count(length_model, rng=rng2) for _ in range(10)]
 
         # Should be identical
         assert samples1 == samples2
@@ -122,11 +122,11 @@ class TestSampleRepeatCount:
         }
 
         # Sample with two different seeds
-        random.seed(42)
-        samples1 = [sample_repeat_count(length_model) for _ in range(20)]
+        rng1 = random.Random(42)
+        samples1 = [sample_repeat_count(length_model, rng=rng1) for _ in range(20)]
 
-        random.seed(123)
-        samples2 = [sample_repeat_count(length_model) for _ in range(20)]
+        rng2 = random.Random(123)
+        samples2 = [sample_repeat_count(length_model, rng=rng2) for _ in range(20)]
 
         # Very unlikely to be identical
         assert samples1 != samples2
@@ -141,8 +141,8 @@ class TestSampleRepeatCount:
         }
 
         # Sample many times
-        random.seed(42)
-        samples = [sample_repeat_count(length_model) for _ in range(1000)]
+        rng = random.Random(42)
+        samples = [sample_repeat_count(length_model, rng=rng) for _ in range(1000)]
 
         # Average should be close to 30 (within 10% tolerance)
         avg = sum(samples) / len(samples)
@@ -207,8 +207,8 @@ class TestDistributionBioinformatics:
             "mean_repeats": 60,
         }
 
-        random.seed(42)
-        samples = [sample_repeat_count(length_model) for _ in range(100)]
+        rng = random.Random(42)
+        samples = [sample_repeat_count(length_model, rng=rng) for _ in range(100)]
 
         # Check biologically realistic properties
         assert all(20 <= s <= 120 for s in samples)
@@ -265,7 +265,8 @@ class TestDistributionEdgeCases:
         }
 
         # Should still sample within bounds
-        samples = [sample_repeat_count(length_model) for _ in range(50)]
+        rng = random.Random(42)
+        samples = [sample_repeat_count(length_model, rng=rng) for _ in range(50)]
 
         assert all(50 <= s <= 100 for s in samples)
 
@@ -275,11 +276,12 @@ class TestDistributionEdgeCases:
             "distribution": "normal",
             "min_repeats": 10,
             "max_repeats": 30,
-            "mean_repeats": 50,  # Above max_repeats
+            "mean_repeats": 35,  # Above max_repeats
         }
 
         # Should still sample within bounds
-        samples = [sample_repeat_count(length_model) for _ in range(50)]
+        rng = random.Random(42)
+        samples = [sample_repeat_count(length_model, rng=rng) for _ in range(50)]
 
         assert all(10 <= s <= 30 for s in samples)
 
@@ -313,12 +315,26 @@ class TestDistributionEdgeCases:
             sample_repeat_count(length_model)
 
     def test_sample_raises_value_error_on_impossible_bounds(self):
-        """Test that impossible/unsamplable bounds raise ValueError after loop exhaustion."""
+        """Test that impossible/unsamplable bounds raise ValueError immediately when sigma is 0."""
         length_model = {
             "distribution": "normal",
             "min_repeats": 50,
             "max_repeats": 50,
             "mean_repeats": 10,
         }
-        with pytest.raises(ValueError, match="Failed to sample repeat count"):
+        with pytest.raises(ValueError, match=r"Failed to sample repeat count in \[50, 50\]"):
+            sample_repeat_count(length_model)
+
+    def test_sample_exhausted_rejection_loop_raises(self, mocker):
+        """Test that exhausting 10,000 attempts raises ValueError."""
+        length_model = {
+            "distribution": "normal",
+            "min_repeats": 20,
+            "max_repeats": 50,
+            "mean_repeats": 35,
+        }
+        mocker.patch("random.gauss", return_value=10)
+        with pytest.raises(
+            ValueError, match=r"Failed to sample repeat count in \[20, 50\] after 10,000 attempts"
+        ):
             sample_repeat_count(length_model)

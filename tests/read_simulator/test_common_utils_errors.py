@@ -45,7 +45,7 @@ class TestRunCommandCaptureErrors:
             run_command(
                 [sys.executable, "-c", "import time; time.sleep(60)"],
                 capture=True,
-                timeout=1,
+                timeout=0.05,
             )
         assert exc_info.value.exit_code == -1
         assert "timed out" in exc_info.value.stderr
@@ -92,7 +92,7 @@ class TestRunCommandStreamingErrors:
         with pytest.raises(ExternalToolError):
             run_command(
                 [sys.executable, "-c", "import time; time.sleep(60)"],
-                timeout=1,
+                timeout=0.05,
             )
 
     def test_missing_binary_raises(self):
@@ -126,7 +126,7 @@ class TestRunCommandStdoutPathErrors:
             run_command(
                 [sys.executable, "-c", "import time; time.sleep(60)"],
                 stdout_path=out,
-                timeout=1,
+                timeout=0.05,
             )
         assert "timed out" in exc_info.value.stderr
 
@@ -188,7 +188,7 @@ class TestRunPipelineErrors:
                     [sys.executable, "-c", "import sys; sys.stdin.read()"],
                 ],
                 capture=True,
-                timeout=1,
+                timeout=0.05,
             )
         assert "timed out" in exc_info.value.stderr.lower()
 
