@@ -176,6 +176,7 @@ def merge_fastq_files(
     input_files: Sequence[str | Path],
     output_file: str | Path,
     validate_inputs: bool = True,
+    read_counts: list[int] | None = None,
 ) -> str:
     """
     Merge multiple FASTQ files into a single output file.
@@ -188,6 +189,7 @@ def merge_fastq_files(
         input_files: List of input FASTQ files to merge (can be gzipped).
         output_file: Path to merged output file (.gz extension for compression).
         validate_inputs: If True, validate input files before merging.
+        read_counts: Optional list to append read counts for each input file.
 
     Returns:
         Path to the merged output file (as string).
@@ -253,6 +255,8 @@ def merge_fastq_files(
             in_handle.close()
 
             total_reads += read_count
+            if read_counts is not None:
+                read_counts.append(read_count)
             logging.info(
                 "Merged %d reads from %s",
                 read_count,

@@ -67,10 +67,10 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .output_config import OutputConfig
 
-from ..exceptions import ExternalToolError, FileOperationError
 from .constants import MINIMAP2_PRESET_PACBIO_HIFI
 from .pipeline_utils import (
     cleanup_intermediates,
+    cleanup_unless_kept,
     create_pipeline_metadata,
     resolve_pipeline_outputs,
 )
@@ -79,6 +79,21 @@ from .wrappers.ccs_wrapper import run_ccs_consensus, validate_ccs_parameters
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 from .wrappers.pbsim3_wrapper import run_pbsim3_simulation, validate_pbsim3_parameters
 from .wrappers.samtools_wrapper import convert_bam_to_fastq, merge_bam_files
+
+__all__ = ["cleanup_intermediates", "simulate_pacbio_hifi_reads"]
+
+
+def _register_ccs_intermediates(bam_path: str, intermediate_files: list[str | None]) -> None:
+    """Register CCS sidecar files alongside a HiFi BAM for cleanup."""
+    base = bam_path.removesuffix(".bam")
+    intermediate_files.extend(
+        [
+            f"{bam_path}.pbi",
+            f"{bam_path}.gzi",
+            f"{base}.ccs_report.txt",
+            f"{base}.zmw_metrics.json.gz",
+        ]
+    )
 
 
 def _simulate_haplotype_hifi(
@@ -299,7 +314,9 @@ def simulate_pacbio_hifi_reads(
         raise RuntimeError(f"Invalid PacBio parameters: {e}") from e
 
     # Derive output directory and base name
-    output_dir_path, output_base = resolve_pipeline_outputs(input_fa, {}, output_config)
+    output_dir_path, output_base = resolve_pipeline_outputs(
+        input_fa, config.get("read_simulation", {}), output_config
+    )
 
     # Define intermediate and final file paths
     clr_prefix = str(output_dir_path / f"{output_base}_clr")
@@ -346,20 +363,13 @@ def simulate_pacbio_hifi_reads(
 
         # Add CLR BAMs and related files to intermediate cleanup list
         intermediate_files.extend(clr_bams)
-        # Note: pbsim3 may create .maf.gz and .ref files per haplotype
-        # Pattern: {prefix}_0001.maf.gz, {prefix}_0001.ref, etc.
         maf_files_by_haplotype: dict[int, list[str]] = {}
         for hap_idx, clr_bam in enumerate(clr_bams, 1):
-            base = clr_bam.replace(".bam", "")
+            base = clr_bam.removesuffix(".bam")
             maf_path = f"{base}.maf"
             maf_gz_path = f"{base}.maf.gz"
-            # Preserve MAF files for source tracking; clean up later
-            if source_tracker is None:
-                intermediate_files.append(maf_path)
-                intermediate_files.append(maf_gz_path)
-            else:
-                maf_files_by_haplotype[hap_idx] = [maf_path, maf_gz_path]
-            intermediate_files.append(f"{base}.ref")
+            intermediate_files.extend([maf_path, maf_gz_path, f"{base}.ref"])
+            maf_files_by_haplotype[hap_idx] = [maf_path, maf_gz_path]
 
         # ==========================================================================
         # STAGE 2: HiFi Consensus Generation (CCS)
@@ -368,13 +378,16 @@ def simulate_pacbio_hifi_reads(
         logging.info("STAGE 2: HiFi consensus generation with CCS")
         logging.info("=" * 80)
 
-        # Run CCS on each CLR BAM independently to preserve ZMW grouping
-        # CCS requires ZMW (Zero-Mode Waveguide) groups to be intact, which are
-        # broken when merging CLR BAMs from diploid simulations
+        # Register final merged hifi_bam and its CCS sidecars
+        intermediate_files.append(hifi_bam)
+        _register_ccs_intermediates(hifi_bam, intermediate_files)
+
         hifi_bams = []
         for i, clr_bam in enumerate(clr_bams, 1):
             if len(clr_bams) > 1:
                 hifi_bam_individual = str(output_dir_path / f"{output_base}_hifi_{i:04d}.bam")
+                intermediate_files.append(hifi_bam_individual)
+                _register_ccs_intermediates(hifi_bam_individual, intermediate_files)
                 logging.info("Processing haplotype %d/%d: %s", i, len(clr_bams), clr_bam)
             else:
                 hifi_bam_individual = hifi_bam
@@ -400,14 +413,9 @@ def simulate_pacbio_hifi_reads(
                 output_bam=hifi_bam,
                 threads=threads,
             )
-
-            # Add individual HiFi BAMs to intermediate files (will be cleaned up)
-            intermediate_files.extend(hifi_bams)
         else:
             # Single haplotype - hifi_bam already set correctly
             hifi_bam = hifi_bams[0]
-
-        intermediate_files.append(hifi_bam)
 
         # ==========================================================================
         # STAGE 3: BAM → FASTQ Conversion (samtools)
@@ -422,6 +430,30 @@ def simulate_pacbio_hifi_reads(
             output_fastq=hifi_fastq,
             threads=threads,
         )
+
+        # Generate read source tracking manifest if tracker provided (before alignment / return)
+        if source_tracker is not None:
+            from .parsers.pacbio_parser import parse_pacbio_reads, reconcile_ccs_reads
+
+            logging.info("Generating read source tracking manifest...")
+            all_origins = []
+            for hap_idx, maf_paths in maf_files_by_haplotype.items():
+                existing_mafs = [p for p in maf_paths if Path(p).exists()]
+                if existing_mafs:
+                    origins = parse_pacbio_reads(
+                        maf_paths=existing_mafs,
+                        haplotype_index=hap_idx,
+                    )
+                    all_origins.extend(origins)
+
+            if Path(hifi_fastq).exists():
+                all_origins = reconcile_ccs_reads(all_origins, hifi_fastq)
+
+            manifest_path = f"{output_dir_path / output_base!s}_read_manifest.tsv.gz"
+            source_tracker.write_manifest(source_tracker.annotate_reads(all_origins), manifest_path)
+            logging.info(
+                "Read source manifest written: %s (%d reads)", manifest_path, len(all_origins)
+            )
 
         if human_reference is not None:
             intermediate_files.append(hifi_fastq)
@@ -453,7 +485,7 @@ def simulate_pacbio_hifi_reads(
         logging.info("STAGE 5: Cleaning up intermediate files")
         logging.info("=" * 80)
 
-        cleanup_intermediates(intermediate_files)
+        cleanup_unless_kept(config, intermediate_files)
 
         # Calculate elapsed time and write metadata
         end_time = datetime.now()
@@ -465,33 +497,6 @@ def simulate_pacbio_hifi_reads(
             str(duration).split(".")[0],  # Remove microseconds
         )
         logging.info(f"Final output: {final_output}")
-
-        # Generate read source tracking manifest if tracker provided
-        if source_tracker is not None:
-            from .parsers.pacbio_parser import parse_pacbio_reads
-
-            logging.info("Generating read source tracking manifest...")
-            all_origins = []
-            for hap_idx, maf_paths in maf_files_by_haplotype.items():
-                existing_mafs = [p for p in maf_paths if Path(p).exists()]
-                if existing_mafs:
-                    origins = parse_pacbio_reads(
-                        maf_paths=existing_mafs,
-                        haplotype_index=hap_idx,
-                    )
-                    all_origins.extend(origins)
-
-            annotated = list(source_tracker.annotate_reads(all_origins))
-            manifest_path = f"{output_dir_path / output_base!s}_read_manifest.tsv.gz"
-            source_tracker.write_manifest(annotated, manifest_path)
-            logging.info(
-                "Read source manifest written: %s (%d reads)", manifest_path, len(annotated)
-            )
-
-            # Now clean up MAF files
-            for maf_paths in maf_files_by_haplotype.values():
-                for maf_f in maf_paths:
-                    Path(maf_f).unlink(missing_ok=True)
 
         tools_used = ["pbsim3", "ccs", "samtools"]
         if human_reference is not None:
@@ -512,26 +517,9 @@ def simulate_pacbio_hifi_reads(
 
         return final_output
 
-    except (ExternalToolError, FileOperationError) as e:
-        # Wrap tool-specific errors in RuntimeError with context
-        logging.error(f"PacBio pipeline failed: {e}")
-        raise RuntimeError(
-            f"PacBio HiFi simulation pipeline failed during processing.\n"
-            f"Error details: {e}\n\n"
-            f"Troubleshooting:\n"
-            f"  1. Check that all tools are installed: pbsim, ccs, samtools, minimap2\n"
-            f"  2. Verify conda environment: conda activate env_pacbio\n"
-            f"  3. Check model file exists: {model_file}\n"
-            f"  4. Review parameter settings (coverage, pass_num, min_passes, min_rq)\n"
-            f"  5. Check log output above for detailed error messages"
-        ) from e
-    except Exception as e:
-        # Catch any unexpected errors
-        logging.error(f"Unexpected error in PacBio pipeline: {e}")
-        raise RuntimeError(f"PacBio HiFi simulation pipeline failed: {e}") from e
     finally:
         try:
             if "intermediate_files" in locals():
-                cleanup_intermediates(intermediate_files)
+                cleanup_unless_kept(config, intermediate_files)
         except Exception as cleanup_error:
             logging.warning("Cleanup failed (non-fatal): %s", cleanup_error)

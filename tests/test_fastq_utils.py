@@ -408,3 +408,19 @@ def test_merge_fastq_files_quality_with_at_symbol(temp_dir):
     assert "read_0" in merged_content
     assert "read_2" in merged_content
     assert "normal_0" in merged_content
+
+
+def test_merge_fastq_files_read_counts_parameter(temp_dir):
+    """Test Issue #150: read_counts parameter records per-file read counts during merge."""
+    file1 = temp_dir / "hap1.fastq"
+    file1.write_text(create_fastq_content(4, "hap1"))
+    file2 = temp_dir / "hap2.fastq"
+    file2.write_text(create_fastq_content(7, "hap2"))
+
+    output = temp_dir / "merged.fastq"
+    read_counts = []
+    result = merge_fastq_files([file1, file2], output, read_counts=read_counts)
+
+    assert result == str(output)
+    assert read_counts == [4, 7]
+    assert count_fastq_reads(result) == 11

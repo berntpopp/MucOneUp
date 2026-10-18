@@ -285,18 +285,17 @@ def run_split_simulation(
 
         # Step 4: Merge FASTQs
         logging.info("Step 4/4: Merging FASTQ files...")
+        read_counts: list[int] = []
         merged_fastq = merge_fastq_files(
             [hap1_fastq, hap2_fastq],
             output_fastq,
             validate_inputs=False,  # Already validated by simulation
+            read_counts=read_counts,
         )
         logging.info("  Merged FASTQ: %s", merged_fastq)
 
-        # Get read counts (import here to avoid circular dependency)
-        from .fastq_utils import count_fastq_reads
-
-        reads_hap1 = count_fastq_reads(hap1_fastq)
-        reads_hap2 = count_fastq_reads(hap2_fastq)
+        reads_hap1 = read_counts[0] if len(read_counts) > 0 else 0
+        reads_hap2 = read_counts[1] if len(read_counts) > 1 else 0
 
         logging.info("=" * 70)
         logging.info("SPLIT-SIMULATION COMPLETE")

@@ -102,9 +102,7 @@ class TestPacBioHiFiPipeline:
         mock_align.side_effect = create_aligned_bam
 
         # Mock cleanup
-        mock_cleanup = mocker.patch(
-            "muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates"
-        )
+        mock_cleanup = mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
 
         # Act
         result = simulate_pacbio_hifi_reads(
@@ -203,9 +201,7 @@ class TestPacBioHiFiPipeline:
             "muc_one_up.read_simulator.pacbio_pipeline.align_reads_with_minimap2"
         )
 
-        mock_cleanup = mocker.patch(
-            "muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates"
-        )
+        mock_cleanup = mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
 
         # Act - No human_reference provided
         result = simulate_pacbio_hifi_reads(
@@ -259,7 +255,7 @@ class TestPacBioHiFiPipeline:
             "muc_one_up.read_simulator.pacbio_pipeline.convert_bam_to_fastq",
             return_value=str(hifi_fastq),
         )
-        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
 
         simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
 
@@ -455,7 +451,7 @@ class TestPacBioHiFiPipeline:
 
         mock_convert_fastq.side_effect = create_hifi_fastq
 
-        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
 
         # Act
         simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
@@ -536,7 +532,7 @@ class TestPacBioHiFiPipeline:
 
         mock_convert_fastq.side_effect = create_hifi_fastq
 
-        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
 
         # Act
         simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
@@ -552,3 +548,312 @@ class TestPacBioHiFiPipeline:
         # Verify FASTQ output uses correct name
         fastq_call = mock_convert_fastq.call_args
         assert fastq_call[1]["output_fastq"] == str(expected_hifi_fastq)
+
+    def test_keep_intermediate_files_honored_and_sidecars_registered(self, mocker, tmp_path):
+        """Test Issue #150: honor keep_intermediate_files and register CCS sidecars."""
+        from muc_one_up.read_simulator.pipeline_utils import cleanup_unless_kept
+
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">hap1\nACGTACGTACGT\n>hap2\nACGTACGTACGT\n")
+
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "read_simulation": {"keep_intermediate_files": True},
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+            },
+        }
+        (tmp_path / "model.model").write_text("model data")
+
+        clr_bam1 = tmp_path / "input_clr_0001.bam"
+        clr_bam2 = tmp_path / "input_clr_0002.bam"
+        hifi_bam1 = tmp_path / "input_hifi_0001.bam"
+        hifi_bam2 = tmp_path / "input_hifi_0002.bam"
+        hifi_bam = tmp_path / "input_hifi.bam"
+        hifi_fastq = tmp_path / "input_hifi.fastq"
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
+            return_value=[str(clr_bam1), str(clr_bam2)],
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_ccs_consensus",
+            side_effect=[str(hifi_bam1), str(hifi_bam2)],
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.merge_bam_files",
+            return_value=str(hifi_bam),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.convert_bam_to_fastq",
+            return_value=str(hifi_fastq),
+        )
+        mock_cleanup = mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept",
+            side_effect=cleanup_unless_kept,
+        )
+
+        simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
+
+        assert mock_cleanup.called
+        # Check that registered intermediate files contain sidecars for both individual HiFi BAMs and merged BAM
+        registered_files = mock_cleanup.call_args[0][1]
+        assert str(hifi_bam1) in registered_files
+        assert f"{hifi_bam1}.pbi" in registered_files
+        assert f"{hifi_bam1}.gzi" in registered_files
+        assert f"{str(hifi_bam1).removesuffix('.bam')}.ccs_report.txt" in registered_files
+        assert f"{str(hifi_bam1).removesuffix('.bam')}.zmw_metrics.json.gz" in registered_files
+
+        assert str(hifi_bam2) in registered_files
+        assert f"{hifi_bam2}.pbi" in registered_files
+        assert f"{hifi_bam2}.gzi" in registered_files
+
+        assert str(hifi_bam) in registered_files
+        assert f"{hifi_bam}.pbi" in registered_files
+
+        # Verify MAF files are registered in intermediate files
+        assert f"{str(clr_bam1).removesuffix('.bam')}.maf" in registered_files
+        assert f"{str(clr_bam1).removesuffix('.bam')}.maf.gz" in registered_files
+        assert f"{str(clr_bam1).removesuffix('.bam')}.ref" in registered_files
+
+    def test_intermediate_files_cleaned_up_on_failure(self, mocker, tmp_path):
+        """Test Issue #150: partial files are registered before tools run and cleaned on failure."""
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGTACGTACGT\n")
+
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+            },
+        }
+        (tmp_path / "model.model").write_text("model data")
+        clr_bam = tmp_path / "input_clr.bam"
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
+            return_value=[str(clr_bam)],
+        )
+        # CCS fails mid-loop
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_ccs_consensus",
+            side_effect=RuntimeError("CCS crashed"),
+        )
+        mock_cleanup = mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
+
+        with pytest.raises(RuntimeError, match="CCS crashed"):
+            simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
+
+        # Verify cleanup_unless_kept was invoked in finally block
+        assert mock_cleanup.called
+        registered_files = mock_cleanup.call_args[0][1]
+        assert str(clr_bam) in registered_files
+        assert f"{str(clr_bam).removesuffix('.bam')}.maf" in registered_files
+
+    def test_propagates_external_tool_error_directly(self, mocker, tmp_path):
+        """Test Issue #150: ExternalToolError propagates directly without RuntimeError wrapping."""
+        from muc_one_up.exceptions import ExternalToolError
+
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGTACGTACGT\n")
+
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+            },
+        }
+        (tmp_path / "model.model").write_text("model data")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
+            side_effect=ExternalToolError(tool="pbsim3", exit_code=1, stderr="pbsim3 failed"),
+        )
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
+
+        with pytest.raises(ExternalToolError, match="pbsim3 failed"):
+            simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
+
+    def test_propagates_file_operation_error_directly(self, mocker, tmp_path):
+        """Test Issue #150: FileOperationError propagates directly without RuntimeError wrapping."""
+        from muc_one_up.exceptions import FileOperationError
+
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGTACGTACGT\n")
+
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+            },
+        }
+        (tmp_path / "model.model").write_text("model data")
+        clr_bam = tmp_path / "input_clr.bam"
+        hifi_bam = tmp_path / "input_hifi.bam"
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
+            return_value=[str(clr_bam)],
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_ccs_consensus",
+            return_value=str(hifi_bam),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.convert_bam_to_fastq",
+            side_effect=FileOperationError("Could not write FASTQ"),
+        )
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
+
+        with pytest.raises(FileOperationError, match="Could not write FASTQ"):
+            simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
+
+    def test_resolve_pipeline_outputs_receives_read_simulation_config(self, mocker, tmp_path):
+        """Test Issue #150: resolve_pipeline_outputs receives config.get('read_simulation', {})."""
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGTACGTACGT\n")
+
+        rs_cfg = {"output_dir": str(tmp_path / "custom_out")}
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "read_simulation": rs_cfg,
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+            },
+        }
+        (tmp_path / "model.model").write_text("model data")
+
+        mock_resolve = mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.resolve_pipeline_outputs",
+            return_value=(tmp_path, "sample"),
+        )
+        clr_bam = tmp_path / "sample_clr.bam"
+        hifi_bam = tmp_path / "sample_hifi.bam"
+        hifi_fastq = tmp_path / "sample_hifi.fastq"
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
+            return_value=[str(clr_bam)],
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_ccs_consensus",
+            return_value=str(hifi_bam),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.convert_bam_to_fastq",
+            return_value=str(hifi_fastq),
+        )
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
+
+        simulate_pacbio_hifi_reads(config=config, input_fa=str(input_fa), human_reference=None)
+
+        assert mock_resolve.called
+        assert mock_resolve.call_args[0][1] == rs_cfg
+
+    def test_pacbio_manifest_reconciles_ccs_reads_and_streams(self, mocker, tmp_path):
+        """Test Issue #127 and #150: manifest reconciles CCS names and streams without list materialization."""
+        from types import GeneratorType
+
+        from muc_one_up.read_simulator.source_tracking import ReadOrigin
+
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGTACGTACGT\n")
+
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+            },
+        }
+        (tmp_path / "model.model").write_text("model data")
+
+        clr_bam = tmp_path / "input_clr_0001.bam"
+        maf_file = tmp_path / "input_clr_0001.maf"
+        maf_file.write_text("dummy maf")
+        hifi_bam = tmp_path / "input_hifi.bam"
+        hifi_fastq = tmp_path / "input_hifi.fastq"
+        # FASTQ contains surviving read movie/1/ccs, but NOT movie/2/ccs (which was rejected by CCS)
+        hifi_fastq.write_text("@movie/1/ccs\nACGT\n+\nIIII\n")
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
+            return_value=[str(clr_bam)],
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_ccs_consensus",
+            return_value=str(hifi_bam),
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.convert_bam_to_fastq",
+            return_value=str(hifi_fastq),
+        )
+        # MAF parser returns raw subreads for ZMW 1 and rejected ZMW 2
+        raw_origins = [
+            ReadOrigin(read_id="movie/1/0_500", haplotype=1, ref_start=10, ref_end=510, strand="+"),
+            ReadOrigin(
+                read_id="movie/1/550_1050", haplotype=1, ref_start=10, ref_end=510, strand="-"
+            ),
+            ReadOrigin(
+                read_id="movie/2/0_500", haplotype=1, ref_start=100, ref_end=600, strand="+"
+            ),
+        ]
+        mocker.patch(
+            "muc_one_up.read_simulator.parsers.pacbio_parser.parse_pacbio_reads",
+            return_value=raw_origins,
+        )
+        mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
+
+        mock_tracker = mocker.Mock()
+
+        def mock_annotate(origins):
+            yield from origins
+
+        mock_tracker.annotate_reads.side_effect = mock_annotate
+
+        simulate_pacbio_hifi_reads(
+            config=config,
+            input_fa=str(input_fa),
+            human_reference=None,
+            source_tracker=mock_tracker,
+        )
+
+        assert mock_tracker.write_manifest.called
+        manifest_call = mock_tracker.write_manifest.call_args
+        # First arg passed to write_manifest is generator (streaming), not materialized list
+        assert isinstance(manifest_call[0][0], GeneratorType)
+        # Consume generator and verify contents
+        annotated_items = list(manifest_call[0][0])
+        assert len(annotated_items) == 1
+        assert annotated_items[0].read_id == "movie/1/ccs"
+        assert annotated_items[0].ref_start == 10
+        assert annotated_items[0].ref_end == 510

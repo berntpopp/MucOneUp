@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
 from muc_one_up.read_simulator.source_tracking import ReadOrigin
@@ -11,10 +12,88 @@ from muc_one_up.read_simulator.source_tracking import ReadOrigin
 logger = logging.getLogger(__name__)
 
 
+def reconcile_ccs_reads(
+    origins: Sequence[ReadOrigin],
+    fastq_path: str | Path,
+) -> list[ReadOrigin]:
+    """Reconcile raw MAF read origins against surviving CCS reads in a FASTQ file.
+
+    pbsim3 produces multiple subreads per ZMW and outputs all simulated reads,
+    including those from ZMWs that are subsequently rejected by CCS consensus.
+    This function resolves each surviving CCS read in the FASTQ (e.g. 'movie/zmw/ccs')
+    to its corresponding genomic origin via a ZMW-origin map, ensuring that:
+    1. Read names in the returned origins match final CCS read names.
+    2. Subreads are deduplicated per surviving ZMW.
+    3. Reads from rejected ZMWs are omitted.
+
+    Args:
+        origins: Raw ReadOrigin entries extracted from MAF files.
+        fastq_path: Path to the HiFi FASTQ file containing surviving CCS reads.
+
+    Returns:
+        List of ReadOrigin entries for surviving CCS reads only.
+    """
+    fastq_file = Path(fastq_path)
+    if not fastq_file.exists():
+        return list(origins)
+
+    exact_map: dict[str, ReadOrigin] = {}
+    zmw_map: dict[str, ReadOrigin] = {}
+
+    for origin in origins:
+        exact_map[origin.read_id] = origin
+        if "/" in origin.read_id:
+            zmw_map[origin.read_id.rsplit("/", 1)[0]] = origin
+        else:
+            zmw_map[origin.read_id] = origin
+
+    surviving_origins: list[ReadOrigin] = []
+    opener = gzip.open if str(fastq_file).endswith(".gz") else open
+
+    try:
+        with opener(fastq_file, "rt") as f:
+            for i, line in enumerate(f):
+                if i % 4 != 0:
+                    continue
+                line = line.strip()
+                if not line.startswith("@"):
+                    continue
+                read_name = line[1:].split()[0]
+
+                matched: ReadOrigin | None = None
+                if read_name in exact_map:
+                    matched = exact_map[read_name]
+                elif "/" in read_name and read_name.rsplit("/", 1)[0] in zmw_map:
+                    matched = zmw_map[read_name.rsplit("/", 1)[0]]
+                elif read_name in zmw_map:
+                    matched = zmw_map[read_name]
+
+                if matched is not None:
+                    surviving_origins.append(
+                        ReadOrigin(
+                            read_id=read_name,
+                            haplotype=matched.haplotype,
+                            ref_start=matched.ref_start,
+                            ref_end=matched.ref_end,
+                            strand=matched.strand,
+                        )
+                    )
+                else:
+                    logger.warning(
+                        "CCS read %s could not be reconciled with MAF origins", read_name
+                    )
+    except (OSError, gzip.BadGzipFile) as exc:
+        logger.warning("Could not read FASTQ file %s for CCS reconciliation: %s", fastq_path, exc)
+        return list(origins)
+
+    return surviving_origins
+
+
 def parse_pacbio_reads(
     maf_paths: list[str],
     haplotype_index: int,
     aligned_bam: str | None = None,
+    fastq_path: str | Path | None = None,
 ) -> list[ReadOrigin]:
     """Parse pbsim3 MAF files to extract read origins.
 
@@ -29,6 +108,7 @@ def parse_pacbio_reads(
             these MAF files.
         aligned_bam: Optional aligned BAM path for fallback position
             extraction.
+        fastq_path: Optional HiFi FASTQ path to reconcile surviving CCS reads.
 
     Returns:
         List of ReadOrigin entries.
@@ -53,6 +133,9 @@ def parse_pacbio_reads(
 
     for maf_path in deduplicated:
         origins.extend(_parse_single_maf(maf_path, haplotype_index))
+
+    if fastq_path is not None:
+        return reconcile_ccs_reads(origins, fastq_path)
 
     return origins
 

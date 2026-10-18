@@ -727,3 +727,50 @@ class TestSkipAlignment:
         assert not mock_align.called
         assert out == fastq
         assert list(tmp_path.glob("*_metadata.tsv"))  # metadata is still written
+
+    def test_ont_manifest_streams_without_list_materialization(self, mocker, tmp_path):
+        """Test Issue #150: ONT manifest write streams generator without materializing list."""
+        from types import GeneratorType
+
+        from muc_one_up.read_simulator.source_tracking import ReadOrigin
+
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGT\n")
+        config = {
+            "tools": {"nanosim": "nanosim", "minimap2": "minimap2", "samtools": "samtools"},
+            "nanosim_params": {"training_data_path": "model", "coverage": 30},
+            "read_simulation": {"skip_alignment": True},
+        }
+        fastq = str(tmp_path / "reads.fastq")
+        mocker.patch(
+            "muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation", return_value=fastq
+        )
+        origins = [
+            ReadOrigin(read_id="read_1", haplotype=1, ref_start=0, ref_end=50, strand="+"),
+            ReadOrigin(read_id="read_2", haplotype=1, ref_start=50, ref_end=100, strand="-"),
+        ]
+        mocker.patch(
+            "muc_one_up.read_simulator.parsers.ont_parser.parse_nanosim_reads",
+            return_value=origins,
+        )
+
+        mock_tracker = mocker.Mock()
+
+        def mock_annotate(origs):
+            yield from origs
+
+        mock_tracker.annotate_reads.side_effect = mock_annotate
+
+        out = simulate_ont_reads_pipeline(
+            config,
+            str(input_fa),
+            source_tracker=mock_tracker,
+        )
+
+        assert out == fastq
+        assert mock_tracker.write_manifest.called
+        manifest_call = mock_tracker.write_manifest.call_args
+        # Verify first arg is streaming generator, not list
+        assert isinstance(manifest_call[0][0], GeneratorType)
+        annotated_items = list(manifest_call[0][0])
+        assert len(annotated_items) == 2
