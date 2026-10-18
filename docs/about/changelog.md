@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-10-18
+
+### Fixed
+- **Mutation & sequence assembly (#134, #135)**:
+  - Preserve prior mutations and live per-repeat lengths across multiple targets and sequential `apply_mutations` calls via `HaplotypeResult._repeat_lengths`; update repeat length after each step in multi-operation mutations; replace only the target repeat slice on non-strict symbol conversion.
+  - Bound normal repeat-count rejection sampling (`1,000,000` draws) and reject `min_rep > max_rep`; validate `fixed_lengths` count in `simulate_diploid`; assemble haplotype sequences in $O(N)$.
+- **ORF & toxic protein detection (#136, #137)**:
+  - Clamp `composition_similarity` to `[0.0, 1.0]`; enforce `min_nt_length = max(min_len, orf_min_aa * 3)` in `run_orf_finder`; strip constant flanks per ORF record so multi-ORF FASTAs in different frames or with SNP-modified flanks score identically regardless of record order.
+  - Support configurable `snapshot.primary_primer` and verify expected fluorophores in `SnapshotValidator`.
+- **VNTR boundaries, repeat lengths & source tracking (#126, #138)**:
+  - Propagate exact mutated repeat lengths through `generate_simulation_statistics`, `write_simulation_statistics`, `ReadSourceTracker.from_simulation_results`, and `companion_stats_fields`; unify VNTR boundary calculation (`get_haplotype_vntr_bounds`) across `simulation_statistics` and `snp_integrator`, handling early-`9` termination without right flank and 0-bp repeat deletions.
+- **Configuration, CLI RNG threading & dual-mode SNPs (#139, #140)**:
+  - Enforce single-CLI-entry config loading boundary; resolve relative NanoSim `training_data_path` prefixes; expand `CONFIG_SCHEMA` with `read_simulation`, `nanosim_params`, `pacbio_params`, `snapshot.primary_primer`, and `validation.mutant_extension`.
+  - Thread seeded `rng` across CLI simulation, mutation, and SNP integration (honoring both `--seed` and `config["seed"]`); implement exact per-repeat coordinate translation for dual-mode SNPs across indels and enforce 1-based SNP input coordinates.
+- **Read simulator pipelines, truth tracking & wrappers (#129, #142, #143, #144, #145)**:
+  - Guard negative start coordinates in `amplicon_Clip`, preserve diploid amplicon templates when only one haplotype extracts, make `StutterTable`, `MoleculeModel`, and `ReadProfile` hashable, and validate 2-record diploid FASTAs.
+  - Compute minimum fragment probe overlap via `math.ceil(plen * bind)`, guard invalid `bind`/insert bounds, deduplicate `reverse_complement` and IUPAC primer matching (including ambiguous template bases) into `sequence_utils.py`, and fix `EmpiricalErrorModel` weighted sampling boundary.
+  - Split VNTR and non-VNTR reads in a single `samtools view -L -U` pass, honor `seed` across `VNTREfficiencyModel` and Stage 10/11 downsampling, and stream `samtools depth` in `check_vntr_coverage`.
+  - Route ONT alignment through `minimap2_wrapper.align_reads_with_minimap2(..., exclude_flags=4)`, clamp extreme diploid PCR bias counts to `[1, total - 1]`, and stream FASTA parsing in `amplicon_extractor` and `diploid_handler`.
+  - Escalate subprocess and pipeline timeouts (`SIGTERM` -> `SIGKILL`) across the entire process group (`os.killpg`), preserve upstream pipeline stage error messages, and validate tool parameters and non-empty outputs across `bwa`, `ccs`, `pbsim3`, `ucsc`, and `samtools` wrappers.
+
+### Removed
+- Deleted dead modules and duplicate helpers (#134, #135, #137, #141, #142, #144, #145): `muc_one_up/validation.py`, `muc_one_up/bioinformatics/validation.py`, `muc_one_up/probabilities.py`, `muc_one_up/cli/source_tracking_setup.py`, `rebuild_haplotype_sequence`, `estimate_hifi_yield`, `_count_fastq_reads`, `align_ont_reads_with_minimap2`, and duplicate `reverse_complement`/`comp` implementations.
+
 ## [0.46.0] - 2026-09-24
 
 ### Breaking change: read profile format

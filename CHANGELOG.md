@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-10-18
+
+Resolves 14 codebase audit issues (#126, #129, #134-#145) across haplotype
+mutation/assembly, VNTR boundary and repeat-length tracking, dual-mode SNP
+coordinate translation, read simulation pipelines, external tool wrappers,
+subprocess process-group timeout cleanup, and dead-code removal (#146). See
+`docs/about/changelog.md`.
+
 ## [0.46.0] - 2026-09-24
 
 Homopolymer runs without a stutter-table entry (e.g. the dupC C8 run) are no
