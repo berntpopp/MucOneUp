@@ -34,7 +34,8 @@ mkdir -p output
 # Run simulation
 muconeup --config config.json simulate \
   --fixed-lengths 60 \
-  --out-base output/my_first_simulation
+  --out-dir output \
+  --out-base my_first_simulation
 ```
 
 **What happened?**
@@ -74,7 +75,8 @@ Generate repeat structure files to see the VNTR composition:
 muconeup --config config.json simulate \
   --fixed-lengths 60 \
   --output-structure \
-  --out-base output/with_structure
+  --out-dir output \
+  --out-base with_structure
 ```
 
 **Output files:**
@@ -118,7 +120,8 @@ muconeup --config config.json simulate \
   --mutation-name normal,dupC \
   --mutation-targets 1,25 \
   --output-structure \
-  --out-base output/mutation_example
+  --out-dir output \
+  --out-base mutation_example
 ```
 
 **What happened?**
@@ -194,7 +197,8 @@ Generate Illumina paired-end reads from your simulated haplotype:
 muconeup --config config.json reads illumina \
   output/mutation_example.001.mut.fa \
   --coverage 30 \
-  --out-base output/reads
+  --out-dir output \
+  --out-base reads
 ```
 
 **Output files:**
@@ -203,8 +207,8 @@ muconeup --config config.json reads illumina \
 output/
 ├── reads_R1.fastq.gz              # Forward reads
 ├── reads_R2.fastq.gz              # Reverse reads
-├── reads.illumina.bam             # Aligned reads
-└── reads.illumina.bam.bai         # BAM index
+├── reads_downsampled.bam          # Aligned reads
+└── reads_downsampled.bam.bai      # BAM index
 ```
 
 ### Verify Read Simulation
@@ -215,11 +219,11 @@ zcat output/reads_R1.fastq.gz | wc -l
 # Divide by 4 to get number of reads
 
 # Check alignment
-samtools view -c output/reads.illumina.bam
+samtools view -c output/reads_downsampled.bam
 # Total aligned reads
 
 # View alignment statistics
-samtools flagstat output/reads.illumina.bam
+samtools flagstat output/reads_downsampled.bam
 ```
 
 ---
@@ -231,7 +235,8 @@ Predict ORFs and detect toxic protein features:
 ```bash
 muconeup --config config.json analyze orfs \
   output/mutation_example.001.mut.fa \
-  --out-base output/orfs \
+  --out-dir output \
+  --out-base orfs \
   --orf-min-aa 100
 ```
 
@@ -239,33 +244,29 @@ muconeup --config config.json analyze orfs \
 
 ```
 output/
-├── orfs.pep.fa                    # Predicted peptides (FASTA)
-└── orfs.orf_stats.txt             # Toxic protein statistics
+├── orfs.orfs.fa                    # Predicted peptides (FASTA)
+└── orfs.orf_stats.json             # Toxic protein statistics
 ```
 
 ### View ORF Statistics
 
 ```bash
-cat output/orfs.orf_stats.txt
+cat output/orfs.orf_stats.json
 ```
 
 **Example output:**
 
-```
-Haplotype Statistics:
-
-haplotype_1:
-  Total ORFs: 12
-  Toxic ORFs: 3
-  Longest ORF: 245 aa
-  Toxic Features:
-    - ORF 3: overall_score=0.72 (TOXIC)
-    - ORF 7: overall_score=0.58 (TOXIC)
-    - ORF 9: overall_score=0.51 (TOXIC)
-
-haplotype_2:
-  Total ORFs: 10
-  Toxic ORFs: 0
+```json
+{
+  "haplotype_1_ORF.1": {
+    "repeat_count": 0,
+    "avg_repeat_identity": 0.0,
+    "repeat_score": 1.0,
+    "composition_similarity": 0.42,
+    "overall_score": 0.71,
+    "toxic_flag": 1.0
+  }
+}
 ```
 
 **Learn more:** See **[Toxic Protein Detection](../guides/toxic-protein-detection.md)** for algorithm details.
@@ -282,18 +283,21 @@ muconeup --config config.json simulate \
   --mutation-name dupC \
   --mutation-targets 1,25 2,30 \
   --output-structure \
-  --out-base output/complete_workflow
+  --out-dir output \
+  --out-base complete_workflow
 
 # 2. Simulate Illumina reads
 muconeup --config config.json reads illumina \
   output/complete_workflow.001.simulated.fa \
   --coverage 100 \
-  --out-base output/complete_reads
+  --out-dir output \
+  --out-base complete_reads
 
 # 3. Predict ORFs
 muconeup --config config.json analyze orfs \
   output/complete_workflow.001.simulated.fa \
-  --out-base output/complete_orfs
+  --out-dir output \
+  --out-base complete_orfs
 
 # 4. View all outputs
 ls -lh output/complete_*
@@ -311,7 +315,7 @@ jq '.' output/complete_workflow.001.simulation_stats.json
 
 **Next steps:**
 
-- Run your variant caller on `complete_reads.illumina.bam`
+- Run your variant caller on `output/complete_reads_downsampled.bam`
 - Compare variant calls to ground truth in `simulation_stats.json`
 - Evaluate sensitivity and precision
 
@@ -326,14 +330,16 @@ Process multiple samples efficiently:
 for i in {1..10}; do
   muconeup --config config.json simulate \
     --fixed-lengths $((40 + i * 5)) \
-    --out-base output/batch_sample_${i}
+    --out-dir output \
+    --out-base batch_sample_${i}
 done
 
 # Simulate reads for all samples (parallel)
 ls output/batch_sample_*.simulated.fa | \
   parallel muconeup --config config.json reads illumina {} \
     --coverage 30 \
-    --out-base output/reads_{/.}
+    --out-dir output \
+    --out-base reads_{/.}
 ```
 
 ---
@@ -344,22 +350,24 @@ ls output/batch_sample_*.simulated.fa | \
 
 ```bash
 # Random VNTR lengths (sampled from distribution)
-muconeup --config config.json simulate --out-base output/random
+muconeup --config config.json simulate --out-dir output --out-base random
 
 # Fixed VNTR lengths
 muconeup --config config.json simulate \
-  --fixed-lengths 60 --out-base output/fixed
+  --fixed-lengths 60 --out-dir output --out-base fixed
 
 # Series generation (parameter sweep)
 muconeup --config config.json simulate \
   --fixed-lengths 40-80 \
   --simulate-series 5 \
-  --out-base output/series
+  --out-dir output \
+  --out-base series
 
 # Dual simulation (normal + mutated)
 muconeup --config config.json simulate \
   --mutation-name normal,dupC \
-  --out-base output/dual
+  --out-dir output \
+  --out-base dual
 ```
 
 ### Read Simulation
@@ -367,15 +375,15 @@ muconeup --config config.json simulate \
 ```bash
 # Illumina paired-end reads
 muconeup --config config.json reads illumina \
-  sample.fa --coverage 100 --out-base reads
+  sample.fa --coverage 100 --out-dir output --out-base reads
 
 # Oxford Nanopore long reads
 muconeup --config config.json reads ont \
-  sample.fa --coverage 50 --out-base reads
+  sample.fa --coverage 50 --out-dir output --out-base reads
 
 # PacBio HiFi reads
 muconeup --config config.json reads pacbio \
-  sample.fa --coverage 30 --out-base reads
+  sample.fa --coverage 30 --out-dir output --out-base reads
 ```
 
 ### Analysis
@@ -383,7 +391,7 @@ muconeup --config config.json reads pacbio \
 ```bash
 # ORF prediction
 muconeup --config config.json analyze orfs \
-  sample.fa --out-base orfs
+  sample.fa --out-dir output --out-base orfs
 
 # Haplotype statistics
 muconeup --config config.json analyze stats sample.fa

@@ -175,7 +175,7 @@ Uses a hybrid Illumina pipeline combining Wessim2-style fragment simulation with
 mamba env create -f conda/env_wessim.yaml
 
 # Activate environment
-conda activate wessim
+conda activate env_wessim
 
 # Verify tools
 which reseq bwa samtools faToTwoBit pblat
@@ -238,7 +238,7 @@ Uses NanoSim with pre-trained error models.
 mamba env create -f conda/env_nanosim.yml
 
 # Activate environment
-conda activate nanosim
+conda activate env_nanosim
 
 # Verify installation
 which simulator.py minimap2 samtools
@@ -270,17 +270,14 @@ Uses pbsim3 for raw reads and CCS for consensus calling.
 #### Install via Conda
 
 ```bash
-# Install pbsim3
-conda install -c bioconda pbsim3
+# Create environment from file
+mamba env create -f conda/env_pacbio.yml
 
-# Install PacBio CCS
-conda install -c bioconda pbccs
-
-# Install minimap2 and samtools
-conda install -c bioconda minimap2 samtools
+# Activate environment
+conda activate env_pacbio
 
 # Verify installation
-which pbsim3 ccs minimap2 samtools
+which pbsim ccs minimap2 samtools
 ```
 
 ---
