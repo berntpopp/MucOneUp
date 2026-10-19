@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-10-19
+
+Resolves 11 codebase audit issues (#127 and #147-#156) across PacBio/ONT
+amplicon and long-read simulation pipelines, external tool wrappers, CLI read
+simulation options, SNP integration and coordinate translation, haplotype
+assembly and config validation, ORF and SNaPshot analysis, Illumina fragment
+simulation, reference helper security hardening, and packaging/CI/documentation.
+See `docs/about/changelog.md`.
+
 ## [0.47.0] - 2026-10-18
 
 Resolves 14 codebase audit issues (#126, #129, #134-#145) across haplotype

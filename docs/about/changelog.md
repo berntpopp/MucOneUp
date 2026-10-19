@@ -9,12 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-10-19
+
 ### Fixed
+- **Amplicon simulation pipelines (#147)**:
+  - Prevent duplicate read IDs in diploid PacBio/ONT amplicon runs when `--seed` is set by deriving distinct per-haplotype seeds (`seed + 1`, `seed + 2`) and prefixing diploid pbsim3/empirical amplicon reads (`hap1_`, `hap2_`).
+  - Reject polyploid FASTAs (>2 records) in diploid amplicon pipelines instead of silently dropping haplotype 3+; reject `--coverage` < 2 in diploid amplicon runs before extraction.
+  - Propagate original `ExternalToolError` exceptions without double-wrapping, honour `OutputConfig.out_dir` / `out_base`, and clean up all `pbsim3` multi-template sidecars (`*.fq.gz`, `*.maf.gz`, `*.ref`).
+- **External tool wrappers & VNTR efficiency (#148)**:
+  - Pass `--id-prefix` to `pbsim3` to avoid read-ID collisions across diploid splits; remove duplicate coverage logging; validate `min_Bind` (`0.0 <= min_Bind <= 1.0`) and `min_fragment_size <= max_fragment_size` in `prepare_fragments`; validate `threads >= 1` in `reseq_wrapper`.
+  - Stream FASTA split output in `nanosim_wrapper.split_fasta_for_diploid` via `SeqIO.parse`; surface actual `samtools` stderr on empty BAM/FASTQ outputs instead of masking with generic errors; remove redundant `samtools index` subprocess invocation after `samtools sort --write-index`.
+  - Include temp directory in `VNTREfficiencyModel` cache path to prevent multi-user `/tmp` collisions and add retry backoff when removing transient temp directories.
+- **CLI read simulation options & pipeline routing (#149)**:
+  - Propagate `reads pacbio --coverage` into `config["pacbio_params"]["coverage"]`; inherit root `config["seed"]` when `--seed` and `read_simulation.seed` are omitted; accept float `--coverage` across `reads illumina`, `reads ont`, and `reads pacbio`.
+  - Wire `--threads` (`-t`) and `--no-align` on `reads amplicon` through `pacbio_params` and `read_simulation`; remove dead legacy `simulate_reads` dispatcher and simplify `simulate_reads_pipeline` signature.
+- **Long-read pipelines, parsers & truth tracking (#127, #150)**:
+  - Honour `keep_intermediate_files` in `pacbio_pipeline` and `ont_pipeline`; remove CCS report/metrics sidecars (`*ccs_report.txt`, `*ccs_metrics.json`, `*.zmw_metrics.json.gz`) during intermediate cleanup.
+  - Reconcile PacBio HiFi and ONT source-tracking manifests with the final surviving FASTQ reads (preventing inflated manifest rows after CCS filtering or NanoSim split merging) and support post-filtering in `ReadSourceTracker.write_read_manifest`.
+  - Stream FASTQ reading/writing in `renumber_fastq_reads` and `parse_pacbio_reads` without buffering whole files in memory; reject polyploid (>2 record) FASTAs in `split_diploid_fasta`; guard empty reference dicts in `annotate_reads_from_umi`.
 - **SNP integration & coordinate translation (#151)**:
-  - Eliminate unconditional `set(range(seq_length))` memory spike in `generate_random_snps` by passing `Sequence[int]` ranges directly.
+  - Eliminate unconditional `set(range(seq_length))` memory spike in `generate_random_snps` by passing `Sequence[int]` ranges directly (`_SampledPositions` exclusions + binary search over VNTR bounds).
   - Preserve `HaplotypeResult._repeat_lengths` through `integrate_snps_unified`.
-  - Translate `--snp-input-file` coordinates across indel mutations in single-mutation mode and support multi-repeat indels in fallback repeat-length calculation via shared `_translate_snps_to_mutated`.
-  - Accept haplotype indices >= 3 in `parse_snp_file` for polyploid simulations.
+  - Translate `--snp-input-file` coordinates across indel mutations in single-mutation mode and support multi-repeat indels in fallback repeat-length calculation via shared `_translate_snps_to_mutated`; accept haplotype indices >= 3 in `parse_snp_file` for polyploid simulations.
+- **Haplotype simulation, assembly & configuration (#152)**:
+  - Align `simulate_single_haplotype` dead-end retry semantics with `from_predefined_chains`; validate `mutation_targets` syntax (`haplotype_index >= 1`, `repeat_index >= 1`) and `fixed_lengths` positivity before simulation.
+  - Reject path separators and traversal in `--out-base` (`validate_out_base`); validate `--reference-assembly` against configured reference assemblies before simulation; replace fragile `sys.path.insert` hacks in `tests/conftest.py`.
+- **ORF analysis, translation & SNaPshot validation (#153)**:
+  - Use `orfipy_core.orfs()` in-memory in `run_orf_finder` instead of spawning `orfipy` CLI subprocesses and temp directories; forward loaded config into `analyze orfs`; strip trailing `*` stop codons in `translate_dna` before regex matching.
+  - Propagate non-zero exit codes when `analyze orfs` or `analyze stats` fails across all inputs; clean up `SnapshotValidator.validate()` temporary directories using `tempfile.TemporaryDirectory`.
+- **Illumina fragment simulation & empirical error model (#154)**:
+  - Slice `Wessim2` fragment start/end tendency arrays by actual nucleotide coordinates (`frag_start:frag_end`) rather than repeat-symbol indices (`range(len(hr.chain))`).
+  - Raise `ValueError` on out-of-range nucleotide offsets in `EmpiricalErrorModel.sample_indel`; surface `OSError` failures during `cleanup_intermediates`; reduce unit test subprocess overhead.
+- **Reference helper security hardening (#155)**:
+  - Validate download URLs (`https://` scheme and trusted domain allowlist), enforce SHA-256 verification, stream downloads with a 500 MB size cap, and apply `filter="data"` on `tarfile.extractall()` in `helpers/download_references.py`.
+  - Add `--preset` (`map-ont`, `map-hifi`, `asm20`) to `helpers/install_references.py` so pre-built minimap2 `.mmi` indexes match runtime preset filenames (`{stem}_{preset}.mmi`).
+- **Packaging, CI & documentation (#156)**:
+  - Change default `reseq` command in `config.json` from a hardcoded conda binary path to `"reseq"`; fix `Makefile` targets (`format`, `security`, `docs-serve`) to use `uv run` and `muc_one_up`; run `pytest -m "not slow"` in the CI `coverage` job so codecov uploads complete on schedule; update `.trivyignore` and installation/quickstart documentation.
 
 ## [0.47.0] - 2026-10-18
 
