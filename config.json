@@ -500,7 +500,7 @@
     }
   },
   "tools": {
-    "reseq": "/home/bernt-popp/development/ReSeq2/build/bin/reseq2",
+    "reseq": "mamba run -n env_wessim reseq",
     "faToTwoBit": "mamba run -n env_wessim faToTwoBit",
     "samtools": "mamba run -n env_wessim samtools",
     "pblat": "mamba run -n env_wessim pblat",

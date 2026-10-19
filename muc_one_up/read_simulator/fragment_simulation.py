@@ -233,12 +233,12 @@ def get_insert_length(mu: float, sigma: float, lower: int, rng: random.Random | 
             f"Mean fragment size ({mu}) is smaller than minimum required length ({lower}) with sigma={sigma}"
         )
     _rng = rng or random
-    for _ in range(1_000_000):
+    for _ in range(10_000):
         length = int(_rng.gauss(mu, sigma))
         if length >= lower:
             return length
     raise ValueError(
-        f"Could not sample insert length >= {lower} from Gaussian(mu={mu}, sigma={sigma}) after 1,000,000 attempts"
+        f"Could not sample insert length >= {lower} from Gaussian(mu={mu}, sigma={sigma}) after 10,000 attempts"
     )
 
 
@@ -406,24 +406,19 @@ def simulate_fragments(
                 frag_seq_rc = reverse_complement(frag_seq)
                 frag_len = len(frag_seq)
 
-                # Get systematic error profiles for this fragment
-                # Use chromosome as key for tendency and rates dictionaries
-                tendenseq_f = tendendict_f.get(chrom, "N" * frag_len)
-                ratesseq_f = ratesdict_f.get(chrom, "!" * frag_len)
-                tendenseq_r = tendendict_r.get(chrom, "N" * frag_len)
-                ratesseq_r = ratesdict_r.get(chrom, "!" * frag_len)
-
-                # Fix field lengths to match fragment length
-                def fix_field(field, length, pad_char):
-                    if len(field) > length:
-                        return field[:length]
-                    else:
-                        return field.ljust(length, pad_char)
-
-                tendenseq_f_fixed = fix_field(tendenseq_f, frag_len, "N")
-                ratesseq_f_fixed = fix_field(ratesseq_f, frag_len, "!")
-                tendenseq_r_fixed = fix_field(tendenseq_r, frag_len, "N")
-                ratesseq_r_fixed = fix_field(ratesseq_r, frag_len, "!")
+                # Get systematic error profiles for this fragment sliced by coordinates
+                # Note: read_syser_file reverses reverse-strand strings on load, so genomic
+                # [fstart:fend] maps to [len - fend : len - fstart] in tendendict_r / ratesdict_r.
+                tendenseq_f_fixed = tendendict_f.get(chrom, "")[fstart:fend].ljust(frag_len, "N")
+                ratesseq_f_fixed = ratesdict_f.get(chrom, "")[fstart:fend].ljust(frag_len, "!")
+                r_tenden = tendendict_r.get(chrom, "")
+                r_rates = ratesdict_r.get(chrom, "")
+                tendenseq_r_fixed = r_tenden[
+                    max(0, len(r_tenden) - fend) : max(0, len(r_tenden) - fstart)
+                ].ljust(frag_len, "N")
+                ratesseq_r_fixed = r_rates[
+                    max(0, len(r_rates) - fend) : max(0, len(r_rates) - fstart)
+                ].ljust(frag_len, "!")
 
                 # Write fragment read pair to FASTA with appropriate headers
                 # reseq expects format: >id 1;length;tendencies;rates

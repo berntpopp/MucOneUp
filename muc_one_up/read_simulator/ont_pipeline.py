@@ -342,10 +342,9 @@ def simulate_ont_reads_pipeline(
 
         all_origins = parse_nanosim_reads(fastq_file, haplotype_map=None)
 
-        annotated = list(source_tracker.annotate_reads(all_origins))
         manifest_path = f"{output_prefix}_read_manifest.tsv.gz"
-        source_tracker.write_manifest(annotated, manifest_path)
-        logging.info("Read source manifest written: %s (%d reads)", manifest_path, len(annotated))
+        source_tracker.write_manifest(source_tracker.annotate_reads(all_origins), manifest_path)
+        logging.info("Read source manifest written: %s (%d reads)", manifest_path, len(all_origins))
 
     # Write metadata file
     metadata_file = create_pipeline_metadata(

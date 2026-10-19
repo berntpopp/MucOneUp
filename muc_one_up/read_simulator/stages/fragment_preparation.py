@@ -73,7 +73,7 @@ def prepare_fragments(
     # Stage 1: Replace Ns
     no_ns_fa = str(Path(output_dir) / f"_{output_base}_noNs.fa")
     logger.info("1. Replacing Ns in FASTA")
-    replace_Ns(input_fa, no_ns_fa, tools)
+    replace_Ns(input_fa, no_ns_fa, tools, seed=rs_config.get("seed"))
     intermediate_files.append(no_ns_fa)
 
     # Stage 2: Validate reseq_model
@@ -84,7 +84,7 @@ def prepare_fragments(
     # Stage 3: Generate systematic errors
     syser_fq = str(Path(output_dir) / f"_{output_base}_syser.fq")
     logger.info("2. Generating systematic errors")
-    generate_systematic_errors(no_ns_fa, reseq_model, syser_fq, tools)
+    generate_systematic_errors(no_ns_fa, reseq_model, syser_fq, tools, seed=rs_config.get("seed"))
     intermediate_files.append(syser_fq)
 
     # Stage 4: Convert FASTA to 2bit
@@ -171,6 +171,7 @@ def prepare_fragments(
         reads_fq,
         threads,
         tools,
+        seed=rs_config.get("seed"),
     )
 
     # Stage 10: Split reads into paired FASTQ files

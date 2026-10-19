@@ -25,17 +25,17 @@ region deviates from the wild-type. The analysis proceeds through four main step
 
 3. **Amino Acid Composition Analysis:**
    - The frequencies of key amino acids (by default R, C, and H) in the variable region are computed.
-   - A wild-type composition is defined (by default, the consensus motif repeated a given number of times)
+   - A toxic reference composition is defined (by default, the consensus motif repeated a given number of times)
      and the similarity score is computed as:
 
-       S_composition = 1 - (sum(|f_mut - f_wt|) / sum(f_wt))
+       S_composition = 1 - (sum(|f_mut - f_ref|) / sum(f_ref))
 
      where a score near 1 indicates high similarity in composition.
 
 4. **Combining Metrics into an Overall Score:**
-   - The overall deviation (or similarity) score is calculated as a weighted sum of the repeat score and
-     the composition similarity. In this implementation, a **higher overall score indicates a greater deviation
-     from the wild-type (i.e. the protein is toxic)**.
+   - The overall score is calculated as a weighted sum of the repeat score and
+     the composition similarity. In this implementation, a **higher overall score indicates higher similarity
+     to the toxic model (i.e. the protein is toxic)**.
    - If the overall score exceeds a user-defined toxic cutoff (e.g. 0.5), the ORF is flagged as toxic.
 
 The module also provides a function to scan an ORF FASTA file and generate a dictionary mapping each ORF header
@@ -213,14 +213,14 @@ def detect_toxic_protein_in_sequence(
         key_residues = ["R", "C", "H"]
 
     # Extract the variable region by removing constant flanks if provided.
-    variable_region = protein_seq
+    variable_region = protein_seq.rstrip("*_")
     if isinstance(left_const, str):
-        if left_const and protein_seq.startswith(left_const):
-            variable_region = protein_seq[len(left_const) :]
+        if left_const and variable_region.startswith(left_const):
+            variable_region = variable_region[len(left_const) :]
     elif left_const:
         for pfx in sorted((p for p in left_const if p), key=len, reverse=True):
-            if protein_seq.startswith(pfx):
-                variable_region = protein_seq[len(pfx) :]
+            if variable_region.startswith(pfx):
+                variable_region = variable_region[len(pfx) :]
                 break
 
     if isinstance(right_const, str):
@@ -245,7 +245,7 @@ def detect_toxic_protein_in_sequence(
     ref_seq = (
         wildtype_variable_region
         if wildtype_variable_region is not None
-        else consensus * expected_repeat_count
+        else consensus * max(1, int(expected_repeat_count))
     )
     # Compute the composition similarity between the variable region and the toxic reference sequence.
     comp_sim = composition_similarity(variable_region, ref_seq, key_residues)

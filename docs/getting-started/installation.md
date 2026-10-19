@@ -69,16 +69,12 @@ docker run --rm ghcr.io/berntpopp/muconeup/muconeup:latest --version
 # Create local directories
 mkdir -p data output
 
-# Copy config to current directory
-cp config.json .
-
-# Run simulation (mount volumes)
+# Run simulation (mount output directory)
 docker run --rm \
   -v $(pwd)/output:/data \
-  -v $(pwd)/config.json:/app/config.json:ro \
   ghcr.io/berntpopp/muconeup/muconeup:latest \
   --config /app/config.json \
-  simulate --out-base /data/sample
+  simulate --out-dir /data --out-base sample
 ```
 
 ### Docker Compose
@@ -93,8 +89,7 @@ services:
     image: ghcr.io/berntpopp/muconeup/muconeup:latest
     volumes:
       - ./data:/data
-      - ./config.json:/app/config.json:ro
-    command: --config /app/config.json simulate --out-base /data/sample
+    command: --config /app/config.json simulate --out-dir /data --out-base sample
 ```
 
 Run:
@@ -175,7 +170,7 @@ Uses a hybrid Illumina pipeline combining Wessim2-style fragment simulation with
 mamba env create -f conda/env_wessim.yaml
 
 # Activate environment
-conda activate wessim
+conda activate env_wessim
 
 # Verify tools
 which reseq bwa samtools faToTwoBit pblat
@@ -238,7 +233,7 @@ Uses NanoSim with pre-trained error models.
 mamba env create -f conda/env_nanosim.yml
 
 # Activate environment
-conda activate nanosim
+conda activate env_nanosim
 
 # Verify installation
 which simulator.py minimap2 samtools
@@ -270,17 +265,14 @@ Uses pbsim3 for raw reads and CCS for consensus calling.
 #### Install via Conda
 
 ```bash
-# Install pbsim3
-conda install -c bioconda pbsim3
+# Create environment from file
+mamba env create -f conda/env_pacbio.yml
 
-# Install PacBio CCS
-conda install -c bioconda pbccs
-
-# Install minimap2 and samtools
-conda install -c bioconda minimap2 samtools
+# Activate environment
+conda activate env_pacbio
 
 # Verify installation
-which pbsim3 ccs minimap2 samtools
+which pbsim ccs minimap2 samtools
 ```
 
 ---
@@ -396,7 +388,7 @@ muconeup --config config.json reads illumina \
 ls test_reads*
 # test_reads_R1.fastq.gz
 # test_reads_R2.fastq.gz
-# test_reads.illumina.bam
+# test_reads_downsampled.bam
 ```
 
 ---

@@ -169,6 +169,27 @@ class TestPCRSimulator:
         # Should have no products (filtered by size)
         assert result["product_count"] == 0
 
+    def test_amplify_size_filtering_boundary_checks(self, pcr_config):
+        """Test size filtering boundaries (size_min <= amplicon_len <= size_max)."""
+        pcr_sim = PCRSimulator(pcr_config)
+
+        # Template too large (> 65bp)
+        template_large = "GGCCGGCCCCGGGCTCCACC" + ("N" * 50) + "TCCGGGGCCGAGGTGACA"
+        res_large = pcr_sim.amplify(
+            template=template_large,
+            mutation_patterns={"mutant": "GCCCCCCCCAGC", "normal": "GCCCCCCCAGC"},
+        )
+        assert res_large["product_count"] == 0
+
+        # Template within size bounds (20 + 18 + 18 = 56bp)
+        template_valid = "GGCCGGCCCCGGGCTCCACC" + ("N" * 18) + "TCCGGGGCCGAGGTGACA"
+        res_valid = pcr_sim.amplify(
+            template=template_valid,
+            mutation_patterns={"mutant": "GCCCCCCCCAGC", "normal": "GCCCCCCCAGC"},
+        )
+        assert res_valid["product_count"] == 1
+        assert res_valid["products"][0]["length"] == 56
+
 
 # DigestSimulator Tests
 class TestDigestSimulator:

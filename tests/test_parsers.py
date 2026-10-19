@@ -14,7 +14,10 @@ from muc_one_up.read_simulator.parsers.illumina_parser import (
     write_fragment_origins,
 )
 from muc_one_up.read_simulator.parsers.ont_parser import parse_nanosim_reads
-from muc_one_up.read_simulator.parsers.pacbio_parser import parse_pacbio_reads
+from muc_one_up.read_simulator.parsers.pacbio_parser import (
+    parse_pacbio_reads,
+    reconcile_ccs_reads,
+)
 
 
 class TestONTParser:
@@ -221,6 +224,57 @@ class TestPacBioParser:
         origins = parse_pacbio_reads(maf_paths=[str(maf_path)], haplotype_index=1)
         assert len(origins) == 1
         assert origins[0].strand == "-"  # from read s-line, not ref
+
+    def test_reconcile_ccs_reads_matches_zmw_and_drops_rejected(self, tmp_path):
+        """Test Issue #127: reconcile_ccs_reads resolves movie/zmw/ccs and drops rejected ZMWs."""
+        from muc_one_up.read_simulator.source_tracking import ReadOrigin
+
+        raw_origins = [
+            # ZMW 1 has 2 subreads in MAF
+            ReadOrigin(
+                read_id="m54000/1/0_500", haplotype=1, ref_start=100, ref_end=600, strand="+"
+            ),
+            ReadOrigin(
+                read_id="m54000/1/550_1050", haplotype=1, ref_start=100, ref_end=600, strand="-"
+            ),
+            # ZMW 2 was rejected by CCS
+            ReadOrigin(
+                read_id="m54000/2/0_500", haplotype=1, ref_start=200, ref_end=700, strand="+"
+            ),
+        ]
+        fastq = tmp_path / "hifi.fastq"
+        fastq.write_text("@m54000/1/ccs\nACGT\n+\nIIII\n")
+
+        reconciled = reconcile_ccs_reads(raw_origins, fastq)
+        assert len(reconciled) == 1
+        assert reconciled[0].read_id == "m54000/1/ccs"
+        assert reconciled[0].haplotype == 1
+        assert reconciled[0].ref_start == 100
+        assert reconciled[0].ref_end == 600
+
+    def test_reconcile_ccs_reads_missing_fastq_raises(self, tmp_path):
+        """Missing FASTQ raises FileOperationError instead of returning raw origins."""
+        from muc_one_up.exceptions import FileOperationError
+        from muc_one_up.read_simulator.source_tracking import ReadOrigin
+
+        raw_origins = [
+            ReadOrigin(read_id="read_1", haplotype=1, ref_start=10, ref_end=20, strand="+"),
+        ]
+        with pytest.raises(FileOperationError, match="HiFi FASTQ file not found"):
+            reconcile_ccs_reads(raw_origins, tmp_path / "nonexistent.fastq")
+
+    def test_reconcile_ccs_reads_unmatched_read_raises(self, tmp_path):
+        """Unmatched surviving CCS read raises FileOperationError."""
+        from muc_one_up.exceptions import FileOperationError
+        from muc_one_up.read_simulator.source_tracking import ReadOrigin
+
+        fastq = tmp_path / "hifi.fastq"
+        fastq.write_text("@movie/99/ccs\nACGT\n+\nIIII\n")
+        raw_origins = [
+            ReadOrigin(read_id="movie/1/0_50", haplotype=1, ref_start=10, ref_end=60, strand="+"),
+        ]
+        with pytest.raises(FileOperationError, match="could not be reconciled"):
+            reconcile_ccs_reads(raw_origins, fastq)
 
 
 class TestIlluminaParser:

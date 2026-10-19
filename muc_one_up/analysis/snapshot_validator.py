@@ -103,11 +103,13 @@ class PCRSimulator:
         for f_pos in forward_sites:
             for r_pos in reverse_sites:
                 if f_pos < r_pos:
-                    # Extract amplicon
-                    amplicon_seq = template[f_pos : r_pos + len(self.reverse_primer)]
+                    amplicon_end = r_pos + len(self.reverse_primer)
 
-                    # Filter by size
-                    if self.size_min <= len(amplicon_seq) <= self.size_max:
+                    # Filter by size before slicing template
+                    if self.size_min <= amplicon_end - f_pos <= self.size_max:
+                        # Extract amplicon
+                        amplicon_seq = template[f_pos:amplicon_end]
+
                         # Extract flanked region (between primers)
                         flanked_start = f_pos + len(self.forward_primer)
                         flanked_end = r_pos

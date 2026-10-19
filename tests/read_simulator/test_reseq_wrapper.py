@@ -63,6 +63,29 @@ class TestReplaceNs:
         assert str(input_fa) in cmd
         assert str(output_fa) in cmd
 
+    def test_constructs_command_with_seed(self, mocker, tmp_path, tools_dict):
+        """Test that replaceN command includes --seed when provided."""
+        input_fa = tmp_path / "input.fa"
+        output_fa = tmp_path / "output.fa"
+        input_fa.write_text(">seq1\nACGTNNACGT\n")
+
+        mock_proc = Mock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = Mock()
+        mock_proc.stderr = Mock()
+        mock_proc.stdout.readline = Mock(return_value=b"")
+        mock_proc.stderr.readline = Mock(return_value=b"")
+        mock_proc.wait = Mock(return_value=0)
+        mock_proc.pid = 12345
+
+        mock_popen = mocker.patch("subprocess.Popen", return_value=mock_proc)
+
+        replace_Ns(str(input_fa), str(output_fa), tools_dict, seed=42)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "--seed" in cmd
+        assert cmd[cmd.index("--seed") + 1] == "42"
+
 
 class TestGenerateSystematicErrors:
     """Test generate_systematic_errors command construction."""
@@ -109,6 +132,37 @@ class TestGenerateSystematicErrors:
         assert "--stopAfterEstimation" in cmd
         assert "--writeSysError" in cmd
         assert str(output_fq) in cmd
+
+    def test_constructs_illuminaPE_command_with_seed(self, mocker, tmp_path, tools_dict):
+        """Test that illuminaPE command includes --seed when provided."""
+        input_fa = tmp_path / "input.fa"
+        model_file = tmp_path / "model.txt"
+        output_fq = tmp_path / "output.fq"
+        input_fa.write_text(">seq1\nACGT\n")
+        model_file.write_text("MODEL_DATA")
+
+        def mock_popen_side_effect(cmd, **kwargs):
+            if "illuminaPE" in cmd:
+                output_fq.write_text("@read1\nACGT\n+\nIIII\n")
+            mock_proc = Mock()
+            mock_proc.returncode = 0
+            mock_proc.stdout = Mock()
+            mock_proc.stderr = Mock()
+            mock_proc.stdout.readline = Mock(return_value=b"")
+            mock_proc.stderr.readline = Mock(return_value=b"")
+            mock_proc.wait = Mock(return_value=0)
+            mock_proc.pid = 12345
+            return mock_proc
+
+        mock_popen = mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
+
+        generate_systematic_errors(
+            str(input_fa), str(model_file), str(output_fq), tools_dict, seed=123
+        )
+
+        cmd = mock_popen.call_args[0][0]
+        assert "--seed" in cmd
+        assert cmd[cmd.index("--seed") + 1] == "123"
 
     def test_raises_error_when_output_missing(self, mocker, tmp_path, tools_dict):
         """Test that missing output raises FileOperationError."""
@@ -183,6 +237,35 @@ class TestCreateReads:
         assert "-s" in cmd
         assert "-i" in cmd
         assert "-o" in cmd
+
+    def test_constructs_seqToIllumina_command_with_seed(self, mocker, tmp_path, tools_dict):
+        """Test that seqToIllumina command includes --seed when provided."""
+        fragments = tmp_path / "fragments.fa"
+        model_file = tmp_path / "model.txt"
+        output_fq = tmp_path / "output.fq"
+        fragments.write_text(">frag1\nACGT\n")
+        model_file.write_text("MODEL_DATA")
+
+        def mock_popen_side_effect(cmd, **kwargs):
+            if "seqToIllumina" in cmd:
+                output_fq.write_text("@read1\nACGT\n+\nIIII\n")
+            mock_proc = Mock()
+            mock_proc.returncode = 0
+            mock_proc.stdout = Mock()
+            mock_proc.stderr = Mock()
+            mock_proc.stdout.readline = Mock(return_value=b"")
+            mock_proc.stderr.readline = Mock(return_value=b"")
+            mock_proc.wait = Mock(return_value=0)
+            mock_proc.pid = 12345
+            return mock_proc
+
+        mock_popen = mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
+
+        create_reads(str(fragments), str(model_file), str(output_fq), 4, tools_dict, seed=456)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "--seed" in cmd
+        assert cmd[cmd.index("--seed") + 1] == "456"
 
     def test_raises_error_on_empty_output(self, mocker, tmp_path, tools_dict):
         """Test that empty output after successful run raises FileOperationError."""

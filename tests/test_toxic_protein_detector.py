@@ -235,6 +235,32 @@ class TestDetectToxicProteinInSequence:
         # Should detect repeats only in variable region
         assert result["repeat_count"] == 5
 
+    def test_strips_trailing_stop_codon_before_removing_right_const(self):
+        """Test that trailing stop codons (* or _) do not prevent right constant region removal."""
+        left_const = "LLLLL"
+        right_const = "RRRRR"
+        consensus = "RCHLGPGHQAGPGLHR"
+        variable = consensus * 3
+
+        clean_seq = left_const + variable + right_const
+        star_seq = left_const + variable + right_const + "*"
+        underscore_seq = left_const + variable + right_const + "_"
+
+        res_clean = detect_toxic_protein_in_sequence(
+            clean_seq, left_const=left_const, right_const=right_const, consensus=consensus
+        )
+        res_star = detect_toxic_protein_in_sequence(
+            star_seq, left_const=left_const, right_const=right_const, consensus=consensus
+        )
+        res_underscore = detect_toxic_protein_in_sequence(
+            underscore_seq, left_const=left_const, right_const=right_const, consensus=consensus
+        )
+
+        assert res_clean["overall_score"] == pytest.approx(res_star["overall_score"])
+        assert res_clean["overall_score"] == pytest.approx(res_underscore["overall_score"])
+        assert res_star["repeat_count"] == 3
+        assert res_underscore["repeat_count"] == 3
+
     def test_uses_default_key_residues(self):
         """Test that default key residues [R, C, H] are used."""
         protein_seq = "RRRCCCHHHRRRCCCHHH"  # Rich in R, C, H

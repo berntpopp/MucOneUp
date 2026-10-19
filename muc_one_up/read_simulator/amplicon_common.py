@@ -23,7 +23,11 @@ from .molecules import MoleculeModel, SourceInterval, build_amplicon_molecules
 from .pcr_bias import PCRBiasModel
 from .read_profiles import active_read_profile
 from .utils.amplicon_extractor import AmpliconExtractor
-from .utils.reference_utils import extract_haplotypes, is_diploid_reference
+from .utils.reference_utils import (
+    extract_haplotypes,
+    is_diploid_reference,
+    validate_reference_compatibility,
+)
 from .utils.template_generator import generate_template_fasta
 
 
@@ -39,6 +43,20 @@ class AmpliconPrep:
     is_diploid: bool = False
     amplicon_sequences: list[str] = field(default_factory=list)
     haplotype_sequences: list[str] = field(default_factory=list)
+
+
+def parse_expected_product_range(
+    expected_range: Any,
+) -> tuple[int, int] | None:
+    """Validate and parse amplicon expected_product_range into a (min, max) tuple."""
+    if expected_range is None:
+        return None
+    if len(expected_range) != 2:
+        raise ValueError(
+            "amplicon_params.expected_product_range must contain exactly "
+            "2 values: [min_product_size, max_product_size]"
+        )
+    return (int(expected_range[0]), int(expected_range[1]))
 
 
 def extract_and_prepare_amplicons(
@@ -76,6 +94,7 @@ def extract_and_prepare_amplicons(
     intermediate_files: list[str] = []
 
     # STAGE 1: Haplotype detection and extraction
+    validate_reference_compatibility(input_fa, min_sequences=1, max_sequences=2)
     diploid = is_diploid_reference(input_fa)
 
     if diploid:

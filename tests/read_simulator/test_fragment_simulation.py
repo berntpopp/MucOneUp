@@ -293,9 +293,12 @@ class TestGetInsertLength:
             get_insert_length(100, 0, 150)
 
     def test_exhausted_rejection_loop_raises(self, mocker):
-        """Test that exhausting 1,000,000 iterations raises ValueError."""
+        """Test that exhausting 10,000 iterations raises ValueError."""
         mocker.patch("random.gauss", return_value=50)
-        with pytest.raises(ValueError, match="Could not sample insert length"):
+        with pytest.raises(
+            ValueError,
+            match=r"Could not sample insert length >= 200 from Gaussian\(mu=50, sigma=10\) after 10,000 attempts",
+        ):
             get_insert_length(50, 10, 200)
 
 
@@ -485,6 +488,56 @@ class TestSimulateFragments:
         assert ">1 2;" in content  # Read 1, pair 2
         assert ">2 1;" in content  # Read 2, pair 1
         assert ">2 2;" in content  # Read 2, pair 2
+
+    def test_simulate_fragments_slices_tendencies_by_coordinates(self, mocker, tmp_path):
+        """Test that tendency and rates are sliced by genomic coordinates [fstart:fend] for both strands."""
+        ref_fa = tmp_path / "ref.fa"
+        ref_fa.write_text(">chr1\n" + "A" * 10 + "C" * 10 + "G" * 10 + "T" * 10 + "\n")  # 40 bases
+
+        syser = tmp_path / "test.syser"
+        syser.write_text(
+            "@chr1 forward\n"
+            + ("A" * 10 + "ABCDEFGHIJ" + "G" * 10 + "T" * 10)
+            + "\n+\n"
+            + ("1" * 10 + "0123456789" + "3" * 10 + "4" * 10)
+            + "\n@chr1 reverse\n"
+            + ("W" * 10 + "KLMNOPQRST" + "Y" * 10 + "Z" * 10)
+            + "\n+\n"
+            + ("5" * 10 + "abcdefghij" + "7" * 10 + "8" * 10)
+            + "\n"
+        )
+
+        psl = tmp_path / "test.psl"
+        psl.write_text(
+            "100\t0\t0\t0\t0\t0\t0\t0\t+\tquery\t150\t0\t100\tchr1\t1000\t10\t20\t1\t100\t0\t10\n"
+        )
+
+        output = tmp_path / "fragments.fa"
+
+        # Mock pick_fragment to return coordinates [10, 20] on "+" strand
+        mocker.patch(
+            "muc_one_up.read_simulator.fragment_simulation.pick_fragment",
+            return_value=("chr1", 10, 20, "+"),
+        )
+
+        simulate_fragments(
+            ref_fa=str(ref_fa),
+            syser_file=str(syser),
+            psl_file=str(psl),
+            read_number=1,
+            fragment_size=10,
+            fragment_sd=1,
+            min_fragment=5,
+            bind=0.5,
+            output_fragments=str(output),
+        )
+
+        content = output.read_text()
+        # Sliced [10:20]:
+        # forward tendency is "ABCDEFGHIJ", forward rate is "0123456789"
+        # reverse tendency is "KLMNOPQRST" reversed ("TSRQPONMLK"), reverse rate is "jihgfedcba"
+        assert ">1 1;10;ABCDEFGHIJ;0123456789\n" in content
+        assert ">1 2;10;TSRQPONMLK;jihgfedcba\n" in content
 
     def test_raises_on_missing_reference(self, tmp_path):
         """Test that missing reference FASTA raises FileOperationError."""

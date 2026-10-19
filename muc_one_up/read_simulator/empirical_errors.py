@@ -115,8 +115,16 @@ def _read_multiplier(model: EmpiricalErrorModel, rng: random.Random) -> float:
 
 
 def _quality(rate: float, length: int, model: EmpiricalErrorModel, rng: random.Random) -> str:
+    if length <= 0:
+        return ""
     phred = -10.0 * math.log10(max(rate * model.q_scale, 1e-4))
-    return "".join(chr(33 + min(40, max(2, round(rng.gauss(phred, 2.0))))) for _ in range(length))
+    # shortcut: tile 64-base Gaussian chunk across read, upgrade if position-specific Phred waves needed
+    chunk_size = min(length, 64)
+    chunk = "".join(
+        chr(33 + min(40, max(2, round(rng.gauss(phred, 2.0))))) for _ in range(chunk_size)
+    )
+    repeats, rem = divmod(length, chunk_size)
+    return chunk * repeats + chunk[:rem]
 
 
 def apply_errors(

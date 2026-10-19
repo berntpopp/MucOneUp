@@ -52,8 +52,7 @@ from ..constants import (
     DEFAULT_MINIMAP2_THREADS,
     MINIMAP2_PRESET_ONT,
 )
-from ..utils import run_command
-from .samtools_wrapper import convert_sam_to_bam, sort_and_index_bam
+from ..utils.common_utils import run_command, run_pipeline
 
 
 def resolve_minimap2_target(reference: str, preset: str) -> str:
@@ -93,6 +92,7 @@ def align_reads_with_minimap2(
     threads: int = DEFAULT_MINIMAP2_THREADS,
     timeout: int = DEFAULT_ALIGNMENT_TIMEOUT,
     exclude_flags: int = 0,
+    platform: str | None = None,
 ) -> str:
     """
     Align long reads to reference genome using minimap2 with configurable preset.
@@ -172,81 +172,59 @@ def align_reads_with_minimap2(
 
     target = resolve_minimap2_target(reference, preset)
 
-    # Create intermediate SAM filename
-    output_sam = str(Path(output_bam).with_suffix(".sam"))
+    if platform is None:
+        platform = "ONT" if preset == MINIMAP2_PRESET_ONT else "PACBIO"
 
-    # Run minimap2 alignment with specified preset
-    # Use build_tool_command to safely handle multi-word commands (conda/mamba)
-    cmd = build_tool_command(
-        minimap2_cmd,
+    sample = Path(output_bam).stem
+    rg_header = f"@RG\\tID:{sample}\\tSM:{sample}\\tPL:{platform}"
+
+    minimap2_args = [
         "-ax",
-        preset,  # Technology-specific preset (map-ont, map-pb, map-hifi)
+        preset,
         "-t",
-        threads,  # Threads (build_tool_command handles conversion)
+        threads,
+        "-R",
+        rg_header,
         target,
         reads_fastq,
+    ]
+    minimap2_full_cmd = build_tool_command(minimap2_cmd, *minimap2_args)
+
+    sort_cmd = build_tool_command(
+        samtools_cmd,
+        "sort",
+        "-@",
+        threads,
         "-o",
-        output_sam,
+        output_bam,
+        "-",
     )
 
-    logging.info(f"Aligning reads with minimap2 (preset: {preset}): {reads_fastq} → {output_sam}")
-    logging.info(f"Using reference: {reference}")
-    run_command(cmd, timeout=timeout, stderr_prefix="[minimap2] ", stderr_log_level=logging.INFO)
-
-    # Validate SAM output exists and is non-empty
-    output_sam_path = Path(output_sam)
-    if not output_sam_path.exists() or output_sam_path.stat().st_size == 0:
-        raise FileOperationError(
-            f"minimap2 alignment failed: Output SAM {output_sam} missing or empty"
+    if exclude_flags > 0:
+        view_cmd = build_tool_command(
+            samtools_cmd,
+            "view",
+            "-u",
+            "-F",
+            str(exclude_flags),
+            "-",
         )
+        pipeline = [minimap2_full_cmd, view_cmd, sort_cmd]
+    else:
+        pipeline = [minimap2_full_cmd, sort_cmd]
 
-    try:
-        # Convert SAM to BAM using reusable samtools wrapper
-        logging.info(f"Converting SAM to BAM: {output_sam} → {output_bam}")
-        if exclude_flags > 0:
-            view_cmd = build_tool_command(
-                samtools_cmd,
-                "view",
-                "-b",
-                "-@",
-                threads,
-                "-F",
-                str(exclude_flags),
-                "-o",
-                output_bam,
-                output_sam,
-            )
-            run_command(
-                view_cmd,
-                timeout=timeout,
-                stderr_prefix="[samtools] ",
-                stderr_log_level=logging.INFO,
-            )
-        else:
-            convert_sam_to_bam(
-                samtools_cmd=samtools_cmd,
-                input_sam=output_sam,
-                output_bam=output_bam,
-                threads=threads,
-                timeout=timeout,
-            )
+    logging.info(
+        "Aligning reads with minimap2 (preset: %s) streamed to samtools sort → %s",
+        preset,
+        output_bam,
+    )
+    logging.info("Using reference: %s", reference)
+    run_pipeline(pipeline, capture=True, timeout=timeout)
 
-        # Sort and index the BAM file using reusable samtools wrapper
-        logging.info(f"Sorting and indexing BAM: {output_bam}")
-        sort_and_index_bam(
-            samtools_exe=samtools_cmd,
-            input_bam=output_bam,
-            output_bam=output_bam,
-            threads=threads,
-        )
-    finally:
-        # Clean up intermediate SAM file
-        try:
-            if output_sam_path.exists():
-                output_sam_path.unlink()
-                logging.debug(f"Removed intermediate SAM file: {output_sam}")
-        except Exception as e:
-            logging.warning(f"Could not remove intermediate SAM file {output_sam}: {e}")
+    # Index the sorted BAM file
+    index_cmd = build_tool_command(samtools_cmd, "index", output_bam)
+    logging.info("[samtools] Indexing BAM: %s", " ".join(index_cmd))
+    run_command(index_cmd, capture=True, timeout=timeout)
 
     # Validate final BAM exists and is non-empty
     output_bam_path = Path(output_bam)

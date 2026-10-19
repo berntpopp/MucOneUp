@@ -4,11 +4,80 @@ from __future__ import annotations
 
 import gzip
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
+from muc_one_up.exceptions import FileOperationError
 from muc_one_up.read_simulator.source_tracking import ReadOrigin
 
 logger = logging.getLogger(__name__)
+
+
+def reconcile_ccs_reads(
+    origins: Sequence[ReadOrigin],
+    fastq_path: str | Path,
+) -> list[ReadOrigin]:
+    """Reconcile raw MAF read origins against surviving CCS reads in a FASTQ file.
+
+    Raises:
+        FileOperationError: If the FASTQ file cannot be read or any surviving CCS
+            read cannot be reconciled with MAF origins.
+    """
+    fastq_file = Path(fastq_path)
+    if not fastq_file.exists():
+        raise FileOperationError(f"HiFi FASTQ file not found for CCS reconciliation: {fastq_path}")
+
+    exact_map: dict[str, ReadOrigin] = {}
+    zmw_map: dict[str, ReadOrigin] = {}
+
+    for origin in origins:
+        exact_map[origin.read_id] = origin
+        if "/" in origin.read_id:
+            zmw_map[origin.read_id.rsplit("/", 1)[0]] = origin
+        else:
+            zmw_map[origin.read_id] = origin
+
+    surviving_origins: list[ReadOrigin] = []
+    opener = gzip.open if str(fastq_file).endswith(".gz") else open
+
+    try:
+        with opener(fastq_file, "rt") as f:
+            for i, line in enumerate(f):
+                if i % 4 != 0:
+                    continue
+                line = line.strip()
+                if not line.startswith("@"):
+                    continue
+                read_name = line[1:].split()[0]
+
+                matched: ReadOrigin | None = None
+                if read_name in exact_map:
+                    matched = exact_map[read_name]
+                elif "/" in read_name and read_name.rsplit("/", 1)[0] in zmw_map:
+                    matched = zmw_map[read_name.rsplit("/", 1)[0]]
+                elif read_name in zmw_map:
+                    matched = zmw_map[read_name]
+
+                if matched is None:
+                    raise FileOperationError(
+                        f"CCS read {read_name} could not be reconciled with MAF origins"
+                    )
+
+                surviving_origins.append(
+                    ReadOrigin(
+                        read_id=read_name,
+                        haplotype=matched.haplotype,
+                        ref_start=matched.ref_start,
+                        ref_end=matched.ref_end,
+                        strand=matched.strand,
+                    )
+                )
+    except (OSError, gzip.BadGzipFile) as exc:
+        raise FileOperationError(
+            f"Could not read FASTQ file {fastq_path} for CCS reconciliation: {exc}"
+        ) from exc
+
+    return surviving_origins
 
 
 def parse_pacbio_reads(
@@ -35,19 +104,14 @@ def parse_pacbio_reads(
     """
     origins: list[ReadOrigin] = []
 
-    # Deduplicate: prefer .maf over .maf.gz when both exist for the same base name
     dedup_map: dict[str, str] = {}
     for maf_path in maf_paths:
         p = Path(maf_path)
         if not p.exists():
             continue
-        # Normalize to base (strip .gz if present)
         base = str(p).removesuffix(".gz")
         existing = dedup_map.get(base)
-        if existing is None:
-            dedup_map[base] = maf_path
-        elif existing.endswith(".gz") and not maf_path.endswith(".gz"):
-            # Prefer uncompressed over gzipped regardless of input order
+        if existing is None or (existing.endswith(".gz") and not maf_path.endswith(".gz")):
             dedup_map[base] = maf_path
     deduplicated = list(dedup_map.values())
 

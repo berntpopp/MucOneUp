@@ -228,6 +228,47 @@ class TestRunSingleSimulationIteration:
         assert stats_call[1]["mutated_units"] == mutated_units
         assert stats_call[1]["mutation_positions"] == [MutationTarget(1, 2)]
 
+    def test_single_mode_snp_input_file_passes_normal_results(
+        self, mock_simulation_options, minimal_config, _mock_delegates
+    ):
+        """Single mode with snp_input_file and mutation passes normal_results to write_fasta_outputs."""
+        from muc_one_up.cli.orchestration import run_single_simulation_iteration
+
+        unmutated_results = _make_haplotype_results()
+        mutated_results = _make_haplotype_results()
+        # Give mutated results a different sequence
+        mutated_results[0].sequence = mutated_results[0].sequence + "C"
+
+        _mock_delegates["generate_haplotypes"].return_value = unmutated_results
+        _mock_delegates["apply_mutation_pipeline"].return_value = (
+            mutated_results,
+            None,
+            None,
+            [MutationTarget(1, 1)],
+        )
+
+        mock_simulation_options.snp_input_file = "snps.tsv"
+        mock_simulation_options.mutation_name = "dupC"
+
+        run_single_simulation_iteration(
+            args=mock_simulation_options,
+            config=minimal_config,
+            out_dir=mock_simulation_options.out_dir,
+            out_base="test",
+            sim_index=1,
+            fixed_conf=None,
+            predefined_chains=None,
+            dual_mutation_mode=False,
+            mutation_pair=None,
+            structure_mutation_info=None,
+        )
+
+        fasta_call = _mock_delegates["write_fasta_outputs"].call_args
+        assert "normal_results" in fasta_call[1]
+        passed_normal = fasta_call[1]["normal_results"]
+        assert passed_normal is not None
+        assert passed_normal[0].sequence == unmutated_results[0].sequence
+
     def test_statistics_receive_timing(
         self, mock_simulation_options, minimal_config, _mock_delegates
     ):

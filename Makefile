@@ -33,7 +33,8 @@ conda-setup:  ## Create conda environments for bioinformatics tools
 	}
 	mamba env create -f conda/env_wessim.yaml --force
 	mamba env create -f conda/env_nanosim.yml --force
-	@echo "✓ Conda environments created: env_wessim, env_nanosim"
+	mamba env create -f conda/env_pacbio.yml --force
+	@echo "✓ Conda environments created: env_wessim, env_nanosim, env_pacbio"
 
 # ==================== TESTING ====================
 
@@ -75,7 +76,7 @@ ci-check:  ## Run EXACT same checks as GitHub Actions CI (run before committing!
 	@echo "2. Ruff formatter check..."
 	ruff format --check muc_one_up/ tests/
 	@echo "3. Mypy type checker..."
-	mypy muc_one_up/ || true
+	mypy muc_one_up/
 	@echo ""
 	@echo "=== JOB: Test Suite ==="
 	@echo "4. Running pytest with coverage..."
@@ -127,6 +128,7 @@ clean-conda:  ## Remove conda environments
 	}
 	mamba env remove -n env_wessim -y || true
 	mamba env remove -n env_nanosim -y || true
+	mamba env remove -n env_pacbio -y || true
 	@echo "✓ Conda environments removed"
 
 # ==================== UTILITIES ====================
@@ -199,14 +201,14 @@ show-version:  ## Show current version
 generate-testdata:  ## Generate comprehensive test dataset (Illumina + ONT + PacBio)
 	@echo "Generating test dataset for current version..."
 	@python3 -c "from muc_one_up.version import __version__; print(f'Version: {__version__}')"
-	uv run python scripts/generate_test_data.py \
+	uv run python helpers/generate_test_data.py \
 		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--threads 4
 
 generate-testdata-illumina:  ## Generate test dataset (Illumina only)
 	@echo "Generating Illumina test dataset..."
-	uv run python scripts/generate_test_data.py \
+	uv run python helpers/generate_test_data.py \
 		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--platforms illumina \
@@ -214,7 +216,7 @@ generate-testdata-illumina:  ## Generate test dataset (Illumina only)
 
 generate-testdata-ont:  ## Generate test dataset (ONT only)
 	@echo "Generating ONT test dataset..."
-	uv run python scripts/generate_test_data.py \
+	uv run python helpers/generate_test_data.py \
 		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--platforms ont \
@@ -222,7 +224,7 @@ generate-testdata-ont:  ## Generate test dataset (ONT only)
 
 generate-testdata-pacbio:  ## Generate test dataset (PacBio only)
 	@echo "Generating PacBio test dataset..."
-	uv run python scripts/generate_test_data.py \
+	uv run python helpers/generate_test_data.py \
 		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--platforms pacbio \
@@ -230,7 +232,7 @@ generate-testdata-pacbio:  ## Generate test dataset (PacBio only)
 
 generate-testdata-debug:  ## Generate test dataset with verbose logging (no tarball)
 	@echo "Generating test dataset (debug mode)..."
-	uv run python scripts/generate_test_data.py \
+	uv run python helpers/generate_test_data.py \
 		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--threads 4 \

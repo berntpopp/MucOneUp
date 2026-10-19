@@ -260,3 +260,21 @@ class TestIntegrateSNPsUnified:
 
         # Chain should be preserved
         assert modified_results[0].chain_strs() == original_chain_strs
+
+    def test_preserves_repeat_lengths(self, tmp_path: Path, minimal_config: dict):
+        """Given HaplotypeResult with _repeat_lengths, when applying SNPs, then preserves _repeat_lengths."""
+        snp_file = tmp_path / "snps.tsv"
+        snp_file.write_text("1\t5\tA\tG\n")
+
+        args = Mock()
+        args.snp_input_file = str(snp_file)
+        args.random_snps = False
+
+        results = [_hr("ATCGATCGATCGATCGATCG", ["1", "2", "X"])]
+        results[0]._repeat_lengths = [6, 8, 6]
+
+        modified_results, _ = integrate_snps_unified(
+            args=args, config=minimal_config, results=results, skip_reference_check=False
+        )
+
+        assert modified_results[0]._repeat_lengths == [6, 8, 6]

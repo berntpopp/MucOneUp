@@ -197,12 +197,16 @@ def simulate_reads(
         "ont": "Oxford Nanopore (ONT) read simulation pipeline with NanoSim",
         "pacbio": "PacBio HiFi read simulation pipeline with pbsim3/CCS",
         "amplicon": "PacBio amplicon read simulation pipeline with pbsim3/CCS (template mode)",
+        "ont-amplicon": "ONT amplicon read simulation pipeline with pbsim3 (template mode)",
         "ont-fragments": "ONT genomic fragment simulation with pbsim3 and per-read truth",
     }
     logging.info(f"Using {simulator_names.get(simulator, f'{simulator} simulator')}")
 
     # Warn if human reference is missing (for alignment-based pipelines)
-    if simulator in ["ont", "ont-fragments", "pacbio", "amplicon"] and not human_reference:
+    if (
+        simulator in ["ont", "ont-fragments", "pacbio", "amplicon", "ont-amplicon"]
+        and not human_reference
+    ):
         logging.warning(
             f"No human_reference specified in config for {simulator.upper()} alignment. "
             "Alignment step will be skipped (FASTQ output only)."

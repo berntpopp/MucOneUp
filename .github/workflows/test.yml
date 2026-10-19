@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, dev]
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     name: Code Quality Checks
@@ -68,7 +71,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=muc_one_up --cov-report=xml --cov-report=term-missing
+          pytest --cov=muc_one_up --cov-report=xml --cov-report=term-missing --cov-fail-under=80
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6
@@ -78,29 +81,3 @@ jobs:
           flags: unittests
           name: codecov-${{ matrix.os }}-py${{ matrix.python-version }}
           fail_ci_if_error: false
-
-  coverage-check:
-    name: Coverage Threshold Check
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.10"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: "latest"
-
-      - name: Install dependencies
-        run: |
-          uv pip install --system -e ".[dev]"
-
-      - name: Check coverage threshold
-        run: |
-          pytest --cov=muc_one_up --cov-fail-under=80

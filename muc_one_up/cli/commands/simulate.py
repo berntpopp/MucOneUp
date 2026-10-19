@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 import random
 from contextlib import nullcontext
+from pathlib import Path
 
 import click
 
@@ -37,7 +39,7 @@ from ..orchestration import run_single_simulation_iteration
     "--num-haplotypes",
     default=2,
     show_default=True,
-    type=int,
+    type=click.IntRange(min=1),
     help="Number of haplotypes to simulate.",
 )
 @click.option(
@@ -69,7 +71,7 @@ from ..orchestration import run_single_simulation_iteration
 )
 @click.option(
     "--simulate-series",
-    type=int,
+    type=click.IntRange(min=1),
     help="Series step size for fixed-length ranges.",
 )
 # Mutation Options
@@ -177,8 +179,15 @@ def simulate(ctx, **kwargs):
 
     with progress_ctx as configs:
         for sim_index, fixed_conf in enumerate(configs, start=1):
+            iteration_args = args
+            snp_out_file = getattr(args, "random_snp_output_file", None)
+            if total_iterations > 1 and snp_out_file:
+                p = Path(snp_out_file)
+                numbered_snp_file = str(p.parent / f"{p.stem}.{sim_index:03d}{p.suffix}")
+                iteration_args = copy.copy(args)
+                iteration_args.random_snp_output_file = numbered_snp_file
             run_single_simulation_iteration(
-                args,
+                iteration_args,
                 config,
                 out_dir,
                 out_base,

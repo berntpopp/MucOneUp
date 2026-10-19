@@ -76,10 +76,9 @@ docker pull ghcr.io/berntpopp/muconeup/muconeup:latest
 # Run
 docker run --rm \
   -v $(pwd)/data:/data \
-  -v $(pwd)/config.json:/app/config.json:ro \
   ghcr.io/berntpopp/muconeup/muconeup:latest \
   --config /app/config.json \
-  simulate --out-base /data/sample
+  simulate --out-dir /data --out-base sample
 ```
 
 **Includes:** MucOneUp + Illumina (Wessim2-style + ReSeq) + ONT (NanoSim) + PacBio (pbsim3) - pre-configured environment.

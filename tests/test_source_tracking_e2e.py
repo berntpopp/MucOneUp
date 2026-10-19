@@ -20,7 +20,10 @@ from muc_one_up.read_simulator.parsers.illumina_parser import (
     write_fragment_origins,
 )
 from muc_one_up.read_simulator.parsers.ont_parser import parse_nanosim_reads
-from muc_one_up.read_simulator.parsers.pacbio_parser import parse_pacbio_reads
+from muc_one_up.read_simulator.parsers.pacbio_parser import (
+    parse_pacbio_reads,
+    reconcile_ccs_reads,
+)
 from muc_one_up.read_simulator.source_tracking import (
     ReadOrigin,
     ReadSourceTracker,
@@ -316,6 +319,79 @@ class TestPacBioEndToEnd:
         maf.write_text("##maf version=1\n\n")
         origins = parse_pacbio_reads([str(maf)], haplotype_index=1)
         assert origins == []
+
+    def test_pacbio_source_tracking_with_ccs_reconciliation(self, tracker_with_mutation, tmp_path):
+        """Test Issue #127: E2E source tracking with subread deduplication and rejected ZMW filtering."""
+        hap1_maf = tmp_path / "sd_0001.maf"
+        self._write_maf(
+            hap1_maf,
+            [
+                # ZMW 1 pass 1: pos 65-95 (crosses Xm)
+                (
+                    "s ref 65 30 + 200 AACCCTCCCAACCCTCCCAACCCTCCCAAC",
+                    "s movie/1/0_30 0 30 + 30 AACCCTCCCAACCCTCCCAACCCTCCCAAC",
+                ),
+                # ZMW 1 pass 2: pos 65-95
+                (
+                    "s ref 65 30 + 200 AACCCTCCCAACCCTCCCAACCCTCCCAAC",
+                    "s movie/1/35_65 0 30 - 30 AACCCTCCCAACCCTCCCAACCCTCCCAAC",
+                ),
+                # ZMW 2: rejected by CCS (low coverage / quality)
+                (
+                    "s ref 0 45 + 200 " + "A" * 45,
+                    "s movie/2/0_45 0 45 + 45 " + "A" * 45,
+                ),
+            ],
+        )
+
+        hap2_maf = tmp_path / "sd_0002.maf"
+        self._write_maf(
+            hap2_maf,
+            [
+                # ZMW 3 on hap2: pos 86-106
+                (
+                    "s ref 86 20 + 200 " + "G" * 20,
+                    "s movie/3/0_20 0 20 + 20 " + "G" * 20,
+                ),
+            ],
+        )
+
+        # HiFi FASTQ only contains surviving CCS reads: movie/1/ccs and movie/3/ccs
+        fastq_path = tmp_path / "hifi.fastq"
+        fastq_path.write_text(
+            "@movie/1/ccs\n" + "A" * 30 + "\n+\n" + "I" * 30 + "\n"
+            "@movie/3/ccs\n" + "G" * 20 + "\n+\n" + "I" * 20 + "\n"
+        )
+
+        origins_hap1 = parse_pacbio_reads([str(hap1_maf)], haplotype_index=1)
+        origins_hap2 = parse_pacbio_reads([str(hap2_maf)], haplotype_index=2)
+        all_raw = origins_hap1 + origins_hap2
+        assert len(all_raw) == 4  # 3 from hap1 (including 2 for ZMW 1), 1 from hap2
+
+        reconciled = reconcile_ccs_reads(all_raw, fastq_path)
+        assert len(reconciled) == 2
+        assert reconciled[0].read_id == "movie/1/ccs"
+        assert reconciled[0].haplotype == 1
+        assert reconciled[0].ref_start == 65
+        assert reconciled[1].read_id == "movie/3/ccs"
+        assert reconciled[1].haplotype == 2
+        assert reconciled[1].ref_start == 86
+
+        manifest_path = str(tmp_path / "pacbio_reconciled_manifest.tsv.gz")
+        tracker_with_mutation.write_manifest(
+            tracker_with_mutation.annotate_reads(reconciled), manifest_path
+        )
+
+        with gzip.open(manifest_path, "rt") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            rows = list(reader)
+
+        assert len(rows) == 2
+        assert rows[0]["read_id"] == "movie/1/ccs"
+        assert rows[0]["overlaps_mutation"] == "true"
+        assert rows[0]["mutation_name"] == "dupC"
+        assert rows[1]["read_id"] == "movie/3/ccs"
+        assert rows[1]["overlaps_mutation"] == "false"
 
 
 # ---------------------------------------------------------------------------

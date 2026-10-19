@@ -83,6 +83,7 @@ def _clean_stale_pbsim3_outputs(output_prefix: str) -> None:
 def _collect_pbsim3_bams(
     output_prefix: str,
     samtools_cmd: str,
+    threads: int = 4,
     timeout: int = DEFAULT_PBSIM3_TIMEOUT,
 ) -> list[str]:
     """
@@ -98,14 +99,13 @@ def _collect_pbsim3_bams(
     multi_sam_pattern = f"{output_prefix_path.name}_[0-9][0-9][0-9][0-9].sam"
     for sam_path in sorted(parent_dir.glob(multi_sam_pattern)):
         bam_target = sam_path.with_suffix(".bam")
-        if not bam_target.exists():
-            convert_sam_to_bam(
-                samtools_cmd=samtools_cmd,
-                input_sam=str(sam_path),
-                output_bam=str(bam_target),
-                threads=4,
-                timeout=timeout,
-            )
+        convert_sam_to_bam(
+            samtools_cmd=samtools_cmd,
+            input_sam=str(sam_path),
+            output_bam=str(bam_target),
+            threads=threads,
+            timeout=timeout,
+        )
         try:
             sam_path.unlink()
         except Exception as e:
@@ -138,7 +138,7 @@ def _collect_pbsim3_bams(
         output_bam_path = Path(output_bam)
         output_sam_path = Path(output_sam)
 
-        if output_sam_path.exists() and not output_bam_path.exists():
+        if output_sam_path.exists():
             logging.info(
                 "pbsim3 produced SAM output, converting to BAM: %s → %s",
                 output_sam,
@@ -148,7 +148,7 @@ def _collect_pbsim3_bams(
                 samtools_cmd=samtools_cmd,
                 input_sam=output_sam,
                 output_bam=output_bam,
-                threads=4,
+                threads=threads,
                 timeout=timeout,
             )
             try:
@@ -196,6 +196,7 @@ def run_pbsim3_simulation(
     length_min: int = DEFAULT_PBSIM3_LENGTH_MIN,
     length_max: int = DEFAULT_PBSIM3_LENGTH_MAX,
     seed: int | None = None,
+    threads: int = 4,
     timeout: int = DEFAULT_PBSIM3_TIMEOUT,
 ) -> list[str]:
     """
@@ -364,7 +365,10 @@ def run_pbsim3_simulation(
     run_command(cmd, timeout=timeout, stderr_prefix="[pbsim3] ", stderr_log_level=logging.INFO)
 
     return _collect_pbsim3_bams(
-        output_prefix=output_prefix, samtools_cmd=samtools_cmd, timeout=timeout
+        output_prefix=output_prefix,
+        samtools_cmd=samtools_cmd,
+        threads=threads,
+        timeout=timeout,
     )
 
 
@@ -396,6 +400,7 @@ def run_pbsim3_template_simulation(
     pass_num: int = DEFAULT_PBSIM3_PASS_NUM,
     accuracy_mean: float = DEFAULT_PBSIM3_ACCURACY_MEAN,
     seed: int | None = None,
+    threads: int = 4,
     timeout: int = DEFAULT_PBSIM3_TIMEOUT,
     *,
     difference_ratio: str | None = None,
@@ -507,7 +512,10 @@ def run_pbsim3_template_simulation(
         return [str(fq_gz)]
 
     return _collect_pbsim3_bams(
-        output_prefix=output_prefix, samtools_cmd=samtools_cmd, timeout=timeout
+        output_prefix=output_prefix,
+        samtools_cmd=samtools_cmd,
+        threads=threads,
+        timeout=timeout,
     )
 
 

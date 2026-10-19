@@ -79,6 +79,7 @@ class PbsimRun:
             seed=seed,
             difference_ratio=self.difference_ratio,
             id_prefix=_READ_PREFIX,
+            threads=self.threads,
         )
         mafs = sorted(
             {*work_dir.glob(f"{prefix.name}*.maf"), *work_dir.glob(f"{prefix.name}*.maf.gz")}

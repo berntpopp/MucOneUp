@@ -128,41 +128,6 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
-# ==================== MYPY ====================
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-strict_equality = true
-check_untyped_defs = true
-
-# Start with gradual typing - can be made stricter over time
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-no_implicit_optional = true
-
-[[tool.mypy.overrides]]
-module = "orfipy.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "orfipy_core.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "jsonschema.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_defs = false
-
-[[tool.mypy.overrides]]
-module = "rfc8785"
-ignore_missing_imports = true
 
 # ==================== PYTEST ====================
 [tool.pytest.ini_options]

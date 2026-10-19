@@ -80,6 +80,12 @@ def run_single_simulation_iteration(
     results = generate_haplotypes(args, config, fixed_conf, predefined_chains, rng=rng)
     logging.info("Haplotype simulation completed successfully for iteration %d.", sim_index)
 
+    normal_results = (
+        list(results)
+        if (getattr(args, "snp_input_file", None) and not dual_mutation_mode and args.mutation_name)
+        else None
+    )
+
     # Apply mutations
     results, mutated_results, mutated_units, mutation_positions = apply_mutation_pipeline(
         args, config, results, args.mutation_name, dual_mutation_mode, mutation_pair, rng=rng
@@ -99,6 +105,8 @@ def run_single_simulation_iteration(
         mutation_positions,
         structure_mutation_info,
         rng=rng,
+        normal_results=normal_results,
+        mutated_units=mutated_units,
     )
 
     # Write mutated units

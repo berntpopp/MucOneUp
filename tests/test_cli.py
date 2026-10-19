@@ -12,6 +12,8 @@ import pytest
 
 from muc_one_up.cli.config import (
     determine_simulation_mode,
+    numbered_filename,
+    parse_fixed_lengths,
     process_mutation_config,
     setup_configuration,
 )
@@ -20,6 +22,7 @@ from muc_one_up.cli.mutations import (
     parse_mutation_targets,
 )
 from muc_one_up.cli.snps import integrate_snps_unified
+from muc_one_up.exceptions import ConfigurationError, ValidationError
 from muc_one_up.type_defs import HaplotypeResult, MutationTarget
 
 # ==============================================================================
@@ -64,7 +67,7 @@ def minimal_config():
             "dupC": {
                 "allowed_repeats": ["1", "2"],
                 "strict_mode": False,
-                "changes": [{"type": "insert", "position": 1, "sequence": "CCCC"}],
+                "changes": [{"type": "insert", "start": 1, "end": 1, "sequence": "CCCC"}],
             }
         },
         "reference_assembly": "hg38",
@@ -158,6 +161,51 @@ def test_setup_configuration_override_assembly(mock_args, minimal_config):
     assert config["reference_assembly"] == "hg19"
 
 
+def test_setup_configuration_invalid_out_base(mock_args):
+    """Test that path traversal or separators in out_base are rejected."""
+    mock_args.out_base = "../escaped"
+    with pytest.raises(ValidationError, match="Invalid out_base"):
+        setup_configuration(mock_args)
+
+
+def test_numbered_filename_invalid_out_base(tmp_path):
+    """Test numbered_filename rejects invalid out_base."""
+    with pytest.raises(ValidationError, match="Invalid out_base"):
+        numbered_filename(str(tmp_path), "../escaped", 1, "fa")
+
+
+def test_setup_configuration_random_snps_validation(mock_args):
+    """Test that --random-snps requires output file and density upfront."""
+    mock_args.random_snps = True
+    mock_args.random_snp_output_file = None
+    mock_args.random_snp_density = 0.001
+
+    with pytest.raises(ValidationError, match="--random-snp-output-file is required"):
+        setup_configuration(mock_args)
+
+    mock_args.random_snp_output_file = "snps.tsv"
+    mock_args.random_snp_density = None
+
+    with pytest.raises(ValidationError, match="--random-snp-density is required"):
+        setup_configuration(mock_args)
+
+
+def test_setup_configuration_null_section_reports_configuration_error_not_invalid_json(
+    tmp_path, mock_args
+):
+    """Test that a null section in valid JSON is reported as ConfigurationError without 'Invalid JSON'."""
+    bad_config = tmp_path / "null_constants.json"
+    bad_config.write_text(json.dumps({"repeats": {"1": "ATCG"}, "constants": None}))
+    mock_args.config = str(bad_config)
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        setup_configuration(mock_args)
+
+    error_msg = str(exc_info.value)
+    assert "Invalid JSON" not in error_msg
+    assert "constants" in error_msg
+
+
 # ==============================================================================
 # Tests for determine_simulation_mode()
 # ==============================================================================
@@ -193,6 +241,34 @@ def test_determine_simulation_mode_series(mock_args, minimal_config):
 
     assert len(sim_configs) > 1
     # Should generate configs for range with step size
+
+
+@pytest.mark.parametrize("invalid_step", [0, -1])
+def test_determine_simulation_mode_series_invalid_step(mock_args, minimal_config, invalid_step):
+    """Test that series step <= 0 raises ValidationError."""
+    mock_args.fixed_lengths = ["20-30"]
+    mock_args.simulate_series = invalid_step
+
+    with pytest.raises(ValidationError, match="--simulate-series must be >= 1"):
+        determine_simulation_mode(mock_args, minimal_config)
+
+
+def test_parse_fixed_lengths_inverted_range():
+    """Test that inverted range like 40-20 raises ValidationError."""
+    with pytest.raises(ValidationError, match=r"start .* must be <= end"):
+        parse_fixed_lengths(["40-20"], 1)
+
+
+def test_parse_fixed_lengths_below_minimum():
+    """Test that fixed length below 10 raises ValidationError."""
+    with pytest.raises(ValidationError, match="Minimum repeat length is 10"):
+        parse_fixed_lengths(["5"], 1)
+
+
+def test_parse_fixed_lengths_range_below_minimum():
+    """Test that range starting below 10 raises ValidationError."""
+    with pytest.raises(ValidationError, match="Minimum repeat length is 10"):
+        parse_fixed_lengths(["5-20"], 1)
 
 
 # ==============================================================================
@@ -239,6 +315,34 @@ def test_process_mutation_config_dual_invalid_first(mock_args):
 
     with pytest.raises(ValidationError, match="first mutation-name must be 'normal'"):
         process_mutation_config(mock_args, None)
+
+
+def test_process_mutation_config_preserves_cli_mutation_when_structure_info_present(mock_args):
+    """Test that explicit CLI mutation args are not overwritten by structure file headers."""
+    mock_args.mutation_name = "normal,dupC"
+    mock_args.mutation_targets = ["1,10"]
+    structure_info = {"name": "delA", "targets": [(1, 5)]}
+
+    dual_mode, pair, name = process_mutation_config(mock_args, structure_info)
+
+    assert dual_mode is True
+    assert pair == ["normal", "dupC"]
+    assert name == "normal,dupC"
+    assert mock_args.mutation_targets == ["1,10"]
+
+
+def test_process_mutation_config_uses_structure_info_defaults_when_cli_none(mock_args):
+    """Test that structure file mutation defaults are applied when CLI args are omitted."""
+    mock_args.mutation_name = None
+    mock_args.mutation_targets = None
+    structure_info = {"name": "dupC", "targets": [(1, 2)]}
+
+    dual_mode, pair, name = process_mutation_config(mock_args, structure_info)
+
+    assert dual_mode is False
+    assert pair is None
+    assert name == "dupC"
+    assert mock_args.mutation_targets == ["1,2"]
 
 
 # ==============================================================================
@@ -447,3 +551,81 @@ def test_cli_refactoring_improves_testability():
     - Clear separation of concerns
     """
     pass
+
+
+def test_cli_simulate_rejects_num_haplotypes_zero(temp_config_file):
+    """Click command 'simulate' rejects --num-haplotypes 0."""
+    from click.testing import CliRunner
+
+    from muc_one_up.cli.click_main import cli
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(temp_config_file), "simulate", "--num-haplotypes", "0"]
+    )
+    assert result.exit_code != 0
+    assert "is not in the range" in result.output or "Error" in result.output
+
+
+def test_cli_simulate_rejects_simulate_series_zero(temp_config_file):
+    """Click command 'simulate' rejects --simulate-series 0."""
+    from click.testing import CliRunner
+
+    from muc_one_up.cli.click_main import cli
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "--config",
+            str(temp_config_file),
+            "simulate",
+            "--fixed-lengths",
+            "20-30",
+            "--simulate-series",
+            "0",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "is not in the range" in result.output or "Error" in result.output
+
+
+def test_cli_simulate_series_numbers_snp_output_file(tmp_path, temp_config_file, monkeypatch):
+    """Series mode passes per-iteration numbered SNP files to avoid clobbering."""
+    from click.testing import CliRunner
+
+    from muc_one_up.cli.click_main import cli
+    from muc_one_up.cli.commands import simulate as sim_module
+
+    recorded_snp_files = []
+
+    def mock_run_iter(args, *pargs, **kwargs):
+        recorded_snp_files.append(args.random_snp_output_file)
+
+    monkeypatch.setattr(sim_module, "run_single_simulation_iteration", mock_run_iter)
+
+    runner = CliRunner()
+    snp_file = tmp_path / "snps.tsv"
+    result = runner.invoke(
+        cli,
+        [
+            "--config",
+            str(temp_config_file),
+            "simulate",
+            "--fixed-lengths",
+            "20-22",
+            "--simulate-series",
+            "1",
+            "--random-snps",
+            "--random-snp-output-file",
+            str(snp_file),
+            "--random-snp-density",
+            "0.001",
+            "--out-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+    assert result.exit_code == 0
+    assert len(recorded_snp_files) > 1
+    assert recorded_snp_files[0].endswith(".001.tsv")
+    assert recorded_snp_files[1].endswith(".002.tsv")

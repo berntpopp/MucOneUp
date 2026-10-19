@@ -266,7 +266,7 @@ def _patch_pacbio(mocker, tmp_path):
         "muc_one_up.read_simulator.pacbio_pipeline.align_reads_with_minimap2",
         return_value=str(tmp_path / "aligned.bam"),
     )
-    mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_intermediates")
+    mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.cleanup_unless_kept")
     mocker.patch("muc_one_up.read_simulator.pacbio_pipeline.create_pipeline_metadata")
 
 
@@ -472,3 +472,130 @@ class TestAmpliconOutputNaming:
         )
 
         assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# 5. TestONTAmpliconContract
+# ---------------------------------------------------------------------------
+
+
+def _ont_amplicon_config(tmp_path):
+    """Minimal ONT Amplicon config."""
+    model_file = tmp_path / "model.model"
+    model_file.write_text("model data")
+    return {
+        "tools": {
+            "pbsim3": "pbsim",
+            "samtools": "samtools",
+            "minimap2": "minimap2",
+        },
+        "amplicon_params": {
+            "forward_primer": "ACGTACGT",
+            "reverse_primer": "TGCATGCA",
+        },
+        "ont_amplicon_params": {
+            "model_type": "qshmm",
+            "model_file": str(model_file),
+            "threads": 4,
+        },
+        "read_simulation": {
+            "simulator": "ont-amplicon",
+            "coverage": 30,
+        },
+    }
+
+
+def _patch_ont_amplicon(mocker, tmp_path):
+    """Patch all ONT Amplicon pipeline dependencies."""
+    from muc_one_up.read_simulator.amplicon_common import AmpliconPrep
+
+    template_fa = tmp_path / "template.fa"
+    template_fa.write_text(">copy\nACGT\n")
+
+    ont_fq = tmp_path / "ont.fq"
+    ont_fq.write_text("@read1\nACGT\n+\nIIII\n")
+
+    aligned_bam = tmp_path / "aligned.bam"
+    aligned_bam.write_bytes(b"FAKE")
+
+    mocker.patch(
+        "muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons",
+        return_value=AmpliconPrep(
+            allele_templates=[template_fa],
+            allele_coverages=[30],
+            output_dir=tmp_path,
+            output_base="amplicon",
+            intermediate_files=[],
+            is_diploid=False,
+        ),
+    )
+    mocker.patch(
+        "muc_one_up.read_simulator.ont_amplicon_pipeline.run_pbsim3_template_simulation",
+        return_value=[str(ont_fq)],
+    )
+    mocker.patch(
+        "muc_one_up.read_simulator.ont_amplicon_pipeline.align_reads_with_minimap2",
+        return_value=str(aligned_bam),
+    )
+    mocker.patch("muc_one_up.read_simulator.ont_amplicon_pipeline.cleanup_unless_kept")
+    mocker.patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
+
+
+class TestONTAmpliconContract:
+    """Verify ONT Amplicon pipeline contract and simulate_reads dispatch."""
+
+    def test_returns_bam_with_reference(self, mocker, tmp_path):
+        from muc_one_up.read_simulator.ont_amplicon_pipeline import (
+            simulate_ont_amplicon_pipeline,
+        )
+
+        _patch_ont_amplicon(mocker, tmp_path)
+
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">seq1\nACGT\n")
+        human_ref = tmp_path / "hg38.fa"
+        human_ref.write_text(">chr1\nACGT\n")
+
+        result = simulate_ont_amplicon_pipeline(
+            _ont_amplicon_config(tmp_path),
+            str(input_fa),
+            human_reference=str(human_ref),
+        )
+
+        assert isinstance(result, str)
+        assert result.endswith(".bam")
+
+    def test_returns_fastq_without_reference(self, mocker, tmp_path):
+        from muc_one_up.read_simulator.ont_amplicon_pipeline import (
+            simulate_ont_amplicon_pipeline,
+        )
+
+        _patch_ont_amplicon(mocker, tmp_path)
+
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">seq1\nACGT\n")
+
+        result = simulate_ont_amplicon_pipeline(
+            _ont_amplicon_config(tmp_path),
+            str(input_fa),
+            human_reference=None,
+        )
+
+        assert isinstance(result, str)
+        assert result.endswith(".fastq") or result.endswith(".fq")
+
+    def test_simulate_reads_warns_without_human_reference(self, mocker, tmp_path, caplog):
+        import logging
+
+        from muc_one_up.read_simulation import simulate_reads
+
+        _patch_ont_amplicon(mocker, tmp_path)
+
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">seq1\nACGT\n")
+
+        config = _ont_amplicon_config(tmp_path)
+        with caplog.at_level(logging.WARNING):
+            simulate_reads(config, str(input_fa))
+
+        assert "No human_reference specified in config for ONT-AMPLICON alignment." in caplog.text

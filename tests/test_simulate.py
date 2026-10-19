@@ -12,6 +12,7 @@ import random
 
 import pytest
 
+from muc_one_up.assembly import assemble_sequence
 from muc_one_up.mutate import apply_mutations
 from muc_one_up.simulate import (
     assemble_haplotype_from_chain,
@@ -70,9 +71,9 @@ def test_simulate_single_haplotype_override_min_len(simple_config):
     # Just confirm it produced something valid:
     assert hr.sequence.startswith("TTTT")  # left const
     assert "AAA" in hr.sequence or "CCC" in hr.sequence  # we used '1' -> '2'
-    assert hr.sequence.endswith(
+    assert not hr.sequence.endswith(
         "AAAA"
-    )  # right const if final repeat was '9'? Maybe not if we never forced it.
+    )  # chain ends with '2', not '9', so right constant is omitted
 
 
 def test_simulate_diploid_fixed_length(simple_config):
@@ -320,10 +321,50 @@ class TestSimulateSingleHaplotypeAdvanced:
 
         assert hr.chain[0] == RepeatUnit("1")
 
+    def test_minimal_config_simulates_full_target_length(self, minimal_config: dict):
+        """Minimal config with fixed B transition reaches full target length and canonical end."""
+        random.seed(42)
+        hr = simulate_single_haplotype(minimal_config, target_length=20)
+        assert len(hr.chain) == 20
+        assert hr.chain[-1].symbol == "9"
+        expected_seq = assemble_sequence(
+            hr.chain, minimal_config["repeats"], minimal_config["constants"]["hg38"]
+        )
+        assert hr.sequence == expected_seq
+        assert hr.sequence.endswith(minimal_config["constants"]["hg38"]["right"])
+
+    def test_simulate_single_haplotype_dead_end_consistency(self, minimal_config: dict):
+        """When simulation hits a dead-end, sequence assembly matches assemble_sequence."""
+        dead_end_config = {
+            "repeats": minimal_config["repeats"],
+            "constants": minimal_config["constants"],
+            "reference_assembly": "hg38",
+            "probabilities": {
+                "1": {"2": 1.0},
+                "2": {},  # Dead end: no next symbol
+            },
+        }
+        hr = simulate_single_haplotype(dead_end_config, target_length=20)
+        assert [u.symbol for u in hr.chain] == ["1", "2"]
+        expected_seq = assemble_sequence(
+            hr.chain, dead_end_config["repeats"], dead_end_config["constants"]["hg38"]
+        )
+        assert hr.sequence == expected_seq
+        # Right constant omitted because chain does not end in '9'
+        assert not hr.sequence.endswith(minimal_config["constants"]["hg38"]["right"])
+
 
 @pytest.mark.unit
 class TestSimulateDiploidAdvanced:
     """Advanced tests for simulate_diploid function."""
+
+    @pytest.mark.parametrize("invalid_num", [0, -1])
+    def test_raises_value_error_when_num_haplotypes_invalid(
+        self, minimal_config: dict, invalid_num: int
+    ):
+        """Given num_haplotypes < 1, raises ValueError."""
+        with pytest.raises(ValueError, match="num_haplotypes must be >= 1"):
+            simulate_diploid(minimal_config, num_haplotypes=invalid_num)
 
     def test_creates_multiple_haplotypes(self, minimal_config: dict):
         """Given num_haplotypes, when simulating, then creates correct count."""

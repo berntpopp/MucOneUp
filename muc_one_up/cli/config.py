@@ -6,6 +6,7 @@ and mutation configuration processing.
 """
 
 import itertools
+import json
 import logging
 import random
 from pathlib import Path
@@ -13,6 +14,27 @@ from typing import Any
 
 from ..exceptions import ConfigurationError, SimulationError, ValidationError
 from ..io import parse_vntr_structure_file
+
+
+def validate_output_base(out_base: str) -> str:
+    """Validate that out_base is a single filename component without path traversal.
+
+    Raises:
+        ValidationError: If out_base is empty, contains path separators, or traverses directories.
+    """
+    if not out_base or not out_base.strip():
+        raise ValidationError("out_base cannot be empty")
+    if (
+        "/" in out_base
+        or "\\" in out_base
+        or out_base in (".", "..")
+        or Path(out_base).name != out_base
+        or Path(out_base).is_absolute()
+    ):
+        raise ValidationError(
+            f"Invalid out_base: '{out_base}'. Must be a single filename component without path separators or directory traversal."
+        )
+    return out_base
 
 
 def parse_fixed_lengths(fixed_lengths_args, num_haplotypes):
@@ -35,12 +57,24 @@ def parse_fixed_lengths(fixed_lengths_args, num_haplotypes):
                 start_str, end_str = val.split("-")
                 start = int(start_str)
                 end = int(end_str)
+                if start > end:
+                    raise ValidationError(
+                        f"Invalid fixed-length range: start ({start}) must be <= end ({end})"
+                    )
+                if start < 10:
+                    raise ValidationError(
+                        f"Invalid fixed-length value: {start}. Minimum repeat length is 10."
+                    )
                 result.append(list(range(start, end + 1)))
             except ValueError as e:
                 raise ValidationError(f"Invalid fixed-length range format: '{val}'") from e
         else:
             try:
                 fixed = int(val)
+                if fixed < 10:
+                    raise ValidationError(
+                        f"Invalid fixed-length value: {fixed}. Minimum repeat length is 10."
+                    )
                 result.append([fixed])
             except ValueError as e:
                 raise ValidationError(f"Invalid fixed-length value: '{val}'") from e
@@ -64,6 +98,7 @@ def numbered_filename(
     Build a filename by combining the output directory, base name, iteration number,
     variant suffix, and a file type suffix.
     """
+    validate_output_base(out_base)
     iter_str = f".{iteration:03d}"
     variant_str = f".{variant}" if variant else ""
     return str(Path(out_dir) / f"{out_base}{iter_str}{variant_str}.{file_type}")
@@ -85,9 +120,10 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
         ConfigurationError: If config cannot be loaded or is invalid
     """
     try:
-        from ..config import load_config_raw
+        from ..config import load_config_raw, validate_simulation_config
 
         config = load_config_raw(args.config)
+        validate_simulation_config(config)
         logging.info("Configuration loaded from %s", args.config)
 
         if args.reference_assembly:
@@ -108,12 +144,21 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
         raise
     except FileNotFoundError as e:
         raise ConfigurationError(f"Config file not found: {args.config}") from e
-    except Exception as e:
+    except json.JSONDecodeError as e:
         raise ConfigurationError(f"Invalid JSON in config file {args.config}: {e}") from e
+    except Exception as e:
+        raise ConfigurationError(f"Configuration error in {args.config}: {e}") from e
 
     out_dir = args.out_dir
-    out_base = args.out_base
+    out_base = validate_output_base(args.out_base)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
+
+    # Validate random-snps upfront
+    if getattr(args, "random_snps", False):
+        if not getattr(args, "random_snp_output_file", None):
+            raise ValidationError("--random-snp-output-file is required when --random-snps is used")
+        if not getattr(args, "random_snp_density", None):
+            raise ValidationError("--random-snp-density is required when --random-snps is used")
 
     return config, out_dir, out_base
 
@@ -181,6 +226,8 @@ def determine_simulation_mode(
         fixed_matrix = parse_fixed_lengths(args.fixed_lengths, args.num_haplotypes)
         if args.simulate_series is not None:
             step = args.simulate_series
+            if step < 1:
+                raise ValidationError(f"--simulate-series must be >= 1 (got {step})")
             new_fixed_matrix = []
             for lst in fixed_matrix:
                 if len(lst) > 1:
@@ -206,6 +253,10 @@ def determine_simulation_mode(
                 "Single simulation iteration generated using a random choice from each fixed-length range."
             )
     else:
+        if "length_model" not in config or config["length_model"] is None:
+            raise ConfigurationError(
+                "Missing or null required configuration section for simulation: 'length_model'"
+            )
         simulation_configs = [None]  # Use random lengths if not provided
 
     return simulation_configs, predefined_chains, structure_mutation_info
@@ -234,14 +285,21 @@ def process_mutation_config(
 
     # Convert structure file mutation info to CLI-style mutation info if present
     if structure_mutation_info:
-        args.mutation_name = structure_mutation_info["name"]
-        target_tuples = structure_mutation_info["targets"]
-        args.mutation_targets = [f"{hap_idx},{rep_idx}" for hap_idx, rep_idx in target_tuples]
-        logging.info(
-            "Using mutation information from structure file: %s at targets %s",
-            args.mutation_name,
-            args.mutation_targets,
-        )
+        if not getattr(args, "mutation_name", None):
+            args.mutation_name = structure_mutation_info["name"]
+            logging.info(
+                "Using mutation information from structure file: %s",
+                args.mutation_name,
+            )
+        if not getattr(args, "mutation_targets", None) and (
+            args.mutation_name == structure_mutation_info["name"]
+        ):
+            target_tuples = structure_mutation_info["targets"]
+            args.mutation_targets = [f"{hap_idx},{rep_idx}" for hap_idx, rep_idx in target_tuples]
+            logging.info(
+                "Using mutation targets from structure file: %s",
+                args.mutation_targets,
+            )
 
     # Process standard mutation args
     if args.mutation_name:

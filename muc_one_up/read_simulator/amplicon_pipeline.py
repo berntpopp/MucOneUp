@@ -23,9 +23,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .output_config import OutputConfig
 
-from ..exceptions import ExternalToolError, FileOperationError
 from .amplicon_common import (
     extract_and_prepare_amplicons,
+    parse_expected_product_range,
     simulate_truth_tracked_amplicons,
     truth_tracked_model,
 )
@@ -144,15 +144,9 @@ def simulate_amplicon_reads_pipeline(
     # Amplicon params
     forward_primer = amplicon_params["forward_primer"]
     reverse_primer = amplicon_params["reverse_primer"]
-    expected_range = amplicon_params.get("expected_product_range")
-    expected_range_tuple: tuple[int, int] | None = None
-    if expected_range is not None:
-        if len(expected_range) != 2:
-            raise ValueError(
-                "amplicon_params.expected_product_range must contain exactly "
-                "2 values: [min_product_size, max_product_size]"
-            )
-        expected_range_tuple = (int(expected_range[0]), int(expected_range[1]))
+    expected_range_tuple = parse_expected_product_range(
+        amplicon_params.get("expected_product_range")
+    )
 
     # Coverage
     # Prefer read_simulation coverage, fall back to pacbio_params, then default 30.
@@ -287,18 +281,6 @@ def simulate_amplicon_reads_pipeline(
 
             return final_output
 
-    except (ExternalToolError, FileOperationError) as e:
-        logging.error("Amplicon pipeline failed: %s", e)
-        raise RuntimeError(
-            f"Amplicon simulation pipeline failed.\nError: {e}\n\n"
-            f"Troubleshooting:\n"
-            f"  1. Verify tools installed: pbsim, ccs, samtools, minimap2\n"
-            f"  2. Check model file: {model_file}\n"
-            f"  3. Ensure primers bind in the reference"
-        ) from e
-    except Exception as e:
-        logging.error("Unexpected error in amplicon pipeline: %s", e)
-        raise RuntimeError(f"Amplicon pipeline failed: {e}") from e
     finally:
         cleanup_unless_kept(config, intermediate_files)
 
@@ -348,6 +330,8 @@ def _simulate_legacy_hifi_fastq(
             accuracy_mean=accuracy_mean,
             seed=hap_seed,
             difference_ratio=difference_ratio,
+            id_prefix=f"hap{i}",
+            threads=threads,
         )
         clr_bam_groups.append(bams)
         intermediate_files.extend(bams)

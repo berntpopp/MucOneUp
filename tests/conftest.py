@@ -50,7 +50,7 @@ def minimal_config() -> dict[str, Any]:
             "2": {"X": 0.5, "A": 0.5},
             "X": {"B": 0.5, "6": 0.5},
             "A": {"B": 0.5, "6": 0.5},
-            "B": {"6": 0.5, "6p": 0.5},
+            "B": {"C": 0.5, "6": 0.25, "6p": 0.25},
             "C": {"X": 1.0},
             "6": {"7": 1.0},
             "6p": {"7": 1.0},
@@ -72,7 +72,8 @@ def minimal_config() -> dict[str, Any]:
                 "changes": [
                     {
                         "type": "insert",
-                        "position": 1,
+                        "start": 1,
+                        "end": 1,
                         "sequence": "CCCCCCCC",
                     }
                 ],
@@ -83,8 +84,8 @@ def minimal_config() -> dict[str, Any]:
                 "changes": [
                     {
                         "type": "delete",
-                        "position": 0,
-                        "count": 5,
+                        "start": 1,
+                        "end": 5,
                     }
                 ],
             },

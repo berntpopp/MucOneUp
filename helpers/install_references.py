@@ -22,6 +22,7 @@ import gzip
 import hashlib
 import json
 import logging
+import shlex
 import shutil
 import subprocess
 import sys
@@ -147,13 +148,14 @@ def execute_index_command(command_template: str, fasta_path: Path) -> None:
         command_template (str): Command template with a {path} placeholder.
         fasta_path (Path): Path to the FASTA file.
     """
-    command = command_template.format(path=str(fasta_path))
-    logging.info("Executing command: %s", command)
+    cmd = [tok.format(path=str(fasta_path)) for tok in shlex.split(command_template)]
+    logging.info("Executing command: %s", " ".join(cmd))
     try:
-        subprocess.run(command.split(), check=True, capture_output=True)
+        subprocess.run(cmd, check=True, capture_output=True)
         logging.info("Command completed for %s", fasta_path.name)
     except subprocess.CalledProcessError as err:
-        logging.error("Command failed for %s: %s", fasta_path, err.stderr.decode().strip())
+        err_msg = err.stderr.decode().strip() if err.stderr else str(err)
+        logging.error("Command failed for %s: %s", fasta_path, err_msg)
         sys.exit(1)
     except Exception as err:
         logging.error("Error executing command for %s: %s", fasta_path, err)
@@ -238,7 +240,18 @@ def process_reference(
         target_path.unlink()
 
     download_file(url, target_path)
-    calculate_md5(target_path)
+    checksum = calculate_md5(target_path)
+    expected_md5 = ref_info.get("expected_md5")
+    if expected_md5:
+        if checksum.lower() != expected_md5.lower():
+            logging.error(
+                "MD5 mismatch for %s: expected %s, got %s",
+                target_path.name,
+                expected_md5,
+                checksum,
+            )
+            sys.exit(1)
+        logging.info("MD5 checksum verified for %s", target_path.name)
 
     # Check if this is a tar file that needs extraction
     if ref_info.get("extract_tar", False) and (
@@ -268,7 +281,12 @@ def process_reference(
             with tarfile.open(target_path) as tar:
                 extract_dir.mkdir(parents=True, exist_ok=True)
                 logging.info("Extracting %s to %s", target_path, extract_dir)
-                tar.extractall(path=extract_dir)
+                tar.extractall(path=extract_dir, filter="data")
+            nested_dir = extract_dir / extract_dir.name
+            if nested_dir.is_dir():
+                for child in nested_dir.iterdir():
+                    shutil.move(str(child), str(extract_dir / child.name))
+                nested_dir.rmdir()
             installed_path = extract_dir
             logging.info("Successfully extracted %s to %s", target_path.name, extract_dir)
     # If the file is gzip-compressed, check for extracted file and extract if needed.
@@ -317,23 +335,53 @@ def process_reference(
     # Run minimap2 indexing command if provided and not skipped
     minimap2_index_command = ref_info.get("minimap2_index_command")
     if minimap2_index_command and not skip_indexing:
-        # Check for .mmi index file
-        index_file = Path(str(installed_path) + ".mmi")
-        if index_file.exists() and not force:
-            logging.info(
-                "Minimap2 index file already exists for %s. Skipping indexing.",
-                installed_path.name,
-            )
+        if "{preset}" in minimap2_index_command or "-d {path}.mmi" in minimap2_index_command:
+            presets = ref_info.get("minimap2_presets", ["map-ont", "map-hifi"])
+            for preset in presets:
+                index_file = Path(f"{installed_path}.{preset}.mmi")
+                if index_file.exists() and not force:
+                    logging.info(
+                        "Minimap2 index file already exists for %s (%s). Skipping indexing.",
+                        installed_path.name,
+                        preset,
+                    )
+                else:
+                    if force and index_file.exists():
+                        logging.info(
+                            "Force enabled, removing existing minimap2 index file: %s",
+                            index_file,
+                        )
+                        index_file.unlink()
+                    if "{preset}" in minimap2_index_command:
+                        command = minimap2_index_command.format(preset=preset, path="{path}")
+                    else:
+                        command = minimap2_index_command.replace(
+                            "-d {path}.mmi", f"-x {preset} -d {{path}}.{preset}.mmi"
+                        )
+                    command = command.replace("minimap2", minimap2_path, 1)
+                    logging.info(
+                        "Executing minimap2 indexing command for %s (%s)",
+                        ref_name,
+                        preset,
+                    )
+                    execute_index_command(command, installed_path)
         else:
-            if force and index_file.exists():
+            index_file = Path(str(installed_path) + ".mmi")
+            if index_file.exists() and not force:
                 logging.info(
-                    "Force enabled, removing existing minimap2 index file: %s",
-                    index_file,
+                    "Minimap2 index file already exists for %s. Skipping indexing.",
+                    installed_path.name,
                 )
-                index_file.unlink()
-            command = minimap2_index_command.replace("minimap2", minimap2_path)
-            logging.info("Executing minimap2 indexing command for %s", ref_name)
-            execute_index_command(command, installed_path)
+            else:
+                if force and index_file.exists():
+                    logging.info(
+                        "Force enabled, removing existing minimap2 index file: %s",
+                        index_file,
+                    )
+                    index_file.unlink()
+                command = minimap2_index_command.replace("minimap2", minimap2_path, 1)
+                logging.info("Executing minimap2 indexing command for %s", ref_name)
+                execute_index_command(command, installed_path)
     elif minimap2_index_command:
         logging.info("Skipping minimap2 indexing for %s", ref_name)
 

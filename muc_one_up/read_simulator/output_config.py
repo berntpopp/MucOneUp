@@ -13,6 +13,16 @@ class OutputConfig:
     out_dir: Path
     out_base: str
 
+    def __post_init__(self) -> None:
+        """Validate output configuration."""
+        from ..cli.config import validate_output_base
+        from ..exceptions import ValidationError
+
+        try:
+            validate_output_base(self.out_base)
+        except ValidationError as e:
+            raise ValueError(str(e)) from e
+
     def derive_path(self, suffix: str) -> Path:
         """Return out_dir / (out_base + suffix)."""
         return self.out_dir / f"{self.out_base}{suffix}"

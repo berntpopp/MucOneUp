@@ -83,11 +83,15 @@ def simulate_reads_pipeline(
     assembly_ctx = AssemblyContext.from_configs(config, _rs_raw)
 
     # Validate and log tools
-    check_external_tools(tools)
+    tools_to_check = (
+        ["reseq", "faToTwoBit", "samtools", "pblat"]
+        if rs_config.get("skip_alignment")
+        else ["reseq", "faToTwoBit", "samtools", "pblat", "bwa"]
+    )
+    check_external_tools(tools, required_tools=tools_to_check)
     logger.info("=" * 60)
     logger.info("Tool Version Information")
     logger.info("=" * 60)
-    tools_to_check = ["reseq", "faToTwoBit", "samtools", "pblat", "bwa"]
     tools_subset = {k: v for k, v in tools.items() if k in tools_to_check}
     tool_versions = capture_tool_versions(tools_subset)
     log_tool_versions(tool_versions)
@@ -118,20 +122,22 @@ def simulate_reads_pipeline(
         source_tracker=source_tracker,
     )
 
-    # Resolve human reference
-    human_ref = resolve_human_reference(config, assembly_ctx, aligner="bwa")
+    align_result = None
+    if not rs_config.get("skip_alignment"):
+        # Resolve human reference
+        human_ref = resolve_human_reference(config, assembly_ctx, aligner="bwa")
 
-    # Stages 9-11: Alignment and refinement
-    align_result = align_and_refine(
-        tools=tools,
-        rs_config=_rs_raw,
-        r1=frag_result.r1_fastq,
-        r2=frag_result.r2_fastq,
-        human_ref=human_ref,
-        output_dir=output_dir,
-        output_base=output_base,
-        assembly_ctx=assembly_ctx,
-    )
+        # Stages 9-11: Alignment and refinement
+        align_result = align_and_refine(
+            tools=tools,
+            rs_config=_rs_raw,
+            r1=frag_result.r1_fastq,
+            r2=frag_result.r2_fastq,
+            human_ref=human_ref,
+            output_dir=output_dir,
+            output_base=output_base,
+            assembly_ctx=assembly_ctx,
+        )
 
     end_time = datetime.now()
     duration = end_time - start_time
@@ -141,23 +147,25 @@ def simulate_reads_pipeline(
         str(duration).split(".")[0],
     )
     logger.info("Final outputs:")
-    logger.info("  Aligned and indexed BAM: %s", align_result.final_bam)
+    if align_result:
+        logger.info("  Aligned and indexed BAM: %s", align_result.final_bam)
     logger.info("  Paired FASTQ files: %s and %s", reads_fq1, reads_fq2)
 
     # Stage 12a: Source tracking manifest
-    fragment_origins_path = (
-        str(output_dir / f"{output_base}_fragment_origins.tsv")
-        if source_tracker is not None
-        else None
-    )
-    generate_read_manifest(
-        sidecar_path=fragment_origins_path,
-        final_bam=align_result.final_bam,
-        input_fa=input_fa,
-        source_tracker=source_tracker,
-        output_dir=output_dir,
-        output_base=output_base,
-    )
+    if align_result is not None:
+        fragment_origins_path = (
+            str(output_dir / f"{output_base}_fragment_origins.tsv")
+            if source_tracker is not None
+            else None
+        )
+        generate_read_manifest(
+            sidecar_path=fragment_origins_path,
+            final_bam=align_result.final_bam,
+            input_fa=input_fa,
+            source_tracker=source_tracker,
+            output_dir=output_dir,
+            output_base=output_base,
+        )
 
     # Stage 12b: Metadata
     create_pipeline_metadata(
@@ -167,30 +175,32 @@ def simulate_reads_pipeline(
         start_time=start_time,
         end_time=end_time,
         platform="Illumina",
-        tools_used=["reseq", "faToTwoBit", "pblat", "bwa", "samtools"],
+        tools_used=tools_to_check,
     )
 
     # Stage 12c: Cleanup
     keep_intermediates = rs_config.get("keep_intermediate_files", False)
     if not keep_intermediates:
         all_intermediates: list[str | None] = list(frag_result.intermediate_files)
-        for bam in align_result.intermediate_bams:
-            all_intermediates.append(bam)
-            bam_index = f"{bam}.bai"
-            if Path(bam_index).exists():
-                all_intermediates.append(bam_index)
-        all_intermediates.extend(align_result.intermediate_files)
+        if align_result:
+            for bam in align_result.intermediate_bams:
+                all_intermediates.append(bam)
+                bam_index = f"{bam}.bai"
+                if Path(bam_index).exists():
+                    all_intermediates.append(bam_index)
+            all_intermediates.extend(align_result.intermediate_files)
 
-        final_bam_index = f"{align_result.final_bam}.bai"
-        all_intermediates = [
-            f for f in all_intermediates if f not in (align_result.final_bam, final_bam_index)
-        ]
+            final_bam_index = f"{align_result.final_bam}.bai"
+            all_intermediates = [
+                f for f in all_intermediates if f not in (align_result.final_bam, final_bam_index)
+            ]
 
         logger.info("=" * 60)
         logger.info("Intermediate File Cleanup")
         logger.info("=" * 60)
         logger.info("Total files to remove: %d", len(all_intermediates))
-        logger.info("Preserving final output: %s", Path(align_result.final_bam).name)
+        if align_result:
+            logger.info("Preserving final output: %s", Path(align_result.final_bam).name)
         cleanup_intermediates(all_intermediates)
         logger.info("Cleanup completed successfully")
         logger.info("=" * 60)
@@ -199,7 +209,7 @@ def simulate_reads_pipeline(
         logger.info("Keeping intermediate files (keep_intermediate_files=true)")
         logger.info("=" * 60)
 
-    return align_result.final_bam
+    return align_result.final_bam if align_result else str(frag_result.r1_fastq)
 
 
 # Backward compatibility CLI
