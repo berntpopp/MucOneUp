@@ -101,13 +101,13 @@ class TestONTEndToEnd:
         # Create realistic NanoSim FASTQ with reads at known positions
         reads = [
             # Read from haplotype_1 at pos 70 (inside Xm repeat 68-86), forward, 20bp
-            ("haplotype_1_70_aligned_0_F_5_10_5", "A" * 20),
+            ("haplotype_1_70_aligned_0_F_5_20_5", "A" * 30),
             # Read from haplotype_1 at pos 50 (start of VNTR, repeat 1), reverse, 15bp
-            ("haplotype_1_50_aligned_1_R_3_9_3", "C" * 15),
+            ("haplotype_1_50_aligned_1_R_0_15_0", "C" * 15),
             # Read from haplotype_2 at pos 70 (inside X repeat, no mutation), forward, 25bp
-            ("haplotype_2_70_aligned_2_F_5_15_5", "G" * 25),
+            ("haplotype_2_70_aligned_2_F_0_25_0", "G" * 25),
             # Read from haplotype_1 at pos 10 (outside VNTR, in left constant), forward, 30bp
-            ("haplotype_1_10_aligned_3_F_5_20_5", "T" * 30),
+            ("haplotype_1_10_aligned_3_F_0_30_0", "T" * 30),
         ]
         fastq_path = tmp_path / "nanosim_reads.fastq"
         self._write_nanosim_fastq(fastq_path, reads)
@@ -119,7 +119,7 @@ class TestONTEndToEnd:
         # Verify parsed origins
         assert origins[0].haplotype == 1
         assert origins[0].ref_start == 70
-        assert origins[0].ref_end == 90  # 70 + 20
+        assert origins[0].ref_end == 90  # 70 + aligned 20 (not read length 30)
         assert origins[0].strand == "+"
 
         assert origins[1].haplotype == 1
@@ -131,7 +131,7 @@ class TestONTEndToEnd:
 
         assert origins[3].haplotype == 1
         assert origins[3].ref_start == 10
-        assert origins[3].ref_end == 40  # 10 + 30
+        assert origins[3].ref_end == 40  # 10 + aligned 30
 
         # Annotate
         annotated = list(tracker_with_mutation.annotate_reads(origins))
@@ -452,7 +452,7 @@ class TestIlluminaEndToEnd:
         fastq_path = tmp_path / "reads_R1.fastq.gz"
         self._write_fastq_gz(
             fastq_path,
-            ["read_pair_0/1", "read_pair_1/1", "read_pair_2/1"],
+            ["0/1", "1/1", "2/1"],  # reseq names reads after the fragment ID
         )
 
         # Parse
@@ -468,7 +468,7 @@ class TestIlluminaEndToEnd:
         assert origins[0].haplotype == 1
         assert origins[0].ref_start == 55
         assert origins[0].ref_end == 90
-        assert origins[0].read_id == "read_pair_0/1"  # full ID preserved
+        assert origins[0].read_id == "0/1"  # full ID preserved
 
         assert origins[1].haplotype == 2
         assert origins[1].ref_start == 86
@@ -692,7 +692,7 @@ class TestCrossPlatformConsistency:
         # Create ONT read at pos 70, haplotype 1, 20bp
         ont_fastq = tmp_path / "ont.fastq"
         with open(ont_fastq, "w") as f:
-            f.write("@haplotype_1_70_aligned_0_F_5_10_5\n")
+            f.write("@haplotype_1_70_aligned_0_F_0_20_0\n")
             f.write("A" * 20 + "\n")
             f.write("+\n")
             f.write("I" * 20 + "\n")

@@ -34,7 +34,7 @@ class TestONTParser:
         assert origins[0].haplotype == 1
         assert origins[0].ref_start == 500
         assert origins[0].strand == "+"
-        assert origins[0].ref_end == 500 + 16
+        assert origins[0].ref_end == 500 + 100  # aligned length, not read length (#9)
 
     def test_parse_reverse_strand(self, tmp_path):
         fastq = tmp_path / "reads.fastq"
@@ -251,6 +251,7 @@ class TestPacBioParser:
         assert reconciled[0].haplotype == 1
         assert reconciled[0].ref_start == 100
         assert reconciled[0].ref_end == 600
+        assert reconciled[0].strand == "+"  # first subread's strand, not the last (#9)
 
     def test_reconcile_ccs_reads_missing_fastq_raises(self, tmp_path):
         """Missing FASTQ raises FileOperationError instead of returning raw origins."""
@@ -317,7 +318,7 @@ class TestIlluminaParser:
 
         fq1 = tmp_path / "reads_R1.fastq.gz"
         with gzip.open(str(fq1), "wt") as f:
-            f.write("@read_0001/1\nACGT\n+\nIIII\n@read_0002/1\nACGT\n+\nIIII\n")
+            f.write("@1/1\nACGT\n+\nIIII\n@2/1\nACGT\n+\nIIII\n")
 
         seq_names = {"haplotype_1": 1, "haplotype_2": 2}
         origins = parse_illumina_reads(origins_path, str(fq1), seq_names)
@@ -325,9 +326,28 @@ class TestIlluminaParser:
         assert origins[0].haplotype == 1
         assert origins[0].ref_start == 100
         assert origins[0].ref_end == 250
-        assert origins[0].read_id == "read_0001/1"
+        assert origins[0].read_id == "1/1"
         assert origins[1].haplotype == 2
         assert origins[1].ref_start == 300
+
+    def test_reads_are_matched_to_fragments_by_name(self, tmp_path):
+        """Positional matching shifted every read after a gap or reorder (#9)."""
+        origins_path = str(tmp_path / "fragment_origins.tsv")
+        with open(origins_path, "w") as f:
+            f.write("fragment_index\tchrom\tfstart\tfend\tstrand\n")
+            f.write("1\thaplotype_1\t100\t250\t+\n")
+            f.write("3\thaplotype_2\t300\t450\t-\n")
+            f.write("4\thaplotype_1\t500\t650\t+\n")
+        fq1 = tmp_path / "reads_R1.fastq.gz"
+        with gzip.open(str(fq1), "wt") as f:
+            f.write("@4 151M E0\nACGT\n+\nIIII\n@1 151M E0\nACGT\n+\nIIII\n")
+        origins = parse_illumina_reads(origins_path, str(fq1), {"haplotype_1": 1})
+        assert [(o.read_id, o.ref_start) for o in origins] == [("4", 500), ("1", 100)]
+
+        with gzip.open(str(fq1), "wt") as f:
+            f.write("@2\nACGT\n+\nIIII\n")
+        with pytest.raises(ReadSimulationError, match="match no fragment"):
+            parse_illumina_reads(origins_path, str(fq1), {"haplotype_1": 1})
 
     def test_parse_without_fastq(self, tmp_path):
         origins_path = str(tmp_path / "fragment_origins.tsv")

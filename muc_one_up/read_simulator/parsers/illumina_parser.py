@@ -6,6 +6,7 @@ import csv
 import gzip
 import logging
 
+from muc_one_up.exceptions import ReadSimulationError
 from muc_one_up.read_simulator.source_tracking import ReadOrigin
 
 logger = logging.getLogger(__name__)
@@ -42,18 +43,21 @@ def parse_illumina_reads(
 ) -> list[ReadOrigin]:
     """Parse Illumina reads using fragment origin sidecar and FASTQ names.
 
-    Uses order-based correlation: fragment N in the sidecar corresponds
-    to read N in the FASTQ output (reseq preserves input order).
+    reseq names each read pair after its fragment FASTA ID, which is the
+    sidecar ``fragment_index``, so reads are matched to fragments by name.
 
     Args:
         sidecar_path: Path to fragment_origins.tsv.
         fastq_r1_path: Path to R1 FASTQ (gzipped). Used to get read
-            names. If None, uses fragment_index as read_id.
+            names. If None or unreadable, uses fragment_index as read_id.
         seq_name_to_haplotype: Map from sequence name
             (e.g. "haplotype_1") to haplotype number (e.g. 1).
 
     Returns:
-        List of ReadOrigin entries (one per fragment).
+        List of ReadOrigin entries (one per read, or per fragment without FASTQ).
+
+    Raises:
+        ReadSimulationError: If a read name matches no sidecar fragment.
     """
     # Read sidecar
     fragments: list[dict] = []
@@ -69,27 +73,28 @@ def parse_illumina_reads(
     if not fragments:
         return []
 
-    # Read FASTQ read names if available (for order-based correlation)
     read_names: list[str] = _extract_read_names(fastq_r1_path)
+    if read_names:
+        by_index = {frag["fragment_index"]: frag for frag in fragments}
+        unknown = [n for n in read_names if n.removesuffix("/1") not in by_index]
+        if unknown:
+            raise ReadSimulationError(
+                f"{len(unknown)} of {len(read_names)} reads in {fastq_r1_path} match no "
+                f"fragment in {sidecar_path} (first: {unknown[0]!r})"
+            )
+        pairs = [(n, by_index[n.removesuffix("/1")]) for n in read_names]
+    else:
+        pairs = [(f"fragment_{frag['fragment_index']}", frag) for frag in fragments]
 
     origins: list[ReadOrigin] = []
-    for i, frag in enumerate(fragments):
-        chrom = frag["chrom"]
-        haplotype = seq_name_to_haplotype.get(chrom, 1)
-        fstart = int(frag["fstart"])
-        fend = int(frag["fend"])
-        strand = frag["strand"]
-
-        # Order-based correlation: fragment i -> read i
-        read_id = read_names[i] if i < len(read_names) else f"fragment_{frag['fragment_index']}"
-
+    for read_id, frag in pairs:
         origins.append(
             ReadOrigin(
                 read_id=read_id,
-                haplotype=haplotype,
-                ref_start=fstart,
-                ref_end=fend,
-                strand=strand,
+                haplotype=seq_name_to_haplotype.get(frag["chrom"], 1),
+                ref_start=int(frag["fstart"]),
+                ref_end=int(frag["fend"]),
+                strand=frag["strand"],
             )
         )
 
