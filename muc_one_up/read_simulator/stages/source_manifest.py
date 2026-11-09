@@ -132,7 +132,8 @@ def generate_read_manifest(
                     normalized = _normalize_read_id(aln.query_name)
                     if normalized:
                         surviving_read_ids.add(normalized)
-            origins = [o for o in origins if _normalize_read_id(o.read_id) in surviving_read_ids]
+            # The read-id set is needed: BAM order differs from FASTQ order.
+            origins = (o for o in origins if _normalize_read_id(o.read_id) in surviving_read_ids)
         except (OSError, AttributeError) as exc:
             logger.warning("pysam filtering skipped (%s); using all origins", exc)
 

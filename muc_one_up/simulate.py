@@ -235,6 +235,7 @@ def simulate_single_haplotype(
 
     Raises:
         ValueError: If target_length is below min_length
+        SimulationError: If the Markov chain reaches a dead end before the terminal block
     """
     if target_length < min_length:
         raise ValueError(
@@ -270,8 +271,10 @@ def simulate_single_haplotype(
 
         next_symbol = pick_next_symbol_no_end(probabilities, current_symbol, rng=rng)
         if next_symbol is None:
-            logging.debug("No valid next symbol; ending chain.")
-            break
+            raise SimulationError(
+                f"No valid next repeat after '{current_symbol}' at repeat {total_repeats} "
+                f"of {target_length}; check the probabilities table in the config."
+            )
 
         current_symbol = next_symbol
 

@@ -38,7 +38,6 @@ RUN --mount=type=cache,target=/home/mambauser/.mamba/pkgs,sharing=locked \
     micromamba create -y -f /tmp/env_nanosim.yml && \
     micromamba create -y -f /tmp/env_wessim.yaml && \
     micromamba create -y -f /tmp/env_pacbio.yml && \
-    micromamba install -y -n env_nanosim -c conda-forge --no-deps scikit-learn=1.5.0 && \
     micromamba remove -y -f --no-prune -n env_nanosim pillow fonttools pip wheel setuptools && \
     micromamba remove -y -f --no-prune -n env_wessim pip && \
     micromamba clean --all --yes && \
@@ -47,7 +46,7 @@ RUN --mount=type=cache,target=/home/mambauser/.mamba/pkgs,sharing=locked \
 WORKDIR /app
 
 # Install MucOneUp Python package
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md uv.lock ./
 COPY muc_one_up/ ./muc_one_up/
 COPY config.json ./
 
@@ -58,9 +57,14 @@ RUN mkdir -p /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL && \
     echo 'class PngInfo: pass' > /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL/PngImagePlugin.py && \
     echo 'from . import Image' > /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL/__init__.py
 
+# Install the exact dependency versions from uv.lock (uv is only mounted, not shipped)
 RUN --mount=type=cache,target=/root/.cache/pip \
-    /usr/bin/pip3 install --break-system-packages . && \
-    sed -i -E 's/mamba run -n [^ ]+ //g' /app/config.json && \
+    --mount=from=ghcr.io/astral-sh/uv:0.11.28,source=/uv,target=/usr/local/bin/uv \
+    uv export --frozen --no-dev --no-hashes --no-emit-project -o /tmp/requirements.txt && \
+    /usr/bin/pip3 install --break-system-packages -r /tmp/requirements.txt && \
+    /usr/bin/pip3 install --break-system-packages --no-deps . && \
+    sed -i -E -e 's/mamba run -n [^ ]+ //g' \
+        -e 's#"reference/pbsim3/#"/opt/conda/envs/env_pacbio/data/#g' /app/config.json && \
     apt-get purge -y python3-pip python3-dev build-essential && \
     apt-get autoremove -y && \
     apt-get clean && \

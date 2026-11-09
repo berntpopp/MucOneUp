@@ -14,3 +14,13 @@
 # CVE-2024-67890
 
 # Add specific CVE exclusions below this line
+
+# scikit-learn 0.23.2 in env_nanosim only (#175). NanoSim's pretrained KDE
+# pickles load only on sklearn 0.23 (sklearn.neighbors._dist_metrics), so it
+# cannot be upgraded. Neither CVE is reachable: NanoSim only loads and samples
+# KernelDensity models; it never uses SVM or text vectorizers. Re-check on
+# expiry or when NanoSim ships models for a newer scikit-learn.
+# CVE-2020-28975: sklearn.svm libsvm crafted-model crash (disputed upstream).
+CVE-2020-28975 exp:2027-05-09
+# CVE-2024-5206: TfidfVectorizer stop_words_ keeps leaked tokens.
+CVE-2024-5206 exp:2027-05-09

@@ -165,7 +165,7 @@ def simulate_pacbio_hifi_reads(
     pass_num = pacbio_params.get("pass_num")
     min_passes = pacbio_params.get("min_passes")
     min_rq = pacbio_params.get("min_rq")
-    threads = pacbio_params.get("threads", 4)
+    threads = pacbio_params.get("threads", 8)
     seed = pacbio_params.get("seed")
 
     from .constants import (
@@ -208,6 +208,7 @@ def simulate_pacbio_hifi_reads(
             length_mean=length_mean,
             length_min=length_min,
             length_max=length_max,
+            length_sd=length_sd,
         )
 
         validate_ccs_parameters(
@@ -351,8 +352,6 @@ def simulate_pacbio_hifi_reads(
             )
 
         if human_reference is not None:
-            intermediate_files.append(hifi_fastq)
-
             logging.info("=" * 80)
             logging.info("STAGE 4: Aligning HiFi reads with minimap2 (map-hifi preset)")
             logging.info("=" * 80)
@@ -366,6 +365,8 @@ def simulate_pacbio_hifi_reads(
                 preset=MINIMAP2_PRESET_PACBIO_HIFI,
                 threads=threads,
             )
+            # Queue the FASTQ only after alignment succeeded so a failure never deletes it
+            intermediate_files.append(hifi_fastq)
             final_output = aligned_bam
         else:
             final_output = hifi_fastq
@@ -392,6 +393,7 @@ def simulate_pacbio_hifi_reads(
             end_time=end_time,
             platform="PacBio",
             tools_used=tools_used,
+            seed=seed,
         )
         logging.info("Metadata file: %s", metadata_file)
         logging.info("=" * 80)

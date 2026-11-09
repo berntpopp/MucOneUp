@@ -87,13 +87,15 @@ def resolve_human_reference(
     3. ``reference_genomes[<assembly>].fasta_path`` (validated for ``aligner`` indices).
 
     Raises:
-        ConfigurationError: If no reference is configured or the
+        ConfigurationError: If no reference is configured, an explicit one does not exist, or the
             ``reference_genomes`` entry cannot be used (the reason is included).
     """
     explicit = assembly_ctx.human_reference or config.get("read_simulation", {}).get(
         "human_reference"
     )
     if explicit:
+        if not Path(explicit).is_file():
+            raise ConfigurationError(f"Human reference not found: {explicit}")
         logger.info("Using human reference from read_simulation config: %s", explicit)
         return str(explicit)
 
@@ -121,6 +123,7 @@ def create_pipeline_metadata(
     tools_used: list[str],
     *,
     extra_rows: list[tuple[str, Any]] | None = None,
+    seed: int | None = None,
 ) -> str:
     """Write pipeline metadata TSV, accepting a :class:`~pathlib.Path` for output_dir.
 
@@ -138,6 +141,7 @@ def create_pipeline_metadata(
         platform: Sequencing platform (``"Illumina"``, ``"ONT"``, or ``"PacBio"``).
         tools_used: List of tool keys actually used in this pipeline run.
         extra_rows: Additional metadata rows (e.g. the read truth manifest).
+        seed: Seed the pipeline actually used (recorded in the Seed row).
 
     Returns:
         Path to the created metadata file as a string.
@@ -151,6 +155,7 @@ def create_pipeline_metadata(
         platform,
         tools_used,
         extra_rows=extra_rows,
+        seed=seed,
     )
 
 

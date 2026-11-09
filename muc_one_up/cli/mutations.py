@@ -9,7 +9,7 @@ import random as _random_module
 
 from ..exceptions import MutationError, ValidationError
 from ..mutate import apply_mutations
-from ..type_defs import HaplotypeResult, MutationTarget
+from ..type_defs import HaplotypeResult, MutationTarget, RepeatUnit
 
 
 def parse_mutation_targets(
@@ -41,8 +41,7 @@ def parse_mutation_targets(
             mutation_positions.append(MutationTarget(hap_i, rep_i))
         except Exception as e:
             raise ValidationError(f"Invalid --mutation-targets format: '{t}' ({e})") from e
-    # A repeated target would otherwise be mutated twice.
-    return list(dict.fromkeys(mutation_positions))
+    return mutation_positions
 
 
 def find_random_mutation_target(
@@ -131,8 +130,15 @@ def apply_mutation_pipeline(
     logging.info("Applying mutation: %s", mutation_name)
 
     if dual_mutation_mode:
-        # Dual mode: keep normal, create mutated
-        normal_results = results
+        # Dual mode: keep normal, create mutated. Drop 'm' markers carried in from a
+        # structure file: the normal haplotypes have no mutation applied (#161).
+        normal_results = [
+            HaplotypeResult(
+                hr.sequence, [RepeatUnit(ru.symbol) for ru in hr.chain], hr._repeat_lengths
+            )
+            for hr in results
+        ]
+        results = normal_results
 
         if args.mutation_targets:
             mutation_positions = parse_mutation_targets(args.mutation_targets)

@@ -484,7 +484,7 @@ class TestCreateReadsChunking:
             ("ReSeq version 1.1", True),
             ("ReSeq2 version 2.0.3", False),
             ("ReSeq2 version 10.0", False),
-            ("N/A", True),
+            ("N/A", False),
         ],
     )
     def test_is_legacy_reseq(self, mocker, version, legacy):

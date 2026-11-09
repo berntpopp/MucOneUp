@@ -1,8 +1,11 @@
 """Golden md5 of seeded legacy amplicon FASTQs with real pbsim3/ccs/samtools.
 
 The 0.45 compatibility promise: simulations without a read profile produce the
-same reads. The md5s below were measured with origin/main eabb721 (MucOneUp
-0.45.0) and are unchanged by #132. Exact procedure (repository ``config.json``
+same reads. The md5s were first measured with eabb721 (MucOneUp 0.45.0) and
+re-measured for 0.49.0 after two intentional changes: 93cc813 (#140, seeded RNG
+threaded through ``simulate``, so seed 42 yields other haplotypes) and 80cdbab
+(#147, ``hap1_``/``hap2_`` read-ID prefixes). On the same input FASTA the read
+sequences and qualities are byte-identical to 0.45. Exact procedure (repository ``config.json``
 with the two ``model_file`` entries made absolute and ``threads`` set to 4 in
 ``pacbio_params`` and ``ont_amplicon_params``)::
 
@@ -38,8 +41,8 @@ from muc_one_up.cli.click_main import cli
 
 REPO = Path(__file__).resolve().parents[2]
 GOLDEN_MD5 = {
-    "ont": ("legacy_amplicon_ont.fastq", "7ec5c90da9afe8ff0c1cda30d682b899"),
-    "pacbio": ("legacy_amplicon_hifi.fastq", "221a5a49c9d7d0e197ff4214199d7c2b"),
+    "ont": ("legacy_amplicon_ont.fastq", "05790c22f3610ac2a5c31174e5fb093d"),
+    "pacbio": ("legacy_amplicon_hifi.fastq", "0f56faac76f518279c26ab79f9f721bd"),
 }
 MODELS = {"ont_amplicon_params": "QSHMM-ONT-HQ.model", "pacbio_params": "ERRHMM-SEQUEL.model"}
 THREADS = 4

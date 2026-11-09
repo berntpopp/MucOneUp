@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from typing import NamedTuple
@@ -39,7 +40,6 @@ __all__ = [
     "reverse_complement",
 ]
 
-_HP_BASES = frozenset("ACGT")
 _SMEAR_MAX_KEEP = 0.95  # smear products keep at most this fraction of the amplicon
 
 
@@ -161,15 +161,9 @@ def homopolymer_runs(seq: str, min_len: int) -> Iterator[tuple[int, int, str]]:
     homopolymers: they are not yielded, so they get no stutter and no
     protection from base-level errors.
     """
-    upper = seq.upper()
-    i = 0
-    while i < len(upper):
-        j = i
-        while j < len(upper) and upper[j] == upper[i]:
-            j += 1
-        if j - i >= min_len and upper[i] in _HP_BASES:
-            yield i, j, upper[i]
-        i = j
+    run = re.compile(rf"([ACGT])\1{{{max(min_len, 1) - 1},}}")  # re caches the compile
+    for m in run.finditer(seq.upper()):
+        yield m.start(), m.end(), m.group(1)
 
 
 def apply_stutter(

@@ -147,3 +147,38 @@ class TestRunPipeline:
             exc_info.value.stderr
         )
         assert "boom" in exc_info.value.stderr
+
+    def test_downstream_failure_reported_over_upstream_sigpipe(self):
+        """An upstream SIGPIPE death must not mask the real downstream failure (#165)."""
+        with pytest.raises(ExternalToolError) as exc_info:
+            run_pipeline([["yes"], ["sh", "-c", "echo No space left on device >&2; exit 1"]])
+
+        assert "Pipeline stage 1" in exc_info.value.stderr
+        assert "No space left" in exc_info.value.stderr
+
+
+@pytest.mark.parametrize("mode", ["capture", "streaming", "pipeline"])
+def test_ctrl_c_kills_child_process_group(tmp_path, mode):
+    """SIGINT during a tool run kills the tool instead of orphaning it (#162)."""
+    import os
+    import threading
+    import time
+
+    pid_file = tmp_path / "pid"
+    cmd = ["sh", "-c", f"echo $$ > {pid_file}; exec sleep 30"]
+    threading.Timer(1, os.kill, (os.getpid(), signal.SIGINT)).start()
+
+    with pytest.raises(KeyboardInterrupt):
+        if mode == "pipeline":
+            run_pipeline([cmd, ["cat"]])
+        else:
+            run_command(cmd, capture=mode == "capture")
+
+    child = int(pid_file.read_text())
+    for _ in range(50):
+        try:
+            os.kill(child, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    pytest.fail(f"child {child} survived Ctrl-C")

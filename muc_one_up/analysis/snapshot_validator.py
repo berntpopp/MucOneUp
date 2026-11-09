@@ -446,9 +446,11 @@ class SnapshotValidator:
             },
         )
 
-        if not pcr_results["success"]:
+        if not pcr_results["success"] or pcr_results["product_count"] == 0:
             return {
                 "pcr_results": pcr_results,
+                "digest_results": self.digest.digest([]),
+                "snapshot_results": [],
                 "mutation_detected": False,
                 "summary": "PCR failed - no products generated",
             }

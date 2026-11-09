@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A configured `human_reference` that does not exist now fails before
+  simulation instead of after it. PacBio no longer deletes the HiFi FASTQ
+  when alignment fails (#176).
+- ONT without a human reference now skips alignment with a warning and
+  returns the FASTQ, like PacBio. It used to align to the simulated
+  haplotypes and write a misleading `.bam` (#183).
+- An unknown ReSeq version (e.g. a slow version probe) is now treated as
+  ReSeq2, not ReSeq 1.x, so its input is no longer chunked. The chosen mode
+  is logged (#182).
+- The metadata `Seed` row records the seed the pipeline used
+  (`read_simulation`, `nanosim_params` or `pacbio_params`), not only the
+  top-level seed (#185).
+
 ## [0.49.0] - 2026-11-09
 
 Resolves the 2026-11-09 codebase audit

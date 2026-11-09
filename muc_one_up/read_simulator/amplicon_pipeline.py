@@ -112,7 +112,7 @@ def simulate_amplicon_reads_pipeline(
     # Extract configuration
     from typing import cast
 
-    from ..type_defs import AmpliconConfig, PacbioConfig, ReadSimulationConfig
+    from ..type_defs import AmpliconConfig, PacbioConfig
 
     _amplicon_raw = config.get("amplicon_params", {})
     _pacbio_raw = config.get("pacbio_params", {})
@@ -120,7 +120,6 @@ def simulate_amplicon_reads_pipeline(
     amplicon_params = cast(AmpliconConfig, _amplicon_raw)
     pacbio_params = cast(PacbioConfig, _pacbio_raw)
     tools = config.get("tools", {})
-    rs_config = cast(ReadSimulationConfig, _rs_raw)
 
     # Tool paths
     pbsim3_cmd = tools.get("pbsim3", "pbsim")
@@ -129,12 +128,15 @@ def simulate_amplicon_reads_pipeline(
     minimap2_cmd = tools.get("minimap2", "minimap2")
 
     # PacBio params
+    missing = [k for k in ("model_type", "model_file") if not pacbio_params.get(k)]
+    if missing:
+        raise ValueError(f"Missing required pacbio_params: {', '.join(missing)}")
     model_type = pacbio_params["model_type"]
     model_file = pacbio_params["model_file"]
     pass_num = pacbio_params.get("pass_num", 3)
     min_passes = pacbio_params.get("min_passes", 3)
     min_rq = pacbio_params.get("min_rq", 0.99)
-    threads = pacbio_params.get("threads", 4)
+    threads = pacbio_params.get("threads") or 8
     seed = pacbio_params.get("seed")
     accuracy_mean = pacbio_params.get("accuracy_mean", 0.85)
     # accuracy_sd is deliberately not forwarded: pacbio_params.accuracy_sd configures
@@ -148,14 +150,10 @@ def simulate_amplicon_reads_pipeline(
         amplicon_params.get("expected_product_range")
     )
 
-    # Coverage
-    # Prefer read_simulation coverage, fall back to pacbio_params, then default 30.
-    # Use explicit None checks to preserve coverage=0 if ever set intentionally.
-    _rs_cov = rs_config.get("coverage")
+    # Template molecules: pacbio_params.coverage (set by --coverage), else 30.
+    # read_simulation.coverage is the Illumina downsample target, not a molecule count.
     _pb_cov = pacbio_params.get("coverage")
-    total_coverage: int = int(
-        _rs_cov if _rs_cov is not None else (_pb_cov if _pb_cov is not None else 30)
-    )
+    total_coverage: int = int(_pb_cov if _pb_cov is not None else 30)
 
     # PCR bias config
     pcr_bias_config = amplicon_params.get("pcr_bias", {})
@@ -276,6 +274,7 @@ def simulate_amplicon_reads_pipeline(
                 tools_used=["pbsim3", "ccs", "samtools"]
                 + (["minimap2"] if human_reference is not None else []),
                 extra_rows=[("Read_truth", truth_name)] if model is not None else None,
+                seed=seed,
             )
 
             return final_output

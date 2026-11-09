@@ -321,7 +321,7 @@ class TestIlluminaParser:
             f.write("@1/1\nACGT\n+\nIIII\n@2/1\nACGT\n+\nIIII\n")
 
         seq_names = {"haplotype_1": 1, "haplotype_2": 2}
-        origins = parse_illumina_reads(origins_path, str(fq1), seq_names)
+        origins = list(parse_illumina_reads(origins_path, str(fq1), seq_names))
         assert len(origins) == 2
         assert origins[0].haplotype == 1
         assert origins[0].ref_start == 100
@@ -341,13 +341,13 @@ class TestIlluminaParser:
         fq1 = tmp_path / "reads_R1.fastq.gz"
         with gzip.open(str(fq1), "wt") as f:
             f.write("@4 151M E0\nACGT\n+\nIIII\n@1 151M E0\nACGT\n+\nIIII\n")
-        origins = parse_illumina_reads(origins_path, str(fq1), {"haplotype_1": 1})
+        origins = list(parse_illumina_reads(origins_path, str(fq1), {"haplotype_1": 1}))
         assert [(o.read_id, o.ref_start) for o in origins] == [("4", 500), ("1", 100)]
 
         with gzip.open(str(fq1), "wt") as f:
             f.write("@2\nACGT\n+\nIIII\n")
         with pytest.raises(ReadSimulationError, match="match no fragment"):
-            parse_illumina_reads(origins_path, str(fq1), {"haplotype_1": 1})
+            list(parse_illumina_reads(origins_path, str(fq1), {"haplotype_1": 1}))
 
     def test_parse_without_fastq(self, tmp_path):
         origins_path = str(tmp_path / "fragment_origins.tsv")
@@ -355,7 +355,7 @@ class TestIlluminaParser:
             f.write("fragment_index\tchrom\tfstart\tfend\tstrand\n")
             f.write("1\thaplotype_1\t100\t250\t+\n")
 
-        origins = parse_illumina_reads(origins_path, None, {"haplotype_1": 1})
+        origins = list(parse_illumina_reads(origins_path, None, {"haplotype_1": 1}))
         assert len(origins) == 1
         assert origins[0].read_id == "fragment_1"
 
@@ -363,9 +363,9 @@ class TestIlluminaParser:
         origins_path = str(tmp_path / "fragment_origins.tsv")
         with open(origins_path, "w") as f:
             f.write("fragment_index\tchrom\tfstart\tfend\tstrand\n")
-        origins = parse_illumina_reads(origins_path, None, {})
+        origins = list(parse_illumina_reads(origins_path, None, {}))
         assert len(origins) == 0
 
     def test_missing_sidecar(self, tmp_path):
-        origins = parse_illumina_reads(str(tmp_path / "nonexistent.tsv"), None, {})
+        origins = list(parse_illumina_reads(str(tmp_path / "nonexistent.tsv"), None, {}))
         assert len(origins) == 0

@@ -106,10 +106,6 @@ MIN_VALID_CCS_OUTPUT_SIZE: Final[int] = 1024
 #: Optimized for ONT error profile with higher indel rate.
 MINIMAP2_PRESET_ONT: Final[str] = "map-ont"
 
-#: Minimap2 preset for PacBio CLR reads.
-#: Optimized for older PacBio Continuous Long Reads.
-MINIMAP2_PRESET_PACBIO_CLR: Final[str] = "map-pb"
-
 #: Minimap2 preset for PacBio HiFi reads.
 #: Optimized for high-accuracy HiFi reads (Q20+).
 MINIMAP2_PRESET_PACBIO_HIFI: Final[str] = "map-hifi"

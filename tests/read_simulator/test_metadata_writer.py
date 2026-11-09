@@ -440,3 +440,18 @@ class TestEdgeCases:
         # Missing platform parameters should NOT be written to file (skip N/A values)
         assert "Coverage" not in content
         assert "Fragment_size" not in content
+
+
+@patch("muc_one_up.read_simulator.utils.metadata_writer.capture_tool_versions", return_value={})
+@patch("muc_one_up.read_simulator.utils.metadata_writer.log_tool_versions")
+def test_seed_row_records_pipeline_seed(_log, _capture, tmp_path):
+    """Issue #185: the seed the pipeline used wins over the top-level seed."""
+    start = datetime(2025, 10, 24, 12, 0, 0)
+
+    def seed_rows(config, **kwargs):
+        path = write_metadata_file(str(tmp_path), "s", config, start, start, "PacBio", **kwargs)
+        return [line for line in Path(path).read_text().splitlines() if line.startswith("Seed\t")]
+
+    assert seed_rows({"tools": {}, "seed": 1}, seed=7) == ["Seed\t7"]
+    assert seed_rows({"tools": {}, "seed": 1}) == ["Seed\t1"]
+    assert seed_rows({"tools": {}}) == []

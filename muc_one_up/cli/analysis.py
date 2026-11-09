@@ -284,6 +284,23 @@ def _translate_dna_flanks(
     return left_pep, right_pep
 
 
+def read_fasta_records(fasta_path: Path) -> list[Any]:
+    """Parse a FASTA file (plain or .gz) into SeqRecords."""
+    import gzip
+
+    from Bio import SeqIO
+
+    from ..exceptions import MucOneUpError
+
+    try:
+        if str(fasta_path).endswith(".gz"):
+            with gzip.open(fasta_path, "rt") as handle:
+                return list(SeqIO.parse(handle, "fasta"))
+        return list(SeqIO.parse(str(fasta_path), "fasta"))
+    except Exception as e:
+        raise MucOneUpError(f"Failed to parse input FASTA {fasta_path}: {e}") from e
+
+
 def run_orf_analysis_standalone(
     input_fasta: str,
     out_dir: str,
@@ -299,8 +316,6 @@ def run_orf_analysis_standalone(
     Single implementation for standalone ORF analysis, used by the
     ``analyze orfs`` CLI command.
     """
-    import gzip
-
     from Bio import SeqIO
     from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
@@ -317,15 +332,7 @@ def run_orf_analysis_standalone(
     if not fasta_path.is_file():
         raise MucOneUpError(f"Input FASTA file not found: {input_fasta}")
 
-    try:
-        if str(fasta_path).endswith(".gz"):
-            with gzip.open(fasta_path, "rt") as handle:
-                records = list(SeqIO.parse(handle, "fasta"))
-        else:
-            records = list(SeqIO.parse(str(fasta_path), "fasta"))
-    except Exception as e:
-        raise MucOneUpError(f"Failed to parse input FASTA {input_fasta}: {e}") from e
-
+    records = read_fasta_records(fasta_path)
     if not records:
         raise ValidationError(f"No valid FASTA records found in {input_fasta}")
 

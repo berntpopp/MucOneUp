@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from muc_one_up.mutate import (
@@ -546,16 +549,14 @@ def test_two_mutations_on_same_repeat_preserves_edits():
     init_seq = "LLABCDERR"
     results = [HaplotypeResult(sequence=init_seq, chain=[RepeatUnit("1")])]
 
-    # Target 1 inserts "Z" at 2: "ABCDE" -> "AZBCDE"
-    # Target 2 inserts "Z" at 2 again on top of the modified repeat: "AZBCDE" -> "AZZBCDE"
-    updated, mutated_units = apply_mutations(
-        config=config,
-        results=results,
-        mutation_name="ins",
-        targets=[MutationTarget(1, 1), MutationTarget(1, 1)],
-    )
-    assert updated[0].sequence == "LLAZZBCDERR"
-    assert mutated_units[1] == [(1, "AZZBCDE")]
+    # The same target twice in one call is rejected, not stacked (#166).
+    with pytest.raises(ValueError, match="Duplicate mutation targets"):
+        apply_mutations(
+            config=config,
+            results=results,
+            mutation_name="ins",
+            targets=[MutationTarget(1, 1), MutationTarget(1, 1)],
+        )
 
     # Sequential calls with different mutations on the same repeat:
     # First: replace at 1 with 'W' ("ABCDE" -> "WBCDE")
@@ -663,3 +664,22 @@ def test_apply_changes_to_repeat_multi_operation_updates_bounds():
             start=2,
             stop=6,
         )
+
+
+def test_shipped_benign_mutations_keep_frame():
+    """Every shipped *_benign mutation changes repeat length by a multiple of 3 (#159)."""
+    config = json.loads((Path(__file__).parents[1] / "config.json").read_text())
+    benign = {k: v for k, v in config["mutations"].items() if k.endswith("_benign")}
+    assert benign
+    for name, mutation in benign.items():
+        delta = 0
+        for c in mutation["changes"]:
+            span = c["end"] - c["start"] + 1
+            seq_len = len(c.get("sequence", ""))
+            delta += {
+                "insert": seq_len,
+                "delete": -span,
+                "replace": seq_len - span,
+                "delete_insert": seq_len - (span - 2),
+            }[c["type"]]
+        assert delta % 3 == 0, f"{name} changes repeat length by {delta}"

@@ -165,6 +165,7 @@ def simulate_reads_pipeline(
         end_time=end_time,
         platform="Illumina",
         tools_used=tools_to_check,
+        seed=rs_config.get("seed"),
     )
 
     # Stage 12c: Cleanup

@@ -8,6 +8,7 @@
 !conda/
 !conda/**
 !pyproject.toml
+!uv.lock
 !README.md
 !config.json
 !muc_one_up/

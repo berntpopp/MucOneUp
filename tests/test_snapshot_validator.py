@@ -455,6 +455,21 @@ class TestSnapshotValidator:
         assert result["pcr_results"]["success"] is False
         assert result["mutation_detected"] is False
         assert "PCR failed" in result["summary"]
+        assert result["digest_results"]["survivor_count"] == 0
+        assert result["snapshot_results"] == []
+
+    def test_complete_workflow_zero_products_is_pcr_failure(self, complete_config):
+        """Primers bind but no product passes the size filter: PCR failure, not normal (#184)."""
+        validator = SnapshotValidator(complete_config, "dupC")
+        template = "GGCCGGCCCCGGGCTCCACC" + "N" * 200 + "TCCGGGGCCGAGGTGACA"
+
+        result = validator.validate_complete_workflow(template)
+
+        assert result["pcr_results"]["product_count"] == 0
+        assert result["mutation_detected"] is False
+        assert "PCR failed" in result["summary"]
+        assert "normal phenotype" not in result["summary"]
+        assert result["digest_results"]["survivor_count"] == 0
 
     def test_complete_workflow_custom_config(self):
         """Test complete workflow with custom non-dupC config and primary_primer."""

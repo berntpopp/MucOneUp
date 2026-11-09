@@ -89,11 +89,12 @@ def simulate_ont_reads_pipeline(
                  - enable_coverage_correction: Apply correction factor (default: True)
         input_fa: Input simulated FASTA file.
         human_reference: Reference for alignment (resolved by
-            ``read_simulation.simulate_reads``). If None, reads are aligned
-            to ``input_fa``.
+            ``read_simulation.simulate_reads``). If None, alignment is
+            skipped with a warning and the FASTQ is returned.
 
     Returns:
-        Path to the final output BAM file (input_basename_ont.bam).
+        Path to the aligned BAM (input_basename_ont.bam), or the FASTQ when
+        alignment is skipped.
 
     Raises:
         ValueError: If required parameters are missing.
@@ -278,22 +279,19 @@ def simulate_ont_reads_pipeline(
     output_bam = f"{output_prefix}.bam"
     if skip_alignment:
         logging.info("2. Alignment skipped (--no-align); output is FASTQ")
+    elif human_reference is None:
+        logging.warning("2. No human reference; skipping alignment, output is FASTQ")
+        skip_alignment = True
     else:
         # 2. Align reads with minimap2
         logging.info("2. Starting read alignment with minimap2")
-
-        reference_for_alignment = human_reference
-        if reference_for_alignment is None:
-            logging.warning("No human reference; aligning against the simulated FASTA")
-            reference_for_alignment = input_fa
-
-        logging.info("Aligning ONT reads to reference: %s", reference_for_alignment)
+        logging.info("Aligning ONT reads to reference: %s", human_reference)
 
         try:
             align_reads_with_minimap2(
                 minimap2_cmd=minimap2_cmd,
                 samtools_cmd=samtools_cmd,
-                reference=reference_for_alignment,
+                reference=human_reference,
                 reads_fastq=fastq_file,
                 output_bam=output_bam,
                 threads=int(threads),
@@ -340,6 +338,7 @@ def simulate_ont_reads_pipeline(
         end_time=end_time,
         platform="ONT",
         tools_used=["nanosim"] if skip_alignment else ["nanosim", "minimap2", "samtools"],
+        seed=seed,
     )
     logging.info("  Metadata file: %s", metadata_file)
 
