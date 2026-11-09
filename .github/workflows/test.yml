@@ -25,23 +25,23 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
+          version: "0.11.28"
 
       - name: Install dependencies
         run: |
-          uv pip install --system -e ".[dev]"
+          uv sync --locked --extra dev --python "3.10"
 
       - name: Run ruff linter
         run: |
-          ruff check muc_one_up/ tests/
+          uv run ruff check muc_one_up/ tests/ helpers/
 
       - name: Run ruff formatter check
         run: |
-          ruff format --check muc_one_up/ tests/
+          uv run ruff format --check muc_one_up/ tests/ helpers/
 
       - name: Check types with mypy
         run: |
-          mypy muc_one_up/
+          uv run mypy muc_one_up/
 
   test:
     name: Test Suite
@@ -63,15 +63,20 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
+          version: "0.11.28"
+
+      - name: Install samtools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y samtools
 
       - name: Install dependencies
         run: |
-          uv pip install --system -e ".[dev]"
+          uv sync --locked --extra dev --python ${{ matrix.python-version }}
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=muc_one_up --cov-report=xml --cov-report=term-missing --cov-fail-under=80
+          uv run pytest --cov=muc_one_up --cov-report=xml --cov-report=term-missing --cov-fail-under=80
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6

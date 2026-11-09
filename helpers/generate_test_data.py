@@ -19,7 +19,7 @@ import logging
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -512,7 +512,7 @@ def generate_manifest(dataset_dir: Path, all_files: list[Path], version: str) ->
         "version": version,
         "generated_with": "MucOneUp",
         "muconeup_version": version,
-        "generation_date": datetime.utcnow().isoformat() + "Z",
+        "generation_date": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "sample": {
             "base_name": SAMPLE_BASE_NAME,
             "vntr_h1": VNTR_H1_LENGTH,
@@ -738,8 +738,8 @@ def create_tarball(dataset_dir: Path, version: str) -> Path:
     version_info = {
         "version": version,
         "release_date": date_str,
-        "source_tarball": str(tarball_path.relative_to(Path.cwd())),
-        "generated_utc": datetime.utcnow().isoformat() + "Z",
+        "source_tarball": str(tarball_path),
+        "generated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     version_file = latest_dir / "VERSION.json"
     with open(version_file, "w") as f:

@@ -39,12 +39,18 @@ dev = [
     "pytest-cov>=5.0.0",
     "pytest-mock>=3.14.0",  # Required for mocker fixture in tests
     "ruff==0.14.1",  # Pinned version - keep in sync with .pre-commit-config.yaml
-    "mypy>=1.8.0",
+    "mypy==1.18.2",  # Pinned like ruff so CI type checks are reproducible
+    "pysam>=0.22",  # So tests exercise the optional read-manifest BAM filter
     "types-jsonschema>=4.0.0",
     "mkdocs-material>=9.5.0",
     "mkdocstrings[python]>=0.24.0",
     "mkdocs-click>=0.8.0",
     "pymdown-extensions>=10.7",
+]
+
+# Filters the source-tracking read manifest to reads that survived alignment
+tracking = [
+    "pysam>=0.22",
 ]
 
 docs = [
@@ -62,6 +68,15 @@ Homepage = "https://github.com/berntpopp/MucOneUp"
 Repository = "https://github.com/berntpopp/MucOneUp"
 Issues = "https://github.com/berntpopp/MucOneUp/issues"
 Documentation = "https://berntpopp.github.io/MucOneUp/"
+
+[tool.hatch.build.targets.sdist]
+# Keep planning notes, release tarballs and large example BAMs out of the sdist
+exclude = [
+    ".planning",
+    "data/testdata_releases",
+    "data/*.bam*",
+    "docs/assets",
+]
 
 # ==================== RUFF ====================
 [tool.ruff]
