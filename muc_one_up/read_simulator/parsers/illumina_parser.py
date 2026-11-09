@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import csv
 import gzip
+import itertools
 import logging
+from array import array
+from collections.abc import Iterator
 
 from muc_one_up.exceptions import ReadSimulationError
 from muc_one_up.read_simulator.source_tracking import ReadOrigin
 
 logger = logging.getLogger(__name__)
+
+FRAGMENT_ORIGIN_FIELDS = ("fragment_index", "chrom", "fstart", "fend", "strand")
 
 
 def write_fragment_origins(fragments: list[dict], output_path: str) -> None:
@@ -21,17 +26,7 @@ def write_fragment_origins(fragments: list[dict], output_path: str) -> None:
         output_path: Path to write the TSV file.
     """
     with open(output_path, "w", newline="") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "fragment_index",
-                "chrom",
-                "fstart",
-                "fend",
-                "strand",
-            ],
-            delimiter="\t",
-        )
+        writer = csv.DictWriter(f, fieldnames=FRAGMENT_ORIGIN_FIELDS, delimiter="\t")
         writer.writeheader()
         writer.writerows(fragments)
 
@@ -40,8 +35,8 @@ def parse_illumina_reads(
     sidecar_path: str,
     fastq_r1_path: str | None,
     seq_name_to_haplotype: dict[str, int],
-) -> list[ReadOrigin]:
-    """Parse Illumina reads using fragment origin sidecar and FASTQ names.
+) -> Iterator[ReadOrigin]:
+    """Stream Illumina read origins from the fragment origin sidecar and FASTQ names.
 
     reseq names each read pair after its fragment FASTA ID, which is the
     sidecar ``fragment_index``, so reads are matched to fragments by name.
@@ -53,79 +48,83 @@ def parse_illumina_reads(
         seq_name_to_haplotype: Map from sequence name
             (e.g. "haplotype_1") to haplotype number (e.g. 1).
 
-    Returns:
-        List of ReadOrigin entries (one per read, or per fragment without FASTQ).
+    Yields:
+        One ReadOrigin per read (or per fragment without FASTQ), in FASTQ order.
 
     Raises:
         ReadSimulationError: If a read name matches no sidecar fragment.
     """
-    # Read sidecar
-    fragments: list[dict] = []
     try:
-        with open(sidecar_path) as f:
-            reader = csv.DictReader(f, delimiter="\t")
-            for row in reader:
-                fragments.append(row)
+        f = open(sidecar_path)
     except FileNotFoundError:
         logger.warning("Fragment origins sidecar not found: %s", sidecar_path)
-        return []
+        return
 
-    if not fragments:
-        return []
+    names = _extract_read_names(fastq_r1_path)
+    first = next(names, None)
+    with f:
+        rows = csv.DictReader(f, delimiter="\t")
+        if first is None:
+            for row in rows:
+                yield ReadOrigin(
+                    read_id=f"fragment_{row['fragment_index']}",
+                    haplotype=seq_name_to_haplotype.get(row["chrom"], 1),
+                    ref_start=int(row["fstart"]),
+                    ref_end=int(row["fend"]),
+                    strand=row["strand"],
+                )
+            return
+        # Reads may come in any order, so index fragments by fragment_index in flat
+        # arrays (~21 bytes per fragment) instead of one dict per row.
+        haps, starts, ends, strands = array("i"), array("q"), array("q"), bytearray()
+        for row in rows:
+            i = int(row["fragment_index"])
+            if i >= len(starts):
+                grow = i + 1 - len(starts)
+                haps.extend([0] * grow)
+                starts.extend([-1] * grow)  # -1 marks an index with no fragment
+                ends.extend([0] * grow)
+                strands.extend(b"+" * grow)
+            haps[i] = seq_name_to_haplotype.get(row["chrom"], 1)
+            starts[i] = int(row["fstart"])
+            ends[i] = int(row["fend"])
+            strands[i] = ord(row["strand"])
 
-    read_names: list[str] = _extract_read_names(fastq_r1_path)
-    if read_names:
-        by_index = {frag["fragment_index"]: frag for frag in fragments}
-        unknown = [n for n in read_names if n.removesuffix("/1") not in by_index]
-        if unknown:
+    for name in itertools.chain([first], names):
+        index = name.removesuffix("/1")
+        i = int(index) if index.isdecimal() else -1
+        if not 0 <= i < len(starts) or starts[i] < 0:
             raise ReadSimulationError(
-                f"{len(unknown)} of {len(read_names)} reads in {fastq_r1_path} match no "
-                f"fragment in {sidecar_path} (first: {unknown[0]!r})"
+                f"Reads in {fastq_r1_path} match no fragment in {sidecar_path} (first: {name!r})"
             )
-        pairs = [(n, by_index[n.removesuffix("/1")]) for n in read_names]
-    else:
-        pairs = [(f"fragment_{frag['fragment_index']}", frag) for frag in fragments]
-
-    origins: list[ReadOrigin] = []
-    for read_id, frag in pairs:
-        origins.append(
-            ReadOrigin(
-                read_id=read_id,
-                haplotype=seq_name_to_haplotype.get(frag["chrom"], 1),
-                ref_start=int(frag["fstart"]),
-                ref_end=int(frag["fend"]),
-                strand=frag["strand"],
-            )
+        yield ReadOrigin(
+            read_id=name,
+            haplotype=haps[i],
+            ref_start=starts[i],
+            ref_end=ends[i],
+            strand=chr(strands[i]),
         )
 
-    return origins
 
-
-def _extract_read_names(fastq_path: str | None) -> list[str]:
-    """Extract read names from a FASTQ file (plain or gzipped).
+def _extract_read_names(fastq_path: str | None) -> Iterator[str]:
+    """Yield read names from a FASTQ file (plain or gzipped).
 
     Args:
         fastq_path: Path to FASTQ file, or None.
 
-    Returns:
-        List of read name strings (without @ prefix or /1 suffix).
+    Yields:
+        Read name strings (without @ prefix or comment fields).
     """
     if not fastq_path:
-        return []
+        return
 
-    read_names: list[str] = []
     try:
         opener = gzip.open if fastq_path.endswith(".gz") else open
         with opener(fastq_path, "rt") as f:
-            line_num = 0
-            for line in f:
-                line_num += 1
-                if line_num % 4 == 1:  # Header lines
+            for line_num, line in enumerate(f):
+                if line_num % 4 == 0:  # Header lines
                     name = line.strip().lstrip("@")
                     # Split on whitespace to get the read ID (drop comment fields)
-                    name = name.split()[0] if name else name
-                    read_names.append(name)
+                    yield name.split()[0] if name else name
     except (FileNotFoundError, OSError) as e:
         logger.warning("Could not read FASTQ for read names: %s", e)
-
-    return read_names

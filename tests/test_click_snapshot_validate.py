@@ -212,6 +212,31 @@ class TestSnapshotValidateCommand:
             assert "haplotypes" in output_data
             assert output_data["mutation"] == "dupC"
 
+    def test_pcr_failure_does_not_crash(self, runner, config_with_snapshot, tmp_path):
+        """A haplotype without primer sites reports PCR failure, not a KeyError (#184)."""
+        fasta = tmp_path / "noprimers.fa"
+        fasta.write_text(">h1\n" + "AT" * 100 + "\n")
+        output_file = tmp_path / "results.json"
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                config_with_snapshot,
+                "analyze",
+                "snapshot-validate",
+                str(fasta),
+                "--mutation",
+                "dupC",
+                "--output",
+                str(output_file),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        hap = json.loads(output_file.read_text())["haplotypes"]["h1"]
+        assert hap["pcr_products"] == 0
+        assert hap["digest_survivors"] == 0
+        assert "PCR failed" in hap["summary"]
+
     def test_json_structure(self, runner, config_with_snapshot, sample_fasta):
         """Test that JSON output has expected structure."""
         result = runner.invoke(

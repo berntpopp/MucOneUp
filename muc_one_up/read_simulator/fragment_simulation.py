@@ -9,6 +9,8 @@ picking based on PSL alignments and producing fragment pairs for later
 sequencing via ReSeq.
 """
 
+import contextlib
+import csv
 import logging
 import math
 import random
@@ -371,12 +373,18 @@ def simulate_fragments(
             f"No matches found in PSL file {psl_file}. Cannot simulate fragments."
         )
 
-    # Collect fragment origins for source tracking sidecar
-    fragment_origins: list[dict] = []
+    from .parsers.illumina_parser import FRAGMENT_ORIGIN_FIELDS
 
-    # Simulate fragments and write to FASTA file
+    # Simulate fragments and write them to the FASTA file, and their origins
+    # to the source tracking sidecar row by row (#189)
     try:
-        with Path(output_fragments).open("w") as fout:
+        with contextlib.ExitStack() as stack:
+            fout = stack.enter_context(Path(output_fragments).open("w"))
+            sidecar = None
+            if fragment_origins_path is not None:
+                sidecar_file = stack.enter_context(open(fragment_origins_path, "w", newline=""))
+                sidecar = csv.writer(sidecar_file, delimiter="\t")
+                sidecar.writerow(FRAGMENT_ORIGIN_FIELDS)
             for i in range(read_number):
                 # Pick a random match from the PSL file
                 match = pick_on_match(matches, rng=rng)
@@ -443,16 +451,8 @@ def simulate_fragments(
                     fout.write(f"{frag_seq}\n")
 
                 # Track fragment origin for source tracking sidecar
-                if fragment_origins_path is not None:
-                    fragment_origins.append(
-                        {
-                            "fragment_index": i + 1,
-                            "chrom": chrom,
-                            "fstart": fstart,
-                            "fend": fend,
-                            "strand": strand,
-                        }
-                    )
+                if sidecar is not None:
+                    sidecar.writerow((i + 1, chrom, fstart, fend, strand))
 
                 # Progress logging
                 if (i + 1) % 10000 == 0:
@@ -460,11 +460,7 @@ def simulate_fragments(
 
         logging.info(f"Fragment simulation completed. Output: {output_fragments}")
 
-        # Write fragment origins sidecar if requested
-        if fragment_origins_path is not None and fragment_origins:
-            from .parsers.illumina_parser import write_fragment_origins
-
-            write_fragment_origins(fragment_origins, fragment_origins_path)
+        if fragment_origins_path is not None:
             logging.info("Fragment origins sidecar written: %s", fragment_origins_path)
 
     except Exception as e:

@@ -208,6 +208,7 @@ def simulate_pacbio_hifi_reads(
             length_mean=length_mean,
             length_min=length_min,
             length_max=length_max,
+            length_sd=length_sd,
         )
 
         validate_ccs_parameters(

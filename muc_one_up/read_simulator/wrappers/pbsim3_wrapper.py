@@ -289,6 +289,7 @@ def run_pbsim3_simulation(
         length_min=length_min,
         length_max=length_max,
         min_coverage=1e-6,
+        length_sd=length_sd,
     )
 
     # Validate model type against allowed values from constants
@@ -529,6 +530,7 @@ def validate_pbsim3_parameters(
     length_min: int,
     length_max: int,
     min_coverage: float | None = None,
+    length_sd: float = 0,
 ) -> None:
     """
     Validate pbsim3 simulation parameters before running.
@@ -543,6 +545,7 @@ def validate_pbsim3_parameters(
         length_min: Minimum read length.
         length_max: Maximum read length.
         min_coverage: Minimum allowed coverage (default: MIN_COVERAGE).
+        length_sd: Read length standard deviation (must be >= 0).
 
     Raises:
         ValueError: If any parameter is outside valid range.
@@ -594,14 +597,10 @@ def validate_pbsim3_parameters(
     if not 0.0 <= accuracy_min <= 1.0:
         raise ValueError(f"Invalid accuracy_min: {accuracy_min}. Must be between 0.0 and 1.0")
 
-    # Validate accuracy_min <= accuracy_mean
-    if accuracy_min > accuracy_mean:
-        raise ValueError(
-            f"Invalid accuracy parameters: accuracy_min ({accuracy_min}) > "
-            f"accuracy_mean ({accuracy_mean})"
-        )
-
     # Validate length parameters
+    if length_sd < 0:
+        raise ValueError(f"Invalid length_sd: {length_sd}. Must be ≥ 0")
+
     if length_min < 1:
         raise ValueError(f"Invalid length_min: {length_min}. Must be ≥ 1")
 
