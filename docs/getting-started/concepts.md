@@ -309,7 +309,7 @@ Specify exact haplotype and position:
 ```bash
 muconeup --config config.json simulate \
   --mutation-name dupC \
-  --mutation-targets 1,25 2,30
+  --mutation-targets 1,25 --mutation-targets 2,30
 ```
 
 Applies dupC mutation to:
@@ -318,15 +318,14 @@ Applies dupC mutation to:
 
 **Random Mutations:**
 
-Let MucOneUp select positions:
+Omit `--mutation-targets` to let MucOneUp select a position:
 
 ```bash
 muconeup --config config.json simulate \
-  --mutation-name dupC \
-  --mutation-targets 2
+  --mutation-name dupC
 ```
 
-Randomly selects 2 positions respecting `allowed_repeats` constraints.
+Randomly selects one position respecting `allowed_repeats` constraints.
 
 ### Mutation Validation
 
