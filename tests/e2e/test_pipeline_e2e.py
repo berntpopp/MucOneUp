@@ -70,7 +70,7 @@ class TestIlluminaE2E:
 
 
 @pytest.mark.e2e
-@pytest.mark.requires_tools("nanosim", "minimap2", "samtools")
+@pytest.mark.requires_tools("simulator.py", "minimap2", "samtools")
 class TestONTE2E:
     """Full ONT pipeline: FASTA -> FASTQ -> sorted BAM."""
 
@@ -114,7 +114,7 @@ class TestONTE2E:
 
 
 @pytest.mark.e2e
-@pytest.mark.requires_tools("pbsim3", "ccs", "minimap2", "samtools")
+@pytest.mark.requires_tools("pbsim", "ccs", "minimap2", "samtools")
 class TestPacBioE2E:
     """Full PacBio HiFi pipeline: FASTA -> CLR -> CCS -> BAM."""
 
@@ -155,7 +155,7 @@ class TestPacBioE2E:
 
 
 @pytest.mark.e2e
-@pytest.mark.requires_tools("pbsim3", "ccs", "minimap2", "samtools")
+@pytest.mark.requires_tools("pbsim", "ccs", "minimap2", "samtools")
 class TestAmpliconE2E:
     """Full Amplicon pipeline: FASTA -> template -> CLR -> CCS -> BAM."""
 
@@ -206,7 +206,7 @@ class TestAmpliconE2E:
 
 
 @pytest.mark.e2e
-@pytest.mark.requires_tools("pbsim3")
+@pytest.mark.requires_tools("pbsim")
 class TestTruthTrackedPbsim3E2E:
     """Truth-tracked amplicon path through real pbsim3 (--track-read-source, no profile)."""
 
