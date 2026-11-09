@@ -306,8 +306,9 @@ def run_orf_analysis_standalone(
     from Bio.SeqRecord import SeqRecord
 
     from ..exceptions import MucOneUpError, ValidationError
+    from ..read_simulator.utils.sequence_utils import reverse_complement
     from ..toxic_protein_detector import scan_orf_fasta
-    from ..translate import dna_to_protein, find_orfs_in_memory, reverse_complement
+    from ..translate import dna_to_protein, find_orfs_in_memory
     from .config import validate_output_base
 
     validate_output_base(out_base)
