@@ -163,6 +163,8 @@ Uses a hybrid Illumina pipeline combining Wessim2-style fragment simulation with
 !!! note "ReSeq2 replaces original ReSeq"
     MucOneUp uses [ReSeq2](https://github.com/berntpopp/ReSeq2), a maintained fork of the original [ReSeq](https://github.com/schmeing/ReSeq) (Schmeing & Robinson, Genome Biology 2021). ReSeq2 fixes a critical deadlock bug in `seqToIllumina` that limited the original to ~10,000 reads per run. With ReSeq2, all requested reads are generated correctly. The original ReSeq is no longer maintained. ReSeq2 uses the same `.reseq` profile format and is a drop-in replacement.
 
+    The conda environment and Docker image still ship the legacy bioconda ReSeq 1.1 until a `reseq2` package exists. MucOneUp detects ReSeq 1.x (`reseq --version`) and feeds `seqToIllumina` batches of at most 10,000 fragments to avoid the deadlock. With ReSeq2 the whole input goes to reseq in one call, so for best results point `tools.reseq` at ReSeq2.
+
 #### Install via Conda
 
 ```bash

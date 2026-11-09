@@ -10,11 +10,13 @@ This module provides wrapper functions for the reseq toolkit operations:
 
 import gzip
 import logging
+import re
 from pathlib import Path
 
 from ...exceptions import FileOperationError
 from ..command_utils import build_tool_command
 from ..utils import run_command
+from ..utils.tool_version import get_tool_version
 
 
 def replace_Ns(
@@ -90,9 +92,15 @@ def generate_systematic_errors(
         )
 
 
-# reseq 1.1 seqToIllumina hangs forever on inputs of more than 10,000 fragments
-# (output stalls just before the first batch boundary), so feed it chunks.
+# Legacy ReSeq 1.x (the bioconda ``reseq`` package) deadlocks in seqToIllumina on
+# more than 10,000 fragments; ReSeq2 (github.com/berntpopp/ReSeq2) fixed this.
 RESEQ_MAX_FRAGMENTS = 10_000
+
+
+def _is_legacy_reseq(reseq_cmd: str) -> bool:
+    """True unless the tool reports ReSeq2 (version >= 2); unknown counts as legacy (safe)."""
+    version = get_tool_version(reseq_cmd, "reseq")
+    return re.search(r"version\s+([2-9]|\d{2,})", version) is None
 
 
 def _split_fasta(path: str, max_records: int, prefix: str) -> list[str]:
@@ -131,8 +139,9 @@ def create_reads(
     """
     Create reads from fragments using reseq/reseq2 seqToIllumina.
 
-    Inputs larger than ``RESEQ_MAX_FRAGMENTS`` are simulated chunk by chunk
-    (chunk *i* uses ``seed + i``) and concatenated, working around a reseq hang.
+    With legacy ReSeq 1.x, inputs larger than ``RESEQ_MAX_FRAGMENTS`` are
+    simulated chunk by chunk (chunk *i* uses ``seed + i``) and concatenated to
+    avoid its deadlock. ReSeq2 always gets the whole input in one call.
 
     Args:
         input_fragments: Input fragments FASTA.
@@ -146,7 +155,11 @@ def create_reads(
     Raises:
         FileOperationError: If the command fails or the output file is not created.
     """
-    chunks = _split_fasta(input_fragments, RESEQ_MAX_FRAGMENTS, output_reads)
+    chunks = (
+        _split_fasta(input_fragments, RESEQ_MAX_FRAGMENTS, output_reads)
+        if _is_legacy_reseq(tools["reseq"])
+        else []
+    )
     single = len(chunks) <= 1
     if single:
         for c in chunks:

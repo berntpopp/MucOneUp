@@ -21,9 +21,11 @@ draw a seed and record it in provenance.
 ### Fixed
 - Illumina simulation works again with real tools:
   - Gapped pblat matches no longer make insert-length sampling impossible.
-  - Input to reseq `seqToIllumina` is chunked into batches of at most 10,000
-    fragments, working around a reseq 1.1 hang on larger inputs. The old
-    600 s cap on that step is gone.
+  - With legacy ReSeq 1.1 (the bioconda package that `conda/env_wessim.yaml`
+    and Docker install, and that `config.json` has pointed at since #156),
+    `seqToIllumina` input is fed in batches of at most 10,000 fragments to
+    avoid its deadlock. ReSeq2 still gets the whole input in one call. The
+    old 600 s cap on that step is gone.
 - All pipelines now resolve the alignment reference once, in one order:
   `human_reference_<asm>`, then `human_reference`, then
   `reference_genomes.<asm>.fasta_path`.

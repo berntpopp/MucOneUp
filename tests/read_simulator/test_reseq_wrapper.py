@@ -195,6 +195,14 @@ class TestGenerateSystematicErrors:
 class TestCreateReads:
     """Test create_reads command construction and output validation."""
 
+    @pytest.fixture(autouse=True)
+    def _reseq2(self, mocker):
+        """Report ReSeq2 so the version probe neither runs nor triggers chunking."""
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.reseq_wrapper.get_tool_version",
+            return_value="ReSeq2 version 2.0.3",
+        )
+
     def test_constructs_correct_seqToIllumina_command(self, mocker, tmp_path, tools_dict):
         """Test that seqToIllumina command includes threads and paths."""
         # Arrange
@@ -416,6 +424,7 @@ class TestCreateReadsChunking:
         from muc_one_up.read_simulator.wrappers import reseq_wrapper
 
         mocker.patch.object(reseq_wrapper, "RESEQ_MAX_FRAGMENTS", 2)
+        mocker.patch.object(reseq_wrapper, "get_tool_version", return_value="ReSeq version 1.1")
         fragments = tmp_path / "fragments.fa"
         fragments.write_text("".join(f">{i} x\nACGT\n" for i in range(5)))
         output_fq = tmp_path / "reads.fq"
@@ -447,3 +456,39 @@ class TestCreateReadsChunking:
             "@4",
         ]
         assert sorted(p.name for p in tmp_path.iterdir()) == ["fragments.fa", "reads.fq"]
+
+    def test_reseq2_gets_whole_input_in_one_call(self, mocker, tmp_path, tools_dict):
+        from muc_one_up.read_simulator.wrappers import reseq_wrapper
+
+        mocker.patch.object(reseq_wrapper, "RESEQ_MAX_FRAGMENTS", 2)
+        mocker.patch.object(reseq_wrapper, "get_tool_version", return_value="ReSeq2 version 2.0.3")
+        fragments = tmp_path / "fragments.fa"
+        fragments.write_text("".join(f">{i} x\nACGT\n" for i in range(5)))
+        output_fq = tmp_path / "reads.fq"
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            args = [str(c) for c in cmd]
+            calls.append((args[args.index("-i") + 1], args[args.index("--seed") + 1]))
+            Path(args[args.index("-o") + 1]).write_text("@0\nACGT\n+\nIIII\n")
+
+        mocker.patch.object(reseq_wrapper, "run_command", side_effect=fake_run)
+
+        create_reads(str(fragments), "model", str(output_fq), 2, tools_dict, seed=10)
+
+        assert calls == [(str(fragments), "10")]
+
+    @pytest.mark.parametrize(
+        ("version", "legacy"),
+        [
+            ("ReSeq version 1.1", True),
+            ("ReSeq2 version 2.0.3", False),
+            ("ReSeq2 version 10.0", False),
+            ("N/A", True),
+        ],
+    )
+    def test_is_legacy_reseq(self, mocker, version, legacy):
+        from muc_one_up.read_simulator.wrappers import reseq_wrapper
+
+        mocker.patch.object(reseq_wrapper, "get_tool_version", return_value=version)
+        assert reseq_wrapper._is_legacy_reseq("reseq") is legacy
