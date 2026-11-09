@@ -9,19 +9,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-11-10
+
+Resolves the 2026-11-09 follow-up audit (issues #159–#201).
+
+**Seeded outputs change.**
+- The VNTR end block is now drawn from the transition table: V always
+  precedes 6/6p, and 6p can skip to 8 (#179).
+- Amplicon and fragment long-read modes default to 30 molecules, using the
+  platform's own `*_params.coverage` instead of the Illumina target of 150
+  (#181).
+- The Vrbacká variants `insG_pos58`, `insG_pos54`, `insA_pos54` and
+  `ins16bp` now insert at the published position. `insG_pos54` and
+  `insA_pos54` target the new units `bJ` and `aH` (#190).
+- The benign controls `delCCC_benign` and `del3bp_pos30_benign` delete
+  3 bp, not 4 (#159).
+
+### Breaking
+- Duplicate mutation targets are now an error. The CLI used to drop them
+  silently, and the Python API applied them twice (#166).
+- Config validation is stricter: only `distribution: "normal"` is accepted
+  (`"uniform"` never worked; it gave fixed lengths), mutation positions
+  must be ≥ 1, transition weights must be > 0, and transition targets must
+  be known repeats or `END` (#180).
+- `--coverage` must be > 0, and `--threads`, `--read-number`, `--n-reads`
+  and `--min-read-length` must be ≥ 1 (#169).
+- ONT without a human reference returns FASTQ instead of aligning to the
+  simulated haplotypes (#183).
+
 ### Fixed
-- A configured `human_reference` that does not exist now fails before
-  simulation instead of after it. PacBio no longer deletes the HiFi FASTQ
-  when alignment fails (#176).
-- ONT without a human reference now skips alignment with a warning and
-  returns the FASTQ, like PacBio. It used to align to the simulated
-  haplotypes and write a misleading `.bam` (#183).
-- An unknown ReSeq version (e.g. a slow version probe) is now treated as
-  ReSeq2, not ReSeq 1.x, so its input is no longer chunked. The chosen mode
-  is logged (#182).
-- The metadata `Seed` row records the seed the pipeline used
-  (`read_simulation`, `nanosim_params` or `pacbio_params`), not only the
-  top-level seed (#185).
+- The benign deletion controls were frameshifts and were flagged as toxic
+  (#159).
+- hg19 runs use the hg19 VNTR region for capture bias instead of the
+  hard-coded hg38 region, which dropped the reads (#160).
+- Dual mode with `--input-structure` reuses the file's targets and writes
+  correct structure files (#161).
+- Ctrl-C and SIGTERM stop the external tools instead of leaving them
+  running (#162). A failed pipe reports the stage that really failed (#165).
+- A dead end in the repeat chain, or an end block that cannot reach 9,
+  raises `SimulationError` instead of returning a truncated haplotype
+  (#167, #179).
+- Kept ONT haplotype FASTQs are prefixed with the sample name, so samples
+  no longer overwrite each other (#168).
+- Docker: NanoSim models load again (scikit-learn 0.23.2), pbsim3 model
+  paths resolve, and the image installs from `uv.lock` (#175, #177, #191).
+- A missing explicit `human_reference` fails before simulation, and PacBio
+  no longer deletes the HiFi FASTQ when alignment fails (#176).
+- An unknown ReSeq version is treated as ReSeq2, so input is not chunked
+  (#182). The metadata `Seed` row records the seed actually used (#185).
+- `snapshot-validate` no longer crashes on PCR failure, and 0 products are
+  reported as a PCR failure instead of normal (#184).
+- pbsim3 accepts `accuracy_mean` < 0.75 and validates `length_sd` (#186).
+- The Vrbacká citation DOI is corrected (#178).
+- PacBio and ONT amplicon defaults agree (threads 8, a clear error for a
+  missing PacBio `model_type`), and `analyze stats` reads `.gz` (#187).
+
+### Performance
+- Read-source tracking streams its manifest: peak memory at 1M read pairs
+  drops from 743 MB to 46 MB, with byte-identical output (#189).
+- The homopolymer scan is about 4x faster (#188).
+
+### CI and tests
+- The e2e tests detect the real `simulator.py` and `pbsim` binaries, and
+  all 7 pass with the real tools (#163, #192).
+- The Docker image is tested with a real `simulate` + `reads` run (#163).
+- Version tags on the image are set only on releases (#164).
+- The scikit-learn CVEs that NanoSim cannot avoid are documented in
+  `.trivyignore`, with expiry dates (#175).
 
 ## [0.49.0] - 2026-11-09
 
