@@ -67,8 +67,8 @@ class TestCommonUtilsSubprocess:
 class TestRunPipeline:
     """Tests for run_pipeline execution."""
 
-    def test_upstream_stderr_is_none(self):
-        """Upstream pipeline stages must inherit stderr (stderr=None), only last stage is PIPE."""
+    def test_upstream_stderr_goes_to_temp_file(self):
+        """Upstream stages write stderr to a temp file (not an unread PIPE); last stage is PIPE."""
         mock_proc1 = MagicMock()
         mock_proc1.stdout = MagicMock()
         mock_proc1.wait = MagicMock(return_value=0)
@@ -82,8 +82,10 @@ class TestRunPipeline:
             run_pipeline([["cmd1"], ["cmd2"]])
 
             assert mock_popen.call_count == 2
-            # First stage has stderr=None (inherits stderr)
-            assert mock_popen.call_args_list[0].kwargs["stderr"] is None
+            # First stage writes stderr to a file object, never an unread PIPE
+            upstream_stderr = mock_popen.call_args_list[0].kwargs["stderr"]
+            assert upstream_stderr not in (None, subprocess.PIPE)
+            assert hasattr(upstream_stderr, "fileno")
             # Last stage has stderr=subprocess.PIPE
             assert mock_popen.call_args_list[1].kwargs["stderr"] == subprocess.PIPE
 
@@ -136,19 +138,12 @@ class TestRunPipeline:
 
             assert "samtools: memory exhausted" in exc_info.value.stderr
 
-    def test_upstream_pipeline_stage_failure_preserves_stage_message(self):
-        """ExternalToolError should identify upstream failed stage and preserve stderr."""
-        mock_proc1 = MagicMock()
-        mock_proc1.wait = MagicMock(return_value=1)
-        mock_proc1.returncode = 1
+    def test_upstream_stage_failure_reports_its_own_stderr(self):
+        """The failing upstream stage's stderr is in the error, not lost (audit #14)."""
+        with pytest.raises(ExternalToolError) as exc_info:
+            run_pipeline([["sh", "-c", "echo boom >&2; exit 3"], ["cat"]])
 
-        mock_proc2 = MagicMock()
-        mock_proc2.communicate = MagicMock(return_value=(b"", b"samtools: view error"))
-        mock_proc2.returncode = 0
-
-        with patch("subprocess.Popen", side_effect=[mock_proc1, mock_proc2]):
-            with pytest.raises(ExternalToolError) as exc_info:
-                run_pipeline([["bwa", "mem"], ["samtools", "view"]])
-
-            assert "Pipeline stage 0 (bwa mem) failed with exit code 1" in exc_info.value.stderr
-            assert "samtools: view error" in exc_info.value.stderr
+        assert "Pipeline stage 0 (sh -c echo boom >&2; exit 3) failed with exit code 3" in (
+            exc_info.value.stderr
+        )
+        assert "boom" in exc_info.value.stderr

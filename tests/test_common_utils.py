@@ -1,7 +1,10 @@
 """Tests for common_utils subprocess helpers."""
 
 import logging
+import os
 import subprocess
+import sys
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -88,16 +91,38 @@ def test_streaming_mode_non_timeout_error_includes_exit_code():
 )
 def test_capture_mode_failure_log_level(caplog, level, expect_error):
     """Non-zero exits log at ERROR by default, or at the requested failure_log_level."""
-    failed = subprocess.CompletedProcess(args=["tool"], returncode=255, stdout="", stderr="usage")
     kwargs = {} if level is None else {"failure_log_level": level}
 
-    with (
-        caplog.at_level(logging.DEBUG),
-        patch("subprocess.run", return_value=failed),
-        pytest.raises(ExternalToolError),
-    ):
-        run_command(["tool"], capture=True, **kwargs)
+    with caplog.at_level(logging.DEBUG), pytest.raises(ExternalToolError):
+        run_command([sys.executable, "-c", "import sys; sys.exit(255)"], capture=True, **kwargs)
 
     exit_records = [r for r in caplog.records if "exited with code 255" in r.getMessage()]
     assert len(exit_records) == 1
     assert (exit_records[0].levelno == logging.ERROR) is expect_error
+
+
+@pytest.mark.parametrize("mode", ["capture", "stdout_path"])
+def test_timeout_kills_grandchildren(tmp_path, mode):
+    """Capture and to-file modes kill the whole process group on timeout (audit f)."""
+    pid_file = tmp_path / "pid"
+    cmd = ["sh", "-c", f"sleep 30 & echo $! > {pid_file}; wait"]
+    kwargs = {"capture": True} if mode == "capture" else {"stdout_path": tmp_path / "out"}
+
+    with pytest.raises(ExternalToolError, match="timed out"):
+        run_command(cmd, timeout=1, **kwargs)
+
+    grandchild = int(pid_file.read_text())
+    for _ in range(50):
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    pytest.fail(f"grandchild {grandchild} survived the timeout")
+
+
+def test_check_external_tools_accepts_multi_word_command():
+    """A wrapper command like 'singularity exec img samtools' is split, not run as one name."""
+    from muc_one_up.read_simulator.utils.common_utils import check_external_tools
+
+    check_external_tools({"samtools": "env true"}, required_tools=["samtools"])

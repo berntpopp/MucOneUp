@@ -13,8 +13,6 @@ from . import bed, samtools
 from .common_utils import (
     RunResult,
     check_external_tools,
-    cleanup_files,
-    fix_field,
     run_command,
     run_pipeline,
 )
@@ -52,10 +50,8 @@ __all__ = [
     "calculate_corrected_coverage",
     "capture_tool_versions",
     "check_external_tools",
-    "cleanup_files",
     "count_fastq_reads",
     "extract_haplotypes",
-    "fix_field",
     "get_reference_info",
     "get_tool_version",
     "is_diploid_reference",
