@@ -332,6 +332,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "fragment_sd": {"type": "number"},
                 "min_fragment": {"type": "number"},
                 "threads": {"type": "number"},
+                "alignment_timeout": {"type": ["number", "null"]},
                 "coverage": {"type": "number"},
                 "downsample_seed": {"type": "number"},
                 "downsample_mode": {"type": "string"},
@@ -358,7 +359,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
                             "type": "object",
                             "properties": {
                                 "chr": {"type": "string"},
-                                "start": {"type": "integer", "minimum": 0},
+                                "start": {"type": "integer", "minimum": 1},
                                 "end": {"type": "integer", "minimum": 1},
                                 "name": {"type": "string"},
                             },

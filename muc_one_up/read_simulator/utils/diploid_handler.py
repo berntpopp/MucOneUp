@@ -310,8 +310,10 @@ def run_split_simulation(
             import shutil
 
             output_dir = output_fastq.parent
-            final_hap1_fastq = str(output_dir / "hap1_reads.fastq.gz")
-            final_hap2_fastq = str(output_dir / "hap2_reads.fastq.gz")
+            # NanoSim writes plain-text FASTQ; only claim .gz when it is gzipped
+            ext = ".fastq.gz" if str(hap1_fastq).endswith(".gz") else ".fastq"
+            final_hap1_fastq = str(output_dir / f"hap1_reads{ext}")
+            final_hap2_fastq = str(output_dir / f"hap2_reads{ext}")
             shutil.copy(hap1_fastq, final_hap1_fastq)
             shutil.copy(hap2_fastq, final_hap2_fastq)
             logging.info("Kept intermediate files: %s, %s", final_hap1_fastq, final_hap2_fastq)

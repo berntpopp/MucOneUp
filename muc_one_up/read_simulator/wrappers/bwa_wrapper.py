@@ -21,7 +21,7 @@ def align_reads(
     output_bam: str,
     tools: dict[str, str],
     threads: int = 4,
-    timeout: int | None = 300,
+    timeout: float | None = None,
     platform: str = "ILLUMINA",
 ) -> None:
     """
@@ -34,7 +34,7 @@ def align_reads(
         output_bam: Output BAM filename.
         tools: Dictionary of tool commands.
         threads: Number of threads.
-        timeout: Timeout in seconds for the alignment pipeline.
+        timeout: Timeout in seconds for the alignment pipeline (None: no limit).
         platform: Sequencing platform for @RG header (default: "ILLUMINA").
 
     Raises:
@@ -56,7 +56,7 @@ def align_reads(
     sort_cmd = build_tool_command(tools["samtools"], "sort", "-@", threads, "-o", output_bam, "-")
 
     logging.info("Running BWA mem | samtools sort pipeline")
-    run_pipeline([bwa_cmd, sort_cmd], capture=True, timeout=timeout or 300)
+    run_pipeline([bwa_cmd, sort_cmd], capture=True, timeout=timeout)
     logging.info("[bwa+samtools] Alignment and BAM sorting completed")
 
     # Index the BAM file

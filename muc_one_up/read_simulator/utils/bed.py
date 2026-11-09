@@ -59,13 +59,17 @@ def create_region_bed(
         raise BedError(f"Failed to create BED file {output_path}: {e}") from e
 
 
-def create_vntr_bed(output_dir: Path, vntr_region: dict) -> Path:
+def create_vntr_bed(output_dir: Path, vntr_region: dict | str) -> Path:
     """
     Create BED file for VNTR region from config.
 
+    The VNTR region is 1-based and end-inclusive, like a samtools region
+    string; the BED file gets the 0-based start that BED requires.
+
     Args:
         output_dir: Directory for BED file
-        vntr_region: Dict with keys: chr, start, end, name
+        vntr_region: Dict with keys chr, start, end, name, or a samtools
+            region string "chr:start-end"
 
     Returns:
         Path to VNTR BED file
@@ -74,6 +78,11 @@ def create_vntr_bed(output_dir: Path, vntr_region: dict) -> Path:
         BedError: If creation fails
         ValueError: If vntr_region is invalid
     """
+    if isinstance(vntr_region, str):
+        chrom, _, coords = vntr_region.replace(",", "").partition(":")
+        start, _, end = coords.partition("-")
+        vntr_region = {"chr": chrom, "start": int(start), "end": int(end), "name": "VNTR"}
+
     required_keys = {"chr", "start", "end", "name"}
     if not required_keys.issubset(vntr_region.keys()):
         raise ValueError(f"vntr_region must contain keys: {required_keys}")
@@ -81,7 +90,11 @@ def create_vntr_bed(output_dir: Path, vntr_region: dict) -> Path:
     bed_file = output_dir / "vntr_region.bed"
 
     return create_region_bed(
-        bed_file, vntr_region["chr"], vntr_region["start"], vntr_region["end"], vntr_region["name"]
+        bed_file,
+        vntr_region["chr"],
+        vntr_region["start"] - 1,
+        vntr_region["end"],
+        vntr_region["name"],
     )
 
 
@@ -93,7 +106,7 @@ def create_flanking_beds(
 
     Args:
         output_dir: Directory for BED files
-        vntr_region: Dict with keys: chr, start, end
+        vntr_region: Dict with keys: chr, start, end (1-based, end-inclusive)
         flanking_size: Size of flanking regions in bp
 
     Returns:
@@ -103,7 +116,7 @@ def create_flanking_beds(
         BedError: If creation fails
     """
     chr = vntr_region["chr"]
-    vntr_start = vntr_region["start"]
+    vntr_start = vntr_region["start"] - 1  # 0-based BED start
     vntr_end = vntr_region["end"]
 
     # Left flanking region
@@ -173,17 +186,3 @@ def create_non_vntr_bed_from_capture(output_path: Path, capture_bed: Path, vntr_
         raise BedError(f"bedtools subtract failed: {e.stderr}") from e
     except FileNotFoundError as e:
         raise BedError("bedtools not found in PATH. Please install bedtools.") from e
-
-
-def check_bedtools_available() -> bool:
-    """
-    Check if bedtools is available in PATH.
-
-    Returns:
-        bool: True if bedtools is available
-    """
-    try:
-        run_command(["bedtools", "--version"], capture=True, timeout=5)
-        return True
-    except (ExternalToolError, FileNotFoundError):
-        return False

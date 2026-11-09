@@ -12,6 +12,7 @@ import contextlib
 import logging
 import re
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,11 @@ logger = logging.getLogger(__name__)
 # tests can patch ``muc_one_up.read_simulator.stages.source_manifest.pysam``
 # cleanly.  The ImportError guard keeps the module importable in environments
 # where pysam is not installed.
+pysam: ModuleType | None
 try:
     import pysam
 except ImportError:  # pragma: no cover
-    pysam = None  # type: ignore[assignment]
+    pysam = None
 
 # parse_illumina_reads is imported at module scope (not inside the function)
 # so that tests can patch it at the module level:
@@ -115,7 +117,14 @@ def generate_read_manifest(
     # ------------------------------------------------------------------
     # Filter to reads that survived alignment (pysam optional)
     # ------------------------------------------------------------------
-    if pysam is not None and final_bam is not None:
+    if final_bam is None:
+        pass  # --no-align: nothing to filter against
+    elif pysam is None:
+        logger.warning(
+            "pysam is not installed: the read manifest also lists reads that are not in "
+            "the final BAM (unaligned or downsampled away). Install pysam to filter them."
+        )
+    else:
         try:
             surviving_read_ids: set[str] = set()
             with pysam.AlignmentFile(final_bam, "rb") as bam:

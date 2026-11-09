@@ -377,3 +377,32 @@ class TestSplitReads:
         with out_fq2.open("rb") as f2:
             magic = f2.read(2)
             assert magic == b"\x1f\x8b"  # Gzip magic number
+
+
+class TestSplitReadsValidation:
+    """split_reads must not silently put R1/R2 out of step (audit a)."""
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            "@r1/1\nACGT\n+\nIIII\n",  # odd number of records
+            "@r1/1\nACGT\n+\nIIII\n@r1/2\nTGCA\n",  # truncated R2
+            "@r1/1\nACGT\n+\nIIII\n@r2/2\nTGCA\n+\nIIII\n",  # mismatched mate
+        ],
+        ids=["odd", "truncated", "mismatch"],
+    )
+    def test_rejects_broken_interleaved_input(self, tmp_path, content):
+        interleaved = tmp_path / "in.fq"
+        interleaved.write_text(content)
+
+        with pytest.raises(FileOperationError):
+            split_reads(str(interleaved), str(tmp_path / "R1.fq.gz"), str(tmp_path / "R2.fq.gz"))
+
+    def test_accepts_identical_names_with_comments(self, tmp_path):
+        interleaved = tmp_path / "in.fq"
+        interleaved.write_text("@r1 a\nACGT\n+\nIIII\n@r1 b\nTGCA\n+\nIIII")
+
+        split_reads(str(interleaved), str(tmp_path / "R1.fq.gz"), str(tmp_path / "R2.fq.gz"))
+
+        with gzip.open(tmp_path / "R2.fq.gz", "rt") as f:
+            assert f.read() == "@r1 b\nTGCA\n+\nIIII"

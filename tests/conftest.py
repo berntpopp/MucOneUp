@@ -381,6 +381,16 @@ def cleanup_logging():
         root_logger.removeHandler(handler)
 
 
+@pytest.fixture(autouse=True)
+def clear_tool_version_cache():
+    """get_tool_version is lru_cached; keep mocked versions from leaking across tests."""
+    from muc_one_up.read_simulator.utils.tool_version import get_tool_version
+
+    get_tool_version.cache_clear()
+    yield
+    get_tool_version.cache_clear()
+
+
 # ============================================================================
 # Marker-based tool skipping
 # ============================================================================

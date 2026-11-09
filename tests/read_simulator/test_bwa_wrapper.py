@@ -73,6 +73,8 @@ class TestBWAWrapperCommandConstruction:
         bwa_cmd = pipeline_cmds[0]
         expected_rg = f"@RG\\tID:{out.stem}\\tSM:{out.stem}\\tPL:ILLUMINA"
         assert bwa_cmd == ["bwa", "mem", "-t", "4", "-R", expected_rg, str(ref), str(r1), str(r2)]
+        # No hidden 300 s cap: default is no timeout (audit #13)
+        assert mock_pipeline.call_args.kwargs["timeout"] is None
 
     def test_custom_platform_rg_header(self, mocker, tmp_path, tools_dict):
         """Test custom platform parameter in @RG header."""

@@ -6,25 +6,27 @@ alignment tools like BWA and minimap2.
 New in Issue #28:
 - get_reference_path_for_assembly(): Get FASTA path for assembly
 - validate_reference_for_assembly(): Validate reference for assembly
-- get_muc1_region_for_assembly(): Get MUC1 VNTR region for assembly
 """
 
 import logging
 from pathlib import Path
 
 from ..exceptions import FileOperationError, ValidationError
+from ..read_simulator.constants import MINIMAP2_PRESET_ONT
 from ..type_defs import ConfigDict, FilePath
 
 
 def validate_reference_genome(
     reference_path: FilePath,
     aligner: str = "bwa",
+    preset: str = MINIMAP2_PRESET_ONT,
 ) -> list[str]:
     """Validate reference genome and indices exist.
 
     Args:
         reference_path: Path to reference FASTA
         aligner: Aligner to check indices for ('bwa' or 'minimap2')
+        preset: minimap2 preset in use (only for aligner='minimap2')
 
     Returns:
         List of warnings (empty if all checks pass)
@@ -49,7 +51,7 @@ def validate_reference_genome(
     if aligner == "bwa":
         warnings.extend(_validate_bwa_indices(reference_path))
     elif aligner == "minimap2":
-        warnings.extend(_validate_minimap2_indices(reference_path))
+        warnings.extend(_validate_minimap2_indices(reference_path, preset))
     else:
         raise ValidationError(f"Unknown aligner: '{aligner}'. Supported aligners: bwa, minimap2")
 
@@ -80,109 +82,19 @@ def _validate_bwa_indices(reference_path: FilePath) -> list[str]:
     return warnings
 
 
-def _validate_minimap2_indices(reference_path: FilePath) -> list[str]:
-    """Validate minimap2 index file exists.
+def _validate_minimap2_indices(reference_path: FilePath, preset: str) -> list[str]:
+    """Check for the index the aligner actually reuses: ``{ref}.{preset}.mmi``.
 
-    Args:
-        reference_path: Path to reference FASTA
-
-    Returns:
-        List of warnings for missing indices
+    Must match ``minimap2_wrapper.resolve_minimap2_target``; any other .mmi
+    is ignored there, so GRCh38 would be re-indexed on every run.
     """
-    ref_p = Path(reference_path)
-    mmi_path = Path(f"{reference_path}.mmi")
-    preset_candidates = [
-        mmi_path,
-        Path(f"{reference_path}.map-ont.mmi"),
-        Path(f"{reference_path}.map-hifi.mmi"),
-        ref_p.with_name(f"{ref_p.stem}_ont.mmi"),
-        ref_p.with_name(f"{ref_p.stem}_hifi.mmi"),
+    mmi_path = Path(f"{reference_path}.{preset}.mmi")
+    if mmi_path.exists():
+        return []
+    return [
+        f"Minimap2 index missing: {mmi_path}. "
+        f"Run: minimap2 -x {preset} -d {mmi_path} {reference_path}"
     ]
-    warnings: list[str] = []
-
-    if not any(p.exists() for p in preset_candidates):
-        warnings.append(
-            f"Minimap2 index missing: {mmi_path}. Run: minimap2 -d {mmi_path} {reference_path}"
-        )
-
-    return warnings
-
-
-def validate_bam_file(bam_path: FilePath, require_index: bool = True) -> list[str]:
-    """Validate BAM file and optional index exist.
-
-    Args:
-        bam_path: Path to BAM file
-        require_index: Require BAI index file (default: True)
-
-    Returns:
-        List of warnings
-
-    Raises:
-        FileOperationError: If BAM file not found
-        ValidationError: If index required but missing
-    """
-    bam = Path(bam_path)
-    warnings: list[str] = []
-
-    # Check BAM exists
-    if not bam.exists():
-        raise FileOperationError(f"BAM file not found: {bam_path}")
-
-    # Check for index
-    bai_path = Path(f"{bam_path}.bai")
-    if not bai_path.exists():
-        msg = f"BAM index missing: {bai_path}. Run: samtools index {bam_path}"
-        if require_index:
-            raise ValidationError(msg)
-        warnings.append(msg)
-
-    return warnings
-
-
-def validate_bed_file(bed_path: FilePath) -> None:
-    """Validate BED file exists and has basic structure.
-
-    Args:
-        bed_path: Path to BED file
-
-    Raises:
-        FileOperationError: If file not found
-        ValidationError: If BED format is invalid
-    """
-    bed = Path(bed_path)
-
-    if not bed.exists():
-        raise FileOperationError(f"BED file not found: {bed_path}")
-
-    # Basic BED format validation
-    with bed.open() as f:
-        for i, line in enumerate(f, 1):
-            line = line.strip()
-
-            # Skip empty lines and comments
-            if not line or line.startswith("#"):
-                continue
-
-            # BED format: chrom start end [name] [score] [strand] ...
-            fields = line.split("\t")
-            if len(fields) < 3:
-                raise ValidationError(
-                    f"Invalid BED format at line {i}: expected at least 3 fields, got {len(fields)}"
-                )
-
-            # Validate start/end are integers
-            try:
-                start = int(fields[1])
-                end = int(fields[2])
-            except ValueError as e:
-                raise ValidationError(f"Invalid BED coordinates at line {i}: {e}") from e
-
-            # Validate start < end
-            if start >= end:
-                raise ValidationError(
-                    f"Invalid BED coordinates at line {i}: start ({start}) >= end ({end})"
-                )
 
 
 # ============================================================================
@@ -304,48 +216,3 @@ def validate_reference_for_assembly(
         logging.warning(f"[{assembly}] {warning}")
 
     return warnings
-
-
-def get_muc1_region_for_assembly(config: ConfigDict, assembly: str | None = None) -> str:
-    """Get MUC1 VNTR region coordinates for specified assembly.
-
-    Args:
-        config: Configuration dictionary
-        assembly: Assembly name (e.g., "hg38", "hg19")
-
-    Returns:
-        Genomic region string (e.g., "chr1:155188487-155192239")
-
-    Raises:
-        ValidationError: If assembly not configured or vntr_region missing
-
-    Example:
-        >>> region = get_muc1_region_for_assembly(config, "hg38")
-        >>> print(region)
-        chr1:155188487-155192239
-    """
-    # Get active assembly
-    if assembly is None:
-        assembly = config.get("reference_assembly", "hg38")
-
-    # Get reference_genomes section
-    ref_genomes = config.get("reference_genomes", {})
-
-    if not ref_genomes:
-        raise ValidationError("No 'reference_genomes' section in config")
-
-    # Get assembly config
-    assembly_config = ref_genomes.get(assembly)
-
-    if not assembly_config:
-        available = list(ref_genomes.keys())
-        raise ValidationError(f"Assembly '{assembly}' not found. Available: {', '.join(available)}")
-
-    # Get VNTR region
-    vntr_region = assembly_config.get("vntr_region")
-
-    if not vntr_region:
-        raise ValidationError(f"No 'vntr_region' configured for assembly '{assembly}'")
-
-    logging.debug(f"MUC1 VNTR region for {assembly}: {vntr_region}")
-    return str(vntr_region)

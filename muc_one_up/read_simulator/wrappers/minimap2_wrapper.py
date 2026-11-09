@@ -151,9 +151,9 @@ def align_reads_with_minimap2(
 
     Notes:
         - Input FASTQ can be gzip-compressed (.fastq.gz)
-        - A prebuilt index is reused when present: ``{reference}.{preset}.mmi``
-          (preferred, matching indexing parameters) or ``{reference}.mmi``;
-          otherwise minimap2 indexes the FASTA in memory on every call
+        - A prebuilt ``{reference}.{preset}.mmi`` is reused when present and not
+          older than the FASTA; otherwise minimap2 indexes the FASTA in memory
+          on every call
         - Intermediate SAM file is cleaned up after conversion
         - Output BAM is coordinate-sorted and indexed
         - Preset parameter enables technology-specific optimization:
@@ -240,44 +240,3 @@ def align_reads_with_minimap2(
 
     logging.info(f"Alignment complete: {output_bam}")
     return output_bam
-
-
-def validate_preset(preset: str) -> None:
-    """
-    Validate minimap2 preset string.
-
-    Args:
-        preset: Minimap2 alignment preset to validate.
-
-    Raises:
-        ValueError: If preset is not one of the valid options.
-
-    Example:
-        Validate before alignment::
-
-            from muc_one_up.read_simulator.wrappers.minimap2_wrapper import validate_preset
-            from muc_one_up.read_simulator.constants import MINIMAP2_PRESET_PACBIO_HIFI
-
-            validate_preset(MINIMAP2_PRESET_PACBIO_HIFI)  # OK
-            validate_preset("invalid-preset")  # Raises ValueError
-
-    Notes:
-        - Valid presets imported from constants module
-        - Used for early validation in pipeline functions
-        - Prevents silent failures from typos in preset names
-    """
-    from ..constants import (
-        MINIMAP2_PRESET_ONT,
-        MINIMAP2_PRESET_PACBIO_CLR,
-        MINIMAP2_PRESET_PACBIO_HIFI,
-    )
-
-    valid_presets = {
-        MINIMAP2_PRESET_ONT,
-        MINIMAP2_PRESET_PACBIO_CLR,
-        MINIMAP2_PRESET_PACBIO_HIFI,
-    }
-
-    if preset not in valid_presets:
-        valid_list = ", ".join(sorted(valid_presets))
-        raise ValueError(f"Invalid minimap2 preset: '{preset}'. Valid options: {valid_list}")
