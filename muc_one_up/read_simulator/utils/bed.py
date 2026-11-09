@@ -59,6 +59,13 @@ def create_region_bed(
         raise BedError(f"Failed to create BED file {output_path}: {e}") from e
 
 
+def parse_region(region: str) -> dict:
+    """Parse a samtools region string "chr:start-end" into a VNTR region dict."""
+    chrom, _, coords = region.replace(",", "").partition(":")
+    start, _, end = coords.partition("-")
+    return {"chr": chrom, "start": int(start), "end": int(end), "name": "VNTR"}
+
+
 def create_vntr_bed(output_dir: Path, vntr_region: dict | str) -> Path:
     """
     Create BED file for VNTR region from config.
@@ -79,9 +86,7 @@ def create_vntr_bed(output_dir: Path, vntr_region: dict | str) -> Path:
         ValueError: If vntr_region is invalid
     """
     if isinstance(vntr_region, str):
-        chrom, _, coords = vntr_region.replace(",", "").partition(":")
-        start, _, end = coords.partition("-")
-        vntr_region = {"chr": chrom, "start": int(start), "end": int(end), "name": "VNTR"}
+        vntr_region = parse_region(vntr_region)
 
     required_keys = {"chr", "start", "end", "name"}
     if not required_keys.issubset(vntr_region.keys()):

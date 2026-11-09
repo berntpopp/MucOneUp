@@ -571,12 +571,6 @@
       "enabled": true,
       "penalty_factor": 0.39,
       "seed": 42,
-      "vntr_region": {
-        "chr": "chr1",
-        "start": 155188487,
-        "end": 155192239,
-        "name": "MUC1_VNTR"
-      },
       "flanking_size": 10000,
       "validation": {
         "check_duplicates": false,
