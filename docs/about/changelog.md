@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.1] - 2026-11-10
+
+**Seeded outputs change** for haplotypes that contain L or R repeats.
+
+### Fixed
+- Repeat units L, R and S now use the sequences from Vrbacká et al. 2025
+  (pristanna/muc1repeats). They came from the VNtyper motif set and each
+  differed by 1 bp (#201).
+
+### Added
+- `dupA_C`: the published C:60dupA frameshift (Vrbacká et al. 2025)
+  (#201).
+
 ## [0.50.0] - 2026-11-10
 
 Resolves the 2026-11-09 follow-up audit (issues #159–#201).
