@@ -40,7 +40,7 @@ RUN --mount=type=cache,target=/home/mambauser/.mamba/pkgs,sharing=locked \
     micromamba create -y -f /tmp/env_pacbio.yml && \
     micromamba install -y -n env_nanosim -c conda-forge --no-deps scikit-learn=1.5.0 && \
     micromamba remove -y -f --no-prune -n env_nanosim pillow fonttools pip wheel setuptools && \
-    micromamba remove -y -f --no-prune -n env_wessim pip wheel setuptools && \
+    micromamba remove -y -f --no-prune -n env_wessim pip && \
     micromamba clean --all --yes && \
     rm -rf /tmp/*.yml /tmp/*.yaml /home/mambauser/.mamba/pkgs/* /opt/conda/pkgs/*
 

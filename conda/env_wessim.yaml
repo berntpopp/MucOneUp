@@ -4,7 +4,7 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - reseq=1.1=py312he667859_5
+  - reseq2=2.0.3=h49d0829_1
   - bwa=0.7.18=h577a1d6_2
   - pblat=2.5.1=h41f7678_4
   - ucsc-fatotwobit=472=h52f6b31_1
