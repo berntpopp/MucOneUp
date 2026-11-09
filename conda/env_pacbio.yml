@@ -28,15 +28,15 @@ channels:
 
 dependencies:
   # PacBio simulation and processing tools
-  - pbsim3>=3.0.5         # PacBio/ONT read simulator
-  - pbccs>=6.4.0          # Circular Consensus Sequencing (CCS)
+  - pbsim3=3.0.5=h9948957_2     # PacBio/ONT read simulator
+  - pbccs=6.4.0=h9ee0642_0      # Circular Consensus Sequencing (CCS)
 
   # Alignment and conversion tools
-  - minimap2>=2.28        # Long-read aligner (supports map-hifi preset)
-  - samtools>=1.21        # SAM/BAM conversion and indexing
+  - minimap2=2.30=h577a1d6_0    # Long-read aligner (supports map-hifi preset)
+  - samtools=1.23=h96c455f_0    # SAM/BAM conversion and indexing
 
   # Compression utilities (required by pbsim3 for output compression)
-  - gzip                  # Required for compressed FASTQ output
+  - gzip=1.14=hb9d3cd8_0 # Required for compressed FASTQ output
 
   # Optional: Additional utilities for debugging and analysis
-  - htslib                # HTSlib for BAM validation
+  - htslib=1.23=h566b1c6_0 # HTSlib for BAM validation
