@@ -1,5 +1,8 @@
 """Click-based CLI for MucOneUp — command registration."""
 
+import signal
+import sys
+
 import click
 
 from ._common import (
@@ -70,6 +73,8 @@ cli.add_command(analyze)
 
 def main():
     """Entry point for Click CLI."""
+    # SIGTERM (docker stop) -> SystemExit, so subprocess cleanup runs as for Ctrl-C
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(128 + signal.SIGTERM))  # OK: entry point
     cli(obj={})
 
 
