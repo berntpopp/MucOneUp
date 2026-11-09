@@ -559,8 +559,8 @@ def test_process_reference_uses_htsjdk_dict_name(tmp_path):
     mock_exec.assert_not_called()
 
 
-def test_create_tarball_records_relative_tarball_path(tmp_path, monkeypatch):
-    """create_tarball must not crash on its own relative tarball path."""
+def test_create_tarball_writes_checksum_and_no_latest_copy(tmp_path, monkeypatch):
+    """Tarballs ship as GitHub Release assets: write a verifiable .sha256, no in-repo _latest copy."""
     import generate_test_data
 
     monkeypatch.chdir(tmp_path)
@@ -570,6 +570,6 @@ def test_create_tarball_records_relative_tarball_path(tmp_path, monkeypatch):
 
     tarball = generate_test_data.create_tarball(dataset, "v9.9.9")
 
-    info = json.loads(Path("data/testdata_releases/_latest/VERSION.json").read_text())
-    assert info["source_tarball"] == str(tarball)
-    assert info["generated_utc"].endswith("Z")
+    checksum = tarball.with_name(tarball.name + ".sha256").read_text()
+    assert checksum == f"{generate_test_data.calculate_checksum(tarball)}  {tarball.name}\n"
+    assert not Path("data/testdata_releases/_latest").exists()

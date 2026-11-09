@@ -1,4 +1,4 @@
-.PHONY: help init install-uv install dev conda-setup test test-fast test-cov lint lint-fix format format-check type-check check clean clean-conda lock sync update generate-testdata generate-testdata-illumina generate-testdata-ont generate-testdata-pacbio generate-testdata-debug all
+.PHONY: help init install-uv install dev conda-setup test test-fast test-cov lint lint-fix format format-check type-check check clean clean-conda lock sync update generate-testdata generate-testdata-illumina generate-testdata-ont generate-testdata-pacbio generate-testdata-debug publish-testdata all
 
 help:  ## Show this help message
 	@echo "Usage: make [target]"
@@ -202,14 +202,14 @@ generate-testdata:  ## Generate comprehensive test dataset (Illumina + ONT + Pac
 	@echo "Generating test dataset for current version..."
 	@python3 -c "from muc_one_up.version import __version__; print(f'Version: {__version__}')"
 	uv run python helpers/generate_test_data.py \
-		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--version v$$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--threads 4
 
 generate-testdata-illumina:  ## Generate test dataset (Illumina only)
 	@echo "Generating Illumina test dataset..."
 	uv run python helpers/generate_test_data.py \
-		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--version v$$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--platforms illumina \
 		--threads 4
@@ -217,7 +217,7 @@ generate-testdata-illumina:  ## Generate test dataset (Illumina only)
 generate-testdata-ont:  ## Generate test dataset (ONT only)
 	@echo "Generating ONT test dataset..."
 	uv run python helpers/generate_test_data.py \
-		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--version v$$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--platforms ont \
 		--threads 4
@@ -225,7 +225,7 @@ generate-testdata-ont:  ## Generate test dataset (ONT only)
 generate-testdata-pacbio:  ## Generate test dataset (PacBio only)
 	@echo "Generating PacBio test dataset..."
 	uv run python helpers/generate_test_data.py \
-		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--version v$$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--platforms pacbio \
 		--threads 4
@@ -233,12 +233,20 @@ generate-testdata-pacbio:  ## Generate test dataset (PacBio only)
 generate-testdata-debug:  ## Generate test dataset with verbose logging (no tarball)
 	@echo "Generating test dataset (debug mode)..."
 	uv run python helpers/generate_test_data.py \
-		--version $$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
+		--version v$$(python3 -c "from muc_one_up.version import __version__; print(__version__)") \
 		--config config.json \
 		--threads 4 \
 		--verbose \
 		--no-cleanup \
 		--no-tarball
+
+publish-testdata:  ## Upload a generated test dataset as GitHub Release testdata-$(VERSION) (needs gh)
+	@test -n "$(VERSION)" || { echo "Usage: make publish-testdata VERSION=v0.48.0"; exit 1; }
+	@tarball=$$(ls data/testdata_releases/*_$(VERSION)/*.tar.gz 2>/dev/null | head -1); \
+	test -n "$$tarball" || { echo "No tarball for $(VERSION) in data/testdata_releases/; run make generate-testdata first"; exit 1; }; \
+	gh release create testdata-$(VERSION) "$$tarball" "$$tarball.sha256" --latest=false \
+		--title "Test dataset $(VERSION) (testdata_40-70)" \
+		--notes "MucOneUp test dataset generated with $(VERSION). Verify with sha256sum -c, then tar -xzf. See docs/reference/test-datasets.md."
 
 all: clean init conda-setup check  ## Full setup from scratch
 

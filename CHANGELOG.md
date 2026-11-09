@@ -62,6 +62,10 @@ draw a seed and record it in provenance.
 - The snapshot integration tests now run on simulated data instead of
   skipping.
 - pysam is a new optional `tracking` extra.
+- Test-data tarballs moved from git to GitHub Releases (`testdata-v0.25.0`);
+  `data/testdata_releases/` is now gitignored. `make publish-testdata` uploads a
+  new dataset with a `.sha256` file, and the generator no longer writes an
+  in-repo `_latest/` copy. Old blobs remain in git history.
 
 ### Removed
 - About 1,800 lines of dead or duplicated code: unused type aliases, a
