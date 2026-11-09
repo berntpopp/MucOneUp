@@ -700,6 +700,7 @@ def test_shipped_benign_mutations_keep_frame():
         ("insC_pos23", "E", lambda s: s[:23] + "C" + s[23:]),
         ("ins16bp", "C", lambda s: s[:57] + s[41:57] + s[57:]),  # C:42_57dup16
         ("del18_31", "X", lambda s: s[:17] + s[31:]),  # X:18_31del
+        ("dupA_C", "C", lambda s: s + "A"),  # C:60dupA
     ],
 )
 def test_shipped_published_variants_match_hgvs(name, unit, expected):
@@ -713,3 +714,11 @@ def test_shipped_published_variants_match_hgvs(name, unit, expected):
         config=config, results=results, mutation_name=name, targets=[MutationTarget(1, 1)]
     )
     assert mutated[1] == [(1, expected(repeat))]
+
+
+def test_shipped_units_match_vrbacka_dictionary():
+    """L, R and S use the Vrbacká 2025 sequences (pristanna/muc1repeats), not the VNtyper motifs (#201)."""
+    repeats = json.loads((Path(__file__).parents[1] / "config.json").read_text())["repeats"]
+    assert repeats["L"] == "GCCCACGGTGTCACCTCAGCCCCGGACACCAGGCCGGCCCCGGGCTCCGCCGCCGCCCCA"
+    assert repeats["R"] == "GCCCACGGTGTCACCTCGGCCACGGACACCAGGCCGGCCCCGGGCTCCACCGCCCCCCCA"
+    assert repeats["S"] == "GCCCACGGTGTCACCTCGGCCCCGGAGAGCAGGCCGGCCCCGGGCTCCACCGCCCCCGCA"
