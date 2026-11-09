@@ -57,7 +57,8 @@ All parameters (consensus motif, identity threshold, expected repeat count, weig
 
 import argparse
 import json
-from pathlib import Path
+
+from Bio import SeqIO
 
 
 def sliding_window_repeat_analysis(
@@ -276,7 +277,7 @@ def scan_orf_fasta(
     Scan an ORF FASTA file for toxic protein sequence features.
 
     For each ORF in the FASTA file, this function:
-      - Reads the sequence (ignoring header lines starting with '>').
+      - Reads the sequence with Bio.SeqIO (header = full description line).
       - Calls `detect_toxic_protein_in_sequence()` to compute the detection metrics.
       - Returns a dictionary mapping each ORF header to its corresponding metrics.
 
@@ -291,28 +292,11 @@ def scan_orf_fasta(
                                       a dictionary of detection metrics.
     """
     results = {}
-    header: str | None = None
-    seq_lines: list[str] = []
-    with Path(orf_fasta_path).open() as fh:
-        for line in fh:
-            line = line.strip()
-            if line.startswith(">"):
-                if header is not None and seq_lines:
-                    protein_seq = "".join(seq_lines)
-                    metrics = detect_toxic_protein_in_sequence(
-                        protein_seq, left_const, right_const, **detection_kwargs
-                    )
-                    results[header] = metrics
-                header = line[1:].strip()
-                seq_lines = []
-            else:
-                seq_lines.append(line)
-        if header is not None and seq_lines:
-            protein_seq = "".join(seq_lines)
-            metrics = detect_toxic_protein_in_sequence(
-                protein_seq, left_const, right_const, **detection_kwargs
+    for record in SeqIO.parse(orf_fasta_path, "fasta"):
+        if record.seq:
+            results[record.description] = detect_toxic_protein_in_sequence(
+                str(record.seq), left_const, right_const, **detection_kwargs
             )
-            results[header] = metrics
     return results
 
 
