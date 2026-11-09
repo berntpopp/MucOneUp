@@ -15,6 +15,7 @@ Stages:
 from __future__ import annotations
 
 import logging
+import math
 import random
 import tempfile
 from datetime import datetime
@@ -69,7 +70,9 @@ def _fragment_settings(
     return molecules, fragments, params
 
 
-def _n_reads(params: dict[str, Any], rs: dict[str, Any], sources: list[str], median: float) -> int:
+def _n_reads(
+    params: dict[str, Any], rs: dict[str, Any], sources: list[str], fragments: FragmentModel
+) -> int:
     if params.get("n_reads") is not None:
         if int(params["n_reads"]) < 1:
             raise ValueError(f"n_reads must be positive, got {params['n_reads']}")
@@ -77,10 +80,13 @@ def _n_reads(params: dict[str, Any], rs: dict[str, Any], sources: list[str], med
     coverage = float(rs["coverage"]) if rs.get("coverage") is not None else 30.0
     if coverage <= 0:
         raise ValueError(f"coverage must be positive, got {coverage:g}")
-    # Fragments start in [-(L-1), len) (uniform coverage), so a base is covered
-    # with probability ~L / (len + L): n = depth * (len + L) / L per source.
+    # --coverage is the total depth over all haplotypes (as NanoSim and PacBio).
+    # A fragment of length L starts in [-(L-1), len) of a source picked with weight
+    # len + L - 1, so each read adds ~L / (sum(len) + k*L) depth to every haplotype:
+    # total depth = n * L / (mean_len + L). L is the log-normal mean, not the median.
+    mean_length = fragments.length_median * math.exp(fragments.length_sigma**2 / 2)
     mean_source = sum(len(s) for s in sources) / len(sources)
-    return max(1, round(coverage * (mean_source + median) * len(sources) / median))
+    return max(1, round(coverage * (mean_source + mean_length) / mean_length))
 
 
 def simulate_ont_fragment_pipeline(
@@ -98,7 +104,7 @@ def simulate_ont_fragment_pipeline(
     molecules_model, fragments, params = _fragment_settings(config)
     seed = params.get("seed", ont.get("seed"))
     sources = load_fragment_sources(input_fa, params.get("flank_fasta"))
-    n_reads = _n_reads(params, rs, sources, fragments.length_median)
+    n_reads = _n_reads(params, rs, sources, fragments)
     output_dir, output_base = resolve_pipeline_outputs(input_fa, rs, output_config)
     fastq = output_dir / f"{output_base}_ont_fragments.fastq"
     truth = output_dir / f"{output_base}_read_truth.tsv.gz"

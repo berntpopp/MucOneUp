@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from muc_one_up.read_simulator.molecules import MoleculeModel, build_fragment_molecules
 from muc_one_up.read_simulator.ont_fragment_pipeline import (
+    _n_reads,
     load_fragment_sources,
     simulate_ont_fragment_pipeline,
 )
 from muc_one_up.read_simulator.output_config import OutputConfig
+from muc_one_up.read_simulator.read_profiles import FragmentModel
 
 MOD = "muc_one_up.read_simulator.ont_fragment_pipeline"
 
@@ -54,7 +58,7 @@ def test_defaults_mix_strands_and_derive_read_count(tmp_path: Path, diploid: Pat
     config = {"read_simulation": {"coverage": 10}, "ont_fragment_params": {"length_median": 1000}}
     out, sim, align = _run(tmp_path, diploid, config)
     molecules = sim.call_args.args[0]
-    assert len(molecules) == 80  # 10x * (3000 + 1000) bp * 2 haplotypes / 1000 bp (#123)
+    assert len(molecules) == 36  # 10x total * (3000 + 1133) / 1133 bp, mean of lognormal(1000, 0.5)
     assert {m.strand for m in molecules} == {"+", "-"}
     assert out.endswith("_ont_fragments.fastq") and not align.called
 
@@ -113,3 +117,13 @@ def test_metadata_records_truth_manifest(tmp_path: Path, diploid: Path) -> None:
             config, str(diploid), output_config=OutputConfig(out_dir=tmp_path, out_base="x")
         )
     assert meta.call_args.kwargs["extra_rows"] == [("Read_truth", "x_read_truth.tsv.gz")]
+
+
+def test_coverage_is_total_depth_over_haplotypes() -> None:
+    """--coverage 10 gave ~23x total: per-haplotype count and median length (#8)."""
+    sources = ["A" * 21000, "C" * 26000]
+    fragments = FragmentModel(6000, 0.5)
+    n = _n_reads({}, {"coverage": 100}, sources, fragments)
+    mols = build_fragment_molecules(sources, n, 6000, 0.5, MoleculeModel(), random.Random(3))
+    total_depth = sum(len(m.seq) for m in mols) / (sum(map(len, sources)) / len(sources))
+    assert total_depth == pytest.approx(100, rel=0.12)
