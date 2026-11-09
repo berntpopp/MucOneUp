@@ -172,7 +172,7 @@ class TestONTPipelineReferenceIntegration:
         ref_file.write_text(">chr1\nATCG\n")
 
         # Create minimap2 index
-        (tmp_path / "hg38.fa.mmi").touch()
+        (tmp_path / "hg38.fa.map-ont.mmi").touch()
 
         config = {
             "tools": {

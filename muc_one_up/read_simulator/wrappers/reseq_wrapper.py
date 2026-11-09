@@ -8,6 +8,7 @@ This module provides wrapper functions for the reseq toolkit operations:
 - create_reads: Generate reads from fragments using seqToIllumina
 """
 
+import gzip
 import logging
 from pathlib import Path
 
@@ -141,6 +142,12 @@ def create_reads(
         raise FileOperationError(f"Failed to create reads: Output {output_reads} missing or empty")
 
 
+def _template_name(header: str) -> str:
+    """Read name without the comment and a trailing /1 or /2 mate suffix."""
+    name = header[1:].split(maxsplit=1)[0] if header.startswith("@") and header.strip() else ""
+    return name.removesuffix("/1").removesuffix("/2")
+
+
 def split_reads(interleaved_fastq: str, output_fastq1: str, output_fastq2: str) -> None:
     """
     Split an interleaved FASTQ (4 lines per record) into two gzipped FASTQ files.
@@ -151,49 +158,38 @@ def split_reads(interleaved_fastq: str, output_fastq1: str, output_fastq2: str) 
         output_fastq2: Output FASTQ filename for read2.
 
     Raises:
-        IOError: If the input file can't be read or output files can't be written.
+        FileOperationError: If the input is truncated, has an odd number of
+            records, or an R2 header does not match its R1 header.
+        OSError: If the input file can't be read or output files can't be written.
     """
-    try:
-        with (
-            Path(interleaved_fastq).open() as in_fq,
-            Path(output_fastq1).open("wb") as out_fq1,
-            Path(output_fastq2).open("wb") as out_fq2,
-        ):
-            # Create gzip writers
-            import gzip
+    with (
+        Path(interleaved_fastq).open() as in_fq,
+        gzip.open(output_fastq1, "wt", compresslevel=1) as out_fq1,
+        gzip.open(output_fastq2, "wt", compresslevel=1) as out_fq2,
+    ):
+        pair = 0
+        while True:
+            read1 = [in_fq.readline() for _ in range(4)]
+            if not read1[0]:
+                break
+            pair += 1
+            read2 = [in_fq.readline() for _ in range(4)]
+            if not all(read1 + read2):  # readline() returns "" at EOF
+                raise FileOperationError(
+                    f"Truncated interleaved FASTQ {interleaved_fastq}: pair {pair} is incomplete"
+                )
+            name1, name2 = _template_name(read1[0]), _template_name(read2[0])
+            if not name1 or name1 != name2:
+                raise FileOperationError(
+                    f"Interleaved FASTQ {interleaved_fastq} out of step at pair {pair}: "
+                    f"R1 {read1[0].strip()!r} vs R2 {read2[0].strip()!r}"
+                )
+            out_fq1.writelines(read1)
+            out_fq2.writelines(read2)
 
-            gzip_fq1 = gzip.GzipFile(fileobj=out_fq1, mode="wb")
-            gzip_fq2 = gzip.GzipFile(fileobj=out_fq2, mode="wb")
-
-            # Process 8 lines at a time (4 lines per record, 2 records)
-            while True:
-                # Read 4 lines for first read
-                read1_lines = [in_fq.readline() for _ in range(4)]
-
-                # Break if EOF
-                if not read1_lines[0]:
-                    break
-
-                # Read 4 lines for second read
-                read2_lines = [in_fq.readline() for _ in range(4)]
-
-                # Write to gzipped files
-                for line in read1_lines:
-                    gzip_fq1.write(line.encode())
-
-                for line in read2_lines:
-                    gzip_fq2.write(line.encode())
-
-            # Close gzip writers
-            gzip_fq1.close()
-            gzip_fq2.close()
-
-        logging.info(
-            "Split interleaved FASTQ %s into %s and %s",
-            interleaved_fastq,
-            output_fastq1,
-            output_fastq2,
-        )
-    except Exception as e:
-        logging.error("Error splitting reads: %s", str(e))
-        raise
+    logging.info(
+        "Split interleaved FASTQ %s into %s and %s",
+        interleaved_fastq,
+        output_fastq1,
+        output_fastq2,
+    )

@@ -126,6 +126,11 @@ def generate_read_manifest(
             origins = [o for o in origins if _normalize_read_id(o.read_id) in surviving_read_ids]
         except (OSError, AttributeError) as exc:
             logger.warning("pysam filtering skipped (%s); using all origins", exc)
+    else:
+        logger.warning(
+            "pysam is not installed: the read manifest also lists reads that are not in "
+            "the final BAM (unaligned or downsampled away). Install pysam to filter them."
+        )
 
     # ------------------------------------------------------------------
     # Annotate and write manifest

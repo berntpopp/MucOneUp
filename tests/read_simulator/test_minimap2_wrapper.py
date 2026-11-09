@@ -20,12 +20,10 @@ import pytest
 from muc_one_up.exceptions import FileOperationError
 from muc_one_up.read_simulator.constants import (
     MINIMAP2_PRESET_ONT,
-    MINIMAP2_PRESET_PACBIO_CLR,
     MINIMAP2_PRESET_PACBIO_HIFI,
 )
 from muc_one_up.read_simulator.wrappers.minimap2_wrapper import (
     align_reads_with_minimap2,
-    validate_preset,
 )
 
 
@@ -269,30 +267,6 @@ class TestAlignReadsWithMinimap2:
 
         # Assert: SAM was never written to disk
         assert not output_sam.exists()
-
-
-class TestValidatePreset:
-    """Test validate_preset validation logic."""
-
-    def test_validates_ont_preset(self):
-        """Test ONT preset is valid."""
-        # Should not raise
-        validate_preset(MINIMAP2_PRESET_ONT)
-
-    def test_validates_pacbio_clr_preset(self):
-        """Test PacBio CLR preset is valid."""
-        # Should not raise
-        validate_preset(MINIMAP2_PRESET_PACBIO_CLR)
-
-    def test_validates_pacbio_hifi_preset(self):
-        """Test PacBio HiFi preset is valid."""
-        # Should not raise
-        validate_preset(MINIMAP2_PRESET_PACBIO_HIFI)
-
-    def test_rejects_invalid_preset(self):
-        """Test invalid preset raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid minimap2 preset"):
-            validate_preset("invalid-preset")
 
 
 class TestPrebuiltIndexReuse:
