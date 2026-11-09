@@ -323,6 +323,15 @@ class TestGenerateRandomSnps:
 
         assert snps1 == snps2
 
+    def test_generate_random_snps_low_density_not_floored_to_zero(self):
+        """1.5 kb at 0.5 SNP/kb expects 0.75 SNPs/run; int() floored it to 0 every time."""
+        sequences = ["ACGT" * 375]
+        rng = random.Random(7)
+        counts = [
+            len(generate_random_snps(sequences, density_per_kb=0.5, rng=rng)) for _ in range(4000)
+        ]
+        assert abs(sum(counts) / len(counts) - 0.75) < 0.05
+
     def test_generate_random_snps_invalid_region(self):
         """Test generating SNPs with invalid region raises ValueError."""
         sequences = ["ATCGATCGATCG"]
