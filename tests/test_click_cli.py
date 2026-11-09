@@ -1697,11 +1697,8 @@ class TestAuditCliFixes:
             ],
         )
 
-    def test_duplicate_mutation_targets_applied_once(self, runner, temp_config_file, tmp_path):
+    def test_duplicate_mutation_targets_rejected(self, runner, temp_config_file, tmp_path):
         base = ["--seed", "7", "--fixed-lengths", "25", "--mutation-name", "dupC"]
-        once = self._simulate(
-            runner, temp_config_file, tmp_path / "a", *base, "--mutation-targets", "1,3"
-        )
         twice = self._simulate(
             runner,
             temp_config_file,
@@ -1712,10 +1709,8 @@ class TestAuditCliFixes:
             "--mutation-targets",
             "1,3",
         )
-        assert once.exit_code == 0, once.output
-        assert twice.exit_code == 0, twice.output
-        fa_a = (tmp_path / "a" / "s.001.simulated.fa").read_text()
-        assert fa_a == (tmp_path / "b" / "s.001.simulated.fa").read_text()
+        assert twice.exit_code != 0
+        assert "Duplicate mutation targets" in twice.output
 
     @pytest.mark.parametrize(
         "extra, message",

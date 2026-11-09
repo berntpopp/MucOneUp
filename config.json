@@ -480,7 +480,7 @@
         {
           "type": "delete",
           "start": 57,
-          "end": 60
+          "end": 59
         }
       ],
       "type": "synthetic"
@@ -493,7 +493,7 @@
         {
           "type": "delete",
           "start": 30,
-          "end": 33
+          "end": 32
         }
       ],
       "type": "synthetic"
