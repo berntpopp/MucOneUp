@@ -172,6 +172,18 @@ class TestReadPslFile:
         # Second match
         assert matches[1] == ("chr2", 1000, 1200, "-")
 
+    def test_skips_gapped_matches_spanning_more_than_twice_probe(self, tmp_path):
+        """A 151 bp probe gapped over 1189 bp of VNTR made bind*span unsatisfiable."""
+        psl = tmp_path / "test.psl"
+        psl.write_text(
+            "151\t0\t0\t0\t0\t0\t1\t1038\t+\tq1\t151\t0\t151\tchr1\t5000\t100\t1289\t2\t75,76\t0,75\t100,1213\n"
+            "151\t0\t0\t0\t0\t0\t0\t0\t+\tq2\t151\t0\t151\tchr1\t5000\t2000\t2151\t1\t151\t0\t2000\n"
+        )
+
+        matches = read_psl_file(str(psl))
+
+        assert matches == [("chr1", 2000, 2151, "+")]
+
     def test_skips_header_lines(self, tmp_path):
         """Test that PSL header lines are skipped."""
         psl = tmp_path / "test.psl"

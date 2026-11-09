@@ -150,6 +150,7 @@ def read_psl_file(psl_file: str) -> list[tuple[str, int, int, str]]:
         IOError: If the file can't be read.
     """
     matches = []
+    skipped_gapped = 0
 
     try:
         with Path(psl_file).open() as f:
@@ -181,11 +182,19 @@ def read_psl_file(psl_file: str) -> list[tuple[str, int, int, str]]:
                 end = int(cols[16])
                 strand = "+" if cols[8] == "+" else "-"
 
+                # Gapped hits inside the VNTR can span several times the probe
+                # length; bind * span then demands inserts no Gaussian reaches.
+                if end - start > 2 * int(cols[10]):
+                    skipped_gapped += 1
+                    continue
+
                 matches.append((chrom, start, end, strand))
     except Exception as e:
         logging.error(f"Error reading PSL file {psl_file}: {e!s}")
         raise
 
+    if skipped_gapped:
+        logging.info(f"Skipped {skipped_gapped} gapped PSL matches spanning > 2x probe length")
     if not matches:
         logging.warning(f"No matches found in PSL file: {psl_file}")
 
