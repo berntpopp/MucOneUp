@@ -14,10 +14,13 @@ import pytest
 from muc_one_up.simulate import simulate_from_chains
 from muc_one_up.type_defs import RepeatUnit
 
+REPO = Path(__file__).resolve().parents[2]
+
 
 @pytest.fixture
 def e2e_config_base() -> dict[str, Any]:
-    """Base config with tool paths discovered from PATH."""
+    """Repository config.json (real MUC1 repeats, flanks, primers) with tools found on PATH."""
+    config: dict[str, Any] = json.loads((REPO / "config.json").read_text())
     tools: dict[str, str] = {}
     # config key -> real binary name
     for key, binary in {
@@ -34,17 +37,18 @@ def e2e_config_base() -> dict[str, Any]:
         path = shutil.which(binary)
         if path:
             tools[key] = path
-    return {"tools": tools}
+    config["tools"] = tools
+    return config
 
 
 @pytest.fixture
-def e2e_diploid_fasta(tmp_path, minimal_config) -> Path:
-    """Generate a small diploid FASTA from real MUC1 repeat chains."""
+def e2e_diploid_fasta(tmp_path, e2e_config_base) -> Path:
+    """Generate a small diploid FASTA from real MUC1 repeat chains and flanks."""
     chains = [
         [RepeatUnit.from_str(s) for s in ["1", "2", "X", "B", "6", "7", "8", "9"]],
         [RepeatUnit.from_str(s) for s in ["1", "2", "A", "B", "6p", "7", "8", "9"]],
     ]
-    results = simulate_from_chains(chains, minimal_config)
+    results = simulate_from_chains(chains, e2e_config_base)
 
     fasta_path = tmp_path / "e2e_diploid.fa"
     with open(fasta_path, "w") as f:
