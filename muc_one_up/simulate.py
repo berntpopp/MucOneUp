@@ -10,7 +10,6 @@ Key Functions:
     simulate_diploid: Generate multiple haplotypes with configurable parameters
     simulate_single_haplotype: Build single haplotype by chaining repeats
     simulate_from_chains: Simulate haplotypes from predefined repeat chains
-    assemble_haplotype_from_chain: Concatenate constants + repeats into sequence
 
 Design:
     All haplotypes enforce canonical terminal block (6/6p → 7 → 8 → 9) to match
@@ -41,10 +40,8 @@ from .distribution import sample_repeat_count
 from .type_defs import (
     AssemblyConstants,
     ConfigDict,
-    DNASequence,
     HaplotypeResult,
     ProbabilitiesDict,
-    RepeatChain,
     RepeatUnit,
 )
 
@@ -84,24 +81,6 @@ def pick_next_symbol_no_end(
     chosen = _rng.choices(symbols, weights=weights, k=1)[0]
     logging.debug("Picked next symbol '%s' from '%s'.", chosen, current_symbol)
     return str(chosen) if chosen is not None else None
-
-
-def assemble_haplotype_from_chain(chain: RepeatChain, config: ConfigDict) -> DNASequence:
-    """Assemble complete haplotype sequence from repeat chain.
-
-    Delegates to assembly.assemble_sequence().
-    Converts legacy string chain to RepeatUnit list.
-
-    Args:
-        chain: List of repeat symbols to assemble (e.g., ['1', '2', '7', '8', '9'])
-        config: Configuration with repeats and constants
-
-    Returns:
-        Assembled haplotype DNA sequence
-    """
-    typed_chain = [RepeatUnit.from_str(s) for s in chain]
-    ref_assembly = config.get("reference_assembly", "hg38")
-    return assemble_sequence(typed_chain, config["repeats"], config["constants"][ref_assembly])
 
 
 def simulate_from_chains(
@@ -181,9 +160,6 @@ def simulate_diploid(
     if rng is None and seed is not None:
         rng = _random_module.Random(seed)
         logging.debug("Created RNG with seed %d", seed)
-    elif rng is None:
-        # Backward compat: fall back to global random
-        rng = None
 
     haplotypes: list[HaplotypeResult] = []
     for i in range(num_haplotypes):
