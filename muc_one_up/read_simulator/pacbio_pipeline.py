@@ -165,7 +165,7 @@ def simulate_pacbio_hifi_reads(
     pass_num = pacbio_params.get("pass_num")
     min_passes = pacbio_params.get("min_passes")
     min_rq = pacbio_params.get("min_rq")
-    threads = pacbio_params.get("threads", 4)
+    threads = pacbio_params.get("threads", 8)
     seed = pacbio_params.get("seed")
 
     from .constants import (

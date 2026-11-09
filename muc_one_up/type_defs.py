@@ -201,6 +201,7 @@ class OntAmpliconConfig(TypedDict, total=False):
 
     model_type: str
     model_file: str
+    coverage: float
     threads: int
     seed: int | None
     accuracy_mean: float

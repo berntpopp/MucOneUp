@@ -587,11 +587,11 @@ Parameters for PacBio HiFi read simulation.
 |-------|------|-------------|---------|
 | `model_type` | string | "qshmm" or "errhmm" | Required |
 | `model_file` | string | pbsim3 model file path | Required |
-| `coverage` | number | Target coverage depth (0.1-10000) | Required |
+| `coverage` | number | Target coverage depth (0.1-10000); template molecules in amplicon mode | Required (amplicon: 30) |
 | `pass_num` | number | Number of passes per molecule (2-50) | Required |
 | `min_passes` | number | Minimum CCS passes (1-50) | Required |
 | `min_rq` | number | Minimum read quality (0.0-1.0) | Required |
-| `threads` | number | Parallel threads (minimum 1) | - |
+| `threads` | number | Parallel threads (minimum 1) | 8 |
 | `seed` | integer | Random seed (null = random) | null |
 | `difference_ratio` | string | pbsim3 `--difference-ratio` (`SUB:INS:DEL`) for amplicon mode; omitted when unset | pbsim3 default |
 
@@ -623,6 +623,7 @@ Parameters for ONT amplicon read simulation (pbsim3 single-pass mode). Separate 
 | `model_type` | string | "qshmm" or "errhmm" | "qshmm" |
 | `model_file` | string | pbsim3 ONT error model file | QSHMM-ONT-HQ.model |
 | `threads` | number | Parallel threads (minimum 1) | 8 |
+| `coverage` | number | Template molecules when `--coverage` is not given | 30 |
 | `seed` | integer | Random seed (null = random) | null |
 | `accuracy_mean` | number | Mean read accuracy (0.0-1.0) | 0.95 |
 | `difference_ratio` | string | pbsim3 `--difference-ratio` (`SUB:INS:DEL`). The pbsim3 default produces insertion-heavy errors; per-base rates measured on real R10.4.1 sup MUC1 amplicons (PRJEB92208) give about `"33:31:36"` | pbsim3 default |
@@ -655,6 +656,7 @@ Settings for `reads ont --simulator pbsim3-fragments` (config simulator
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
 | `n_reads` | integer | Number of reads | derived from coverage |
+| `coverage` | number | Total depth used to derive `n_reads` (set by `--coverage`) | 30 |
 | `length_median` | number | Median read length (bp) | profile, else 5000 |
 | `length_sigma` | number | Log-normal sigma | profile, else 0.5 |
 | `flank_fasta` | string | FASTA with `left`/`right` records added around each haplotype | none |

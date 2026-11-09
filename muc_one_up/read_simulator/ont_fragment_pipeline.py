@@ -72,14 +72,12 @@ def _fragment_settings(
     return molecules, fragments, params
 
 
-def _n_reads(
-    params: dict[str, Any], rs: dict[str, Any], sources: list[str], fragments: FragmentModel
-) -> int:
+def _n_reads(params: dict[str, Any], sources: list[str], fragments: FragmentModel) -> int:
     if params.get("n_reads") is not None:
         if int(params["n_reads"]) < 1:
             raise ValueError(f"n_reads must be positive, got {params['n_reads']}")
         return int(params["n_reads"])
-    coverage = float(rs["coverage"]) if rs.get("coverage") is not None else 30.0
+    coverage = float(params["coverage"]) if params.get("coverage") is not None else 30.0
     if coverage <= 0:
         raise ValueError(f"coverage must be positive, got {coverage:g}")
     # --coverage is the total depth over all haplotypes (as NanoSim and PacBio).
@@ -106,7 +104,7 @@ def simulate_ont_fragment_pipeline(
     molecules_model, fragments, params = _fragment_settings(config)
     seed = params.get("seed", ont.get("seed"))
     sources = load_fragment_sources(input_fa, params.get("flank_fasta"))
-    n_reads = _n_reads(params, rs, sources, fragments)
+    n_reads = _n_reads(params, sources, fragments)
     output_dir, output_base = resolve_pipeline_outputs(input_fa, rs, output_config)
     fastq = output_dir / f"{output_base}_ont_fragments.fastq"
     truth = output_dir / f"{output_base}_read_truth.tsv.gz"
@@ -117,7 +115,7 @@ def simulate_ont_fragment_pipeline(
         model_file=ont.get("model_file") or DEFAULT_ONT_MODEL,
         accuracy_mean=ont.get("accuracy_mean") or 0.95,
         difference_ratio=ont.get("difference_ratio"),
-        threads=ont.get("threads") or 4,
+        threads=ont.get("threads") or 8,
     )
     start = datetime.now()
     logging.info(
