@@ -271,7 +271,7 @@ def reads():
 @threads_option
 @click.option(
     "--read-number",
-    type=int,
+    type=click.IntRange(min=1),
     default=None,
     help="Number of fragment pairs to generate (overrides config read_number). "
     "More fragments allow higher coverage. Default: 100000 from config.",
@@ -333,7 +333,7 @@ def illumina(
 @reads.command()
 @click.option(
     "--min-read-length",
-    type=int,
+    type=click.IntRange(min=1),
     default=None,
     help=(
         "Minimum read length. Overrides nanosim_params.min_read_length from the "
@@ -349,7 +349,9 @@ def illumina(
     "Default: pbsim3-fragments with --read-profile or when the config sets "
     "read_simulation.simulator to ont-fragments, otherwise nanosim.",
 )
-@click.option("--n-reads", type=int, default=None, help="pbsim3-fragments: number of reads.")
+@click.option(
+    "--n-reads", type=click.IntRange(min=1), default=None, help="pbsim3-fragments: number of reads."
+)
 @click.option(
     "--read-length-median", type=float, default=None, help="pbsim3-fragments: median read length."
 )
@@ -471,7 +473,7 @@ def ont(
 @reads.command()
 @click.option(
     "--threads",
-    type=int,
+    type=click.IntRange(min=1),
     default=None,
     help="Thread count for alignment and CCS consensus (overrides config).",
 )
