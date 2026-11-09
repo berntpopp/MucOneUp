@@ -16,6 +16,7 @@ Based on VariantCentrifuge battle-tested pattern and verified through real-world
 testing in conda environments (see TESTING_RESULTS.md).
 """
 
+import functools
 import logging
 import re
 from collections.abc import Callable
@@ -27,6 +28,7 @@ from .common_utils import run_command
 logger = logging.getLogger(__name__)
 
 
+@functools.cache  # probing under `mamba run` takes seconds; once per run
 def get_tool_version(tool_cmd: str, tool_name: str) -> str:
     """
     Get version string for a bioinformatics tool.

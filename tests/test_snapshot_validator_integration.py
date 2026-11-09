@@ -8,60 +8,59 @@ from pathlib import Path
 
 import pytest
 from Bio import SeqIO
+from click.testing import CliRunner
 
 from muc_one_up.analysis.snapshot_validator import SnapshotValidator
+from muc_one_up.cli.click_main import cli
 from muc_one_up.config import load_config
 
+REPO_CONFIG = Path(__file__).resolve().parent.parent / "config.json"
 
-@pytest.fixture
+
+@pytest.fixture(scope="module")
 def config():
-    """Load actual config.json with snapshot_validation section."""
-    config_path = Path("config.json")
-    if not config_path.exists():
-        pytest.skip("config.json not found")
-    return load_config(str(config_path))
+    """Load the repo config.json with its snapshot_validation section."""
+    return load_config(str(REPO_CONFIG))
 
 
-@pytest.fixture
-def test_data_dir():
-    """Test data directory."""
-    return Path("output/dupC")
+@pytest.fixture(scope="module")
+def test_data_dir(tmp_path_factory):
+    """Simulate a normal + dupC diploid pair (dupC on haplotype 1) with the real CLI."""
+    out_dir = tmp_path_factory.mktemp("dupC")
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--config",
+            str(REPO_CONFIG),
+            "simulate",
+            "--out-base",
+            "dupC",
+            "--out-dir",
+            str(out_dir),
+            "--mutation-name",
+            "normal,dupC",
+            "--mutation-targets",
+            "1,20",
+            "--fixed-lengths",
+            "27",
+            "--seed",
+            "42",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    return out_dir
 
 
 @pytest.fixture
 def mutant_sample_path(test_data_dir):
     """Path to mutant sample FASTA."""
-    # Try different possible naming patterns
-    possible_paths = [
-        test_data_dir / "dupC.001.mut.simulated.fa",
-        test_data_dir / "dupC.mut.simulated.fa",
-        test_data_dir / "dupC.001.simulated.fa",
-    ]
-
-    for path in possible_paths:
-        if path.exists():
-            return path
-
-    pytest.skip(
-        f"Mutant sample not found in {test_data_dir}. Generate with: muconeup --config config.json simulate --out-base dupC --mutation-name dupC --fixed-lengths 27 --out-dir output/dupC/"
-    )
+    return test_data_dir / "dupC.001.mut.simulated.fa"
 
 
 @pytest.fixture
 def normal_sample_path(test_data_dir):
     """Path to normal sample FASTA."""
-    possible_paths = [
-        test_data_dir / "dupC.001.normal.simulated.fa",
-        test_data_dir / "dupC.normal.simulated.fa",
-    ]
-
-    for path in possible_paths:
-        if path.exists():
-            return path
-
-    pytest.skip(
-        f"Normal sample not found in {test_data_dir}. Generate with: muconeup --config config.json simulate --out-base dupC --mutation-name normal,dupC --fixed-lengths 27 --out-dir output/dupC/"
-    )
+    return test_data_dir / "dupC.001.normal.simulated.fa"
 
 
 class TestIntegrationWithRealData:

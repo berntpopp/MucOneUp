@@ -265,7 +265,7 @@ Putting it all together: simulate, generate reads, analyze:
 # 1. Generate diploid haplotype with mutation
 muconeup --config config.json simulate \
   --mutation-name dupC \
-  --mutation-targets 1,25 2,30 \
+  --mutation-targets 1,25 --mutation-targets 2,30 \
   --output-structure \
   --out-dir output \
   --out-base complete_workflow
@@ -340,10 +340,12 @@ muconeup --config config.json simulate --out-dir output --out-base random
 muconeup --config config.json simulate \
   --fixed-lengths 60 --out-dir output --out-base fixed
 
-# Series generation (parameter sweep)
+# Series generation (parameter sweep): haplotype 1 at 40, 50, ..., 80
+# with haplotype 2 fixed at 60 -> 5 iterations (--simulate-series is the step)
 muconeup --config config.json simulate \
   --fixed-lengths 40-80 \
-  --simulate-series 5 \
+  --fixed-lengths 60 \
+  --simulate-series 10 \
   --out-dir output \
   --out-base series
 

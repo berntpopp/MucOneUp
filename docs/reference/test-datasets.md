@@ -4,13 +4,16 @@ Standardized test datasets for validating MucOneUp workflows and benchmarking pe
 
 ## Download
 
-**Latest Release**: [testdata_40-70.tar.gz](https://github.com/berntpopp/MucOneUp/raw/main/data/testdata_releases/_latest/testdata_40-70.tar.gz)
+Test datasets are published as [GitHub Releases](https://github.com/berntpopp/MucOneUp/releases?q=testdata) tagged `testdata-<version>`, separate from the code releases.
 
-The `_latest` directory always contains the most recent test dataset with a constant filename for persistent download links.
+**Current dataset**: [`testdata-v0.25.0`](https://github.com/berntpopp/MucOneUp/releases/tag/testdata-v0.25.0)
 
-Extract with: `tar -xzf testdata_40-70.tar.gz`
-
-Check version: `cat VERSION.json` (included in `_latest/` directory)
+```bash
+curl -LO https://github.com/berntpopp/MucOneUp/releases/download/testdata-v0.25.0/testdata_40-70_v0.25.0.tar.gz
+curl -LO https://github.com/berntpopp/MucOneUp/releases/download/testdata-v0.25.0/testdata_40-70_v0.25.0.tar.gz.sha256
+sha256sum -c testdata_40-70_v0.25.0.tar.gz.sha256
+tar -xzf testdata_40-70_v0.25.0.tar.gz
+```
 
 ## Dataset Characteristics
 
@@ -80,9 +83,16 @@ python helpers/generate_test_data.py \
 
 **Requirements**: All platform-specific tools (BWA, NanoSim, pbsim3) must be installed.
 
-**Output**: Tarball in `data/testdata_releases/{date}_{version}/` with automatic `_latest` symlink for persistent downloads.
+**Output**: `data/testdata_releases/{date}_{version}/testdata_40-70_{version}.tar.gz` plus a `.sha256` file. This directory is gitignored; tarballs are never committed.
 
-The script automatically updates the `_latest` symlink to point to the newest release, ensuring documentation links remain valid.
+**Publish** the tarball as a GitHub Release (requires an authenticated `gh` CLI):
+
+```bash
+make generate-testdata                  # writes data/testdata_releases/<date>_v<version>/
+make publish-testdata VERSION=v0.48.0   # creates release testdata-v0.48.0 with tarball + .sha256
+```
+
+Then update the **Current dataset** link above.
 
 ## Use Cases
 

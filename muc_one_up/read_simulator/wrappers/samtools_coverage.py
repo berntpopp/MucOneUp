@@ -5,7 +5,7 @@ Samtools coverage and downsampling operations.
 This module provides wrapper functions for samtools coverage and downsampling:
 - calculate_vntr_coverage: Calculate coverage over VNTR regions
 - calculate_target_coverage: Calculate coverage over target regions
-- downsample_bam: Downsample BAM files to target coverage in a specific region
+- downsample_bam: Pair-aware downsampling of the templates in a BED region
 - downsample_entire_bam: Downsample the entire BAM file
 """
 
@@ -15,11 +15,8 @@ from pathlib import Path
 from ...exceptions import FileOperationError
 from ..command_utils import build_tool_command
 from ..utils import run_command
-from ..utils.samtools import (
-    build_downsample_args,
-    build_merge_args,
-    mean_depth_from_lines,
-)
+from ..utils.samtools import build_downsample_args, mean_depth_from_lines
+from .samtools_core import merge_bam_files
 
 
 def _read_mean_coverage(depth_file: str, label: str) -> float:
@@ -87,76 +84,110 @@ def calculate_target_coverage(
         bam_file,
     )
     logging.info(f"[samtools] Running: {' '.join(cmd)} > {depth_file}")
-    run_command(cmd, timeout=60, stdout_path=Path(depth_file))
+    run_command(cmd, stdout_path=Path(depth_file))  # no cap: capture BEDs can span an exome
     return _read_mean_coverage(depth_file, "target regions"), depth_file
+
+
+def _template_names(samtools_exe: str, bam: str, bed: str, names_file: str) -> None:
+    """Write the unique names of reads in *bam* that overlap *bed* to *names_file*."""
+    sam_file = f"{names_file}.sam"
+    run_command(
+        build_tool_command(samtools_exe, "view", "-L", bed, bam), stdout_path=Path(sam_file)
+    )
+    with Path(sam_file).open() as sam:
+        names = dict.fromkeys(line.split("\t", 1)[0] for line in sam)
+    Path(names_file).write_text("".join(f"{n}\n" for n in names))
+    Path(sam_file).unlink()
 
 
 def downsample_bam(
     samtools_exe: str,
-    input_bam: str,
-    output_bam: str,
-    region: str,
+    input_bam: str | Path,
+    output_bam: str | Path,
+    region_bed: str | Path,
     fraction: float,
     seed: int,
     threads: int,
+    keep_bed: str | Path | None = None,
 ) -> None:
-    """Downsample the BAM file to the specified fraction in the given region."""
-    region_bed = f"{output_bam.removesuffix('.bam')}_region.bed"
-    chrom, coords = region.split(":")
-    start, end = coords.split("-")
-    bed_start = int(start) - 1
-    with Path(region_bed).open("w") as f:
-        f.write(f"{chrom}\t{bed_start}\t{end}\n")
+    """Pair-aware downsampling of the templates that touch *region_bed*.
 
-    region_bam = f"{output_bam.removesuffix('.bam')}_region_only.bam"
-    other_bam = f"{output_bam.removesuffix('.bam')}_other_regions.bam"
+    Reads are split by template name, so a pair with one mate in the region and
+    the other outside is treated as one unit: every template with any read
+    overlapping *region_bed* is subsampled (``--subsample`` hashes the read
+    name, so mates share their fate); all other templates are kept in full, or,
+    when *keep_bed* is given, only those with a read overlapping *keep_bed*.
+    The coordinate-sorted parts are merged (merge keeps the sort order) and the
+    result is indexed.
+    """
+    if not 0.0 < fraction <= 1.0:
+        raise ValueError(f"Fraction must be in (0.0, 1.0], got {fraction}")
 
-    # Pass 1: Extract non-region reads at full coverage using -L + -U
-    cmd = build_tool_command(
-        samtools_exe,
-        "view",
-        "-b",
-        "-L",
-        region_bed,
-        "-U",
-        other_bam,
-        "-@",
-        threads,
-        "-o",
-        "/dev/null",
-        input_bam,
-    )
-    run_command(cmd, timeout=60)
+    tmp = str(output_bam).removesuffix(".bam")
+    names = f"{tmp}_region_names.txt"
+    region_bam = f"{tmp}_region_only.bam"
+    other_bam = f"{tmp}_other_regions.bam"
+    kept_names = f"{tmp}_kept_names.txt"
+    kept_bam = f"{tmp}_kept_regions.bam"
+    sampled_bam = f"{tmp}_region_sampled.bam"
+    input_bam, region_bed = str(input_bam), str(region_bed)
 
-    # Pass 2: Extract and downsample region reads
-    cmd = build_tool_command(
-        samtools_exe,
-        *build_downsample_args(
-            input_bam, region_bam, fraction, seed, threads=threads, region_bed=region_bed
-        ),
-    )
-    run_command(cmd, timeout=60)
-
-    # Merge the downsampled region BAM with the unchanged "other" BAM
-    cmd = build_tool_command(
-        samtools_exe,
-        *build_merge_args(output_bam, [region_bam, other_bam], threads=threads, force=True),
-    )
-    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
-
-    cmd = build_tool_command(samtools_exe, "index", output_bam)
-    run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
-
-    for tmp_file in [region_bam, other_bam, region_bed]:
-        tmp_path = Path(tmp_file)
-        if tmp_path.exists():
-            try:
-                tmp_path.unlink()
-            except Exception as e:
-                logging.warning(f"Could not remove temporary file {tmp_file}: {e!s}")
+    try:
+        _template_names(samtools_exe, input_bam, region_bed, names)
+        run_command(
+            build_tool_command(
+                samtools_exe,
+                "view",
+                "-b",
+                "-@",
+                threads,
+                "-N",
+                names,
+                "-o",
+                region_bam,
+                "-U",
+                other_bam,
+                input_bam,
+            )
+        )
+        if keep_bed is not None:
+            _template_names(samtools_exe, other_bam, str(keep_bed), kept_names)
+            run_command(
+                build_tool_command(
+                    samtools_exe,
+                    "view",
+                    "-b",
+                    "-@",
+                    threads,
+                    "-N",
+                    kept_names,
+                    "-o",
+                    kept_bam,
+                    other_bam,
+                )
+            )
+            other_bam = kept_bam
+        run_command(
+            build_tool_command(
+                samtools_exe,
+                *build_downsample_args(region_bam, sampled_bam, fraction, seed, threads=threads),
+            )
+        )
+        merge_bam_files(samtools_exe, [sampled_bam, other_bam], str(output_bam), threads=threads)
+        run_command(build_tool_command(samtools_exe, "index", str(output_bam)))
+    finally:
+        for tmp_file in (
+            names,
+            region_bam,
+            f"{tmp}_other_regions.bam",
+            kept_names,
+            kept_bam,
+            sampled_bam,
+        ):
+            Path(tmp_file).unlink(missing_ok=True)
 
     logging.info(
-        f"Downsampled BAM file in region {region} to fraction {fraction:.4f} (seed: {seed})"
+        "Downsampled templates in %s to fraction %.4f (seed: %d)", region_bed, fraction, seed
     )
 
 

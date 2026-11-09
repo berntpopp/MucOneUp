@@ -12,11 +12,14 @@ import os
 import shutil
 import signal
 import subprocess
+import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from ...exceptions import ExternalToolError, ValidationError
+from ..command_utils import build_tool_command
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,11 +50,61 @@ class RunResult:
             )
         return NotImplemented
 
-    def __bool__(self) -> bool:
-        return bool(self.returncode)
-
     def __hash__(self) -> int:
         return hash((self.returncode, self.stdout, self.stderr, self.command))
+
+
+def _kill_process_group(proc: subprocess.Popen) -> None:
+    """SIGTERM the process group (start_new_session=True: pgid == pid), then SIGKILL it.
+
+    The SIGKILL is sent even if the leader exited, so grandchildren die too.
+    """
+    with contextlib.suppress(Exception):
+        os.killpg(proc.pid, signal.SIGTERM)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        proc.wait(timeout=5)
+    with contextlib.suppress(Exception):
+        os.killpg(proc.pid, signal.SIGKILL)
+    with contextlib.suppress(Exception):
+        proc.wait()
+
+
+def _communicate(
+    cmd: list[str], cmd_str: str, timeout: float | None, cwd: Path | None, stdout: Any
+) -> tuple[int, str | None, str]:
+    """Run *cmd* in its own process group, collecting stderr (and stdout if PIPE).
+
+    On timeout the whole process group is killed, so grandchildren (e.g. tools
+    started via ``mamba run``) do not outlive the call.
+    """
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            shell=False,
+            stdout=stdout,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            cwd=cwd,
+            start_new_session=True,
+        )
+    except FileNotFoundError:
+        raise  # Let callers handle "tool not found" directly
+    except Exception as e:
+        raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        _kill_process_group(proc)
+        with contextlib.suppress(Exception):
+            proc.communicate()
+        raise ExternalToolError(
+            tool="command",
+            exit_code=-1,
+            stderr=f"Command timed out after {timeout}s",
+            cmd=cmd_str,
+        ) from e
+    return proc.returncode, out, err or ""
 
 
 def run_command(
@@ -68,8 +121,8 @@ def run_command(
     Run a command in its own process group so that it can be killed on timeout.
     Capture both stdout and stderr live and log them line-by-line.
 
-    When *capture=True*, uses ``subprocess.run`` to collect stdout/stderr as
-    strings instead of streaming them to the logger.
+    When *capture=True*, collects stdout/stderr as strings instead of
+    streaming them to the logger.
 
     When *stdout_path* is provided, stdout is streamed directly to the file
     (no in-memory buffering) regardless of the capture flag. This avoids OOM
@@ -101,91 +154,23 @@ def run_command(
     cmd_str = " ".join(cmd)
     logging.info("Running command: %s (timeout=%s)", cmd_str, timeout)
 
-    # ---- stdout-to-file mode: stream directly to disk (no memory buffering) ----
-    if stdout_path is not None:
-        try:
+    # ---- stdout-to-file mode (no memory buffering) or capture mode ----
+    if stdout_path is not None or capture:
+        if stdout_path is not None:
             with Path(stdout_path).open("w") as stdout_fh:
-                proc = subprocess.run(
-                    cmd,
-                    shell=False,
-                    stdout=stdout_fh,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    errors="replace",
-                    timeout=timeout,
-                    cwd=cwd,
-                )
-        except subprocess.TimeoutExpired as e:
+                returncode, stdout, stderr = _communicate(cmd, cmd_str, timeout, cwd, stdout_fh)
+        else:
+            returncode, stdout, stderr = _communicate(cmd, cmd_str, timeout, cwd, subprocess.PIPE)
+        if returncode != 0:
+            logging.log(failure_log_level, "Command exited with code %d: %s", returncode, cmd_str)
             raise ExternalToolError(
                 tool="command",
-                exit_code=-1,
-                stderr=f"Command timed out after {timeout}s",
-                cmd=cmd_str,
-            ) from e
-        except FileNotFoundError:
-            raise
-        except Exception as e:
-            raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
-
-        if proc.returncode != 0:
-            logging.log(
-                failure_log_level, "Command exited with code %d: %s", proc.returncode, cmd_str
-            )
-            raise ExternalToolError(
-                tool="command",
-                exit_code=proc.returncode,
-                stderr=proc.stderr or "Command failed",
+                exit_code=returncode,
+                stderr=stderr or "Command failed",
+                stdout=stdout or "",
                 cmd=cmd_str,
             )
-        return RunResult(
-            returncode=proc.returncode,
-            stdout=None,
-            stderr=proc.stderr,
-            command=cmd_str,
-        )
-
-    # ---- capture mode: collect output as strings ----
-    if capture:
-        try:
-            proc = subprocess.run(
-                cmd,
-                shell=False,
-                capture_output=True,
-                text=True,
-                errors="replace",
-                timeout=timeout,
-                cwd=cwd,
-            )
-        except subprocess.TimeoutExpired as e:
-            raise ExternalToolError(
-                tool="command",
-                exit_code=-1,
-                stderr=f"Command timed out after {timeout}s",
-                cmd=cmd_str,
-            ) from e
-        except FileNotFoundError:
-            raise  # Let callers handle "tool not found" directly
-        except Exception as e:
-            raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
-
-        result = RunResult(
-            returncode=proc.returncode,
-            stdout=proc.stdout,
-            stderr=proc.stderr,
-            command=cmd_str,
-        )
-        if proc.returncode != 0:
-            logging.log(
-                failure_log_level, "Command exited with code %d: %s", proc.returncode, cmd_str
-            )
-            raise ExternalToolError(
-                tool="command",
-                exit_code=proc.returncode,
-                stderr=proc.stderr or "Command failed",
-                stdout=proc.stdout or "",
-                cmd=cmd_str,
-            )
-        return result
+        return RunResult(returncode=returncode, stdout=stdout, stderr=stderr, command=cmd_str)
 
     # ---- streaming mode: log stdout/stderr line-by-line via threads ----
     try:
@@ -201,10 +186,6 @@ def run_command(
         )
     except Exception as e:
         raise ExternalToolError(tool="command", exit_code=1, stderr=str(e), cmd=cmd_str) from e
-
-    pgid = None
-    with contextlib.suppress(Exception):
-        pgid = os.getpgid(popen_proc.pid)
 
     def log_stream(stream, log_func, level=None, prefix=""):
         """Read lines from a stream and log them using log_func."""
@@ -243,20 +224,7 @@ def run_command(
     except subprocess.TimeoutExpired:
         timed_out = True
         logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
-        target_pgid = pgid if pgid is not None else popen_proc.pid
-        if target_pgid:
-            with contextlib.suppress(Exception):
-                os.killpg(target_pgid, signal.SIGTERM)
-        try:
-            popen_proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            pass
-        finally:
-            if target_pgid:
-                with contextlib.suppress(Exception):
-                    os.killpg(target_pgid, signal.SIGKILL)
-            with contextlib.suppress(Exception):
-                popen_proc.wait()
+        _kill_process_group(popen_proc)
     stdout_thread.join()
     stderr_thread.join()
 
@@ -327,12 +295,13 @@ def run_pipeline(
         return run_command(cmds[0], timeout=timeout, capture=capture, cwd=cwd)
 
     processes: list[subprocess.Popen] = []
+    # Upstream stderr goes to temp files (a PIPE nobody reads could deadlock)
+    upstream_stderr = [tempfile.TemporaryFile() for _ in cmds[:-1]]
     try:
         # Start all processes in the pipeline
         for i, cmd in enumerate(cmds):
             stdin_source = processes[-1].stdout if i > 0 else None
-            # Only capture stderr from last process; upstream processes inherit stderr
-            stderr_dest = subprocess.PIPE if (i == len(cmds) - 1) else None
+            stderr_dest = subprocess.PIPE if (i == len(cmds) - 1) else upstream_stderr[i]
 
             proc = subprocess.Popen(
                 cmd,
@@ -399,9 +368,13 @@ def run_pipeline(
                         p.wait()
 
         # Check for failures
-        stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
         for i, p in enumerate(processes):
             if p.returncode != 0:
+                if i < len(upstream_stderr):
+                    upstream_stderr[i].seek(0)
+                    stderr_text = upstream_stderr[i].read().decode("utf-8", errors="replace")
+                else:
+                    stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace")
                 stage_msg = (
                     f"Pipeline stage {i} ({' '.join(cmds[i])}) failed with exit code {p.returncode}"
                 )
@@ -436,24 +409,9 @@ def run_pipeline(
         raise ExternalToolError(
             tool="pipeline", exit_code=1, stderr=str(e), cmd=pipeline_str
         ) from e
-
-
-def fix_field(field: str, desired_length: int, pad_char: str) -> str:
-    """
-    Ensure a field is exactly desired_length characters long.
-
-    Args:
-        field: Input string.
-        desired_length: Desired length.
-        pad_char: Character to pad with.
-
-    Returns:
-        String of length desired_length.
-    """
-    if len(field) > desired_length:
-        return field[:desired_length]
-    else:
-        return field + pad_char * (desired_length - len(field))
+    finally:
+        for fh in upstream_stderr:
+            fh.close()
 
 
 def check_external_tools(
@@ -502,7 +460,7 @@ def check_external_tools(
         if tool not in required_tools:
             continue
 
-        cmd = command.split()[0]  # Get just the executable part
+        cmd = build_tool_command(command)[0]  # Get just the executable part
         if not (shutil.which(cmd) or Path(cmd).is_file()):
             raise ValidationError(f"Required tool '{tool}' (command: '{cmd}') not found in PATH")
 
@@ -511,7 +469,7 @@ def check_external_tools(
     try:
         # Only check samtools as it's usually the most reliable
         logging.info("Checking samtools availability...")
-        run_command([tools["samtools"], "--version"], timeout=10)
+        run_command(build_tool_command(tools["samtools"], "--version"), timeout=10)
 
         # Don't check BWA directly as it gives an error code when run without arguments
         # which is actually expected behavior
@@ -521,21 +479,3 @@ def check_external_tools(
         raise ValidationError(
             f"External tool validation failed. If using conda/mamba environments, ensure they're properly set up: {e}"
         ) from e
-
-
-def cleanup_files(file_list: list[str]) -> None:
-    """
-    Remove files in the provided list if they exist.
-
-    Args:
-        file_list: List of filenames.
-    """
-    for file in file_list:
-        if file:
-            file_path = Path(file)
-            if file_path.exists():
-                try:
-                    file_path.unlink()
-                    logging.info("Removed intermediate file: %s", file)
-                except Exception as e:
-                    logging.warning("Failed to remove file %s: %s", file, str(e))

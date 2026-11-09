@@ -17,7 +17,7 @@ def sample_repeat_count(
 
     Args:
         length_model: Dictionary with keys 'distribution', 'min_repeats', 'max_repeats',
-                     'mean_repeats', 'median_repeats'
+                     'mean_repeats'
         rng: Optional explicit Random instance. Defaults to global random module.
 
     Returns:
@@ -46,10 +46,10 @@ def sample_repeat_count(
         raise ValueError(f"min_repeats ({min_rep}) cannot be greater than max_repeats ({max_rep})")
 
     if dist_type == "normal":
-        if min_rep == max_rep and int(mean_rep) != min_rep:
+        if min_rep == max_rep and round(mean_rep) != min_rep:
             raise ValueError(f"Failed to sample repeat count in [{min_rep}, {max_rep}]")
         for _ in range(10_000):
-            val = int(_rng.gauss(mean_rep, (max_rep - min_rep) / 4.0))
+            val = round(_rng.gauss(mean_rep, (max_rep - min_rep) / 4.0))
             if min_rep <= val <= max_rep:
                 logging.debug("Sampled repeat count: %d", val)
                 return val

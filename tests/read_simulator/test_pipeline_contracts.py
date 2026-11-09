@@ -92,7 +92,9 @@ class TestIlluminaOutputNaming:
         input_fa.write_text(">test\nATCG\n")
 
         oc = OutputConfig(out_dir=custom_dir, out_base="myreads")
-        result = simulate_reads_pipeline(config, str(input_fa), output_config=oc)
+        result = simulate_reads_pipeline(
+            config, str(input_fa), human_reference="/ref/hg38.fa", output_config=oc
+        )
 
         assert "myreads" in result
         assert result.endswith(".bam")
@@ -109,7 +111,7 @@ class TestIlluminaOutputNaming:
         input_fa = tmp_path / "sample_001.fa"
         input_fa.write_text(">test\nATCG\n")
 
-        result = simulate_reads_pipeline(config, str(input_fa))
+        result = simulate_reads_pipeline(config, str(input_fa), human_reference="/ref/hg38.fa")
 
         assert "sample_001" in result
 
@@ -125,7 +127,7 @@ class TestIlluminaOutputNaming:
         input_fa = tmp_path / "sample.fa"
         input_fa.write_text(">test\nATCG\n")
 
-        result = simulate_reads_pipeline(config, str(input_fa))
+        result = simulate_reads_pipeline(config, str(input_fa), human_reference="/ref/hg38.fa")
 
         assert isinstance(result, str)
 
@@ -598,4 +600,4 @@ class TestONTAmpliconContract:
         with caplog.at_level(logging.WARNING):
             simulate_reads(config, str(input_fa))
 
-        assert "No human_reference specified in config for ONT-AMPLICON alignment." in caplog.text
+        assert "ONT-AMPLICON: No human reference for assembly" in caplog.text

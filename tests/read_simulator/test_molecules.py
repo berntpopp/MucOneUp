@@ -240,3 +240,10 @@ class TestFragmentMolecules:
                 depth[i] += 1
         left, right = sum(depth[:200]) / 200, sum(depth[-200:]) / 200
         assert left / right == pytest.approx(1.0, abs=0.15)
+
+    def test_alleles_of_different_length_get_equal_depth(self) -> None:
+        """Uniform haplotype choice gave the 21 kb allele 1.19x the 26 kb depth (#8)."""
+        src = ["A" * 21000, "C" * 26000]
+        mols = build_fragment_molecules(src, 8000, 6000, 0.5, MoleculeModel(), random.Random(5))
+        depth = [sum(len(m.seq) for m in mols if m.hap == h) / len(src[h - 1]) for h in (1, 2)]
+        assert depth[0] / depth[1] == pytest.approx(1.0, abs=0.1)

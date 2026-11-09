@@ -41,7 +41,8 @@ def parse_mutation_targets(
             mutation_positions.append(MutationTarget(hap_i, rep_i))
         except Exception as e:
             raise ValidationError(f"Invalid --mutation-targets format: '{t}' ({e})") from e
-    return mutation_positions
+    # A repeated target would otherwise be mutated twice.
+    return list(dict.fromkeys(mutation_positions))
 
 
 def find_random_mutation_target(
@@ -143,7 +144,10 @@ def apply_mutation_pipeline(
         try:
             mutated_results, mutated_units = apply_mutations(
                 config=config,
-                results=[HaplotypeResult(hr.sequence, list(hr.chain)) for hr in results],
+                results=[
+                    HaplotypeResult(hr.sequence, list(hr.chain), hr._repeat_lengths)
+                    for hr in results
+                ],
                 mutation_name=mutation_pair[1],
                 targets=mutation_positions,
                 rng=rng,

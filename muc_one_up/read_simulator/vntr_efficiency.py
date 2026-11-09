@@ -12,11 +12,16 @@ import logging
 from pathlib import Path
 
 from muc_one_up.read_simulator.utils import bed, samtools
+from muc_one_up.read_simulator.wrappers.samtools_coverage import (
+    calculate_target_coverage,
+    downsample_bam,
+)
 
 logger = logging.getLogger(__name__)
 
 
-# Default MUC1 VNTR region (hg38)
+# Default MUC1 VNTR region (hg38), 1-based end-inclusive like samtools regions;
+# bed.create_vntr_bed converts it to the 0-based BED start.
 DEFAULT_VNTR_REGION = {
     "chr": "chr1",
     "start": 155188487,
@@ -103,10 +108,11 @@ class VNTREfficiencyModel:
 
         Workflow:
         1. Create BED files for VNTR and non-VNTR regions
-        2. Extract reads by region (mutually exclusive)
-        3. Downsample VNTR reads by penalty factor
-        4. Merge VNTR (downsampled) + non-VNTR (full)
-        5. Sort and index output BAM
+        2. Split templates (read pairs) by name: any read in the VNTR puts
+           the whole template in the VNTR set
+        3. Downsample VNTR templates by penalty factor
+        4. Merge VNTR (downsampled) + non-VNTR target templates (full)
+        5. Index output BAM
         6. Calculate coverage statistics
 
         Args:
@@ -152,49 +158,24 @@ class VNTREfficiencyModel:
             # Step 1: Create BED files
             vntr_bed, non_vntr_bed = self._create_bed_files(temp_dir)
 
-            # Step 2: Extract reads by region (two-step single-pass partitioning)
-            vntr_reads_bam = temp_dir / "vntr_reads.bam"
-            remainder_bam = temp_dir / "remainder.bam"
-            non_vntr_reads_bam = temp_dir / "non_vntr_reads.bam"
-
-            logger.info("  Partitioning VNTR reads and remainder in single pass...")
-            samtools.extract_reads_by_region(
+            # Steps 2-5: pair-aware split by template name, downsample VNTR
+            # templates, keep templates on non-VNTR targets, merge and index
+            downsample_bam(
+                self.samtools_cmd,
                 input_bam,
+                output_bam,
                 vntr_bed,
-                vntr_reads_bam,
-                unselected_bam=remainder_bam,
-                exclude_flags=2304,
-                samtools_cmd=self.samtools_cmd,
+                self.penalty_factor,
+                self.seed,
+                self.threads,
+                keep_bed=non_vntr_bed,
             )
-
-            logger.info("  Filtering remainder reads against non-VNTR targets...")
-            samtools.extract_reads_by_region(
-                remainder_bam,
-                non_vntr_bed,
-                non_vntr_reads_bam,
-                exclude_flags=2304,
-                samtools_cmd=self.samtools_cmd,
-            )
-
-            # Step 3: Downsample VNTR reads
-            vntr_downsampled_bam = temp_dir / "vntr_downsampled.bam"
-
-            logger.info(f"  Downsampling VNTR reads by {self.penalty_factor:.3f}...")
-            self._downsample_reads(vntr_reads_bam, vntr_downsampled_bam, self.penalty_factor)
-
-            # Step 4: Merge and sort
-            merged_bam = temp_dir / "merged.bam"
-
-            logger.info("  Merging VNTR (downsampled) + non-VNTR (full)...")
-            self._merge_and_sort(vntr_downsampled_bam, non_vntr_reads_bam, merged_bam, output_bam)
-
-            # Step 5: Index output
-            logger.info("  Indexing output BAM...")
-            samtools.index_bam(output_bam, samtools_cmd=self.samtools_cmd)
 
             # Step 6: Calculate statistics
             logger.info("  Calculating coverage statistics...")
-            stats = self._calculate_statistics(input_bam, output_bam, vntr_bed, non_vntr_bed)
+            stats = self._calculate_statistics(
+                input_bam, output_bam, vntr_bed, non_vntr_bed, temp_dir
+            )
 
             logger.info("  VNTR efficiency bias applied successfully")
             logger.info(f"    VNTR coverage: {stats['vntr_coverage']:.2f}x")
@@ -245,41 +226,8 @@ class VNTREfficiencyModel:
 
         return vntr_bed, non_vntr_bed
 
-    def _downsample_reads(self, input_bam: Path, output_bam: Path, fraction: float) -> None:
-        """
-        Downsample reads by fraction.
-
-        Args:
-            input_bam: Input BAM file
-            output_bam: Output BAM file
-            fraction: Fraction of reads to keep
-        """
-        samtools.downsample_bam(
-            input_bam, output_bam, fraction, self.seed, samtools_cmd=self.samtools_cmd
-        )
-
-    def _merge_and_sort(self, bam1: Path, bam2: Path, merged_bam: Path, sorted_bam: Path) -> None:
-        """
-        Merge two BAM files and sort by coordinate.
-
-        Args:
-            bam1: First BAM file (VNTR downsampled)
-            bam2: Second BAM file (non-VNTR full)
-            merged_bam: Output merged BAM (unsorted)
-            sorted_bam: Output sorted BAM
-        """
-        # Merge
-        samtools.merge_bams(
-            [bam1, bam2], merged_bam, threads=self.threads, samtools_cmd=self.samtools_cmd
-        )
-
-        # Sort
-        samtools.sort_bam(
-            merged_bam, sorted_bam, threads=self.threads, samtools_cmd=self.samtools_cmd
-        )
-
     def _calculate_statistics(
-        self, input_bam: Path, output_bam: Path, vntr_bed: Path, non_vntr_bed: Path
+        self, input_bam: Path, output_bam: Path, vntr_bed: Path, non_vntr_bed: Path, temp_dir: Path
     ) -> dict:
         """
         Calculate coverage statistics for input and output BAMs.
@@ -289,6 +237,7 @@ class VNTREfficiencyModel:
             output_bam: Output BAM file
             vntr_bed: VNTR region BED
             non_vntr_bed: Non-VNTR region BED
+            temp_dir: Directory for depth files
 
         Returns:
             Dict with coverage statistics
@@ -298,11 +247,16 @@ class VNTREfficiencyModel:
         output_reads = samtools.get_read_count(output_bam, samtools_cmd=self.samtools_cmd)
 
         # Coverage in output BAM
-        vntr_cov = samtools.calculate_mean_coverage(
-            output_bam, vntr_bed, samtools_cmd=self.samtools_cmd
+        vntr_cov, _ = calculate_target_coverage(
+            self.samtools_cmd, str(output_bam), str(vntr_bed), self.threads, str(temp_dir), "vntr"
         )
-        non_vntr_cov = samtools.calculate_mean_coverage(
-            output_bam, non_vntr_bed, samtools_cmd=self.samtools_cmd
+        non_vntr_cov, _ = calculate_target_coverage(
+            self.samtools_cmd,
+            str(output_bam),
+            str(non_vntr_bed),
+            self.threads,
+            str(temp_dir),
+            "non_vntr",
         )
 
         # Calculate ratio

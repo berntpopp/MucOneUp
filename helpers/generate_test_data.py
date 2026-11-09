@@ -19,7 +19,7 @@ import logging
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -512,7 +512,7 @@ def generate_manifest(dataset_dir: Path, all_files: list[Path], version: str) ->
         "version": version,
         "generated_with": "MucOneUp",
         "muconeup_version": version,
-        "generation_date": datetime.utcnow().isoformat() + "Z",
+        "generation_date": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "sample": {
             "base_name": SAMPLE_BASE_NAME,
             "vntr_h1": VNTR_H1_LENGTH,
@@ -705,49 +705,29 @@ GPL-3.0 (same as MucOneUp)
 
 
 def create_tarball(dataset_dir: Path, version: str) -> Path:
-    """Create compressed tarball of dataset in data/testdata_releases/ folder."""
+    """Create the dataset tarball plus a .sha256 file in data/testdata_releases/ (gitignored).
+
+    Tarballs are published as GitHub Release assets (``make publish-testdata``),
+    not committed: each one is ~17 MB and would bloat git history forever.
+    """
     logger = logging.getLogger(__name__)
     logger.info("Creating tarball")
 
-    # Create releases folder with date and version in data/
     date_str = datetime.now().strftime("%Y-%m-%d")
     releases_dir = Path("data/testdata_releases") / f"{date_str}_{version}"
     ensure_dir(releases_dir)
 
-    tarball_name = f"{dataset_dir.name}.tar.gz"
-    tarball_path = releases_dir / tarball_name
-
+    tarball_path = releases_dir / f"{dataset_dir.name}.tar.gz"
     cmd = ["tar", "-czf", str(tarball_path), "-C", str(dataset_dir.parent), dataset_dir.name]
-
     run_command(cmd, "Create tarball", check=True)
 
+    # sha256sum -c format, so downloaders can verify the release asset
+    checksum_path = tarball_path.with_name(tarball_path.name + ".sha256")
+    checksum_path.write_text(f"{calculate_checksum(tarball_path)}  {tarball_path.name}\n")
+
     logger.info(f"✓ Tarball created: {tarball_path}")
-
-    # Create/update _latest directory with constant-name tarball
-    latest_dir = Path("data/testdata_releases/_latest")
-    if latest_dir.exists():
-        shutil.rmtree(latest_dir)
-    ensure_dir(latest_dir)
-
-    # Copy tarball with constant name (version-agnostic for persistent URLs)
-    constant_name = f"{SAMPLE_BASE_NAME}.tar.gz"
-    latest_tarball = latest_dir / constant_name
-    shutil.copy2(tarball_path, latest_tarball)
-
-    # Add version metadata for traceability
-    version_info = {
-        "version": version,
-        "release_date": date_str,
-        "source_tarball": str(tarball_path.relative_to(Path.cwd())),
-        "generated_utc": datetime.utcnow().isoformat() + "Z",
-    }
-    version_file = latest_dir / "VERSION.json"
-    with open(version_file, "w") as f:
-        json.dump(version_info, f, indent=2)
-
-    logger.info("✓ Created _latest directory with constant-name tarball")
-    logger.info(f"  Download URL: data/testdata_releases/_latest/{constant_name}")
-    logger.info(f"  Version: {version} (released {date_str})")
+    logger.info(f"✓ Checksum: {checksum_path}")
+    logger.info(f"  Publish with: make publish-testdata VERSION={version}")
 
     return tarball_path
 

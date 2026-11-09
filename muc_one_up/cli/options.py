@@ -41,7 +41,7 @@ class SimulationOptions:
     # SNP config
     snp_input_file: str | None = None
     random_snps: bool = False
-    random_snp_density: float = 0.001
+    random_snp_density: float | None = None
     random_snp_output_file: str | None = None
     random_snp_region: str = "constants_only"
     random_snp_haplotypes: str = "all"

@@ -25,12 +25,6 @@ class TestRunResult:
         assert r == 0
         assert r != 1
 
-    def test_bool_truthy_on_zero(self):
-        """RunResult with returncode 0 should be falsy like int 0 for `if result:` patterns."""
-        r = RunResult(returncode=0, stdout=None, stderr=None, command="cmd")
-        # Note: this follows int semantics where 0 is falsy
-        assert not r  # 0 is falsy
-
 
 class TestRunCommandCapture:
     def test_capture_stdout(self):

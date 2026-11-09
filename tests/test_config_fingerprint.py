@@ -253,3 +253,30 @@ class TestPathKeysConstant:
     def test_path_keys_not_empty(self):
         """Test PATH_KEYS is not empty."""
         assert len(PATH_KEYS) > 0
+
+
+def test_fingerprint_independent_of_cwd(tmp_path, monkeypatch):
+    """load_config resolves relative paths only from other cwds; fingerprint must not change."""
+    import json
+    import shutil
+    from pathlib import Path
+
+    from muc_one_up.config import load_config
+
+    cfg_dir = tmp_path / "cfg"
+    cfg_dir.mkdir()
+    shutil.copy(Path(__file__).parent.parent / "config.json", cfg_dir / "config.json")
+    cfg = json.loads((cfg_dir / "config.json").read_text())
+    rel_paths = [g["fasta_path"] for g in cfg["reference_genomes"].values()]
+    rel_paths += [cfg["pacbio_params"]["model_file"]]
+    rel_paths += [cfg["read_simulation"][k] for k in ("reseq_model", "sample_bam_hg38",
+                  "sample_bam_hg19", "human_reference", "sample_target_bed")]  # fmt: skip
+    for rel in rel_paths:
+        (cfg_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / rel).touch()
+
+    monkeypatch.chdir(cfg_dir)
+    fp_local = compute_config_fingerprint(load_config("config.json"))
+    monkeypatch.chdir(tmp_path)
+    fp_other = compute_config_fingerprint(load_config("cfg/config.json"))
+    assert fp_local == fp_other

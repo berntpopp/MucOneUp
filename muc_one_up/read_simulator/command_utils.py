@@ -63,9 +63,6 @@ def build_tool_command(tool_cmd: str, *args: Any) -> list[str]:
         - Bandit B602: subprocess with shell=True (HIGH severity)
         - Python subprocess security: https://docs.python.org/3/library/subprocess.html#security
         - shlex documentation: https://docs.python.org/3/library/shlex.html
-
-    See Also:
-        get_tool_executable: Extract executable name from tool command
     """
     if not tool_cmd:
         raise ValueError("tool_cmd cannot be empty")
@@ -81,55 +78,3 @@ def build_tool_command(tool_cmd: str, *args: Any) -> list[str]:
     cmd_list.extend(str(arg) for arg in args)
 
     return cmd_list
-
-
-def get_tool_executable(tool_cmd: str) -> str:
-    """
-    Extract the actual executable name from a tool command.
-
-    Useful for logging, error messages, and debugging. This function identifies
-    the actual tool being invoked, even when wrapped in conda/mamba commands.
-
-    Examples:
-        >>> get_tool_executable("bwa")
-        "bwa"
-
-        >>> get_tool_executable("mamba run -n env_wessim reseq")
-        "reseq"
-
-        >>> get_tool_executable("mamba run --no-capture-output -n env_wessim samtools")
-        "samtools"
-
-        >>> get_tool_executable("")
-        "unknown"
-
-    Args:
-        tool_cmd: Tool command string (may contain conda/mamba prefix).
-
-    Returns:
-        The final executable name. For multi-word commands, returns the last
-        non-flag element (typically the actual tool name). Returns "unknown"
-        if the command is empty or cannot be determined.
-
-    See Also:
-        build_tool_command: Build full command list for subprocess execution
-    """
-    if not tool_cmd:
-        return "unknown"
-
-    if " " in tool_cmd:
-        # Multi-word command - parse and find the tool name
-        parts = shlex.split(tool_cmd)
-
-        # The tool name is usually the last non-flag element
-        # e.g., "mamba run -n env_wessim reseq" -> "reseq"
-        # Walk backwards to find first element that doesn't start with "-"
-        for part in reversed(parts):
-            if not part.startswith("-"):
-                return part
-
-        # Fallback: if all elements start with "-", return the last one
-        return parts[-1] if parts else "unknown"
-
-    # Simple command - just return it
-    return tool_cmd

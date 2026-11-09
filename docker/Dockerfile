@@ -40,7 +40,7 @@ RUN --mount=type=cache,target=/home/mambauser/.mamba/pkgs,sharing=locked \
     micromamba create -y -f /tmp/env_pacbio.yml && \
     micromamba install -y -n env_nanosim -c conda-forge --no-deps scikit-learn=1.5.0 && \
     micromamba remove -y -f --no-prune -n env_nanosim pillow fonttools pip wheel setuptools && \
-    micromamba remove -y -f --no-prune -n env_wessim pip wheel setuptools && \
+    micromamba remove -y -f --no-prune -n env_wessim pip && \
     micromamba clean --all --yes && \
     rm -rf /tmp/*.yml /tmp/*.yaml /home/mambauser/.mamba/pkgs/* /opt/conda/pkgs/*
 
@@ -59,7 +59,7 @@ RUN mkdir -p /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL && \
     echo 'from . import Image' > /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL/__init__.py
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    /usr/bin/pip3 install --break-system-packages . biopython && \
+    /usr/bin/pip3 install --break-system-packages . && \
     sed -i -E 's/mamba run -n [^ ]+ //g' /app/config.json && \
     apt-get purge -y python3-pip python3-dev build-essential && \
     apt-get autoremove -y && \

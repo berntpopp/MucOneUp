@@ -186,25 +186,17 @@ def simulate_pacbio_hifi_reads(
     length_min = pacbio_params.get("length_min", DEFAULT_PBSIM3_LENGTH_MIN)
     length_max = pacbio_params.get("length_max", DEFAULT_PBSIM3_LENGTH_MAX)
 
-    required_params = {
-        "model_type": model_type,
-        "model_file": model_file,
-        "coverage": coverage,
-        "pass_num": pass_num,
-        "min_passes": min_passes,
-        "min_rq": min_rq,
-    }
-
-    missing_params = [key for key, value in required_params.items() if value is None]
-    if missing_params:
-        raise RuntimeError(
-            f"Missing required PacBio parameters in config: {', '.join(missing_params)}"
-        )
-
-    if model_type is None or model_file is None or coverage is None:
-        raise RuntimeError("Required PacBio parameters missing")  # unreachable
-    if pass_num is None or min_passes is None or min_rq is None:
-        raise RuntimeError("Required PacBio parameters missing")  # unreachable
+    if (
+        model_type is None
+        or model_file is None
+        or coverage is None
+        or pass_num is None
+        or min_passes is None
+        or min_rq is None
+    ):
+        required = ("model_type", "model_file", "coverage", "pass_num", "min_passes", "min_rq")
+        missing = [key for key in required if pacbio_params.get(key) is None]
+        raise RuntimeError(f"Missing required PacBio parameters in config: {', '.join(missing)}")
 
     try:
         validate_pbsim3_parameters(

@@ -2,7 +2,7 @@
 
 Tests cover:
 - resolve_pipeline_outputs: output dir/base resolution with fallback chain
-- resolve_human_reference: 3-path fallback for human reference resolution
+- resolve_human_reference: single precedence for the alignment reference
 - create_pipeline_metadata: thin wrapper around write_metadata_file
 - cleanup_intermediates: safe removal of intermediate files
 """
@@ -21,6 +21,7 @@ from muc_one_up.read_simulator.output_config import OutputConfig
 from muc_one_up.read_simulator.pipeline_utils import (
     cleanup_intermediates,
     create_pipeline_metadata,
+    intermediate_work_dir,
     resolve_human_reference,
     resolve_pipeline_outputs,
 )
@@ -95,114 +96,52 @@ class TestResolvePipelineOutputs:
         assert new_dir.exists()
 
 
+def _ctx(human_reference=None):
+    return AssemblyContext(
+        assembly_name="hg38",
+        left_constant="ACGT",
+        right_constant="TGCA",
+        human_reference=human_reference,
+    )
+
+
 class TestResolveHumanReference:
-    """Tests for resolve_human_reference function."""
+    """One precedence: human_reference_<asm> > human_reference > reference_genomes."""
 
-    def test_from_reference_genomes(self, tmp_path):
-        """Uses reference_genomes section as first priority."""
-        ref_file = tmp_path / "hg38.fa"
-        ref_file.write_text(">chr1\nACGT\n")
-        # Create required index files so validation passes
-        for ext in [".fai", ".amb", ".ann", ".bwt", ".pac", ".sa"]:
-            (tmp_path / f"hg38.fa{ext}").touch()
-
-        config = {
+    def _genomes(self, tmp_path):
+        ref = tmp_path / "hg38.fa"
+        ref.write_text(">chr1\nACGT\n")
+        return ref, {
             "reference_assembly": "hg38",
-            "reference_genomes": {
-                "hg38": {
-                    "fasta_path": str(ref_file),
-                    "vntr_region": "chr1:155188487-155192239",
-                }
-            },
+            "reference_genomes": {"hg38": {"fasta_path": str(ref)}},
         }
-        assembly_ctx = AssemblyContext(
-            assembly_name="hg38",
-            left_constant="ACGT",
-            right_constant="TGCA",
-            human_reference=str(tmp_path / "fallback.fa"),
-        )
 
-        result = resolve_human_reference(config=config, assembly_ctx=assembly_ctx, aligner="bwa")
+    def test_explicit_human_reference_wins_over_reference_genomes(self, tmp_path):
+        _, config = self._genomes(tmp_path)
+        config["read_simulation"] = {"human_reference": "/explicit.fa"}
 
-        assert result == str(ref_file)
+        assert resolve_human_reference(config, _ctx(), "bwa") == "/explicit.fa"
 
-    def test_fallback_to_assembly_context(self, tmp_path):
-        """Falls back to assembly_ctx.human_reference when reference_genomes lookup fails."""
-        fallback_ref = tmp_path / "assembly_ctx_ref.fa"
-        fallback_ref.write_text(">chr1\nACGT\n")
+    def test_assembly_keyed_reference_wins(self, tmp_path):
+        _, config = self._genomes(tmp_path)
+        config["read_simulation"] = {"human_reference": "/explicit.fa"}
 
-        config = {
-            "reference_assembly": "hg38",
-            # No reference_genomes section — will cause get_reference_path_for_assembly to raise
-        }
-        assembly_ctx = AssemblyContext(
-            assembly_name="hg38",
-            left_constant="ACGT",
-            right_constant="TGCA",
-            human_reference=str(fallback_ref),
-        )
+        assert resolve_human_reference(config, _ctx("/asm.fa"), "bwa") == "/asm.fa"
 
-        # Mock get_reference_path_for_assembly to simulate failure
-        with patch(
-            "muc_one_up.read_simulator.pipeline_utils.get_reference_path_for_assembly",
-            side_effect=Exception("no reference_genomes"),
-        ):
-            result = resolve_human_reference(
-                config=config, assembly_ctx=assembly_ctx, aligner="bwa"
-            )
+    def test_falls_back_to_reference_genomes(self, tmp_path):
+        ref, config = self._genomes(tmp_path)
 
-        assert result == str(fallback_ref)
+        assert resolve_human_reference(config, _ctx(), "minimap2") == str(ref)
 
-    def test_fallback_to_rs_config(self, tmp_path):
-        """Falls back to config['read_simulation']['human_reference'] (legacy)."""
-        legacy_ref = tmp_path / "legacy_ref.fa"
-        legacy_ref.write_text(">chr1\nACGT\n")
+    def test_broken_reference_genomes_entry_raises_with_reason(self, tmp_path):
+        config = {"reference_genomes": {"hg38": {"fasta_path": str(tmp_path / "typo.fa")}}}
 
-        config = {
-            "reference_assembly": "hg38",
-            "read_simulation": {
-                "human_reference": str(legacy_ref),
-            },
-            # No reference_genomes
-        }
-        assembly_ctx = AssemblyContext(
-            assembly_name="hg38",
-            left_constant="ACGT",
-            right_constant="TGCA",
-            human_reference=None,  # No assembly_ctx fallback
-        )
+        with pytest.raises(ConfigurationError, match=r"typo\.fa"):
+            resolve_human_reference(config, _ctx(), "bwa")
 
-        with patch(
-            "muc_one_up.read_simulator.pipeline_utils.get_reference_path_for_assembly",
-            side_effect=Exception("no reference_genomes"),
-        ):
-            result = resolve_human_reference(
-                config=config, assembly_ctx=assembly_ctx, aligner="bwa"
-            )
-
-        assert result == str(legacy_ref)
-
-    def test_raises_when_no_reference(self, tmp_path):
-        """Raises ConfigurationError when no reference can be found via any path."""
-        config = {
-            "reference_assembly": "hg38",
-            # No reference_genomes, no read_simulation.human_reference
-        }
-        assembly_ctx = AssemblyContext(
-            assembly_name="hg38",
-            left_constant="ACGT",
-            right_constant="TGCA",
-            human_reference=None,
-        )
-
-        with (
-            patch(
-                "muc_one_up.read_simulator.pipeline_utils.get_reference_path_for_assembly",
-                side_effect=Exception("no reference_genomes"),
-            ),
-            pytest.raises(ConfigurationError),
-        ):
-            resolve_human_reference(config=config, assembly_ctx=assembly_ctx, aligner="bwa")
+    def test_raises_when_no_reference(self):
+        with pytest.raises(ConfigurationError, match="No human reference"):
+            resolve_human_reference({"reference_assembly": "hg38"}, _ctx(), "bwa")
 
 
 class TestCreatePipelineMetadata:
@@ -308,3 +247,14 @@ class TestCleanupUnlessKept:
         f.write_text("x")
         cleanup_unless_kept({"read_simulation": {"keep_intermediate_files": True}}, [str(f)])
         assert f.exists()
+
+
+@pytest.mark.parametrize("keep", [False, True])
+def test_intermediate_work_dir_kept_under_output_dir(tmp_path, keep):
+    config = {"read_simulation": {"keep_intermediate_files": keep}}
+
+    with intermediate_work_dir(config, tmp_path, "sim_") as work_dir:
+        (work_dir / "x").write_text("x")
+
+    assert (work_dir.parent == tmp_path) is keep
+    assert work_dir.exists() is keep

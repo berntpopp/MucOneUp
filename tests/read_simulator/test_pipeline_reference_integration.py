@@ -1,304 +1,115 @@
-"""Tests for reference assembly management integration in read simulation pipelines."""
+"""The alignment reference is resolved once in simulate_reads and shared by every pipeline."""
+
+import logging
 
 import pytest
 
 from muc_one_up.exceptions import ConfigurationError
+from muc_one_up.read_simulation import simulate_reads
+
+PIPELINES = {
+    "illumina": "muc_one_up.read_simulator.pipeline.simulate_reads_pipeline",
+    "ont": "muc_one_up.read_simulator.ont_pipeline.simulate_ont_reads_pipeline",
+    "pacbio": "muc_one_up.read_simulator.pacbio_pipeline.simulate_pacbio_hifi_reads",
+    "amplicon": "muc_one_up.read_simulator.amplicon_pipeline.simulate_amplicon_reads_pipeline",
+    "ont-amplicon": "muc_one_up.read_simulator.ont_amplicon_pipeline.simulate_ont_amplicon_pipeline",
+    "ont-fragments": "muc_one_up.read_simulator.ont_fragment_pipeline.simulate_ont_fragment_pipeline",
+}
 
 
-class TestIlluminaPipelineReferenceIntegration:
-    """Test reference assembly management in Illumina pipeline."""
+def _config(tmp_path, simulator, **rs):
+    genomes_ref = tmp_path / "hg38.fa"
+    genomes_ref.write_text(">chr1\nACGT\n")
+    return {
+        "reference_assembly": "hg38",
+        "reference_genomes": {"hg38": {"fasta_path": str(genomes_ref)}},
+        "read_simulation": {"simulator": simulator, **rs},
+    }
 
-    def _patch_pipeline(self, mocker, tmp_path, final_bam: str | None = None):
-        """Patch all heavy pipeline dependencies; return mock_align."""
-        from muc_one_up.read_simulator.stages import AlignmentResult, FragmentResult
 
-        if final_bam is None:
-            final_bam = str(tmp_path / "out.bam")
+@pytest.mark.parametrize("simulator", sorted(PIPELINES))
+def test_every_pipeline_gets_the_same_reference(simulator, tmp_path, mocker):
+    """Same config -> same alignment reference, whatever the platform (#2)."""
+    pipeline = mocker.patch(PIPELINES[simulator], return_value="out")
+    config = _config(tmp_path, simulator, human_reference="/explicit/GRCh38.fa")
 
-        mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
-        mocker.patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={})
-        mocker.patch("muc_one_up.read_simulator.pipeline.log_tool_versions")
-        mocker.patch("muc_one_up.read_simulator.pipeline.cleanup_intermediates")
-        mocker.patch("muc_one_up.read_simulator.pipeline.create_pipeline_metadata")
-        mocker.patch("muc_one_up.read_simulator.pipeline.generate_read_manifest")
+    simulate_reads(config, "in.fa")
 
+    assert pipeline.call_args.kwargs["human_reference"] == "/explicit/GRCh38.fa"
+
+
+@pytest.mark.parametrize("simulator", sorted(PIPELINES))
+def test_reference_genomes_used_when_no_explicit_reference(simulator, tmp_path, mocker):
+    pipeline = mocker.patch(PIPELINES[simulator], return_value="out")
+
+    simulate_reads(_config(tmp_path, simulator), "in.fa")
+
+    assert pipeline.call_args.kwargs["human_reference"] == str(tmp_path / "hg38.fa")
+
+
+@pytest.mark.parametrize("simulator", sorted(PIPELINES))
+def test_skip_alignment_passes_no_reference(simulator, tmp_path, mocker):
+    pipeline = mocker.patch(PIPELINES[simulator], return_value="out")
+    config = _config(tmp_path, simulator, human_reference="/x.fa", skip_alignment=True)
+
+    simulate_reads(config, "in.fa")
+
+    assert pipeline.call_args.kwargs["human_reference"] is None
+
+
+def test_broken_reference_is_a_warning_not_a_silent_switch(tmp_path, mocker, caplog):
+    pipeline = mocker.patch(PIPELINES["pacbio"], return_value="out")
+    config = _config(tmp_path, "pacbio")
+    config["reference_genomes"]["hg38"]["fasta_path"] = str(tmp_path / "typo.fa")
+
+    with caplog.at_level(logging.WARNING):
+        simulate_reads(config, "in.fa")
+
+    assert pipeline.call_args.kwargs["human_reference"] is None
+    assert any(r.levelno == logging.WARNING and "typo.fa" in r.message for r in caplog.records)
+
+
+def test_illumina_without_reference_raises(tmp_path, mocker):
+    mocker.patch(PIPELINES["illumina"], return_value="out")
+    config = {"read_simulation": {"simulator": "illumina"}}
+
+    with pytest.raises(ConfigurationError, match="No human reference"):
+        simulate_reads(config, "in.fa")
+
+
+class TestONTAlignmentReference:
+    """ONT aligns to the reference it is given, or the simulated FASTA without one."""
+
+    @pytest.fixture
+    def run(self, tmp_path, mocker):
+        config = {
+            "tools": {"nanosim": "simulator.py", "minimap2": "minimap2", "samtools": "samtools"},
+            "nanosim_params": {"training_data_path": str(tmp_path / "model"), "coverage": 30},
+            "read_simulation": {"output_dir": str(tmp_path)},
+        }
         mocker.patch(
-            "muc_one_up.read_simulator.pipeline.prepare_fragments",
-            return_value=FragmentResult(
-                r1_fastq="/r1.fq.gz",
-                r2_fastq="/r2.fq.gz",
-                intermediate_files=[],
-            ),
-        )
-        mock_align = mocker.patch(
-            "muc_one_up.read_simulator.pipeline.align_and_refine",
-            return_value=AlignmentResult(
-                final_bam=final_bam,
-                intermediate_bams=[],
-                intermediate_files=[],
-            ),
-        )
-        return mock_align
-
-    def test_uses_reference_from_reference_genomes(self, tmp_path, mocker):
-        """Test pipeline uses reference_genomes section when available."""
-        ref_file = tmp_path / "hg38.fa"
-        ref_file.write_text(">chr1\nATCG\n")
-
-        # Create mock reference indices
-        for ext in [".fai", ".amb", ".ann", ".bwt", ".pac", ".sa"]:
-            (tmp_path / f"hg38.fa{ext}").touch()
-
-        config = {
-            "tools": {
-                "reseq": "reseq",
-                "faToTwoBit": "faToTwoBit",
-                "samtools": "samtools",
-                "pblat": "pblat",
-                "bwa": "bwa",
-            },
-            "read_simulation": {
-                "reseq_model": str(tmp_path / "model"),
-                "sample_bam": str(tmp_path / "sample.bam"),
-                "output_dir": str(tmp_path),
-            },
-            "reference_assembly": "hg38",
-            "reference_genomes": {
-                "hg38": {
-                    "fasta_path": str(ref_file),
-                    "vntr_region": "chr1:155188487-155192239",
-                }
-            },
-        }
-
-        mock_align = self._patch_pipeline(mocker, tmp_path)
-
-        from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
-
-        input_fa = tmp_path / "test.fa"
-        input_fa.write_text(">test\nATCG\n")
-
-        simulate_reads_pipeline(config, str(input_fa))
-
-        # Verify align_and_refine was called with reference from reference_genomes
-        assert mock_align.called
-        call_kwargs = mock_align.call_args
-        assert call_kwargs[1]["human_ref"] == str(ref_file)
-
-    def test_fallback_to_old_human_reference(self, tmp_path, mocker):
-        """Test pipeline falls back to old human_reference config."""
-        ref_file = tmp_path / "old_ref.fa"
-        ref_file.write_text(">chr1\nATCG\n")
-
-        config = {
-            "tools": {
-                "reseq": "reseq",
-                "faToTwoBit": "faToTwoBit",
-                "samtools": "samtools",
-                "pblat": "pblat",
-                "bwa": "bwa",
-            },
-            "read_simulation": {
-                "reseq_model": str(tmp_path / "model"),
-                "sample_bam": str(tmp_path / "sample.bam"),
-                "human_reference": str(ref_file),  # Old config format
-                "output_dir": str(tmp_path),
-            },
-        }
-
-        mock_align = self._patch_pipeline(mocker, tmp_path)
-
-        from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
-
-        input_fa = tmp_path / "test.fa"
-        input_fa.write_text(">test\nATCG\n")
-
-        simulate_reads_pipeline(config, str(input_fa))
-
-        # Verify fallback to old human_reference
-        assert mock_align.called
-        call_kwargs = mock_align.call_args
-        assert call_kwargs[1]["human_ref"] == str(ref_file)
-
-    def test_raises_error_when_no_reference_configured(self, tmp_path, mocker):
-        """Test pipeline raises error when no reference configured."""
-        config = {
-            "tools": {
-                "reseq": "reseq",
-                "faToTwoBit": "faToTwoBit",
-                "samtools": "samtools",
-                "pblat": "pblat",
-                "bwa": "bwa",
-            },
-            "read_simulation": {
-                "reseq_model": str(tmp_path / "model"),
-                "sample_bam": str(tmp_path / "sample.bam"),
-                "output_dir": str(tmp_path),
-                # No reference configured
-            },
-        }
-
-        # Still need prepare_fragments mocked (runs before reference resolution)
-        mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
-        mocker.patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={})
-        mocker.patch("muc_one_up.read_simulator.pipeline.log_tool_versions")
-
-        from muc_one_up.read_simulator.stages import FragmentResult
-
-        mocker.patch(
-            "muc_one_up.read_simulator.pipeline.prepare_fragments",
-            return_value=FragmentResult(
-                r1_fastq="/r1.fq.gz",
-                r2_fastq="/r2.fq.gz",
-                intermediate_files=[],
-            ),
-        )
-
-        from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
-
-        input_fa = tmp_path / "test.fa"
-        input_fa.write_text(">test\nATCG\n")
-
-        with pytest.raises(ConfigurationError, match="human_reference not specified"):
-            simulate_reads_pipeline(config, str(input_fa))
-
-
-class TestONTPipelineReferenceIntegration:
-    """Test reference assembly management in ONT pipeline."""
-
-    def test_uses_reference_from_reference_genomes(self, tmp_path, mocker):
-        """Test ONT pipeline uses reference_genomes section when available."""
-        ref_file = tmp_path / "hg38.fa"
-        ref_file.write_text(">chr1\nATCG\n")
-
-        # Create minimap2 index
-        (tmp_path / "hg38.fa.mmi").touch()
-
-        config = {
-            "tools": {
-                "nanosim": "simulator.py",
-                "minimap2": "minimap2",
-                "samtools": "samtools",
-            },
-            "nanosim_params": {
-                "training_data_path": str(tmp_path / "model"),
-                "coverage": 30,
-            },
-            "read_simulation": {
-                "output_dir": str(tmp_path),
-            },
-            "reference_assembly": "hg38",
-            "reference_genomes": {
-                "hg38": {
-                    "fasta_path": str(ref_file),
-                    "vntr_region": "chr1:155188487-155192239",
-                }
-            },
-        }
-
-        # Mock pipeline steps
-        mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
-        mock_nanosim.return_value = str(tmp_path / "reads.fastq")
-
-        mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
-        )
-
-        # Mock diploid check to avoid split-simulation complexity
-        mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference", return_value=False
-        )
-
-        from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
-
-        input_fa = tmp_path / "test.fa"
-        input_fa.write_text(">test\nATCG\n")
-
-        simulate_ont_reads_pipeline(config, str(input_fa))
-
-        # Verify align was called with reference from reference_genomes
-        assert mock_align.called
-        call_args = mock_align.call_args
-        assert call_args[1]["reference"] == str(ref_file)
-
-    def test_fallback_to_input_fa_on_error(self, tmp_path, mocker):
-        """Test ONT pipeline falls back to input_fa when reference loading fails."""
-        config = {
-            "tools": {
-                "nanosim": "simulator.py",
-                "minimap2": "minimap2",
-                "samtools": "samtools",
-            },
-            "nanosim_params": {
-                "training_data_path": str(tmp_path / "model"),
-                "coverage": 30,
-            },
-            "read_simulation": {
-                "output_dir": str(tmp_path),
-            },
-            "reference_assembly": "nonexistent",  # Will fail
-        }
-
-        mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
-        mock_nanosim.return_value = str(tmp_path / "reads.fastq")
-
-        mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
+            "muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation",
+            return_value=str(tmp_path / "reads.fastq"),
         )
         mocker.patch(
             "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference", return_value=False
         )
-
-        from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
-
+        align = mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
         input_fa = tmp_path / "test.fa"
         input_fa.write_text(">test\nATCG\n")
 
-        simulate_ont_reads_pipeline(config, str(input_fa))
-
-        # Verify fallback to input_fa
-        assert mock_align.called
-        call_args = mock_align.call_args
-        assert call_args[1]["reference"] == str(input_fa)
-
-    def test_uses_user_provided_reference(self, tmp_path, mocker):
-        """Test ONT pipeline uses user-provided reference when specified."""
-        user_ref = tmp_path / "user_ref.fa"
-        user_ref.write_text(">chr1\nATCG\n")
-
-        config = {
-            "tools": {
-                "nanosim": "simulator.py",
-                "minimap2": "minimap2",
-                "samtools": "samtools",
-            },
-            "nanosim_params": {
-                "training_data_path": str(tmp_path / "model"),
-                "coverage": 30,
-            },
-            "read_simulation": {
-                "output_dir": str(tmp_path),
-            },
-        }
-
-        mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
-        mock_nanosim.return_value = str(tmp_path / "reads.fastq")
-
-        mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
-        )
-        mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.is_diploid_reference", return_value=False
-        )
-
         from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
 
-        input_fa = tmp_path / "test.fa"
-        input_fa.write_text(">test\nATCG\n")
+        def _run(human_reference):
+            simulate_ont_reads_pipeline(config, str(input_fa), human_reference=human_reference)
+            return align.call_args.kwargs["reference"], str(input_fa)
 
-        simulate_ont_reads_pipeline(config, str(input_fa), human_reference=str(user_ref))
+        return _run
 
-        # Verify user-provided reference is used
-        assert mock_align.called
-        call_args = mock_align.call_args
-        assert call_args[1]["reference"] == str(user_ref)
+    def test_uses_given_reference(self, run):
+        reference, _ = run("/ref/GRCh38.fa")
+        assert reference == "/ref/GRCh38.fa"
+
+    def test_without_reference_aligns_to_simulated_fasta(self, run):
+        reference, input_fa = run(None)
+        assert reference == input_fa

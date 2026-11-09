@@ -41,6 +41,13 @@ logger = logging.getLogger(__name__)
 PATH_KEYS = frozenset(
     [
         "human_reference",  # read_simulation
+        "reseq_model",  # read_simulation
+        "sample_bam_hg19",  # read_simulation
+        "sample_bam_hg38",  # read_simulation
+        "sample_target_bed",  # read_simulation
+        "capture_bed",  # read_simulation.vntr_capture_efficiency
+        "flank_fasta",  # ont_fragment_params
+        "fasta_path",  # reference_genomes.*
         "training_data_path",  # nanosim_params
         "model_file",  # pacbio_params
         "faToTwoBit",  # tools

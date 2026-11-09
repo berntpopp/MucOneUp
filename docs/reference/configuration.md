@@ -262,9 +262,9 @@ Distribution parameters for sampling VNTR repeat counts.
 |-------|------|-------------|----------|
 | `distribution` | string | "normal" or "uniform" | Yes |
 | `mean_repeats` | float | Mean for normal distribution | If normal |
-| `median_repeats` | float | Median for normal distribution | If normal |
-| `min_repeats` | integer | Minimum repeat count | Yes |
-| `max_repeats` | integer | Maximum repeat count | Yes |
+| `median_repeats` | float | Informational only; not used for sampling | No |
+| `min_repeats` | integer | Minimum repeat count (at least 10) | Yes |
+| `max_repeats` | integer | Maximum repeat count (at least 10) | Yes |
 
 ---
 
@@ -499,7 +499,7 @@ Parameters for Illumina read simulation (Wessim2-style fragment simulation with 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
 | `simulator` | string | "illumina", "ont", "pacbio", "amplicon", or "ont-amplicon" | "illumina" |
-| `human_reference` | string | Path to reference FASTA | Required |
+| `human_reference` | string | Alignment reference FASTA used by every simulator. Precedence: `human_reference_<assembly>`, then `human_reference`, then `reference_genomes.<assembly>.fasta_path`. Ignored with `--no-align` | Required for Illumina (unless `reference_genomes` is set) |
 | `reseq_model` | string | Path to ReSeq2 error model (`.reseq` file) | - |
 | `read_number` | integer | Number of fragment pairs to simulate (more = higher achievable coverage). CLI: `--read-number` | 100000 |
 | `fragment_size` | integer | Mean insert size (bp) | 350 |

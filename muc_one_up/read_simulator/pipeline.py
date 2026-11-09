@@ -17,11 +17,11 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .output_config import OutputConfig
 
+from ..exceptions import ConfigurationError
 from .assembly_context import AssemblyContext
 from .pipeline_utils import (
     cleanup_intermediates,
     create_pipeline_metadata,
-    resolve_human_reference,
     resolve_pipeline_outputs,
 )
 from .stages.alignment import align_and_refine
@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 def simulate_reads_pipeline(
     config: dict[str, Any],
     input_fa: str,
+    human_reference: str | None = None,
     source_tracker: Any | None = None,
     output_config: OutputConfig | None = None,
 ) -> str:
@@ -56,6 +57,8 @@ def simulate_reads_pipeline(
     Args:
         config: Dictionary containing "tools" and "read_simulation" sections.
         input_fa: Input simulated FASTA file.
+        human_reference: Reference FASTA for BWA alignment (resolved by
+            ``read_simulation.simulate_reads``); required unless skip_alignment.
         source_tracker: Optional read source tracker for provenance.
         output_config: Optional OutputConfig controlling output directory and
             base name. When provided, takes precedence over config-derived
@@ -67,6 +70,11 @@ def simulate_reads_pipeline(
     Raises:
         ConfigurationError: If required configuration is missing.
     """
+    if human_reference is None and not config.get("read_simulation", {}).get("skip_alignment"):
+        raise ConfigurationError(
+            "Illumina alignment needs a human reference: set read_simulation.human_reference "
+            "or reference_genomes.<assembly>.fasta_path, or use --no-align."
+        )
     start_time = datetime.now()
     logger.info(
         "Starting read simulation pipeline at %s",
@@ -100,17 +108,6 @@ def simulate_reads_pipeline(
     # Resolve output paths
     output_dir, output_base = resolve_pipeline_outputs(input_fa, _rs_raw, output_config)
 
-    # Legacy FASTQ path overrides (only when no output_config)
-    if output_config is not None:
-        reads_fq1 = str(output_dir / f"{output_base}_R1.fastq.gz")
-        reads_fq2 = str(output_dir / f"{output_base}_R2.fastq.gz")
-    else:
-        reads_fq1 = _rs_raw.get("output_fastq1", str(output_dir / f"{output_base}_R1.fastq.gz"))
-        reads_fq2 = _rs_raw.get("output_fastq2", str(output_dir / f"{output_base}_R2.fastq.gz"))
-
-    logger.info("Output filenames:")
-    logger.info("  FASTQ pair: %s, %s", reads_fq1, reads_fq2)
-
     # Stages 1-8: Fragment preparation
     frag_result = prepare_fragments(
         tools=tools,
@@ -123,17 +120,14 @@ def simulate_reads_pipeline(
     )
 
     align_result = None
-    if not rs_config.get("skip_alignment"):
-        # Resolve human reference
-        human_ref = resolve_human_reference(config, assembly_ctx, aligner="bwa")
-
+    if human_reference is not None and not rs_config.get("skip_alignment"):
         # Stages 9-11: Alignment and refinement
         align_result = align_and_refine(
             tools=tools,
             rs_config=_rs_raw,
             r1=frag_result.r1_fastq,
             r2=frag_result.r2_fastq,
-            human_ref=human_ref,
+            human_ref=human_reference,
             output_dir=output_dir,
             output_base=output_base,
             assembly_ctx=assembly_ctx,
@@ -149,18 +143,13 @@ def simulate_reads_pipeline(
     logger.info("Final outputs:")
     if align_result:
         logger.info("  Aligned and indexed BAM: %s", align_result.final_bam)
-    logger.info("  Paired FASTQ files: %s and %s", reads_fq1, reads_fq2)
+    logger.info("  Paired FASTQ files: %s and %s", frag_result.r1_fastq, frag_result.r2_fastq)
 
-    # Stage 12a: Source tracking manifest
-    if align_result is not None:
-        fragment_origins_path = (
-            str(output_dir / f"{output_base}_fragment_origins.tsv")
-            if source_tracker is not None
-            else None
-        )
+    # Stage 12a: Source tracking manifest (all origins when not aligned)
+    if source_tracker is not None:
         generate_read_manifest(
-            sidecar_path=fragment_origins_path,
-            final_bam=align_result.final_bam,
+            sidecar_path=str(output_dir / f"{output_base}_fragment_origins.tsv"),
+            final_bam=align_result.final_bam if align_result else None,
             input_fa=input_fa,
             source_tracker=source_tracker,
             output_dir=output_dir,
@@ -210,20 +199,3 @@ def simulate_reads_pipeline(
         logger.info("=" * 60)
 
     return align_result.final_bam if align_result else str(frag_result.r1_fastq)
-
-
-# Backward compatibility CLI
-if __name__ == "__main__":  # OK: top-level entry point
-    import json
-    import sys
-
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
-
-    if len(sys.argv) != 3:
-        print("Usage: python pipeline.py <config.json> <input_fasta>")
-        sys.exit(1)
-
-    with Path(sys.argv[1]).open() as fh:
-        cfg = json.load(fh)
-
-    simulate_reads_pipeline(cfg, sys.argv[2])

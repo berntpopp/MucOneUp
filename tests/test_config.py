@@ -15,10 +15,10 @@ def test_load_config_valid(tmp_path):
         "probabilities": {"1": {"2": 1.0}},
         "length_model": {
             "distribution": "normal",
-            "min_repeats": 5,
-            "max_repeats": 10,
-            "mean_repeats": 7,
-            "median_repeats": 7,
+            "min_repeats": 10,
+            "max_repeats": 20,
+            "mean_repeats": 15,
+            "median_repeats": 15,
         },
         "mutations": {},
         "tools": {
@@ -353,3 +353,33 @@ def test_validate_simulation_config_invalid_schema():
     }
     with pytest.raises(ConfigurationError, match="Invalid configuration in section 'repeats'"):
         validate_simulation_config(cfg)
+
+
+_LM = {"distribution": "normal", "min_repeats": 10, "max_repeats": 50, "mean_repeats": 20}
+
+
+@pytest.mark.parametrize(
+    "section,value",
+    [
+        ("length_model", {**_LM, "min_repeats": 5}),
+        ("length_model", {**_LM, "min_repeats": 10.5}),
+        ("mutations", {"m": {"allowed_repeats": ["X"], "changes": [
+            {"type": "delete", "start": 1.5, "end": 2}]}}),
+    ],
+)  # fmt: skip
+def test_validate_simulation_config_rejects_values_that_fail_mid_batch(section, value):
+    """min_repeats < 10 and non-integer positions must fail at config load, not mid-run."""
+    from muc_one_up.config import validate_simulation_config
+    from muc_one_up.exceptions import ConfigurationError
+
+    cfg = {"repeats": {"X": "A"}, "constants": {}, "probabilities": {}, section: value}
+    with pytest.raises(ConfigurationError, match=f"section '{section}'"):
+        validate_simulation_config(cfg)
+
+
+def test_length_model_median_repeats_optional():
+    """median_repeats is never read by the simulator, so it is not required."""
+    from muc_one_up.config import validate_simulation_config
+
+    cfg = {"repeats": {}, "constants": {}, "probabilities": {}, "length_model": _LM}
+    validate_simulation_config(cfg)

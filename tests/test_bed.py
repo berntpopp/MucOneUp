@@ -10,16 +10,14 @@ Tests cover:
 - Error handling
 """
 
-import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from muc_one_up.read_simulator.utils.bed import (
     BedError,
-    check_bedtools_available,
     create_flanking_beds,
     create_non_vntr_bed_from_capture,
     create_region_bed,
@@ -107,11 +105,13 @@ class TestCreateVntrBed:
         assert result == temp_dir / "vntr_region.bed"
         assert result.exists()
 
-        content = result.read_text()
-        assert "chr1" in content
-        assert "155188487" in content
-        assert "155192239" in content
-        assert "MUC1_VNTR" in content
+        # 1-based config start 155188487 becomes 0-based BED start 155188486
+        assert result.read_text() == "chr1\t155188486\t155192239\tMUC1_VNTR\n"
+
+    def test_create_vntr_bed_from_region_string(self, temp_dir):
+        """A samtools region string gets the same 0-based BED start."""
+        result = create_vntr_bed(temp_dir, "chr1:155,188,487-155192239")
+        assert result.read_text() == "chr1\t155188486\t155192239\tVNTR\n"
 
     def test_vntr_bed_missing_keys(self, temp_dir):
         """Test validation of VNTR region dictionary."""
@@ -150,8 +150,8 @@ class TestCreateFlankingBeds:
         assert "chr1" in left_content
         assert "Flanking_Left" in left_content
         # Default flanking_size is 10000
-        expected_left_start = vntr_region["start"] - 10000
-        assert str(expected_left_start) in left_content
+        bed_start = vntr_region["start"] - 1  # left flank ends where the VNTR starts
+        assert left_content == f"chr1\t{bed_start - 10000}\t{bed_start}\tFlanking_Left\n"
 
         # Verify right flanking region
         right_content = right_bed.read_text()
@@ -173,7 +173,7 @@ class TestCreateFlankingBeds:
         )
 
         left_content = left_bed.read_text()
-        expected_left_start = vntr_region["start"] - 5000
+        expected_left_start = vntr_region["start"] - 1 - 5000
         assert str(expected_left_start) in left_content
 
         right_content = right_bed.read_text()
@@ -194,7 +194,7 @@ class TestCreateFlankingBeds:
 
         left_content = left_bed.read_text()
         # Should start at 0, not -5000
-        assert left_content.startswith("chr1\t0\t5000")
+        assert left_content.startswith("chr1\t0\t4999\t")
 
     def test_flanking_combined_file_format(self, temp_dir, vntr_region):
         """Test format of combined flanking BED file."""
@@ -288,34 +288,6 @@ class TestCreateNonVntrBedFromCapture:
 
         with pytest.raises(BedError, match="bedtools not found in PATH"):
             create_non_vntr_bed_from_capture(output_bed, capture_bed, vntr_bed)
-
-
-class TestCheckBedtoolsAvailable:
-    """Tests for bedtools availability checking."""
-
-    @patch("subprocess.run")
-    def test_bedtools_available(self, mock_run):
-        """Test detection of available bedtools."""
-        mock_run.return_value = MagicMock(returncode=0)
-        assert check_bedtools_available() is True
-
-    @patch("subprocess.run")
-    def test_bedtools_not_found(self, mock_run):
-        """Test handling of missing bedtools."""
-        mock_run.side_effect = FileNotFoundError()
-        assert check_bedtools_available() is False
-
-    @patch("subprocess.run")
-    def test_bedtools_error(self, mock_run):
-        """Test handling of bedtools execution error."""
-        mock_run.side_effect = subprocess.CalledProcessError(1, "bedtools")
-        assert check_bedtools_available() is False
-
-    @patch("subprocess.run")
-    def test_bedtools_timeout(self, mock_run):
-        """Test handling of bedtools timeout."""
-        mock_run.side_effect = subprocess.TimeoutExpired("bedtools", 5)
-        assert check_bedtools_available() is False
 
 
 class TestBedFileEdgeCases:

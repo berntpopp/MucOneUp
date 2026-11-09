@@ -262,6 +262,14 @@ class TestGetRepeatLengths:
         lengths = get_repeat_lengths(chain, minimal_config, vntr_length=0)
         assert lengths == [0]
 
+    def test_repeat_lengths_ambiguous_multi_mutation_raises(self, minimal_config: dict):
+        """2+ mutated repeats with a length change cannot be attributed; must not guess."""
+        chain = [RU("1m"), RU("2m"), RU("X")]
+        with pytest.raises(ValueError, match="Cannot infer repeat lengths"):
+            get_repeat_lengths(chain, minimal_config, vntr_length=37)
+        # Same-length (substitution) mutations are unambiguous
+        assert get_repeat_lengths(chain, minimal_config, vntr_length=36) == [12, 12, 12]
+
 
 @pytest.mark.unit
 class TestCountRepeatTypes:
@@ -368,9 +376,10 @@ class TestGenerateHaplotypeStats:
         """Test generating stats for haplotype with mutations."""
         left = minimal_config["constants"]["hg38"]["left"]
         right = minimal_config["constants"]["hg38"]["right"]
-        vntr = "ATCGATCGATCG"
+        chain = ["1", "2m", "X", "Am", "6", "7", "8", "9"]
+        vntr = "".join(minimal_config["repeats"][s.rstrip("m")] for s in chain)
         seq = left + vntr + right
-        simulation_results = [_hr(seq, ["1", "2m", "X", "Am", "6", "7", "8", "9"])]
+        simulation_results = [_hr(seq, chain)]
 
         stats = generate_haplotype_stats(simulation_results, minimal_config)
 

@@ -133,12 +133,8 @@ DEFAULT_CCS_TIMEOUT: Final[int] = 7200
 #: Alignment is typically faster than simulation/consensus.
 DEFAULT_ALIGNMENT_TIMEOUT: Final[int] = 3600
 
-#: Default timeout for samtools operations (30 minutes).
-#: SAM/BAM conversion and indexing are usually quick.
-DEFAULT_SAMTOOLS_TIMEOUT: Final[int] = 1800
-
 # =============================================================================
-# Coverage and Quality Limits
+# Coverage Limits
 # =============================================================================
 
 #: Minimum valid coverage for read simulation.
@@ -148,25 +144,6 @@ MIN_COVERAGE: Final[float] = 0.1
 #: Maximum valid coverage for read simulation.
 #: Very high coverage (>1000x) can cause memory issues and slow processing.
 MAX_COVERAGE: Final[float] = 10000.0
-
-#: Minimum valid quality score (Phred scale).
-MIN_QUALITY_SCORE: Final[int] = 0
-
-#: Maximum valid quality score (Phred scale).
-#: Q93 represents 99.9999999% accuracy (theoretical maximum).
-MAX_QUALITY_SCORE: Final[int] = 93
-
-# =============================================================================
-# File Size Limits
-# =============================================================================
-
-#: Minimum reference sequence length (base pairs).
-#: Very short sequences may not simulate realistically.
-MIN_REFERENCE_LENGTH: Final[int] = 100
-
-#: Maximum reference sequence length (base pairs).
-#: Protects against accidentally simulating entire genomes.
-MAX_REFERENCE_LENGTH: Final[int] = 1_000_000_000  # 1 Gbp
 
 # =============================================================================
 # Pass Number Limits (Multi-pass Simulation)
@@ -181,21 +158,8 @@ MIN_PASS_NUM: Final[int] = 2
 MAX_PASS_NUM: Final[int] = 50
 
 # =============================================================================
-# Accuracy Limits (0.0-1.0 scale)
-# =============================================================================
-
-#: Minimum valid accuracy value.
-MIN_ACCURACY: Final[float] = 0.0
-
-#: Maximum valid accuracy value.
-MAX_ACCURACY: Final[float] = 1.0
-
-# =============================================================================
 # Amplicon Simulation Constants
 # =============================================================================
-
-#: Default timeout for amplicon simulation pipeline (1 hour).
-DEFAULT_AMPLICON_TIMEOUT: Final[int] = 3600
 
 #: Valid PCR bias preset names.
 VALID_PCR_PRESETS: Final[set[str]] = {"default", "no_bias", "madritsch2025_r10"}

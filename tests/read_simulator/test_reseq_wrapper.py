@@ -13,6 +13,7 @@ These tests verify that our wrapper correctly:
 """
 
 import gzip
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -193,6 +194,14 @@ class TestGenerateSystematicErrors:
 
 class TestCreateReads:
     """Test create_reads command construction and output validation."""
+
+    @pytest.fixture(autouse=True)
+    def _reseq2(self, mocker):
+        """Report ReSeq2 so the version probe neither runs nor triggers chunking."""
+        mocker.patch(
+            "muc_one_up.read_simulator.wrappers.reseq_wrapper.get_tool_version",
+            return_value="ReSeq2 version 2.0.3",
+        )
 
     def test_constructs_correct_seqToIllumina_command(self, mocker, tmp_path, tools_dict):
         """Test that seqToIllumina command includes threads and paths."""
@@ -377,3 +386,109 @@ class TestSplitReads:
         with out_fq2.open("rb") as f2:
             magic = f2.read(2)
             assert magic == b"\x1f\x8b"  # Gzip magic number
+
+
+class TestSplitReadsValidation:
+    """split_reads must not silently put R1/R2 out of step (audit a)."""
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            "@r1/1\nACGT\n+\nIIII\n",  # odd number of records
+            "@r1/1\nACGT\n+\nIIII\n@r1/2\nTGCA\n",  # truncated R2
+            "@r1/1\nACGT\n+\nIIII\n@r2/2\nTGCA\n+\nIIII\n",  # mismatched mate
+        ],
+        ids=["odd", "truncated", "mismatch"],
+    )
+    def test_rejects_broken_interleaved_input(self, tmp_path, content):
+        interleaved = tmp_path / "in.fq"
+        interleaved.write_text(content)
+
+        with pytest.raises(FileOperationError):
+            split_reads(str(interleaved), str(tmp_path / "R1.fq.gz"), str(tmp_path / "R2.fq.gz"))
+
+    def test_accepts_identical_names_with_comments(self, tmp_path):
+        interleaved = tmp_path / "in.fq"
+        interleaved.write_text("@r1 a\nACGT\n+\nIIII\n@r1 b\nTGCA\n+\nIIII")
+
+        split_reads(str(interleaved), str(tmp_path / "R1.fq.gz"), str(tmp_path / "R2.fq.gz"))
+
+        with gzip.open(tmp_path / "R2.fq.gz", "rt") as f:
+            assert f.read() == "@r1 b\nTGCA\n+\nIIII"
+
+
+class TestCreateReadsChunking:
+    """reseq 1.1 hangs on >10,000 fragments; create_reads must chunk the input."""
+
+    def test_chunks_large_input_with_distinct_seeds(self, mocker, tmp_path, tools_dict):
+        from muc_one_up.read_simulator.wrappers import reseq_wrapper
+
+        mocker.patch.object(reseq_wrapper, "RESEQ_MAX_FRAGMENTS", 2)
+        mocker.patch.object(reseq_wrapper, "get_tool_version", return_value="ReSeq version 1.1")
+        fragments = tmp_path / "fragments.fa"
+        fragments.write_text("".join(f">{i} x\nACGT\n" for i in range(5)))
+        output_fq = tmp_path / "reads.fq"
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            args = [str(c) for c in cmd]
+            chunk_in = args[args.index("-i") + 1]
+            names = [
+                ln[1:].split()[0]
+                for ln in Path(chunk_in).read_text().splitlines()
+                if ln.startswith(">")
+            ]
+            calls.append((names, args[args.index("--seed") + 1]))
+            Path(args[args.index("-o") + 1]).write_text(
+                "".join(f"@{n}\nACGT\n+\nIIII\n" for n in names)
+            )
+
+        mocker.patch.object(reseq_wrapper, "run_command", side_effect=fake_run)
+
+        create_reads(str(fragments), "model", str(output_fq), 2, tools_dict, seed=10)
+
+        assert calls == [(["0", "1"], "10"), (["2", "3"], "11"), (["4"], "12")]
+        assert [ln for ln in output_fq.read_text().splitlines() if ln.startswith("@")] == [
+            "@0",
+            "@1",
+            "@2",
+            "@3",
+            "@4",
+        ]
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["fragments.fa", "reads.fq"]
+
+    def test_reseq2_gets_whole_input_in_one_call(self, mocker, tmp_path, tools_dict):
+        from muc_one_up.read_simulator.wrappers import reseq_wrapper
+
+        mocker.patch.object(reseq_wrapper, "RESEQ_MAX_FRAGMENTS", 2)
+        mocker.patch.object(reseq_wrapper, "get_tool_version", return_value="ReSeq2 version 2.0.3")
+        fragments = tmp_path / "fragments.fa"
+        fragments.write_text("".join(f">{i} x\nACGT\n" for i in range(5)))
+        output_fq = tmp_path / "reads.fq"
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            args = [str(c) for c in cmd]
+            calls.append((args[args.index("-i") + 1], args[args.index("--seed") + 1]))
+            Path(args[args.index("-o") + 1]).write_text("@0\nACGT\n+\nIIII\n")
+
+        mocker.patch.object(reseq_wrapper, "run_command", side_effect=fake_run)
+
+        create_reads(str(fragments), "model", str(output_fq), 2, tools_dict, seed=10)
+
+        assert calls == [(str(fragments), "10")]
+
+    @pytest.mark.parametrize(
+        ("version", "legacy"),
+        [
+            ("ReSeq version 1.1", True),
+            ("ReSeq2 version 2.0.3", False),
+            ("ReSeq2 version 10.0", False),
+            ("N/A", True),
+        ],
+    )
+    def test_is_legacy_reseq(self, mocker, version, legacy):
+        from muc_one_up.read_simulator.wrappers import reseq_wrapper
+
+        mocker.patch.object(reseq_wrapper, "get_tool_version", return_value=version)
+        assert reseq_wrapper._is_legacy_reseq("reseq") is legacy

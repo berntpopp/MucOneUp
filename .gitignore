@@ -210,3 +210,11 @@ docs/archive/
 .codex
 .worktrees/
 config_experiment.json
+
+# Understand Anything
+.ua/
+.understand-anything/
+.understandignore
+
+# Test-data tarballs are GitHub Release assets (make publish-testdata), not git files
+data/testdata_releases/

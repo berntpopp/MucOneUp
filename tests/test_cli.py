@@ -58,10 +58,10 @@ def minimal_config():
         },
         "length_model": {
             "distribution": "normal",
-            "min_repeats": 5,
-            "max_repeats": 10,
-            "mean_repeats": 7,
-            "median_repeats": 7,
+            "min_repeats": 10,
+            "max_repeats": 20,
+            "mean_repeats": 15,
+            "median_repeats": 15,
         },
         "mutations": {
             "dupC": {
@@ -489,68 +489,6 @@ def test_cli_refactoring_maintains_backwards_compatibility(mock_args, minimal_co
     # Test mutation config processing
     dual_mode, _pair, _name = process_mutation_config(mock_args, mutation_info)
     assert isinstance(dual_mode, bool)
-
-
-def test_cli_functions_follow_solid_principles():
-    """
-    Meta-test to document SOLID principles in refactored code.
-
-    Single Responsibility:
-    - setup_configuration: Only handles config loading
-    - determine_simulation_mode: Only determines sim mode
-    - process_mutation_config: Only processes mutation config
-    - Each function has one clear purpose
-
-    Open/Closed:
-    - Functions accept args/config, can be extended without modification
-    - New simulation modes can be added to determine_simulation_mode
-
-    Liskov Substitution:
-    - Not applicable (no inheritance)
-
-    Interface Segregation:
-    - Functions have minimal, focused interfaces
-    - No function depends on unused parameters
-
-    Dependency Inversion:
-    - Functions depend on abstractions (args, config dicts)
-    - Not tightly coupled to implementations
-    """
-    pass
-
-
-def test_cli_refactoring_eliminates_duplication():
-    """
-    Meta-test documenting DRY improvements.
-
-    Before: SNP integration logic duplicated (~120 lines)
-    - Lines 629-707 for dual mode
-    - Lines 772-828 for single mode
-
-    After: Single integrate_snps_unified() function
-    - Used in both dual and single modes
-    - Eliminates ~120 lines of duplication
-    - skip_reference_check parameter handles differences
-    """
-    pass
-
-
-def test_cli_refactoring_improves_testability():
-    """
-    Meta-test documenting testability improvements.
-
-    Before:
-    - 801-line main() function
-    - Cannot test individual concerns
-    - sys.exit() kills test runner
-
-    After:
-    - 21 focused functions (up from 6)
-    - Each function testable independently
-    - main() reduced to ~45 lines
-    - Clear separation of concerns
-    """
-    pass
 
 
 def test_cli_simulate_rejects_num_haplotypes_zero(temp_config_file):

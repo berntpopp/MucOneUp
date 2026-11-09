@@ -106,3 +106,49 @@ class TestGenerateReadManifest:
 
         # Verify sidecar file was cleaned up
         assert not sidecar_path.exists()
+
+    def test_no_bam_keeps_all_origins(self, mocker, tmp_path):
+        """final_bam=None (--no-align) skips BAM filtering and still cleans the sidecar."""
+        fasta_path = tmp_path / "input.fa"
+        fasta_path.write_text(">haplotype_1\nACGT\n")
+        sidecar_path = tmp_path / "fragment_origins.tsv"
+        sidecar_path.write_text("")
+        origins = [MagicMock(read_id="r1"), MagicMock(read_id="r2")]
+        mocker.patch(f"{MODULE}.parse_illumina_reads", return_value=origins)
+        mock_pysam = mocker.patch(f"{MODULE}.pysam")
+        tracker = MagicMock()
+
+        result = generate_read_manifest(
+            sidecar_path=str(sidecar_path),
+            final_bam=None,
+            input_fa=str(fasta_path),
+            source_tracker=tracker,
+            output_dir=tmp_path,
+            output_base="sample",
+        )
+
+        assert result is not None
+        mock_pysam.AlignmentFile.assert_not_called()
+        tracker.annotate_reads.assert_called_once_with(origins)
+        assert not sidecar_path.exists()
+
+    def test_warns_when_pysam_missing(self, mocker, tmp_path, caplog):
+        """Without pysam the manifest keeps unaligned reads; say so (audit o)."""
+        fasta_path = tmp_path / "input.fa"
+        fasta_path.write_text(">haplotype_1\nACGT\n")
+        sidecar_path = tmp_path / "fragment_origins.tsv"
+        sidecar_path.write_text("fragment_index\tchrom\tfstart\tfend\tstrand\n")
+        mocker.patch(f"{MODULE}.parse_illumina_reads", return_value=[])
+        mocker.patch(f"{MODULE}.pysam", None)
+
+        with caplog.at_level("WARNING"):
+            generate_read_manifest(
+                sidecar_path=str(sidecar_path),
+                final_bam="final.bam",
+                input_fa=str(fasta_path),
+                source_tracker=MagicMock(),
+                output_dir=tmp_path,
+                output_base="sample",
+            )
+
+        assert any("pysam is not installed" in r.getMessage() for r in caplog.records)

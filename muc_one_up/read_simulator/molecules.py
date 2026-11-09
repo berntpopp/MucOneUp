@@ -311,20 +311,23 @@ def build_fragment_molecules(
     model: MoleculeModel,
     rng: random.Random,
 ) -> list[Molecule]:
-    """Sample genomic fragments: haplotype uniform, log-normal length, uniform coverage.
+    """Sample genomic fragments: log-normal length, uniform coverage across haplotypes.
 
     A fragment of length L starts uniformly in ``[-(L - 1), len(source))`` and is
     clipped to the source, as if the source were a window of a longer genome.
-    Every source base is then equally likely to be covered, so both flanks and
-    the VNTR are sampled evenly; fragments overlapping a source end are shorter.
+    The source is picked with weight ``len(source) + L - 1`` (its number of start
+    positions), so every base of every haplotype is equally likely to be covered:
+    flanks, VNTR and both alleles are sampled evenly regardless of allele length.
+    Fragments overlapping a source end are shorter.
     """
     if not sources or n_molecules < 0 or length_median <= 0 or length_sigma <= 0:
         raise ValueError("sources must be non-empty and length parameters positive")
     molecules: list[Molecule] = []
     for mol_id in range(1, n_molecules + 1):
-        hap = rng.randrange(len(sources)) + 1
-        source = sources[hap - 1]
         length = _lognormal_length(length_median, length_sigma, rng)
+        weights = [len(s) + length - 1 for s in sources]
+        hap = rng.choices(range(1, len(sources) + 1), weights=weights)[0]
+        source = sources[hap - 1]
         offset = rng.randrange(-(length - 1), len(source))
         start, end = max(0, offset), min(len(source), offset + length)
         molecules.append(

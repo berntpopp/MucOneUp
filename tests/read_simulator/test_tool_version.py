@@ -367,3 +367,13 @@ class TestExpectedProbeFailures:
 
         assert version == "pbsim3 (installed)"
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+@patch("muc_one_up.read_simulator.utils.tool_version.run_command")
+def test_version_probed_once_per_command(mock_run):
+    """Repeated lookups reuse the first probe (audit d)."""
+    mock_run.return_value = _make_result(stdout="samtools 1.17\n")
+
+    assert get_tool_version("samtools", "samtools") == "samtools 1.17"
+    assert get_tool_version("samtools", "samtools") == "samtools 1.17"
+    assert mock_run.call_count == 1

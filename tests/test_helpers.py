@@ -7,6 +7,8 @@ Tests cover security fixes and enhancements for Issue #155:
 4. Safe whitespace splitting in execute_index_command
 """
 
+import gzip
+import hashlib
 import json
 import sys
 import tarfile
@@ -184,6 +186,7 @@ def test_download_nanosim_model_uses_tar_data_filter(tmp_path):
 
     with (
         patch("download_references.requests") as mock_requests,
+        patch("download_references.NANOSIM_MODEL_MD5", hashlib.md5(b"chunk").hexdigest()),
         patch("tarfile.open") as mock_tar_open,
     ):
         mock_requests.get.return_value = mock_response
@@ -213,7 +216,10 @@ def test_download_nanosim_model_flattens_nested_directory(tmp_path):
     mock_response = MagicMock()
     mock_response.iter_content.return_value = [tar_bytes]
 
-    with patch("download_references.requests") as mock_requests:
+    with (
+        patch("download_references.requests") as mock_requests,
+        patch("download_references.NANOSIM_MODEL_MD5", hashlib.md5(tar_bytes).hexdigest()),
+    ):
         mock_requests.get.return_value = mock_response
         extract_dir = download_references.download_nanosim_model(output_dir=tmp_path, force=True)
         assert extract_dir is not None
@@ -424,3 +430,146 @@ def test_install_references_preset_minimap2_indexing(tmp_path):
 
         assert any("-x map-ont -d {path}.map-ont.mmi {path}" in cmd for cmd in commands_executed)
         assert any("-x map-hifi -d {path}.map-hifi.mmi {path}" in cmd for cmd in commands_executed)
+
+
+# -----------------------------------------------------------------------------
+# Audit #7 / k / l / m: robust installs
+# -----------------------------------------------------------------------------
+
+
+def _nanosim_tar_bytes() -> bytes:
+    import io
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = b"profile"
+        info = tarfile.TarInfo(name="training_model_profile")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def test_download_nanosim_model_corrupt_download_leaves_no_folder(tmp_path):
+    """A corrupt tarball fails MD5, leaves no model folder, and the next run re-downloads."""
+    good = _nanosim_tar_bytes()
+    corrupt = MagicMock()
+    corrupt.iter_content.return_value = [b"not a tarball"]
+    ok = MagicMock()
+    ok.iter_content.return_value = [good]
+
+    with (
+        patch("download_references.requests") as mock_requests,
+        patch("download_references.NANOSIM_MODEL_MD5", hashlib.md5(good).hexdigest()),
+    ):
+        mock_requests.get.side_effect = [corrupt, ok]
+        assert download_references.download_nanosim_model(output_dir=tmp_path) is None
+        model_dirs = [p for p in (tmp_path / "nanosim").iterdir() if p.is_dir()]
+        assert model_dirs == []
+
+        extract_dir = download_references.download_nanosim_model(output_dir=tmp_path)
+        assert (extract_dir / "training_model_profile").is_file()
+        assert mock_requests.get.call_count == 2
+        assert mock_requests.get.call_args.kwargs["timeout"] == 60
+
+
+def test_download_nanosim_model_failed_extract_removes_folder(tmp_path):
+    """If extraction fails after MD5 passes, the partial model folder is removed."""
+    data = b"garbage"
+    resp = MagicMock()
+    resp.iter_content.return_value = [data]
+    with (
+        patch("download_references.requests") as mock_requests,
+        patch("download_references.NANOSIM_MODEL_MD5", hashlib.md5(data).hexdigest()),
+    ):
+        mock_requests.get.return_value = resp
+        assert download_references.download_nanosim_model(output_dir=tmp_path) is None
+    assert [p for p in (tmp_path / "nanosim").iterdir() if p.is_dir()] == []
+
+
+def test_extract_gzip_failure_leaves_no_final_file(tmp_path):
+    """An interrupted gzip extract must not leave the final (or .part) file behind."""
+    gz = tmp_path / "ref.fna.gz"
+    gz.write_bytes(gzip.compress(b">chr1\nACGT\n" * 1000))
+
+    with (
+        patch("install_references.shutil.copyfileobj", side_effect=OSError("disk full")),
+        pytest.raises(SystemExit),
+    ):
+        install_references.extract_gzip(gz)
+    assert not (tmp_path / "ref.fna").exists()
+    assert not (tmp_path / "ref.fna.part").exists()
+
+    assert install_references.extract_gzip(gz).read_bytes() == b">chr1\nACGT\n" * 1000
+
+
+def test_process_reference_skips_download_when_md5_matches(tmp_path):
+    """An existing file with matching MD5 is not downloaded again (unless --force)."""
+    target = tmp_path / "ref.txt"
+    target.write_text("content")
+    ref_info = {
+        "url": "https://example.com/ref.txt",
+        "target_path": "ref.txt",
+        "expected_md5": hashlib.md5(b"content").hexdigest(),
+    }
+    kwargs = {
+        "ref_name": "r",
+        "ref_info": ref_info,
+        "output_dir": tmp_path,
+        "skip_indexing": True,
+        "bwa_path": "bwa",
+        "gatk_path": "gatk",
+        "minimap2_path": "minimap2",
+    }
+
+    with patch("install_references.download_file") as mock_dl:
+        install_references.process_reference(force=False, **kwargs)
+    mock_dl.assert_not_called()
+
+    def fake_download(url, dest):
+        dest.write_text("content")
+
+    with patch("install_references.download_file", side_effect=fake_download) as mock_dl:
+        install_references.process_reference(force=True, **kwargs)
+    mock_dl.assert_called_once()
+
+
+def test_process_reference_uses_htsjdk_dict_name(tmp_path):
+    """An existing ref.dict (htsjdk naming) skips CreateSequenceDictionary."""
+    (tmp_path / "ref.fna").write_text(">chr1\nACGT\n")
+    (tmp_path / "ref.dict").write_text("@HD\n")
+    ref_info = {
+        "url": "https://example.com/ref.fna",
+        "target_path": "ref.fna",
+        "seq_dict_command": "gatk CreateSequenceDictionary -R {path}",
+    }
+    with (
+        patch("install_references.download_file"),
+        patch("install_references.execute_index_command") as mock_exec,
+    ):
+        install_references.process_reference(
+            ref_name="r",
+            ref_info=ref_info,
+            output_dir=tmp_path,
+            skip_indexing=True,
+            bwa_path="bwa",
+            gatk_path="gatk",
+            minimap2_path="minimap2",
+            force=False,
+        )
+    mock_exec.assert_not_called()
+
+
+def test_create_tarball_writes_checksum_and_no_latest_copy(tmp_path, monkeypatch):
+    """Tarballs ship as GitHub Release assets: write a verifiable .sha256, no in-repo _latest copy."""
+    import generate_test_data
+
+    monkeypatch.chdir(tmp_path)
+    dataset = tmp_path / "work" / "testdata_40-70"
+    dataset.mkdir(parents=True)
+    (dataset / "a.txt").write_text("x")
+
+    tarball = generate_test_data.create_tarball(dataset, "v9.9.9")
+
+    checksum = tarball.with_name(tarball.name + ".sha256").read_text()
+    assert checksum == f"{generate_test_data.calculate_checksum(tarball)}  {tarball.name}\n"
+    assert not Path("data/testdata_releases/_latest").exists()

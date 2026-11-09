@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 
+from ...config_fingerprint import compute_config_fingerprint
 from .._common import require_config
 from ..config import (
     determine_simulation_mode,
@@ -160,6 +161,7 @@ def simulate(ctx, **kwargs):
         args, config, rng=rng
     )
     dual_mutation_mode, mutation_pair, _ = process_mutation_config(args, structure_mutation_info)
+    config_fingerprint = compute_config_fingerprint(config)  # config is fixed across iterations
 
     # Run haplotype generation ONLY
     total_iterations = len(simulation_configs)
@@ -198,6 +200,7 @@ def simulate(ctx, **kwargs):
                 mutation_pair,
                 structure_mutation_info,
                 rng=rng,
+                config_fingerprint=config_fingerprint,
             )
 
     logging.info("Haplotype generation completed successfully.")

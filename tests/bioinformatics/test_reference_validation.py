@@ -3,10 +3,7 @@
 import pytest
 
 from muc_one_up.bioinformatics.reference_validation import (
-    get_muc1_region_for_assembly,
     get_reference_path_for_assembly,
-    validate_bam_file,
-    validate_bed_file,
     validate_reference_for_assembly,
     validate_reference_genome,
 )
@@ -40,6 +37,22 @@ class TestReferenceGenomeValidation:
 
         with pytest.raises(ValidationError, match="Unknown aligner"):
             validate_reference_genome(ref_file, aligner="unknown")
+
+    def test_minimap2_check_matches_index_the_aligner_reuses(self, tmp_path):
+        """Only {ref}.{preset}.mmi counts; a generic ref.fa.mmi is ignored by the aligner (#15)."""
+        ref_file = tmp_path / "test.fa"
+        ref_file.write_text(">chr1\nATCG\n")
+        (tmp_path / "test.fa.fai").touch()
+        (tmp_path / "test.fa.mmi").touch()
+
+        warnings = validate_reference_genome(ref_file, aligner="minimap2", preset="map-hifi")
+        assert warnings == [
+            f"Minimap2 index missing: {ref_file}.map-hifi.mmi. "
+            f"Run: minimap2 -x map-hifi -d {ref_file}.map-hifi.mmi {ref_file}"
+        ]
+
+        (tmp_path / "test.fa.map-hifi.mmi").touch()
+        assert validate_reference_genome(ref_file, aligner="minimap2", preset="map-hifi") == []
 
 
 class TestAssemblyManagement:
@@ -119,40 +132,6 @@ class TestAssemblyManagement:
         with pytest.raises(ValidationError, match="No 'fasta_path' configured"):
             get_reference_path_for_assembly(config, assembly="hg38")
 
-    def test_get_muc1_region_default(self):
-        """Test getting MUC1 VNTR region for default assembly."""
-        config = {
-            "reference_genomes": {
-                "hg38": {"fasta_path": "/some/path.fa", "vntr_region": "chr1:155188487-155192239"}
-            },
-            "reference_assembly": "hg38",
-        }
-
-        region = get_muc1_region_for_assembly(config)
-        assert region == "chr1:155188487-155192239"
-
-    def test_get_muc1_region_explicit_assembly(self):
-        """Test getting MUC1 VNTR region for explicit assembly."""
-        config = {
-            "reference_genomes": {
-                "hg38": {"fasta_path": "/some/path.fa", "vntr_region": "chr1:155188487-155192239"},
-                "hg19": {"fasta_path": "/some/path.fa", "vntr_region": "chr1:155160963-155162030"},
-            }
-        }
-
-        region_hg38 = get_muc1_region_for_assembly(config, "hg38")
-        assert region_hg38 == "chr1:155188487-155192239"
-
-        region_hg19 = get_muc1_region_for_assembly(config, "hg19")
-        assert region_hg19 == "chr1:155160963-155162030"
-
-    def test_get_muc1_region_missing(self):
-        """Test error when vntr_region not configured."""
-        config = {"reference_genomes": {"hg38": {"fasta_path": "/some/path.fa"}}}
-
-        with pytest.raises(ValidationError, match="No 'vntr_region' configured"):
-            get_muc1_region_for_assembly(config, "hg38")
-
     def test_validate_reference_for_assembly_calls_existing_validation(self, tmp_path):
         """Verify that validate_reference_for_assembly uses existing function."""
         ref_file = tmp_path / "hg38.fa"
@@ -189,75 +168,3 @@ class TestAssemblyManagement:
 
         with pytest.raises(FileOperationError):
             validate_reference_for_assembly(config, "hg38")
-
-
-class TestBAMValidation:
-    """Tests for BAM file validation."""
-
-    def test_validate_bam_exists(self, tmp_path):
-        """Test BAM validation when file exists."""
-        bam_file = tmp_path / "test.bam"
-        bam_file.write_text("dummy bam")
-
-        # Should warn about missing index
-        warnings = validate_bam_file(bam_file, require_index=False)
-        assert len(warnings) == 1
-        assert "BAM index missing" in warnings[0]
-
-    def test_validate_bam_missing(self, tmp_path):
-        """Test BAM validation when file doesn't exist."""
-        bam_file = tmp_path / "nonexistent.bam"
-
-        with pytest.raises(FileOperationError, match="BAM file not found"):
-            validate_bam_file(bam_file)
-
-    def test_validate_bam_require_index_missing(self, tmp_path):
-        """Test BAM validation fails when index required but missing."""
-        bam_file = tmp_path / "test.bam"
-        bam_file.write_text("dummy bam")
-
-        with pytest.raises(ValidationError, match="BAM index missing"):
-            validate_bam_file(bam_file, require_index=True)
-
-
-class TestBEDValidation:
-    """Tests for BED file validation."""
-
-    def test_validate_bed_valid(self, tmp_path):
-        """Test BED validation with valid file."""
-        bed_file = tmp_path / "test.bed"
-        bed_file.write_text("chr1\t100\t200\n")
-
-        # Should not raise
-        validate_bed_file(bed_file)
-
-    def test_validate_bed_missing(self, tmp_path):
-        """Test BED validation when file doesn't exist."""
-        bed_file = tmp_path / "nonexistent.bed"
-
-        with pytest.raises(FileOperationError, match="BED file not found"):
-            validate_bed_file(bed_file)
-
-    def test_validate_bed_invalid_format(self, tmp_path):
-        """Test BED validation with invalid format."""
-        bed_file = tmp_path / "test.bed"
-        bed_file.write_text("chr1\t100\n")  # Missing end position
-
-        with pytest.raises(ValidationError, match="expected at least 3 fields"):
-            validate_bed_file(bed_file)
-
-    def test_validate_bed_invalid_coordinates(self, tmp_path):
-        """Test BED validation with invalid coordinates."""
-        bed_file = tmp_path / "test.bed"
-        bed_file.write_text("chr1\t200\t100\n")  # start > end
-
-        with pytest.raises(ValidationError, match=r"start.*>=.*end"):
-            validate_bed_file(bed_file)
-
-    def test_validate_bed_skip_comments(self, tmp_path):
-        """Test BED validation skips comments and empty lines."""
-        bed_file = tmp_path / "test.bed"
-        bed_file.write_text("# This is a comment\n\nchr1\t100\t200\n")
-
-        # Should not raise
-        validate_bed_file(bed_file)

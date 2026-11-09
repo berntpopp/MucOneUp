@@ -130,14 +130,18 @@ def extract_gzip(file_path: Path) -> Path:
         Path: Path to the extracted file.
     """
     extracted_path = file_path.with_suffix("")
+    part_path = extracted_path.with_name(extracted_path.name + ".part")
     logging.info("Extracting %s to %s", file_path.name, extracted_path.name)
     try:
-        with gzip.open(file_path, "rb") as f_in, extracted_path.open("wb") as f_out:
+        # Write to .part then rename, so an interrupted extract never looks complete
+        with gzip.open(file_path, "rb") as f_in, part_path.open("wb") as f_out:
             shutil.copyfileobj(f_in, f_out)
+        part_path.replace(extracted_path)
         logging.info("Extraction complete: %s", extracted_path.name)
         return extracted_path
     except Exception as err:
         logging.error("Failed to extract %s: %s", file_path, err)
+        part_path.unlink(missing_ok=True)
         sys.exit(1)
 
 
@@ -239,11 +243,17 @@ def process_reference(
         logging.info("Force enabled, removing existing file: %s", target_path)
         target_path.unlink()
 
-    download_file(url, target_path)
-    checksum = calculate_md5(target_path)
     expected_md5 = ref_info.get("expected_md5")
-    if expected_md5:
-        if checksum.lower() != expected_md5.lower():
+    if (
+        expected_md5
+        and target_path.exists()
+        and calculate_md5(target_path).lower() == expected_md5.lower()
+    ):
+        logging.info("%s already present with matching MD5, skipping download.", target_path.name)
+    else:
+        download_file(url, target_path)
+        checksum = calculate_md5(target_path)
+        if expected_md5 and checksum.lower() != expected_md5.lower():
             logging.error(
                 "MD5 mismatch for %s: expected %s, got %s",
                 target_path.name,
@@ -251,7 +261,8 @@ def process_reference(
                 checksum,
             )
             sys.exit(1)
-        logging.info("MD5 checksum verified for %s", target_path.name)
+        if expected_md5:
+            logging.info("MD5 checksum verified for %s", target_path.name)
 
     # Check if this is a tar file that needs extraction
     if ref_info.get("extract_tar", False) and (
@@ -388,7 +399,8 @@ def process_reference(
     # Run sequence dictionary command if provided.
     seq_dict_command = ref_info.get("seq_dict_command")
     if seq_dict_command:
-        seq_dict_file = installed_path.parent / (installed_path.name + ".dict")
+        # htsjdk/GATK name the dictionary ref.dict, not ref.fna.dict
+        seq_dict_file = installed_path.with_suffix(".dict")
         if seq_dict_file.exists() and not force:
             logging.info(
                 "Sequence dictionary already exists for %s. Skipping creation.",

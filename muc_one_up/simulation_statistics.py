@@ -148,6 +148,10 @@ def get_repeat_lengths(
 
     Returns:
         List[int]: List of nucleotide lengths for each repeat.
+
+    Raises:
+        ValueError: If 2+ repeats are mutated, the VNTR length differs from the
+            unmutated sum, and no per-repeat lengths are given (ambiguous).
     """
     repeats_dict = config.get("repeats", {})
     lengths = [len(repeats_dict.get(unit.symbol, "")) for unit in chain]
@@ -161,10 +165,18 @@ def get_repeat_lengths(
                 lengths[rep_idx - 1] = len(seq)
     elif vntr_length is not None:
         mutated_indices = [i for i, u in enumerate(chain) if u.mutated]
-        if len(mutated_indices) == 1 and vntr_length >= 0:
-            delta = vntr_length - sum(lengths)
-            if lengths[mutated_indices[0]] + delta >= 0:
-                lengths[mutated_indices[0]] += delta
+        delta = vntr_length - sum(lengths)
+        if len(mutated_indices) > 1 and delta != 0:
+            raise ValueError(
+                f"Cannot infer repeat lengths: {len(mutated_indices)} mutated repeats changed "
+                f"the VNTR length by {delta} bp and no stored per-repeat lengths are available"
+            )
+        if (
+            len(mutated_indices) == 1
+            and vntr_length >= 0
+            and lengths[mutated_indices[0]] + delta >= 0
+        ):
+            lengths[mutated_indices[0]] += delta
 
     return lengths
 

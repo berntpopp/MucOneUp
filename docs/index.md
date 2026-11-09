@@ -230,7 +230,7 @@ Verify your pipeline detects specific mutations:
 # Apply targeted mutation
 muconeup --config config.json simulate \
   --mutation-name dupC \
-  --mutation-targets 1,25 2,30 \
+  --mutation-targets 1,25 --mutation-targets 2,30 \
   --output-structure \
   --out-base mutation_test
 
@@ -252,7 +252,7 @@ Create large-scale datasets with controlled variation:
 # Generate 100 samples with varying VNTR lengths
 for i in {1..100}; do
   muconeup --config config.json simulate \
-    --out-base training/sample_${i} \
+    --out-dir training --out-base sample_${i} \
     --seed ${i}
 done
 

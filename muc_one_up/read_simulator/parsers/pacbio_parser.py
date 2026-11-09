@@ -32,10 +32,8 @@ def reconcile_ccs_reads(
 
     for origin in origins:
         exact_map[origin.read_id] = origin
-        if "/" in origin.read_id:
-            zmw_map[origin.read_id.rsplit("/", 1)[0]] = origin
-        else:
-            zmw_map[origin.read_id] = origin
+        # A CCS read takes its first subread's origin (strand), not the last one's
+        zmw_map.setdefault(origin.read_id.rsplit("/", 1)[0], origin)
 
     surviving_origins: list[ReadOrigin] = []
     opener = gzip.open if str(fastq_file).endswith(".gz") else open

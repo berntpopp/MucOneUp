@@ -16,7 +16,6 @@ Pipeline stages:
 from __future__ import annotations
 
 import logging
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -35,6 +34,7 @@ from .molecule_pipeline import PbsimRun, sequencer_for
 from .pipeline_utils import (
     cleanup_unless_kept,
     create_pipeline_metadata,
+    intermediate_work_dir,
     resolve_pipeline_outputs,
 )
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
@@ -118,9 +118,7 @@ def simulate_ont_amplicon_pipeline(
     intermediate_files: list[str] = []
 
     try:
-        with tempfile.TemporaryDirectory(prefix="ont_amplicon_sim_") as temp_dir:
-            temp_path = Path(temp_dir)
-
+        with intermediate_work_dir(config, output_dir, "ont_amplicon_sim_") as temp_path:
             logging.info("=" * 80)
             logging.info("ONT AMPLICON SIMULATION PIPELINE")
             logging.info("=" * 80)
@@ -217,7 +215,8 @@ def simulate_ont_amplicon_pipeline(
                 start_time=start_time,
                 end_time=end_time,
                 platform="ONT",
-                tools_used=["pbsim3", "minimap2", "samtools"],
+                tools_used=["pbsim3", "samtools"]
+                + (["minimap2"] if human_reference is not None else []),
                 extra_rows=[("Read_truth", truth_name)] if model is not None else None,
             )
 

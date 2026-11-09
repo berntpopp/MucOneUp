@@ -34,6 +34,10 @@ import tarfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from install_references import calculate_md5
+
+from muc_one_up.read_simulator.utils.sequence_utils import reverse_complement
+
 try:
     import requests
 except ImportError:  # pragma: no cover
@@ -48,6 +52,9 @@ logging.basicConfig(
 
 # Default padding around VNTR region (in base pairs)
 DEFAULT_PADDING = 5000
+
+# Matches NanoSim_GIAB_HG002_model in install_references_config.json
+NANOSIM_MODEL_MD5 = "71e40dba231dbfea5f6321ce40741c09"
 
 
 def parse_region(region_str: str) -> tuple:
@@ -140,31 +147,6 @@ def get_ucsc_region_das(
         # Catch any other unexpected errors
         logging.error(f"An unexpected error occurred while fetching {segment}: {e}", exc_info=True)
         return None
-
-
-def reverse_complement(sequence: str) -> str:
-    """
-    Return the reverse complement of a DNA sequence.
-
-    Args:
-        sequence: DNA sequence
-
-    Returns:
-        str: Reverse complement of the sequence
-    """
-    complement = {
-        "A": "T",
-        "C": "G",
-        "G": "C",
-        "T": "A",
-        "a": "t",
-        "c": "g",
-        "g": "c",
-        "t": "a",
-        "N": "N",
-        "n": "n",
-    }
-    return "".join(complement.get(base, base) for base in reversed(sequence))
 
 
 def download_flanking_regions(
@@ -288,12 +270,19 @@ def download_nanosim_model(output_dir, force=False):
         logging.error("The 'requests' package is required to download NanoSim models.")
         return None
     try:
-        response = requests.get(model_url, stream=True)
+        response = requests.get(model_url, stream=True, timeout=60)
         response.raise_for_status()
         with tar_path.open("wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         logging.info(f"Downloaded NanoSim model to {tar_path}")
+        checksum = calculate_md5(tar_path)
+        if checksum != NANOSIM_MODEL_MD5:
+            tar_path.unlink()
+            logging.error(
+                f"MD5 mismatch for {tar_path}: expected {NANOSIM_MODEL_MD5}, got {checksum}"
+            )
+            return None
     except Exception as e:
         logging.error(f"Failed to download NanoSim model: {e}")
         return None
@@ -316,6 +305,8 @@ def download_nanosim_model(output_dir, force=False):
         return extract_path
     except Exception as e:
         logging.error(f"Failed to extract NanoSim model: {e}")
+        # Remove the partial folder so the next run does not treat it as installed
+        shutil.rmtree(extract_path, ignore_errors=True)
         return None
 
 

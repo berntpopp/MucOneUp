@@ -24,14 +24,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .output_config import OutputConfig
 
-from ..exceptions import ConfigurationError
-from .assembly_context import AssemblyContext
 from .constants import MINIMAP2_PRESET_ONT
-from .pipeline_utils import (
-    create_pipeline_metadata,
-    resolve_human_reference,
-    resolve_pipeline_outputs,
-)
+from .pipeline_utils import create_pipeline_metadata, resolve_pipeline_outputs
 from .utils import is_diploid_reference, run_split_simulation
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 from .wrappers.nanosim_wrapper import run_nanosim_simulation
@@ -94,7 +88,9 @@ def simulate_ont_reads_pipeline(
                  - enable_split_simulation: Enable diploid split mode (default: True)
                  - enable_coverage_correction: Apply correction factor (default: True)
         input_fa: Input simulated FASTA file.
-        human_reference: Path to human reference genome. If None, uses input_fa.
+        human_reference: Reference for alignment (resolved by
+            ``read_simulation.simulate_reads``). If None, reads are aligned
+            to ``input_fa``.
 
     Returns:
         Path to the final output BAM file (input_basename_ont.bam).
@@ -134,9 +130,6 @@ def simulate_ont_reads_pipeline(
     _rs_raw = config.get("read_simulation", {})
     ns_params = cast(NanosimConfig, _ns_raw)
     rs_config = cast(ReadSimulationConfig, _rs_raw)
-
-    # Resolve assembly context once for the entire pipeline run
-    assembly_ctx = AssemblyContext.from_configs(config, _rs_raw)
 
     # Validate required tools
     nanosim_cmd = tools.get("nanosim")
@@ -236,7 +229,7 @@ def simulate_ont_reads_pipeline(
                 simulation_params=sim_params,
                 output_fastq=f"{output_prefix}_merged.fastq",
                 correction_factor=correction_factor,
-                keep_intermediate=False,
+                keep_intermediate=bool(rs_config.get("keep_intermediate_files", False)),
                 seed=seed,
             )
             fastq_file = result.merged_fastq
@@ -281,7 +274,7 @@ def simulate_ont_reads_pipeline(
             logging.error("NanoSim simulation failed: %s", e)
             raise RuntimeError(f"ONT read simulation failed: {e!s}") from e
 
-    skip_alignment = bool(config.get("read_simulation", {}).get("skip_alignment", False))
+    skip_alignment = bool(rs_config.get("skip_alignment", False))
     output_bam = f"{output_prefix}.bam"
     if skip_alignment:
         logging.info("2. Alignment skipped (--no-align); output is FASTQ")
@@ -289,18 +282,10 @@ def simulate_ont_reads_pipeline(
         # 2. Align reads with minimap2
         logging.info("2. Starting read alignment with minimap2")
 
-        # Resolve reference for alignment
-        if human_reference is None:
-            try:
-                reference_for_alignment = resolve_human_reference(
-                    config, assembly_ctx, aligner="minimap2"
-                )
-            except ConfigurationError:
-                logging.warning("Falling back to aligning against simulated reference")
-                reference_for_alignment = input_fa
-        else:
-            reference_for_alignment = human_reference
-            logging.info("Using user-provided reference: %s", reference_for_alignment)
+        reference_for_alignment = human_reference
+        if reference_for_alignment is None:
+            logging.warning("No human reference; aligning against the simulated FASTA")
+            reference_for_alignment = input_fa
 
         logging.info("Aligning ONT reads to reference: %s", reference_for_alignment)
 

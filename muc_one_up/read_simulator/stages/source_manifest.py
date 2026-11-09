@@ -12,6 +12,7 @@ import contextlib
 import logging
 import re
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,11 @@ logger = logging.getLogger(__name__)
 # tests can patch ``muc_one_up.read_simulator.stages.source_manifest.pysam``
 # cleanly.  The ImportError guard keeps the module importable in environments
 # where pysam is not installed.
+pysam: ModuleType | None
 try:
     import pysam
 except ImportError:  # pragma: no cover
-    pysam = None  # type: ignore[assignment]
+    pysam = None
 
 # parse_illumina_reads is imported at module scope (not inside the function)
 # so that tests can patch it at the module level:
@@ -52,7 +54,7 @@ def _normalize_read_id(read_id: str | None) -> str:
 
 def generate_read_manifest(
     sidecar_path: str | None,
-    final_bam: str,
+    final_bam: str | None,
     input_fa: str,
     source_tracker: Any | None,
     output_dir: Path,
@@ -67,7 +69,7 @@ def generate_read_manifest(
     Args:
         sidecar_path: Path to the fragment origins TSV sidecar file, or None.
         final_bam: Path to the final aligned BAM file (used to filter
-            surviving reads).
+            surviving reads), or None when alignment was skipped.
         input_fa: Path to the per-haplotype FASTA (used to build
             seq_name → haplotype index mapping from FASTA headers).
         source_tracker: A :class:`ReadSourceTracker` instance, or None.
@@ -115,7 +117,14 @@ def generate_read_manifest(
     # ------------------------------------------------------------------
     # Filter to reads that survived alignment (pysam optional)
     # ------------------------------------------------------------------
-    if pysam is not None:
+    if final_bam is None:
+        pass  # --no-align: nothing to filter against
+    elif pysam is None:
+        logger.warning(
+            "pysam is not installed: the read manifest also lists reads that are not in "
+            "the final BAM (unaligned or downsampled away). Install pysam to filter them."
+        )
+    else:
         try:
             surviving_read_ids: set[str] = set()
             with pysam.AlignmentFile(final_bam, "rb") as bam:

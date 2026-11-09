@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from muc_one_up.read_simulator.command_utils import build_tool_command, get_tool_executable
+from muc_one_up.read_simulator.command_utils import build_tool_command
 
 
 class TestBuildToolCommand:
@@ -213,67 +213,6 @@ class TestBuildToolCommand:
         assert cmd == ["tool", "-t", "4", "--input", "file.txt", "--coverage", "30.5"]
 
 
-class TestGetToolExecutable:
-    """Test tool executable extraction utility."""
-
-    def test_simple_tool(self):
-        """Test extracting name from simple command."""
-        assert get_tool_executable("bwa") == "bwa"
-
-    def test_simple_tool_with_path(self):
-        """Test extracting name from command with path."""
-        assert get_tool_executable("/usr/bin/bwa") == "/usr/bin/bwa"
-
-    def test_conda_command_basic(self):
-        """Test extracting tool name from basic conda command."""
-        assert get_tool_executable("mamba run -n env_wessim reseq") == "reseq"
-
-    def test_conda_command_with_flags(self):
-        """Test extracting tool name from conda command with flags."""
-        tool_name = get_tool_executable("mamba run --no-capture-output -n env_wessim samtools")
-        assert tool_name == "samtools"
-
-    def test_conda_command_bwa(self):
-        """Test extracting BWA from conda command."""
-        assert get_tool_executable("mamba run -n env_wessim bwa") == "bwa"
-
-    def test_conda_command_nanosim(self):
-        """Test extracting NanoSim from conda command."""
-        tool_name = get_tool_executable("mamba run -n env_nanosim nanosim")
-        assert tool_name == "nanosim"
-
-    def test_empty_command_returns_unknown(self):
-        """Test that empty string returns 'unknown'."""
-        assert get_tool_executable("") == "unknown"
-
-    def test_none_command_returns_unknown(self):
-        """Test that None returns 'unknown'."""
-        assert get_tool_executable(None) == "unknown"  # type: ignore[arg-type]
-
-    def test_command_only_flags(self):
-        """Test command with only flags (edge case)."""
-        # If all elements start with "-", should return the last one
-        result = get_tool_executable("-t -n -v")
-        assert result == "-v"
-
-    def test_tool_with_version_flag(self):
-        """Test command ending with version flag."""
-        # Should return the tool name, not the flag
-        assert get_tool_executable("bwa --version") == "bwa"
-
-    def test_docker_wrapped_command(self):
-        """Test extracting tool from Docker-wrapped command."""
-        # Future extension: docker run -it container tool
-        tool_name = get_tool_executable("docker run -it biocontainers/bwa bwa")
-        assert tool_name == "bwa"
-
-    def test_singularity_wrapped_command(self):
-        """Test extracting tool from Singularity-wrapped command."""
-        # Future extension: singularity exec image.sif tool
-        tool_name = get_tool_executable("singularity exec bwa.sif bwa")
-        assert tool_name == "bwa"
-
-
 class TestCommandUtilsIntegration:
     """Integration tests for command_utils with real-world scenarios."""
 
@@ -287,9 +226,6 @@ class TestCommandUtilsIntegration:
         # Verify correct structure
         assert cmd[:5] == ["mamba", "run", "--no-capture-output", "-n", "env_wessim"]
         assert cmd[5:] == ["reseq", "replaceN", "-r", "input.fa", "-R", "output.fa"]
-
-        # Verify tool name extraction
-        assert get_tool_executable(tools_dict["reseq"]) == "reseq"
 
     def test_integration_bwa_mem(self):
         """Test building complete BWA mem command."""

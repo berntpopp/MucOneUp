@@ -38,7 +38,6 @@ def _haplotype_from_ref_name(ref_name: str, read_id: str) -> int:
 
 def _parse_single_read(
     read_id: str,
-    seq_len: int,
     haplotype_map: int | None,
 ) -> ReadOrigin | None:
     """Parse a single NanoSim read name into a ReadOrigin."""
@@ -57,7 +56,8 @@ def _parse_single_read(
     else:
         haplotype = _haplotype_from_ref_name(ref_name, read_id)
 
-    ref_end = ref_start + seq_len
+    # Aligned (middle) length: the read's head/tail are unaligned simulated bases
+    ref_end = ref_start + int(match.group(7))
 
     return ReadOrigin(
         read_id=read_id,
@@ -94,7 +94,7 @@ def parse_nanosim_reads(
                 header = f.readline().strip()
                 if not header:
                     break
-                seq = f.readline().strip()
+                f.readline()  # sequence
                 f.readline()  # +
                 f.readline()  # quality
 
@@ -102,7 +102,7 @@ def parse_nanosim_reads(
                     continue
 
                 read_id = header.lstrip("@")
-                origin = _parse_single_read(read_id, len(seq), haplotype_map)
+                origin = _parse_single_read(read_id, haplotype_map)
                 if origin is not None:
                     origins.append(origin)
     except FileNotFoundError:

@@ -15,7 +15,7 @@ MucOneUp supports multiple installation methods for different use cases.
 
 **Required for Read Simulation:**
 
-- **Illumina:** reseq, bwa, samtools, UCSC tools (faToTwoBit, pblat)
+- **Illumina:** reseq2, bwa, samtools, UCSC tools (faToTwoBit, pblat)
 - **Oxford Nanopore:** NanoSim, minimap2, samtools
 - **PacBio HiFi:** pbsim3, ccs, minimap2, samtools
 
@@ -163,20 +163,31 @@ Uses a hybrid Illumina pipeline combining Wessim2-style fragment simulation with
 !!! note "ReSeq2 replaces original ReSeq"
     MucOneUp uses [ReSeq2](https://github.com/berntpopp/ReSeq2), a maintained fork of the original [ReSeq](https://github.com/schmeing/ReSeq) (Schmeing & Robinson, Genome Biology 2021). ReSeq2 fixes a critical deadlock bug in `seqToIllumina` that limited the original to ~10,000 reads per run. With ReSeq2, all requested reads are generated correctly. The original ReSeq is no longer maintained. ReSeq2 uses the same `.reseq` profile format and is a drop-in replacement.
 
-#### Install via Conda
+    The conda environment (`conda/env_wessim.yaml`) and the Docker image install ReSeq2 from [Bioconda](https://bioconda.github.io/recipes/reseq2/README.html) (`reseq2`). If `tools.reseq` points at the legacy ReSeq 1.x, MucOneUp detects it (`--version`) and feeds `seqToIllumina` batches of at most 10,000 fragments to avoid the deadlock.
+
+#### Install via Conda (Recommended)
 
 ```bash
-# Create environment from file (uses original reseq until bioconda approves reseq2)
+# Create environment from file (installs bioconda reseq2)
 mamba env create -f conda/env_wessim.yaml
 
 # Activate environment
 conda activate env_wessim
 
 # Verify tools
-which reseq bwa samtools faToTwoBit pblat
+which reseq2 bwa samtools faToTwoBit pblat
+reseq2 --version   # ReSeq2 version 2.0.3
 ```
 
-#### Build ReSeq2 from Source (Recommended)
+Existing `env_wessim` environments created before v0.49 contain the legacy `reseq` 1.1. Add ReSeq2 with:
+
+```bash
+mamba install -n env_wessim -c bioconda -c conda-forge reseq2=2.0.3
+```
+
+and set `"reseq": "mamba run -n env_wessim reseq2"` in `config.json`. The shipped config already uses this.
+
+#### Build ReSeq2 from Source (Alternative)
 
 ReSeq2 can be built from source in three commands:
 

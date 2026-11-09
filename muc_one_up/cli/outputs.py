@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ..exceptions import FileOperationError
+from ..exceptions import FileOperationError, ValidationError
 from ..fasta_writer import write_fasta
 from ..type_defs import HaplotypeResult
 from .config import numbered_filename
@@ -238,6 +238,17 @@ def generate_output_base(input_path: Path, suffix: str) -> str:
         Output base name (e.g., 'sample.001.simulated_reads').
     """
     return input_path.stem + suffix
+
+
+def check_unique_output_bases(input_paths: Any, suffix: str) -> None:
+    """Raise if batch inputs resolve to the same auto-generated output base."""
+    bases = [generate_output_base(Path(p), suffix) for p in input_paths]
+    dupes = sorted({b for b in bases if bases.count(b) > 1})
+    if dupes:
+        raise ValidationError(
+            f"Input files would write to the same output name(s) {dupes}; "
+            "pass --out-base or process them with separate --out-dir values"
+        )
 
 
 def write_fasta_outputs(

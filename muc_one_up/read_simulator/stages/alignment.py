@@ -19,6 +19,7 @@ from typing import Any
 
 from ...exceptions import ConfigurationError
 from ..assembly_context import AssemblyContext
+from ..utils import bed
 from ..wrappers.bwa_wrapper import align_reads
 from ..wrappers.samtools_coverage import (
     calculate_target_coverage,
@@ -83,7 +84,9 @@ def align_and_refine(
     # ------------------------------------------------------------------
     aligned_bam = str(output_dir / f"{output_base}.bam")
     logger.info("9. Aligning reads to reference: %s", human_ref)
-    align_reads(r1, r2, human_ref, aligned_bam, tools, threads)
+    align_reads(
+        r1, r2, human_ref, aligned_bam, tools, threads, timeout=rs_config.get("alignment_timeout")
+    )
     current_bam = aligned_bam
 
     # ------------------------------------------------------------------
@@ -294,15 +297,16 @@ def align_and_refine(
                 # subsampling, so reads passing at seed X with a lower fraction
                 # will always pass at the same seed with a higher fraction.
                 step2_seed = ds_seed + 1
-                downsample_bam(
-                    tools["samtools"],
-                    current_bam,
-                    downsampled_bam,
-                    vntr_region,
-                    fraction2,
-                    step2_seed,
-                    threads,
-                )
+                with tempfile.TemporaryDirectory(dir=str(output_dir)) as bed_dir:
+                    downsample_bam(
+                        tools["samtools"],
+                        current_bam,
+                        downsampled_bam,
+                        bed.create_vntr_bed(Path(bed_dir), vntr_region),
+                        fraction2,
+                        step2_seed,
+                        threads,
+                    )
                 current_bam = downsampled_bam
             else:
                 logger.info(

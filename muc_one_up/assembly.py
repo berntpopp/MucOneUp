@@ -1,7 +1,6 @@
 """Centralized sequence assembly from repeat chains.
 
 Single source of truth for chain -> DNA sequence conversion.
-Replaces assemble_haplotype_from_chain() in simulate.py.
 """
 
 from __future__ import annotations

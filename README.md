@@ -65,7 +65,7 @@ pip install git+https://github.com/berntpopp/MucOneUp.git
 
 **Requirements:**
 - Python 3.10+
-- External tools for read simulation (optional): BWA, samtools, reseq
+- External tools for read simulation (optional): BWA, samtools, ReSeq2
 
 ### Option 2: Docker (All-in-One)
 
@@ -81,7 +81,7 @@ docker run --rm \
   simulate --out-dir /data --out-base sample
 ```
 
-**Includes:** MucOneUp + Illumina (Wessim2-style + ReSeq) + ONT (NanoSim) + PacBio (pbsim3) - pre-configured environment.
+**Includes:** MucOneUp + Illumina (Wessim2-style + ReSeq2) + ONT (NanoSim) + PacBio (pbsim3) - pre-configured environment.
 
 ### Option 3: Development Setup
 
