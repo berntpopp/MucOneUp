@@ -59,7 +59,7 @@ RUN mkdir -p /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL && \
     echo 'from . import Image' > /opt/conda/envs/env_nanosim/lib/python3.9/site-packages/PIL/__init__.py
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    /usr/bin/pip3 install --break-system-packages . biopython && \
+    /usr/bin/pip3 install --break-system-packages . && \
     sed -i -E 's/mamba run -n [^ ]+ //g' /app/config.json && \
     apt-get purge -y python3-pip python3-dev build-essential && \
     apt-get autoremove -y && \

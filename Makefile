@@ -72,15 +72,15 @@ ci-check:  ## Run EXACT same checks as GitHub Actions CI (run before committing!
 	@echo ""
 	@echo "=== JOB: Code Quality Checks ==="
 	@echo "1. Ruff linter..."
-	ruff check muc_one_up/ tests/
+	uv run ruff check muc_one_up/ tests/ helpers/
 	@echo "2. Ruff formatter check..."
-	ruff format --check muc_one_up/ tests/
+	uv run ruff format --check muc_one_up/ tests/ helpers/
 	@echo "3. Mypy type checker..."
-	mypy muc_one_up/
+	uv run mypy muc_one_up/
 	@echo ""
 	@echo "=== JOB: Test Suite ==="
 	@echo "4. Running pytest with coverage..."
-	pytest --cov=muc_one_up --cov-report=term-missing
+	uv run pytest --cov=muc_one_up --cov-report=term-missing --cov-fail-under=80
 	@echo ""
 	@echo "✅ All CI checks passed!"
 
