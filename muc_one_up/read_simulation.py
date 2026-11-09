@@ -66,53 +66,61 @@ def _get_simulator(simulator_type: str) -> Callable[..., str]:
     """Return the pipeline function for the given simulator type.
 
     Imports only the selected backend to avoid loading heavy dependencies
-    (e.g., Biopython for amplicon) when they are not needed.
+    (e.g., Biopython for amplicon) when they are not needed. Every pipeline
+    takes ``(config, input_fa, human_reference=..., source_tracker=..., output_config=...)``.
     """
     if simulator_type == "illumina":
-        from muc_one_up.read_simulator.pipeline import (
-            simulate_reads_pipeline as simulate_illumina_reads,
-        )
+        from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
 
-        return lambda config, input_fa, _, **kw: simulate_illumina_reads(config, input_fa, **kw)
+        return simulate_reads_pipeline
     elif simulator_type == "ont":
         from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
 
-        return lambda config, input_fa, human_reference, **kw: simulate_ont_reads_pipeline(
-            config, input_fa, human_reference=human_reference, **kw
-        )
+        return simulate_ont_reads_pipeline
     elif simulator_type == "pacbio":
         from muc_one_up.read_simulator.pacbio_pipeline import simulate_pacbio_hifi_reads
 
-        return lambda config, input_fa, human_reference, **kw: simulate_pacbio_hifi_reads(
-            config, input_fa, human_reference=human_reference, **kw
-        )
+        return simulate_pacbio_hifi_reads
     elif simulator_type == "amplicon":
         from muc_one_up.read_simulator.amplicon_pipeline import (
             simulate_amplicon_reads_pipeline,
         )
 
-        return lambda config, input_fa, human_reference, **kw: simulate_amplicon_reads_pipeline(
-            config, input_fa, human_reference=human_reference, **kw
-        )
+        return simulate_amplicon_reads_pipeline
     elif simulator_type == "ont-amplicon":
         from muc_one_up.read_simulator.ont_amplicon_pipeline import (
             simulate_ont_amplicon_pipeline,
         )
 
-        return lambda config, input_fa, human_reference, **kw: simulate_ont_amplicon_pipeline(
-            config, input_fa, human_reference=human_reference, **kw
-        )
+        return simulate_ont_amplicon_pipeline
     elif simulator_type == "ont-fragments":
         from muc_one_up.read_simulator.ont_fragment_pipeline import (
             simulate_ont_fragment_pipeline,
         )
 
-        return lambda config, input_fa, human_reference, **kw: simulate_ont_fragment_pipeline(
-            config, input_fa, human_reference=human_reference, **kw
-        )
+        return simulate_ont_fragment_pipeline
     else:
         valid = "amplicon, illumina, ont, ont-amplicon, ont-fragments, pacbio"
         raise ValueError(f"Unknown simulator: '{simulator_type}'. Valid options: {valid}. ")
+
+
+def _resolve_alignment_reference(config: dict[str, Any], simulator: str) -> str | None:
+    """Resolve the alignment reference once for all pipelines (None when not aligning)."""
+    from muc_one_up.exceptions import ConfigurationError
+    from muc_one_up.read_simulator.assembly_context import AssemblyContext
+    from muc_one_up.read_simulator.pipeline_utils import resolve_human_reference
+
+    rs = config.get("read_simulation", {})
+    if rs.get("skip_alignment"):
+        return None
+    aligner = "bwa" if simulator == "illumina" else "minimap2"
+    try:
+        return resolve_human_reference(config, AssemblyContext.from_configs(config, rs), aligner)
+    except ConfigurationError as exc:
+        if simulator == "illumina":
+            raise
+        logging.warning("%s: %s", simulator.upper(), exc)
+        return None
 
 
 def simulate_reads(
@@ -179,17 +187,15 @@ def simulate_reads(
     Notes:
         - Simulator names are case-insensitive
         - Default simulator is "illumina" if not specified
-        - Human reference is extracted from config for alignment
+        - The alignment reference is resolved once here (see resolve_human_reference)
         - Strategy Pattern makes adding new simulators trivial
     """
     # Determine which simulator to use (case-insensitive, default to illumina)
     simulator = config.get("read_simulation", {}).get("simulator", "illumina").lower()
 
-    # Extract human reference from config (needed for ONT and PacBio alignment)
-    human_reference = config.get("read_simulation", {}).get("human_reference")
-
     # Get the pipeline function for the selected simulator (lazy import)
     simulator_func = _get_simulator(simulator)
+    human_reference = _resolve_alignment_reference(config, simulator)
 
     # Log which simulator is being used
     simulator_names = {
@@ -202,21 +208,11 @@ def simulate_reads(
     }
     logging.info(f"Using {simulator_names.get(simulator, f'{simulator} simulator')}")
 
-    # Warn if human reference is missing (for alignment-based pipelines)
-    if (
-        simulator in ["ont", "ont-fragments", "pacbio", "amplicon", "ont-amplicon"]
-        and not human_reference
-    ):
-        logging.warning(
-            f"No human_reference specified in config for {simulator.upper()} alignment. "
-            "Alignment step will be skipped (FASTQ output only)."
-        )
-
     # Dispatch to appropriate pipeline using Strategy Pattern
     return simulator_func(
         config,
         input_fa,
-        human_reference,
+        human_reference=human_reference,
         source_tracker=source_tracker,
         output_config=output_config,
     )

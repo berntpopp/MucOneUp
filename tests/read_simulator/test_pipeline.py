@@ -59,13 +59,11 @@ def test_illumina_pipeline_respects_skip_alignment(tmp_path, mocker):
         "muc_one_up.read_simulator.pipeline.prepare_fragments",
         return_value=FragmentResult(r1_fastq=r1_path, r2_fastq=r2_path),
     )
-    mock_resolve_ref = mocker.patch("muc_one_up.read_simulator.pipeline.resolve_human_reference")
     mock_align = mocker.patch("muc_one_up.read_simulator.pipeline.align_and_refine")
 
     result = simulate_reads_pipeline(config, str(input_fa))
 
     assert result == r1_path
-    mock_resolve_ref.assert_not_called()
     mock_align.assert_not_called()
     mock_manifest.assert_not_called()
     assert mock_meta.called
@@ -93,18 +91,39 @@ def test_illumina_pipeline_aligns_by_default(tmp_path, mocker):
         "muc_one_up.read_simulator.pipeline.prepare_fragments",
         return_value=FragmentResult(r1_fastq=r1_path, r2_fastq=r2_path),
     )
-    mock_resolve_ref = mocker.patch(
-        "muc_one_up.read_simulator.pipeline.resolve_human_reference", return_value="/ref/hg38.fa"
-    )
     mock_align = mocker.patch(
         "muc_one_up.read_simulator.pipeline.align_and_refine",
         return_value=AlignmentResult(final_bam=final_bam),
     )
 
-    result = simulate_reads_pipeline(config, str(input_fa))
+    result = simulate_reads_pipeline(config, str(input_fa), human_reference="/ref/hg38.fa")
 
     assert result == final_bam
-    mock_resolve_ref.assert_called_once()
-    mock_align.assert_called_once()
-    mock_manifest.assert_called_once()
+    assert mock_align.call_args[1]["human_ref"] == "/ref/hg38.fa"
+    mock_manifest.assert_not_called()  # no source tracker
     assert "bwa" in mock_meta.call_args[1]["tools_used"]
+
+
+def test_illumina_no_align_still_writes_read_manifest(tmp_path, mocker):
+    """--no-align --track-read-source writes a manifest from all origins (no BAM filter)."""
+    config = _minimal_illumina_config(tmp_path)
+    config["read_simulation"]["skip_alignment"] = True
+    input_fa = tmp_path / "input.fa"
+    input_fa.write_text(">test\nACGTACGT\n")
+
+    mocker.patch("muc_one_up.read_simulator.pipeline.check_external_tools")
+    mocker.patch("muc_one_up.read_simulator.pipeline.capture_tool_versions", return_value={})
+    mocker.patch("muc_one_up.read_simulator.pipeline.log_tool_versions")
+    mocker.patch("muc_one_up.read_simulator.pipeline.cleanup_intermediates")
+    mocker.patch("muc_one_up.read_simulator.pipeline.create_pipeline_metadata")
+    mocker.patch(
+        "muc_one_up.read_simulator.pipeline.prepare_fragments",
+        return_value=FragmentResult(r1_fastq="r1", r2_fastq="r2"),
+    )
+    mock_manifest = mocker.patch("muc_one_up.read_simulator.pipeline.generate_read_manifest")
+
+    simulate_reads_pipeline(config, str(input_fa), source_tracker=object())
+
+    mock_manifest.assert_called_once()
+    assert mock_manifest.call_args[1]["final_bam"] is None
+    assert mock_manifest.call_args[1]["sidecar_path"].endswith("_fragment_origins.tsv")

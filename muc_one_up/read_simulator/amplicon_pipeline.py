@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -34,6 +33,7 @@ from .molecule_pipeline import PbsimRun, sequencer_for
 from .pipeline_utils import (
     cleanup_unless_kept,
     create_pipeline_metadata,
+    intermediate_work_dir,
     resolve_pipeline_outputs,
 )
 from .wrappers.ccs_wrapper import run_ccs_consensus
@@ -167,9 +167,7 @@ def simulate_amplicon_reads_pipeline(
     intermediate_files: list[str] = []
 
     try:
-        with tempfile.TemporaryDirectory(prefix="amplicon_sim_") as temp_dir:
-            temp_path = Path(temp_dir)
-
+        with intermediate_work_dir(config, output_dir, "amplicon_sim_") as temp_path:
             logging.info("=" * 80)
             logging.info("AMPLICON SIMULATION PIPELINE")
             logging.info("=" * 80)
@@ -275,7 +273,8 @@ def simulate_amplicon_reads_pipeline(
                 start_time=start_time,
                 end_time=end_time,
                 platform="PacBio",
-                tools_used=["pbsim3", "ccs", "minimap2", "samtools"],
+                tools_used=["pbsim3", "ccs", "samtools"]
+                + (["minimap2"] if human_reference is not None else []),
                 extra_rows=[("Read_truth", truth_name)] if model is not None else None,
             )
 

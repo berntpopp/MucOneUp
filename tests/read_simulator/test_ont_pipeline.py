@@ -521,7 +521,8 @@ class TestReturnValue:
 class TestDiploidSplitSimulation:
     """Test diploid split-simulation mode."""
 
-    def test_uses_split_simulation_for_diploid_reference(self, mocker, tmp_path):
+    @pytest.mark.parametrize("keep", [False, True])
+    def test_uses_split_simulation_for_diploid_reference(self, mocker, tmp_path, keep):
         """Test that split-simulation is used when diploid reference is detected and enabled."""
         # Create diploid FASTA
         input_fa = tmp_path / "sample.fa"
@@ -565,12 +566,15 @@ class TestDiploidSplitSimulation:
         # Mock alignment
         mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
+        config["read_simulation"] = {"keep_intermediate_files": keep}
+
         # Act
         result = simulate_ont_reads_pipeline(config, str(input_fa))
 
         # Assert
         mock_split_sim.assert_called_once()
         assert mock_split_sim.call_args[1]["diploid_fasta"] == str(input_fa)
+        assert mock_split_sim.call_args[1]["keep_intermediate"] is keep
         assert result.endswith("sample_ont.bam")
 
     def test_logs_diploid_mode_information(self, mocker, tmp_path, caplog):

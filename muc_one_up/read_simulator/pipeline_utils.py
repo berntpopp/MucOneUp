@@ -4,7 +4,7 @@ Provides four helpers that are reused across Illumina, ONT, PacBio, and
 Amplicon pipeline entry-points:
 
 - resolve_pipeline_outputs: determine output directory and base name
-- resolve_human_reference: locate human reference FASTA with a 3-tier fallback
+- resolve_human_reference: locate the alignment reference (one precedence for all)
 - create_pipeline_metadata: thin Path-aware wrapper over write_metadata_file
 - cleanup_intermediates: safely remove intermediate files without raising
 """
@@ -12,7 +12,9 @@ Amplicon pipeline entry-points:
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
+import tempfile
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,7 +23,7 @@ from ..bioinformatics.reference_validation import (
     get_reference_path_for_assembly,
     validate_reference_for_assembly,
 )
-from ..exceptions import ConfigurationError
+from ..exceptions import ConfigurationError, FileOperationError, ValidationError
 from .assembly_context import AssemblyContext
 from .output_config import OutputConfig
 from .utils.metadata_writer import write_metadata_file
@@ -76,73 +78,37 @@ def resolve_human_reference(
     assembly_ctx: AssemblyContext,
     aligner: str = "bwa",
 ) -> str:
-    """Resolve path to the human reference FASTA with a 3-tier fallback.
+    """Resolve the human reference FASTA used for alignment by every pipeline.
 
-    Fallback order:
-    1. ``config["reference_genomes"]`` section via
-       :func:`get_reference_path_for_assembly`.
-    2. ``assembly_ctx.human_reference`` (set from assembly-keyed rs_config key).
-    3. ``config["read_simulation"]["human_reference"]`` (legacy flat key).
+    Explicit settings win over the shared assembly table:
 
-    Args:
-        config: Main simulation configuration dictionary.
-        assembly_ctx: Resolved assembly context for the current run.
-        aligner: Aligner name passed to reference validation (default ``"bwa"``).
-
-    Returns:
-        Absolute path to the human reference FASTA as a string.
+    1. ``read_simulation.human_reference_<assembly>`` (``assembly_ctx.human_reference``).
+    2. ``read_simulation.human_reference``.
+    3. ``reference_genomes[<assembly>].fasta_path`` (validated for ``aligner`` indices).
 
     Raises:
-        ConfigurationError: If no reference can be found through any fallback.
+        ConfigurationError: If no reference is configured or the
+            ``reference_genomes`` entry cannot be used (the reason is included).
     """
-    # Tier 1: reference_genomes config section
+    explicit = assembly_ctx.human_reference or config.get("read_simulation", {}).get(
+        "human_reference"
+    )
+    if explicit:
+        logger.info("Using human reference from read_simulation config: %s", explicit)
+        return str(explicit)
+
     try:
         ref_path = get_reference_path_for_assembly(config, assembly_ctx.assembly_name)
-        human_reference = str(ref_path)
+    except (ValidationError, FileOperationError) as exc:
+        raise ConfigurationError(
+            f"No human reference for assembly '{assembly_ctx.assembly_name}': set "
+            f"read_simulation.human_reference or reference_genomes.{assembly_ctx.assembly_name}"
+            f".fasta_path ({exc})"
+        ) from exc
 
-        logger.info(
-            "Using reference from config: %s (%s)",
-            human_reference,
-            assembly_ctx.assembly_name,
-        )
-
-        # Validate reference indices — non-fatal, only log warnings
-        try:
-            warnings = validate_reference_for_assembly(
-                config, assembly_ctx.assembly_name, aligner=aligner
-            )
-            if warnings:
-                for warning in warnings:
-                    logger.warning("%s", warning)
-        except Exception as val_err:
-            logger.debug("Reference validation failed (non-fatal): %s", val_err)
-
-        return human_reference
-    except Exception:
-        logger.debug(
-            "reference_genomes lookup failed for '%s', trying fallbacks",
-            assembly_ctx.assembly_name,
-        )
-
-    # Tier 2: assembly_ctx.human_reference
-    if assembly_ctx.human_reference:
-        logger.debug(
-            "Resolved human reference from assembly_ctx: %s",
-            assembly_ctx.human_reference,
-        )
-        return assembly_ctx.human_reference
-
-    # Tier 3: legacy config["read_simulation"]["human_reference"]
-    legacy: str | None = config.get("read_simulation", {}).get("human_reference")
-    if legacy:
-        logger.debug("Resolved human reference from legacy read_simulation config: %s", legacy)
-        return legacy
-
-    raise ConfigurationError(
-        f"human_reference not specified for assembly '{assembly_ctx.assembly_name}'. "
-        "Provide it via config['reference_genomes'], assembly_ctx.human_reference, "
-        "or config['read_simulation']['human_reference']."
-    )
+    logger.info("Using reference_genomes reference: %s (%s)", ref_path, assembly_ctx.assembly_name)
+    validate_reference_for_assembly(config, assembly_ctx.assembly_name, aligner=aligner)  # logs
+    return str(ref_path)
 
 
 def create_pipeline_metadata(
@@ -209,6 +175,24 @@ def cleanup_intermediates(file_list: Sequence[str | None]) -> None:
             logger.debug("Removed intermediate file: %s", path)
         except OSError as exc:
             logger.warning("Could not remove intermediate file %s: %s", path, exc)
+
+
+@contextmanager
+def intermediate_work_dir(
+    config: Mapping[str, Any], output_dir: Path, prefix: str
+) -> Iterator[Path]:
+    """Scratch directory for a pipeline run.
+
+    Kept under ``output_dir`` when ``read_simulation.keep_intermediate_files`` is
+    true, otherwise a temporary directory removed on exit.
+    """
+    if config.get("read_simulation", {}).get("keep_intermediate_files", False):
+        work_dir = Path(tempfile.mkdtemp(prefix=prefix, dir=output_dir))
+        logger.info("Keeping intermediate work directory: %s", work_dir)
+        yield work_dir
+    else:
+        with tempfile.TemporaryDirectory(prefix=prefix) as tmp:
+            yield Path(tmp)
 
 
 def cleanup_unless_kept(config: Mapping[str, Any], file_list: Sequence[str | None]) -> None:
