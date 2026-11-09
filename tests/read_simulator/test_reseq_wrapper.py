@@ -13,6 +13,7 @@ These tests verify that our wrapper correctly:
 """
 
 import gzip
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -406,3 +407,43 @@ class TestSplitReadsValidation:
 
         with gzip.open(tmp_path / "R2.fq.gz", "rt") as f:
             assert f.read() == "@r1 b\nTGCA\n+\nIIII"
+
+
+class TestCreateReadsChunking:
+    """reseq 1.1 hangs on >10,000 fragments; create_reads must chunk the input."""
+
+    def test_chunks_large_input_with_distinct_seeds(self, mocker, tmp_path, tools_dict):
+        from muc_one_up.read_simulator.wrappers import reseq_wrapper
+
+        mocker.patch.object(reseq_wrapper, "RESEQ_MAX_FRAGMENTS", 2)
+        fragments = tmp_path / "fragments.fa"
+        fragments.write_text("".join(f">{i} x\nACGT\n" for i in range(5)))
+        output_fq = tmp_path / "reads.fq"
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            args = [str(c) for c in cmd]
+            chunk_in = args[args.index("-i") + 1]
+            names = [
+                ln[1:].split()[0]
+                for ln in Path(chunk_in).read_text().splitlines()
+                if ln.startswith(">")
+            ]
+            calls.append((names, args[args.index("--seed") + 1]))
+            Path(args[args.index("-o") + 1]).write_text(
+                "".join(f"@{n}\nACGT\n+\nIIII\n" for n in names)
+            )
+
+        mocker.patch.object(reseq_wrapper, "run_command", side_effect=fake_run)
+
+        create_reads(str(fragments), "model", str(output_fq), 2, tools_dict, seed=10)
+
+        assert calls == [(["0", "1"], "10"), (["2", "3"], "11"), (["4"], "12")]
+        assert [ln for ln in output_fq.read_text().splitlines() if ln.startswith("@")] == [
+            "@0",
+            "@1",
+            "@2",
+            "@3",
+            "@4",
+        ]
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["fragments.fa", "reads.fq"]

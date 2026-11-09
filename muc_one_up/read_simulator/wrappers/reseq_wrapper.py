@@ -90,17 +90,49 @@ def generate_systematic_errors(
         )
 
 
+# reseq 1.1 seqToIllumina hangs forever on inputs of more than 10,000 fragments
+# (output stalls just before the first batch boundary), so feed it chunks.
+RESEQ_MAX_FRAGMENTS = 10_000
+
+
+def _split_fasta(path: str, max_records: int, prefix: str) -> list[str]:
+    """Split a FASTA into files of at most *max_records* records; return their paths."""
+    chunks: list[str] = []
+    out = None
+    count = 0
+    try:
+        with Path(path).open() as fin:
+            for line in fin:
+                if line.startswith(">"):
+                    if out is None or count == max_records:
+                        if out is not None:
+                            out.close()
+                        chunks.append(f"{prefix}.chunk{len(chunks)}.fa")
+                        out = Path(chunks[-1]).open("w")
+                        count = 0
+                    count += 1
+                if out is not None:
+                    out.write(line)
+    finally:
+        if out is not None:
+            out.close()
+    return chunks
+
+
 def create_reads(
     input_fragments: str,
     reseq_model: str,
     output_reads: str,
     threads: int,
     tools: dict[str, str],
-    timeout: int | None = 600,
+    timeout: int | None = None,
     seed: int | None = None,
 ) -> None:
     """
     Create reads from fragments using reseq/reseq2 seqToIllumina.
+
+    Inputs larger than ``RESEQ_MAX_FRAGMENTS`` are simulated chunk by chunk
+    (chunk *i* uses ``seed + i``) and concatenated, working around a reseq hang.
 
     Args:
         input_fragments: Input fragments FASTA.
@@ -108,33 +140,51 @@ def create_reads(
         output_reads: Output reads FASTQ.
         threads: Number of threads.
         tools: Dictionary of tool commands.
-        timeout: Timeout in seconds (default: 10 minutes).
+        timeout: Timeout in seconds per reseq call (default: none).
         seed: Random seed for reproducibility.
 
     Raises:
         FileOperationError: If the command fails or the output file is not created.
     """
-    cmd_args: list[str | int] = [
-        "seqToIllumina",
-        "-j",
-        threads,
-        "-s",
-        reseq_model,
-        "-i",
-        input_fragments,
-        "-o",
-        output_reads,
-    ]
-    if seed is not None:
-        cmd_args.extend(["--seed", seed])
-    cmd = build_tool_command(tools["reseq"], *cmd_args)
-
-    run_command(
-        cmd,
-        timeout=timeout,
-        stderr_log_level=logging.INFO,
-        stderr_prefix="[reseq] ",
-    )
+    chunks = _split_fasta(input_fragments, RESEQ_MAX_FRAGMENTS, output_reads)
+    single = len(chunks) <= 1
+    if single:
+        for c in chunks:
+            Path(c).unlink()
+        chunks = [input_fragments]
+    try:
+        for i, chunk in enumerate(chunks):
+            chunk_out = output_reads if single else f"{chunk}.fq"
+            cmd_args: list[str | int] = [
+                "seqToIllumina",
+                "-j",
+                threads,
+                "-s",
+                reseq_model,
+                "-i",
+                chunk,
+                "-o",
+                chunk_out,
+            ]
+            if seed is not None:
+                cmd_args.extend(["--seed", seed + i])
+            run_command(
+                build_tool_command(tools["reseq"], *cmd_args),
+                timeout=timeout,
+                stderr_log_level=logging.INFO,
+                stderr_prefix="[reseq] ",
+            )
+        if not single:
+            with Path(output_reads).open("wb") as fout:
+                for chunk in chunks:
+                    chunk_fq = Path(f"{chunk}.fq")
+                    if chunk_fq.exists():
+                        fout.write(chunk_fq.read_bytes())
+    finally:
+        if not single:
+            for chunk in chunks:
+                Path(chunk).unlink(missing_ok=True)
+                Path(f"{chunk}.fq").unlink(missing_ok=True)
 
     # Verify output exists and is non-empty
     output_path = Path(output_reads)
