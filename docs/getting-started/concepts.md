@@ -196,9 +196,7 @@ Defined in `config.json`:
 
 ### Length Distributions
 
-MucOneUp supports two distribution models:
-
-**Normal Distribution:**
+MucOneUp samples lengths from a normal distribution (`"distribution": "normal"`, the only supported value):
 
 ```json
 {
@@ -213,20 +211,6 @@ MucOneUp supports two distribution models:
 ```
 
 Samples repeat counts from normal distribution, clipped to [min, max] range.
-
-**Uniform Distribution:**
-
-```json
-{
-  "length_model": {
-    "distribution": "uniform",
-    "min_repeats": 40,
-    "max_repeats": 100
-  }
-}
-```
-
-Samples uniformly across [min, max] range.
 
 ### Fixed vs Random Lengths
 
