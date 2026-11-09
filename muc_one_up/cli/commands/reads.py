@@ -40,33 +40,16 @@ def _run_batch_simulation(
     """
     from ...read_simulation import simulate_reads as simulate_reads_pipeline
     from ...read_simulator.output_config import OutputConfig
-    from ..config import validate_output_base
-    from ..outputs import check_unique_output_bases
+    from ..outputs import batch_output_bases
 
-    if out_base:
-        validate_output_base(out_base)
-    else:
-        check_unique_output_bases(input_fastas, suffix)
-
-    # Warn if --out-base provided for multiple files
-    if len(input_fastas) > 1 and out_base:
-        logging.warning(
-            "--out-base '%s' will be used for all %d files. "
-            "Consider omitting --out-base for auto-generated names.",
-            out_base,
-            len(input_fastas),
-        )
+    out_bases = batch_output_bases(input_fastas, out_base, suffix)
 
     total_files = len(input_fastas)
     logging.info("Processing %d FASTA file(s) for %s read simulation", total_files, simulator_label)
 
-    for idx, input_fasta in enumerate(input_fastas, start=1):
-        # Determine output base name
-        if out_base:
-            actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
-        else:
-            actual_out_base = None
-
+    for idx, (input_fasta, actual_out_base) in enumerate(
+        zip(input_fastas, out_bases, strict=True), start=1
+    ):
         output_config = OutputConfig.from_input_fasta(
             input_fa=input_fasta,
             out_dir=out_dir,
@@ -151,16 +134,16 @@ def _setup_read_config(
         config["read_simulation"]["coverage"] = 30
 
     if seed_config_key is not None:
-        if seed is not None:
-            if seed_config_key not in config:
-                config[seed_config_key] = {}
-            config[seed_config_key]["seed"] = seed
-            logging.info(f"Using random seed: {seed} (results will be reproducible)")
-        elif config.get(seed_config_key, {}).get("seed") is None and config.get("seed") is not None:
-            if seed_config_key not in config:
-                config[seed_config_key] = {}
-            config[seed_config_key]["seed"] = config["seed"]
-            logging.info(f"Using random seed: {config['seed']} (results will be reproducible)")
+        _apply_seed(config, config.setdefault(seed_config_key, {}), seed)
+
+
+def _apply_seed(config: dict[str, Any], params: dict[str, Any], seed: int | None) -> None:
+    """Set params["seed"] from CLI --seed, else inherit top-level config seed if unset."""
+    if seed is None and params.get("seed") is None:
+        seed = config.get("seed")
+    if seed is not None:
+        params["seed"] = seed
+        logging.info("Using random seed: %s (results will be reproducible)", seed)
 
 
 def _apply_ont_amplicon_params(
@@ -184,12 +167,7 @@ def _apply_ont_amplicon_params(
         params["model_type"] = model_type
     if model_file is not None:
         params["model_file"] = model_file
-    if seed is not None:
-        params["seed"] = seed
-        logging.info("Using random seed: %d (results will be reproducible)", seed)
-    elif params.get("seed") is None and config.get("seed") is not None:
-        params["seed"] = config["seed"]
-        logging.info("Using random seed: %d (results will be reproducible)", config["seed"])
+    _apply_seed(config, params, seed)
 
     # Default to QSHMM-ONT-HQ.model if missing or explicitly null
     if not params.get("model_file"):
@@ -235,12 +213,7 @@ def _apply_pacbio_params(
         if value is not None:
             params[key] = value
 
-    if seed is not None:
-        params["seed"] = seed
-        logging.info("Using random seed: %d (results will be reproducible)", seed)
-    elif params.get("seed") is None and config.get("seed") is not None:
-        params["seed"] = config["seed"]
-        logging.info("Using random seed: %d (results will be reproducible)", config["seed"])
+    _apply_seed(config, params, seed)
 
     required = ["model_type", "model_file"]
     missing = [p for p in required if p not in params]
@@ -446,6 +419,7 @@ def ont(
                 fragment_seed = config.get("seed")
         fragment = {
             "n_reads": n_reads,
+            "coverage": coverage,
             "length_median": read_length_median,
             "length_sigma": read_length_sigma,
             "flank_fasta": flank_fasta,
@@ -747,6 +721,10 @@ def amplicon(
         _apply_ont_amplicon_params(config, model_type, model_file, seed)
     else:
         _apply_pacbio_params(config, model_type, model_file, seed, threads=threads)
+    # The amplicon pipelines read molecule count from their own params, not read_simulation.
+    if coverage_int is not None:
+        params_key = "ont_amplicon_params" if platform == "ont" else "pacbio_params"
+        config[params_key]["coverage"] = coverage_int
 
     # Apply PCR bias overrides
     if "pcr_bias" not in config["amplicon_params"]:

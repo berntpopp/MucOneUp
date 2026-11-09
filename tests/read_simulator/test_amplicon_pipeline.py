@@ -263,3 +263,29 @@ class TestAmpliconPipelineTruthTracking:
         assert truth.called and not legacy.called
         run = truth.call_args.args[2]
         assert run.pass_num > 1 and run.ccs_cmd
+
+
+@pytest.mark.parametrize(("params_coverage", "expected"), [(None, 30), (7, 7)])
+def test_molecule_count_ignores_illumina_coverage(
+    amplicon_config, diploid_fasta_with_primers, params_coverage, expected
+):
+    """Molecule count is pacbio_params.coverage, else 30; never read_simulation (#181)."""
+    amplicon_config["read_simulation"]["coverage"] = 150
+    amplicon_config["pacbio_params"].pop("coverage")
+    if params_coverage is not None:
+        amplicon_config["pacbio_params"]["coverage"] = params_coverage
+    with (
+        patch(
+            "muc_one_up.read_simulator.amplicon_pipeline.extract_and_prepare_amplicons",
+            side_effect=RuntimeError("stop"),
+        ) as prep,
+        pytest.raises(RuntimeError, match="stop"),
+    ):
+        simulate_amplicon_reads_pipeline(amplicon_config, str(diploid_fasta_with_primers))
+    assert prep.call_args.kwargs["total_coverage"] == expected
+
+
+def test_missing_model_type_is_a_clear_error(amplicon_config, diploid_fasta_with_primers):
+    del amplicon_config["pacbio_params"]["model_type"]
+    with pytest.raises(ValueError, match="pacbio_params: model_type"):
+        simulate_amplicon_reads_pipeline(amplicon_config, str(diploid_fasta_with_primers))

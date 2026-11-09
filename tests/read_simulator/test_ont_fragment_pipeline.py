@@ -55,7 +55,11 @@ def _run(tmp_path: Path, diploid: Path, config: dict):
 
 
 def test_defaults_mix_strands_and_derive_read_count(tmp_path: Path, diploid: Path) -> None:
-    config = {"read_simulation": {"coverage": 10}, "ont_fragment_params": {"length_median": 1000}}
+    # read_simulation.coverage is the Illumina target and must not drive the read count (#181)
+    config = {
+        "read_simulation": {"coverage": 150},
+        "ont_fragment_params": {"length_median": 1000, "coverage": 10},
+    }
     out, sim, align = _run(tmp_path, diploid, config)
     molecules = sim.call_args.args[0]
     assert len(molecules) == 36  # 10x total * (3000 + 1133) / 1133 bp, mean of lognormal(1000, 0.5)
@@ -98,7 +102,7 @@ def test_profile_models_and_alignment(tmp_path: Path, diploid: Path) -> None:
     [
         {"ont_fragment_params": {"n_reads": 0}},
         {"ont_fragment_params": {"n_reads": -3}},
-        {"read_simulation": {"coverage": 0}},
+        {"ont_fragment_params": {"coverage": 0}},
     ],
 )
 def test_zero_requests_are_rejected(tmp_path: Path, diploid: Path, config: dict) -> None:
@@ -123,7 +127,7 @@ def test_coverage_is_total_depth_over_haplotypes() -> None:
     """--coverage 10 gave ~23x total: per-haplotype count and median length (#8)."""
     sources = ["A" * 21000, "C" * 26000]
     fragments = FragmentModel(6000, 0.5)
-    n = _n_reads({}, {"coverage": 100}, sources, fragments)
+    n = _n_reads({"coverage": 100}, sources, fragments)
     mols = build_fragment_molecules(sources, n, 6000, 0.5, MoleculeModel(), random.Random(3))
     total_depth = sum(len(m.seq) for m in mols) / (sum(map(len, sources)) / len(sources))
     assert total_depth == pytest.approx(100, rel=0.12)

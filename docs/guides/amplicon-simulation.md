@@ -140,6 +140,7 @@ The ONT amplicon pipeline reads from the `ont_amplicon_params` config section (s
 | `model_type` | string | `"qshmm"` | pbsim3 model type (`errhmm` or `qshmm`) |
 | `model_file` | string | `QSHMM-ONT-HQ.model` | pbsim3 ONT error model file |
 | `threads` | int | `8` | Number of threads |
+| `coverage` | int | `30` | Template molecules when `--coverage` is not given |
 | `accuracy_mean` | float | `0.95` | Mean read accuracy |
 
 Available ONT models in `reference/pbsim3/`:
@@ -281,6 +282,8 @@ This means 500 <= amplicon_length <= 15000 bp. Amplicons outside this range rais
 
 `--coverage` specifies the total number of **template molecules**. For PacBio, the actual HiFi read count may be lower due to CCS quality filtering (`min_rq`, `min_passes`). For ONT, each template produces one output read (no CCS filtering).
 
+Without `--coverage`, the count comes from the platform's own config (`pacbio_params.coverage` or `ont_amplicon_params.coverage`), else 30. `read_simulation.coverage` is the Illumina downsampling target and is not used here.
+
 For diploid inputs, the total is split between alleles by the PCR bias model:
 
 ```bash
@@ -307,7 +310,7 @@ Options:
   --model-type [qshmm|errhmm]  pbsim3 model type (overrides config)
   --pcr-preset [default|madritsch2025_r10|no_bias]  PCR bias preset
   --stochastic-pcr          Enable stochastic PCR bias
-  --coverage INT             Total template molecules (default: 30)
+  --coverage INT             Total template molecules (default: platform *_params.coverage, else 30)
   --seed INT                 Random seed for reproducibility
   --out-dir PATH             Output directory (default: .)
   --out-base TEXT             Output base name

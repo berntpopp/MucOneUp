@@ -197,6 +197,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
             "properties": {
                 "model_type": {"type": "string", "enum": ["qshmm", "errhmm"]},
                 "model_file": {"type": "string"},
+                "coverage": {"type": "number", "minimum": 1},
                 "threads": {"type": "number", "minimum": 1},
                 "seed": {"type": ["number", "null"]},
                 "accuracy_mean": {
@@ -535,6 +536,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
             "type": "object",
             "properties": {
                 "n_reads": {"type": ["integer", "null"], "minimum": 1},
+                "coverage": {"type": "number", "exclusiveMinimum": 0},
                 "length_median": {"type": "number", "exclusiveMinimum": 0},
                 "length_sigma": {"type": "number", "exclusiveMinimum": 0},
                 "flank_fasta": {"type": ["string", "null"]},

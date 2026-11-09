@@ -1483,6 +1483,7 @@ class TestIssue149ReadsFixes:
         assert result_amp.exit_code == 0
         amp_config = mock_simulate.call_args[0][0]
         assert amp_config["read_simulation"]["coverage"] == 11
+        assert amp_config["pacbio_params"]["coverage"] == 11  # what the pipeline reads (#181)
         assert isinstance(amp_config["read_simulation"]["coverage"], int)
 
     def test_reads_commands_inherit_top_level_seed(self, runner, tmp_path, mocker):
@@ -1865,6 +1866,19 @@ class TestAuditCliFixes:
         )
         assert result.exit_code == 0, result.output
         assert (out / "x_stats.basic_stats.json").exists()
+
+    def test_analyze_stats_reads_gzip(self, runner, temp_config, tmp_path):
+        import gzip
+
+        fa = tmp_path / "x.fa.gz"
+        with gzip.open(fa, "wt") as handle:
+            handle.write(">x\nACGG\n")
+        result = runner.invoke(
+            cli, ["--config", temp_config, "analyze", "stats", str(fa), "--out-dir", str(tmp_path)]
+        )
+        assert result.exit_code == 0, result.output
+        stats = json.loads((tmp_path / "x.fa_stats.basic_stats.json").read_text())
+        assert stats["sequences"] == [{"header": "x", "length": 4, "gc_content": 75.0}]
 
     def test_reads_invalid_out_base_exits_1(self, runner, temp_config, tmp_path, mocker):
         mock_sim = mocker.patch("muc_one_up.read_simulation.simulate_reads")
