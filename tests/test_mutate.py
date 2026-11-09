@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from muc_one_up.mutate import (
@@ -663,3 +666,33 @@ def test_apply_changes_to_repeat_multi_operation_updates_bounds():
             start=2,
             stop=6,
         )
+
+
+@pytest.mark.parametrize(
+    ("name", "unit", "expected"),
+    [
+        # Vrbacká et al. 2025 (bioRxiv 10.1101/2025.09.06.673538), Table 1, HGVS-style unit:position
+        ("dupC", "X", lambda s: s[:59] + "C" + s[59:]),  # X:59dupC
+        ("insCCCC", "X", lambda s: s[:59] + "CCCC" + s[59:]),  # X:56_59dupCCCC
+        ("insG", "X", lambda s: s[:58] + "G" + s[58:]),  # X:58_59insG
+        ("insG_pos58", "X", lambda s: s[:58] + "G" + s[58:]),  # B:/X:58_59insG
+        ("insG_pos58", "B", lambda s: s[:58] + "G" + s[58:]),
+        ("insG_pos54", "bJ", lambda s: s[:54] + "G" + s[54:]),  # bJ:54_55insG
+        ("insA_pos54", "aH", lambda s: s[:54] + "A" + s[54:]),  # aH:54_55insA
+        ("insC_pos23", "A", lambda s: s[:23] + "C" + s[23:]),  # A:/E:23dupC
+        ("insC_pos23", "E", lambda s: s[:23] + "C" + s[23:]),
+        ("ins16bp", "C", lambda s: s[:57] + s[41:57] + s[57:]),  # C:42_57dup16
+        ("del18_31", "X", lambda s: s[:17] + s[31:]),  # X:18_31del
+    ],
+)
+def test_shipped_published_variants_match_hgvs(name, unit, expected):
+    """Shipped mutation coordinates reproduce the published unit:position variants (#190)."""
+    config = json.loads((Path(__file__).parents[1] / "config.json").read_text())
+    assert unit in config["mutations"][name]["allowed_repeats"]
+    repeat = config["repeats"][unit]
+    results = [HaplotypeResult(sequence="LL" + repeat + "RR", chain=[RepeatUnit(unit)])]
+    config["constants"] = {"hg38": {"left": "LL", "right": "RR"}}
+    _, mutated = apply_mutations(
+        config=config, results=results, mutation_name=name, targets=[MutationTarget(1, 1)]
+    )
+    assert mutated[1] == [(1, expected(repeat))]

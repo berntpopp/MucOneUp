@@ -33,7 +33,9 @@
     "P": "GCCCACGGTGTCACCTCGGCCCCGGACACCAGGCCAGCCCCGGGCTCCACCGCCCCCCCA",
     "Q": "GCCCACAGTGTCACCTCGGCCCCGGACACCAGGCCGGCCCCGGGCTCCACCGCCCCCCCA",
     "R": "GCCCACGGTGTCACCTCGGGCACGGACACCAGGCCGGCCCCGGGCTCCACCGCCCCCCCA",
-    "S": "GCCCACGGTGTCACCTCAGCCCCGGAGAGCAGGCCGGCCCCGGGCTCCACCGCCCCCGCA"
+    "S": "GCCCACGGTGTCACCTCAGCCCCGGAGAGCAGGCCGGCCCCGGGCTCCACCGCCCCCGCA",
+    "aH": "GCCCACGGTGTCACCTCGGCCCCGGAGAGCAGGCCGGCCCCGGGCTCCACCGCCTCCCCA",
+    "bJ": "GCCCACGGTGTCACCTCGGCCCCGGACACCAGGCCCGCCCCGGGCTCCACCGCCCCCGCA"
   },
   "constants": {
     "hg38": {
@@ -375,8 +377,8 @@
       "changes": [
         {
           "type": "insert",
-          "start": 58,
-          "end": 59,
+          "start": 59,
+          "end": 60,
           "sequence": "G"
         }
       ],
@@ -385,14 +387,13 @@
     },
     "insG_pos54": {
       "allowed_repeats": [
-        "B",
-        "J"
+        "bJ"
       ],
       "changes": [
         {
           "type": "insert",
-          "start": 54,
-          "end": 55,
+          "start": 55,
+          "end": 56,
           "sequence": "G"
         }
       ],
@@ -401,14 +402,13 @@
     },
     "insA_pos54": {
       "allowed_repeats": [
-        "A",
-        "H"
+        "aH"
       ],
       "changes": [
         {
           "type": "insert",
-          "start": 54,
-          "end": 55,
+          "start": 55,
+          "end": 56,
           "sequence": "A"
         }
       ],
@@ -436,8 +436,8 @@
       "changes": [
         {
           "type": "insert",
-          "start": 57,
-          "end": 58,
+          "start": 58,
+          "end": 59,
           "sequence": "GGGCTCCACCGCCCCC"
         }
       ],
