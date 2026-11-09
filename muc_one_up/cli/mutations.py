@@ -41,8 +41,7 @@ def parse_mutation_targets(
             mutation_positions.append(MutationTarget(hap_i, rep_i))
         except Exception as e:
             raise ValidationError(f"Invalid --mutation-targets format: '{t}' ({e})") from e
-    # A repeated target would otherwise be mutated twice.
-    return list(dict.fromkeys(mutation_positions))
+    return mutation_positions
 
 
 def find_random_mutation_target(
