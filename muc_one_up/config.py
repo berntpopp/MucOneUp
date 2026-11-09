@@ -70,8 +70,8 @@ from .exceptions import ConfigurationError
 #:         Example: {"1": {"2": 0.7, "7": 0.3}, "2": {"7": 1.0}}
 #:
 #:     length_model: Distribution parameters for VNTR length sampling
-#:         Required keys: distribution, min_repeats, max_repeats,
-#:                       mean_repeats, median_repeats
+#:         Required keys: distribution, min_repeats, max_repeats (integers >= 10),
+#:                       mean_repeats; median_repeats is optional and unused
 #:
 #:     mutations: Named mutation definitions
 #:         Each mutation has:
@@ -240,17 +240,17 @@ CONFIG_SCHEMA: dict[str, Any] = {
             "type": "object",
             "properties": {
                 "distribution": {"type": "string"},
-                "min_repeats": {"type": "number"},
-                "max_repeats": {"type": "number"},
+                # simulate_single_haplotype rejects chains shorter than 10 repeats
+                "min_repeats": {"type": "integer", "minimum": 10},
+                "max_repeats": {"type": "integer", "minimum": 10},
                 "mean_repeats": {"type": "number"},
-                "median_repeats": {"type": "number"},
+                "median_repeats": {"type": "number"},  # informational; never read
             },
             "required": [
                 "distribution",
                 "min_repeats",
                 "max_repeats",
                 "mean_repeats",
-                "median_repeats",
             ],
             "additionalProperties": False,
         },
@@ -277,8 +277,8 @@ CONFIG_SCHEMA: dict[str, Any] = {
                                         "delete_insert",
                                     ],
                                 },
-                                "start": {"type": "number"},
-                                "end": {"type": "number"},
+                                "start": {"type": "integer"},
+                                "end": {"type": "integer"},
                                 "sequence": {"type": "string"},
                             },
                             "required": ["type", "start", "end"],

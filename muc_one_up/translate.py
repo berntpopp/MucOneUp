@@ -7,49 +7,22 @@ efficient ORF finding and implements custom translation with the standard
 genetic code.
 
 Key Functions:
-    predict_orfs_in_haplotypes: Find and translate ORFs in all haplotypes
     find_orfs_in_memory: Use orfipy to find ORFs in DNA sequence
     dna_to_protein: Translate DNA sequence to protein using codon table
-    reverse_complement: Generate reverse complement of DNA sequence
-    write_peptides_to_fasta: Write predicted peptides to FASTA file
 
 Key Constants:
     CODON_TABLE: Standard genetic code mapping codons to amino acids
 
-Workflow:
-    1. Detect ORFs using orfipy_core (both strands)
-    2. Filter by minimum amino acid length (orf_min_aa)
-    3. Translate DNA to protein sequences
-    4. Optional: Filter by required N-terminal prefix
-    5. Write results to peptide FASTA file
-
-Example:
-    Predict ORFs with minimum 100 aa length::
-
-        from muc_one_up.translate import run_orf_finder_in_memory
-
-        results = [(seq1, chain1), (seq2, chain2)]
-        run_orf_finder_in_memory(
-            results=results,
-            output_pep="output.pep.fa",
-            orf_min_aa=100,
-            required_prefix="MTRV"  # Optional N-terminal filter
-        )
-
 Notes:
     - Supports both forward and reverse strand ORF detection
     - Stop codons: TAA, TAG, TGA (standard genetic code)
-    - Start codons: ATG, TTG, CTG (common bacterial starts)
+    - Default start codon: ATG
     - Uses '_' character for stop codons in CODON_TABLE
+    - The ``analyze orfs`` command (cli/analysis.py) drives the full workflow
 
 See Also:
     - toxic_protein_detector.py: Analyze translated ORFs for toxic features
 """
-
-import logging
-from pathlib import Path
-
-from .type_defs import HaplotypeResult
 
 #: Standard genetic code codon table.
 #:
@@ -143,39 +116,6 @@ CODON_TABLE = {
 }
 
 
-def reverse_complement(seq: str) -> str:
-    """Generate reverse complement of DNA sequence.
-
-    Handles both uppercase and lowercase DNA bases (A, T, G, C, N).
-    Unknown bases are converted to 'N'.
-
-    Args:
-        seq: DNA sequence string (any case)
-
-    Returns:
-        Reverse complement DNA sequence
-
-    Example:
-        >>> reverse_complement("ATCG")
-        'CGAT'
-        >>> reverse_complement("atcgN")
-        'Ncgat'
-    """
-    rc_map = {
-        "A": "T",
-        "T": "A",
-        "G": "C",
-        "C": "G",
-        "N": "N",
-        "a": "t",
-        "t": "a",
-        "g": "c",
-        "c": "g",
-        "n": "n",
-    }
-    return "".join(rc_map.get(base, "N") for base in reversed(seq))
-
-
 def dna_to_protein(
     dna: str, codon_table: dict[str, str] = CODON_TABLE, include_stop: bool = False
 ) -> str:
@@ -225,7 +165,7 @@ def find_orfs_in_memory(
     """Find Open Reading Frames in DNA sequence using orfipy.
 
     Uses orfipy_core for efficient ORF detection on one or both strands.
-    Default start codons: ATG, TTG, CTG (standard + alternative bacterial starts).
+    Default start codon: ATG.
     Default stop codons: TAA, TAG, TGA (standard genetic code).
 
     Args:
@@ -233,7 +173,7 @@ def find_orfs_in_memory(
         min_len: Minimum ORF length in nucleotides
         max_len: Maximum ORF length in nucleotides
         strand: Strand option ('+' for forward, '-' for reverse, 'b' for both)
-        starts: List of start codon sequences, defaults to ["ATG", "TTG", "CTG"]
+        starts: List of start codon sequences, defaults to ["ATG"]
         stops: List of stop codon sequences, defaults to ["TAA", "TAG", "TGA"]
         include_stop: If True, include stop codon in ORF coordinates
         partial5: Allow partial ORFs at 5' end (no start codon)
@@ -248,7 +188,7 @@ def find_orfs_in_memory(
     if stops is None:
         stops = ["TAA", "TAG", "TGA"]
     if starts is None:
-        starts = ["ATG", "TTG", "CTG"]
+        starts = ["ATG"]
     return list(
         orfipy_core.orfs(
             seq,
@@ -263,134 +203,3 @@ def find_orfs_in_memory(
             between_stops=False,
         )
     )
-
-
-def predict_orfs_in_haplotypes(
-    results: list[HaplotypeResult],
-    min_len: int = 30,
-    orf_min_aa: int = 100,
-    required_prefix: str | None = None,
-) -> dict[str, list[tuple[str, str, int, int, str, str]]]:
-    """Predict and translate ORFs for all haplotypes.
-
-    Finds ORFs in each haplotype sequence, translates to protein, and filters
-    by minimum amino acid length and optional N-terminal prefix requirement.
-
-    Args:
-        results: List of HaplotypeResult objects.
-        min_len: Minimum ORF length in nucleotides for orfipy detection
-        orf_min_aa: Minimum peptide length in amino acids (post-translation filter)
-        required_prefix: Optional N-terminal amino acid prefix filter
-                        (e.g., "MTRV" to require specific signal peptide)
-
-    Returns:
-        Dictionary mapping haplotype IDs to ORF lists:
-        {
-            "haplotype_1": [
-                (orf_id, peptide, start, stop, strand, description),
-                ...
-            ],
-            ...
-        }
-
-    Example:
-        >>> results = [HaplotypeResult(seq1, chain1), HaplotypeResult(seq2, chain2)]
-        >>> orfs = predict_orfs_in_haplotypes(results, orf_min_aa=100)
-        >>> orfs["haplotype_1"]
-        [('haplotype_1_ORF1', 'MTRV...', 245, 1523, '+', 'len=1278')]
-    """
-    haplotype_orfs = {}
-    min_nt_length = max(min_len, orf_min_aa * 3)
-
-    for i, hr in enumerate(results, start=1):
-        dna_seq = hr.sequence
-        hap_id = f"haplotype_{i}"
-        orfs = find_orfs_in_memory(
-            seq=dna_seq,
-            min_len=min_nt_length,
-            max_len=1000000,
-            strand="b",
-            starts=["ATG", "TTG", "CTG"],
-            stops=["TAA", "TAG", "TGA"],
-            include_stop=False,
-        )
-        orf_list = []
-        orf_count = 0
-        for start, stop, strand, desc in orfs:
-            orf_count += 1
-            if strand == "+":
-                dna_sub = dna_seq[start:stop]
-            else:
-                dna_sub = reverse_complement(dna_seq[start:stop])
-            peptide = dna_to_protein(dna_sub, include_stop=False)
-            if len(peptide) < orf_min_aa:
-                continue
-            if required_prefix and not peptide.startswith(required_prefix):
-                continue
-            orf_id = f"{hap_id}_ORF{orf_count}"
-            orf_list.append((orf_id, peptide, start, stop, strand, desc))
-        haplotype_orfs[hap_id] = orf_list
-
-    logging.info("Predicted ORFs for %d haplotypes.", len(results))
-    return haplotype_orfs
-
-
-def write_peptides_to_fasta(haplotype_orfs: dict[str, list[tuple]], output_pep: str) -> None:
-    """Write predicted peptide sequences to FASTA file.
-
-    Args:
-        haplotype_orfs: Dictionary mapping haplotype IDs to ORF lists
-                       (from predict_orfs_in_haplotypes)
-        output_pep: Output FASTA filename for peptide sequences
-
-    Raises:
-        Exception: If file writing fails (logged and re-raised)
-
-    Example Output:
-        >haplotype_1_ORF1 strand=+ len=1278
-        MTRVPGTRPALLLLLVPLLLQTGALA...
-        >haplotype_1_ORF2 strand=- len=456
-        MKRELLSAAVPV...
-    """
-    try:
-        with Path(output_pep).open("w") as out_fh:
-            for _hap_id, orf_list in haplotype_orfs.items():
-                for orf_id, peptide, _start, _stop, strand, desc in orf_list:
-                    out_fh.write(f">{orf_id} strand={strand} {desc}\n")
-                    out_fh.write(peptide + "\n")
-        logging.info("Peptide FASTA written to %s", output_pep)
-    except Exception as e:
-        logging.error("Error writing peptide FASTA: %s", e)
-        raise
-
-
-def run_orf_finder_in_memory(
-    results: list[HaplotypeResult],
-    output_pep: str,
-    min_len: int = 30,
-    orf_min_aa: int = 100,
-    required_prefix: str | None = None,
-) -> None:
-    """Predict ORFs and write peptides to FASTA (complete pipeline).
-
-    High-level orchestration function combining ORF detection, translation,
-    filtering, and FASTA output. Convenience wrapper for common workflow.
-
-    Args:
-        results: List of HaplotypeResult objects from simulation
-        output_pep: Output FASTA filename for translated peptides
-        min_len: Minimum ORF length in nucleotides
-        orf_min_aa: Minimum peptide length in amino acids
-        required_prefix: Optional N-terminal prefix requirement
-
-    Example:
-        >>> from muc_one_up.simulate import simulate_diploid
-        >>> from muc_one_up.translate import run_orf_finder_in_memory
-        >>>
-        >>> results = simulate_diploid(config)
-        >>> run_orf_finder_in_memory(results, "output.pep.fa", orf_min_aa=100)
-    """
-    haplotype_orfs = predict_orfs_in_haplotypes(
-        results, min_len=min_len, orf_min_aa=orf_min_aa, required_prefix=required_prefix
-    )
-    write_peptides_to_fasta(haplotype_orfs, output_pep)

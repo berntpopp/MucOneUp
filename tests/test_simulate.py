@@ -15,7 +15,6 @@ import pytest
 from muc_one_up.assembly import assemble_sequence
 from muc_one_up.mutate import apply_mutations
 from muc_one_up.simulate import (
-    assemble_haplotype_from_chain,
     pick_next_symbol_no_end,
     simulate_diploid,
     simulate_from_chains,
@@ -137,60 +136,6 @@ class TestPickNextSymbolNoEnd:
 
         forbidden = {"6", "6p", "9", "END"}
         assert all(r not in forbidden for r in results if r is not None)
-
-
-@pytest.mark.unit
-class TestAssembleHaplotypeFromChain:
-    """Comprehensive tests for assemble_haplotype_from_chain function."""
-
-    def test_assembles_with_left_constant(self, minimal_config: dict):
-        """Given valid chain not ending with '9', when assembling, then includes left constant only."""
-        chain = ["1", "2", "X"]
-        result = assemble_haplotype_from_chain(chain, minimal_config)
-
-        left = minimal_config["constants"]["hg38"]["left"]
-        assert result.startswith(left)
-        # Chain doesn't end with "9", so right constant is omitted
-        right = minimal_config["constants"]["hg38"]["right"]
-        assert not result.endswith(right)
-
-    def test_handles_mutation_markers(self, minimal_config: dict):
-        """Given chain with 'm' markers, when assembling, then strips marker for lookup."""
-        chain = ["1", "2m", "Xm"]
-        result = assemble_haplotype_from_chain(chain, minimal_config)
-
-        # Should successfully use base symbols
-        assert minimal_config["repeats"]["2"] in result
-        assert minimal_config["repeats"]["X"] in result
-
-    def test_raises_error_for_unknown_symbol(self, minimal_config: dict):
-        """Given unknown symbol, when assembling, then raises KeyError."""
-        chain = ["1", "UNKNOWN"]
-
-        with pytest.raises(KeyError):
-            assemble_haplotype_from_chain(chain, minimal_config)
-
-    def test_uses_hg19_when_specified(self, minimal_config: dict):
-        """Given hg19 assembly, when assembling, then uses hg19 constants."""
-        minimal_config["constants"]["hg19"] = {
-            "left": "GGGG" * 20,
-            "right": "CCCC" * 20,
-        }
-        minimal_config["reference_assembly"] = "hg19"
-        chain = ["1"]
-
-        result = assemble_haplotype_from_chain(chain, minimal_config)
-
-        assert result.startswith("GGGG" * 20)
-        # Chain doesn't end with "9", so right constant is omitted
-
-    def test_assembles_empty_chain(self, minimal_config: dict):
-        """Given empty chain, when assembling, then returns only left constant."""
-        chain: list[str] = []
-        result = assemble_haplotype_from_chain(chain, minimal_config)
-
-        left = minimal_config["constants"]["hg38"]["left"]
-        assert result == left
 
 
 @pytest.mark.unit

@@ -58,10 +58,10 @@ def minimal_config():
         },
         "length_model": {
             "distribution": "normal",
-            "min_repeats": 5,
-            "max_repeats": 10,
-            "mean_repeats": 7,
-            "median_repeats": 7,
+            "min_repeats": 10,
+            "max_repeats": 20,
+            "mean_repeats": 15,
+            "median_repeats": 15,
         },
         "mutations": {
             "dupC": {

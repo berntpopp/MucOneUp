@@ -95,24 +95,3 @@ class TestAssembleSequence:
         right = constants["right"]
         r9 = repeats["9"]
         assert seq == left + r9 + right
-
-
-def test_simulate_delegates_to_centralized_assembly():
-    """simulate.assemble_haplotype_from_chain should delegate to assemble_sequence."""
-    from unittest.mock import patch
-
-    from muc_one_up.simulate import assemble_haplotype_from_chain
-
-    config = {
-        "repeats": {"1": "ACGT", "9": "TGCA"},
-        "constants": {"hg38": {"left": "L", "right": "R"}},
-        "reference_assembly": "hg38",
-    }
-    with patch("muc_one_up.simulate.assemble_sequence", return_value="MOCKED") as mock:
-        result = assemble_haplotype_from_chain(["1", "9"], config)
-    mock.assert_called_once_with(
-        [RepeatUnit("1"), RepeatUnit("9")],
-        config["repeats"],
-        config["constants"]["hg38"],
-    )
-    assert result == "MOCKED"

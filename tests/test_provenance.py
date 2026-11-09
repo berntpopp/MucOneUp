@@ -272,6 +272,13 @@ class TestCollectProvenanceMetadata:
         assert "duration_seconds" in provenance
         assert "command_line" in provenance
 
+    def test_precomputed_fingerprint_is_used(self, mocker):
+        """A fingerprint computed once per run is reused instead of rehashing per iteration."""
+        spy = mocker.patch("muc_one_up.provenance.compute_config_fingerprint")
+        provenance = collect_provenance_metadata({}, 0.0, 1.0, config_fingerprint="sha256:abc")
+        assert provenance["config_fingerprint"] == "sha256:abc"
+        spy.assert_not_called()
+
     def test_correct_values(self):
         """Test values are correct."""
         config = {"repeats": {"X": "ACGACT"}, "seed": 42}

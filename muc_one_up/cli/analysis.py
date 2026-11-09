@@ -52,6 +52,7 @@ def write_simulation_statistics(
     applied_snp_info_mut,
     mutation_positions=None,
     mutated_units=None,
+    config_fingerprint=None,
 ):
     """Generate and write simulation statistics with provenance metadata.
 
@@ -68,6 +69,7 @@ def write_simulation_statistics(
             config=config,
             start_time=iteration_start,
             end_time=iteration_end,
+            config_fingerprint=config_fingerprint,
         )
     except Exception as e:
         # Graceful degradation: simulation continues even if provenance fails
@@ -304,8 +306,9 @@ def run_orf_analysis_standalone(
     from Bio.SeqRecord import SeqRecord
 
     from ..exceptions import MucOneUpError, ValidationError
+    from ..read_simulator.utils.sequence_utils import reverse_complement
     from ..toxic_protein_detector import scan_orf_fasta
-    from ..translate import dna_to_protein, find_orfs_in_memory, reverse_complement
+    from ..translate import dna_to_protein, find_orfs_in_memory
     from .config import validate_output_base
 
     validate_output_base(out_base)

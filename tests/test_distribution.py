@@ -338,3 +338,15 @@ class TestDistributionEdgeCases:
             ValueError, match=r"Failed to sample repeat count in \[20, 50\] after 10,000 attempts"
         ):
             sample_repeat_count(length_model)
+
+    def test_sample_rounds_instead_of_truncating(self):
+        """Sampled mean must match configured mean (int() truncation biased it ~0.5 low)."""
+        length_model = {
+            "distribution": "normal",
+            "min_repeats": 0,
+            "max_repeats": 4,
+            "mean_repeats": 2,
+        }
+        rng = random.Random(1)
+        samples = [sample_repeat_count(length_model, rng=rng) for _ in range(20_000)]
+        assert abs(sum(samples) / len(samples) - 2) < 0.05

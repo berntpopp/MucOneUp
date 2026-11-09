@@ -222,8 +222,10 @@ def generate_random_snps(
                 # Keep only positions in VNTR region
                 valid_positions = range(vntr_start, vntr_end)
 
-        # Calculate number of SNPs to generate
-        target_count = int(len(valid_positions) * rate_per_base)
+        _rng = rng if rng is not None else _random_module
+        # Stochastic rounding keeps the expected count unbiased (int() floors low densities to 0)
+        expected = len(valid_positions) * rate_per_base
+        target_count = int(expected) + (_rng.random() < expected % 1)
         logging.debug(
             f"Target SNP count for haplotype {hap_idx + 1}: {target_count} "
             f"(rate: {rate_per_base}, region: {region})"
@@ -242,7 +244,6 @@ def generate_random_snps(
             )
         else:
             # Sample without replacement
-            _rng = rng if rng is not None else _random_module
             positions = _rng.sample(valid_positions, target_count)
 
         # Create SNP definitions
@@ -255,7 +256,6 @@ def generate_random_snps(
 
             # Choose a random alternative base different from reference
             alt_bases = [b for b in DNA_BASES if b != ref_base]
-            _rng = rng if rng is not None else _random_module
             alt_base = _rng.choice(alt_bases)
 
             all_snps.append(

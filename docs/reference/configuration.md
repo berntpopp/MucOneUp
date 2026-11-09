@@ -262,9 +262,9 @@ Distribution parameters for sampling VNTR repeat counts.
 |-------|------|-------------|----------|
 | `distribution` | string | "normal" or "uniform" | Yes |
 | `mean_repeats` | float | Mean for normal distribution | If normal |
-| `median_repeats` | float | Median for normal distribution | If normal |
-| `min_repeats` | integer | Minimum repeat count | Yes |
-| `max_repeats` | integer | Maximum repeat count | Yes |
+| `median_repeats` | float | Informational only; not used for sampling | No |
+| `min_repeats` | integer | Minimum repeat count (at least 10) | Yes |
+| `max_repeats` | integer | Maximum repeat count (at least 10) | Yes |
 
 ---
 
