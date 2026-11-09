@@ -210,3 +210,8 @@ docs/archive/
 .codex
 .worktrees/
 config_experiment.json
+
+# Understand Anything
+.ua/
+.understand-anything/
+.understandignore
