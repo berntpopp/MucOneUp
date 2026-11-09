@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-11-09
+
 Resolves the 2026-11-09 codebase audit
 (`.planning/reports/2026-11-09-codebase-audit.md`) in six workstreams.
 
@@ -41,6 +43,8 @@ draw a seed and record it in provenance.
   - Conflicting or ignored option combinations now exit 1.
   - Batch output-name collisions are rejected.
   - `--random-snp-output-file` is written under `--out-dir`.
+  - `reads --track-read-source` no longer crashes when `--out-dir` does not
+    exist yet.
 - `keep_intermediate_files` now works in the amplicon and ONT pipelines.
   Illumina `--no-align --track-read-source` now writes a manifest.
 - Config:
