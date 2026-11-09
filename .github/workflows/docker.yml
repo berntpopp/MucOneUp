@@ -67,8 +67,8 @@ jobs:
         with:
           images: ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup
           tags: |
-            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }},enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }},enable=${{ github.event_name == 'release' }}
             type=edge,branch=main
             type=ref,event=pr
             type=raw,value=latest,enable=${{ github.event_name == 'release' }}
@@ -94,7 +94,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.35.0
         if: github.event_name != 'pull_request'
         with:
-          image-ref: ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup:${{ steps.version.outputs.version }}
+          image-ref: ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup:${{ steps.meta.outputs.version }}
           version: "v0.69.3"
           format: 'sarif'
           output: 'trivy-results.sarif'
@@ -109,6 +109,13 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
       # Test
+      # Smoke test: simulate a short diploid, then ONT amplicon reads via the baked-in pbsim3
       - name: Test image
         run: |
-          docker run --rm ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup:${{ steps.version.outputs.version }} --version
+          docker run --rm --entrypoint sh ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup:${{ steps.meta.outputs.version }} -ec '
+            cd /tmp && muconeup --version
+            muconeup --config /app/config.json simulate --fixed-lengths 20 --seed 1 --out-base smoke
+            muconeup --config /app/config.json reads amplicon smoke.001.simulated.fa --platform ont \
+              --model-type qshmm --model-file /opt/conda/envs/env_pacbio/data/QSHMM-ONT-HQ.model \
+              --coverage 20 --seed 1 --no-align --out-base smoke
+            test -s smoke_amplicon_ont.fastq'

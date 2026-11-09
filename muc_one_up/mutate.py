@@ -160,6 +160,13 @@ def apply_mutations(
         int, list[tuple[int, str]]
     ] = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)
 
+    duplicates = sorted(
+        {(t.haplotype_index, t.repeat_index) for t in targets if targets.count(t) > 1}
+    )
+    if duplicates:
+        # Applying the same target twice would stack the change in one repeat.
+        raise ValueError(f"Duplicate mutation targets (haplotype, repeat): {duplicates}")
+
     # Apply the mutation to each specified target.
     for target in targets:
         hap_i = target.haplotype_index

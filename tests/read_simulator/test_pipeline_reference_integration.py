@@ -31,11 +31,24 @@ def _config(tmp_path, simulator, **rs):
 def test_every_pipeline_gets_the_same_reference(simulator, tmp_path, mocker):
     """Same config -> same alignment reference, whatever the platform (#2)."""
     pipeline = mocker.patch(PIPELINES[simulator], return_value="out")
-    config = _config(tmp_path, simulator, human_reference="/explicit/GRCh38.fa")
+    explicit = tmp_path / "GRCh38.fa"
+    explicit.write_text(">chr1\nACGT\n")
+    config = _config(tmp_path, simulator, human_reference=str(explicit))
 
     simulate_reads(config, "in.fa")
 
-    assert pipeline.call_args.kwargs["human_reference"] == "/explicit/GRCh38.fa"
+    assert pipeline.call_args.kwargs["human_reference"] == str(explicit)
+
+
+@pytest.mark.parametrize("simulator", sorted(PIPELINES))
+def test_missing_explicit_reference_raises_before_simulating(simulator, tmp_path, mocker):
+    """A typo in human_reference must fail up front, not after simulating (#176)."""
+    pipeline = mocker.patch(PIPELINES[simulator], return_value="out")
+    config = _config(tmp_path, simulator, human_reference=str(tmp_path / "missing.fa"))
+
+    with pytest.raises(ConfigurationError, match="not found"):
+        simulate_reads(config, "in.fa")
+    pipeline.assert_not_called()
 
 
 @pytest.mark.parametrize("simulator", sorted(PIPELINES))
@@ -78,7 +91,7 @@ def test_illumina_without_reference_raises(tmp_path, mocker):
 
 
 class TestONTAlignmentReference:
-    """ONT aligns to the reference it is given, or the simulated FASTA without one."""
+    """ONT aligns to the reference it is given and skips alignment without one (#183)."""
 
     @pytest.fixture
     def run(self, tmp_path, mocker):
@@ -101,15 +114,19 @@ class TestONTAlignmentReference:
         from muc_one_up.read_simulator.ont_pipeline import simulate_ont_reads_pipeline
 
         def _run(human_reference):
-            simulate_ont_reads_pipeline(config, str(input_fa), human_reference=human_reference)
-            return align.call_args.kwargs["reference"], str(input_fa)
+            out = simulate_ont_reads_pipeline(
+                config, str(input_fa), human_reference=human_reference
+            )
+            return align, out
 
         return _run
 
     def test_uses_given_reference(self, run):
-        reference, _ = run("/ref/GRCh38.fa")
-        assert reference == "/ref/GRCh38.fa"
+        align, out = run("/ref/GRCh38.fa")
+        assert align.call_args.kwargs["reference"] == "/ref/GRCh38.fa"
+        assert out.endswith(".bam")
 
-    def test_without_reference_aligns_to_simulated_fasta(self, run):
-        reference, input_fa = run(None)
-        assert reference == input_fa
+    def test_without_reference_skips_alignment_and_returns_fastq(self, run, tmp_path):
+        align, out = run(None)
+        align.assert_not_called()
+        assert out == str(tmp_path / "reads.fastq")

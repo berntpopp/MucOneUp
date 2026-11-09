@@ -108,7 +108,7 @@ def shared_read_options(func: Any) -> Any:
     )(func)
     func = click.option(
         "--coverage",
-        type=float,
+        type=click.FloatRange(min=0, min_open=True),
         default=None,
         help="Target sequencing coverage (overrides config if provided, defaults to config value or 30x).",
     )(func)
@@ -161,7 +161,7 @@ def threads_option(func: Any) -> Any:
     """Add ``--threads`` (thread count override)."""
     return click.option(
         "--threads",
-        type=int,
+        type=click.IntRange(min=1),
         default=None,
         help="Thread count (overrides config).",
     )(func)

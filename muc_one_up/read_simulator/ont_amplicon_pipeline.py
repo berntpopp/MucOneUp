@@ -69,13 +69,12 @@ def simulate_ont_amplicon_pipeline(
     """
     from typing import cast
 
-    from ..type_defs import AmpliconConfig, OntAmpliconConfig, ReadSimulationConfig
+    from ..type_defs import AmpliconConfig, OntAmpliconConfig
 
     amplicon_params = cast(AmpliconConfig, config.get("amplicon_params", {}))
     ont_params = cast(OntAmpliconConfig, config.get("ont_amplicon_params", {}))
     tools = config.get("tools", {})
     rs_raw = config.get("read_simulation", {})
-    rs_config = cast(ReadSimulationConfig, rs_raw)
 
     # Tool paths (no CCS needed for ONT)
     pbsim3_cmd = tools.get("pbsim3", "pbsim")
@@ -107,8 +106,9 @@ def simulate_ont_amplicon_pipeline(
         amplicon_params.get("expected_product_range")
     )
 
-    _rs_cov = rs_config.get("coverage")
-    total_coverage: int = int(_rs_cov if _rs_cov is not None else 30)
+    # Template molecules: ont_amplicon_params.coverage (set by --coverage), else 30.
+    _ont_cov = ont_params.get("coverage")
+    total_coverage: int = int(_ont_cov if _ont_cov is not None else 30)
 
     pcr_bias_config = amplicon_params.get("pcr_bias", {})
 
@@ -218,6 +218,7 @@ def simulate_ont_amplicon_pipeline(
                 tools_used=["pbsim3", "samtools"]
                 + (["minimap2"] if human_reference is not None else []),
                 extra_rows=[("Read_truth", truth_name)] if model is not None else None,
+                seed=seed,
             )
 
             return final_output

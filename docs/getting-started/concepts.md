@@ -116,8 +116,12 @@ MucOneUp represents VNTR structure using symbolic notation defined in `config.js
 MucOneUp **enforces** a canonical terminal block matching biological MUC1 structure:
 
 ```
-Variable Region → 6 or 6p → 7 → 8 → 9 → Constant Region
+Variable Region → V → 6 or 6p → 7 → 8 → 9 → Constant Region
 ```
+
+The block always enters through `V`; 6 vs 6p and the units after it are drawn from
+the `probabilities` table (with the default config, `6p` occasionally skips `7`: `V-6p-8-9`).
+These units count toward the target repeat length.
 
 **Why this matters:**
 
@@ -129,7 +133,7 @@ Variable Region → 6 or 6p → 7 → 8 → 9 → Constant Region
 
 ```
 # Realistic (enforced by MucOneUp)
-haplotype_1: 1-2-3-X-A-B-X-6-7-8-9
+haplotype_1: 1-2-3-X-A-B-X-V-6-7-8-9
 
 # Unrealistic (not allowed)
 haplotype_1: 1-2-3-X-A-B-X-9  # Missing 6-7-8
@@ -149,7 +153,7 @@ MucOneUp uses **state transition probabilities** to generate realistic repeat ch
 2. **Sample** next repeat from probability distribution
 3. **Append** to chain
 4. **Repeat** until target length reached
-5. **Enforce** terminal block (6/6p → 7 → 8 → 9)
+5. **Enforce** terminal block (V → 6/6p → 7 → 8 → 9, drawn from the table)
 
 ### Probability Matrix
 
@@ -196,9 +200,7 @@ Defined in `config.json`:
 
 ### Length Distributions
 
-MucOneUp supports two distribution models:
-
-**Normal Distribution:**
+MucOneUp samples lengths from a normal distribution (`"distribution": "normal"`, the only supported value):
 
 ```json
 {
@@ -213,20 +215,6 @@ MucOneUp supports two distribution models:
 ```
 
 Samples repeat counts from normal distribution, clipped to [min, max] range.
-
-**Uniform Distribution:**
-
-```json
-{
-  "length_model": {
-    "distribution": "uniform",
-    "min_repeats": 40,
-    "max_repeats": 100
-  }
-}
-```
-
-Samples uniformly across [min, max] range.
 
 ### Fixed vs Random Lengths
 

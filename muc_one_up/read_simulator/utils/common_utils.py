@@ -104,6 +104,9 @@ def _communicate(
             stderr=f"Command timed out after {timeout}s",
             cmd=cmd_str,
         ) from e
+    except BaseException:  # Ctrl-C / SystemExit: don't orphan the tool's process group
+        _kill_process_group(proc)
+        raise
     return proc.returncode, out, err or ""
 
 
@@ -225,6 +228,9 @@ def run_command(
         timed_out = True
         logging.warning("Command timed out after %s seconds. Killing process group.", timeout)
         _kill_process_group(popen_proc)
+    except BaseException:  # Ctrl-C / SystemExit: don't orphan the tool's process group
+        _kill_process_group(popen_proc)
+        raise
     stdout_thread.join()
     stderr_thread.join()
 
@@ -367,9 +373,11 @@ def run_pipeline(
                     with contextlib.suppress(Exception):
                         p.wait()
 
-        # Check for failures
-        for i, p in enumerate(processes):
-            if p.returncode != 0:
+        # Check for failures; an upstream SIGPIPE is only a symptom of a later stage failing
+        failed = [i for i, p in enumerate(processes) if p.returncode != 0]
+        for i in failed:
+            p = processes[i]
+            if p.returncode != -signal.SIGPIPE or i == failed[-1]:
                 if i < len(upstream_stderr):
                     upstream_stderr[i].seek(0)
                     stderr_text = upstream_stderr[i].read().decode("utf-8", errors="replace")
@@ -409,6 +417,10 @@ def run_pipeline(
         raise ExternalToolError(
             tool="pipeline", exit_code=1, stderr=str(e), cmd=pipeline_str
         ) from e
+    except BaseException:  # Ctrl-C / SystemExit: don't orphan the tools' process groups
+        for p in processes:
+            _kill_process_group(p)
+        raise
     finally:
         for fh in upstream_stderr:
             fh.close()

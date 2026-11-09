@@ -11,7 +11,7 @@ from typing import Any
 from ..exceptions import FileOperationError, ValidationError
 from ..fasta_writer import write_fasta
 from ..type_defs import HaplotypeResult
-from .config import numbered_filename
+from .config import numbered_filename, validate_output_base
 from .snps import integrate_snps_unified
 
 
@@ -249,6 +249,24 @@ def check_unique_output_bases(input_paths: Any, suffix: str) -> None:
             f"Input files would write to the same output name(s) {dupes}; "
             "pass --out-base or process them with separate --out-dir values"
         )
+
+
+def batch_output_bases(input_paths: Any, out_base: str | None, suffix: str) -> list[str]:
+    """Return one output base per input: --out-base (numbered when batching) or stem + suffix."""
+    if out_base is not None:
+        validate_output_base(out_base)
+    if not out_base:
+        check_unique_output_bases(input_paths, suffix)
+        return [generate_output_base(Path(p), suffix) for p in input_paths]
+    if len(input_paths) == 1:
+        return [out_base]
+    logging.warning(
+        "--out-base '%s' will be used for all %d files. "
+        "Consider omitting --out-base for auto-generated names.",
+        out_base,
+        len(input_paths),
+    )
+    return [f"{out_base}_{i:03d}" for i in range(1, len(input_paths) + 1)]
 
 
 def write_fasta_outputs(

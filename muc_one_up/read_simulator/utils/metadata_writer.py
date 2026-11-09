@@ -134,6 +134,7 @@ def write_metadata_file(
     tools_used: list[str] | None = None,
     *,
     extra_rows: MetadataRows | None = None,
+    seed: int | None = None,
 ) -> str:
     """
     Write TSV metadata file with provenance information.
@@ -148,6 +149,7 @@ def write_metadata_file(
         tools_used: Tool keys whose versions are captured (default: all tools)
         extra_rows: Additional (key, value) rows from the pipeline, e.g. the
             ``Read_truth`` manifest of a truth-tracked run
+        seed: Seed the pipeline actually used (falls back to ``config["seed"]``)
 
     For amplicon runs (``read_simulation.assay_type == "amplicon"`` or an
     amplicon simulator), amplicon fields (Template_molecules, Model_type,
@@ -232,8 +234,10 @@ def write_metadata_file(
         f.write(f"Output_base\t{output_base}\n")
         f.write(f"Output_dir\t{output_dir}\n")
 
-        if "seed" in config:
-            f.write(f"Seed\t{config['seed']}\n")
+        if seed is None:
+            seed = config.get("seed")
+        if seed is not None:
+            f.write(f"Seed\t{seed}\n")
 
         # Platform- or assay-specific parameters (skip if N/A)
         if _is_amplicon_run(config):

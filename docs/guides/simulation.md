@@ -12,7 +12,7 @@ The `simulate` command generates diploid haplotype sequences with customizable V
 
 - Generates two haplotype sequences (diploid reference)
 - Uses probability-based repeat transitions
-- Enforces canonical terminal blocks (6/6p → 7 → 8 → 9)
+- Enforces canonical terminal blocks (V → 6/6p → 7 → 8 → 9, drawn from the transition table)
 - Supports fixed or random VNTR lengths
 - Applies mutations (optional)
 - Integrates SNPs (optional)
@@ -287,7 +287,7 @@ haplotype_2 <repeat1>-<repeat2>-<repeat3>-...-<terminal_block>
 2. **Sample** next repeat from probability distribution
 3. **Append** to chain
 4. **Repeat** until target length reached
-5. **Enforce** terminal block
+5. **Enforce** terminal block (V → 6/6p → 7 → 8 → 9, drawn from the table)
 
 ### Probability Matrix
 

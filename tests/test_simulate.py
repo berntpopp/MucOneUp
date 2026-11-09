@@ -9,10 +9,13 @@ Following modern testing best practices:
 """
 
 import random
+from pathlib import Path
 
 import pytest
 
 from muc_one_up.assembly import assemble_sequence
+from muc_one_up.config import load_config
+from muc_one_up.exceptions import SimulationError
 from muc_one_up.mutate import apply_mutations
 from muc_one_up.simulate import (
     pick_next_symbol_no_end,
@@ -40,7 +43,7 @@ def simple_config():
             "9": "GGG",  # final block usage
         },
         "constants": {"hg38": {"left": "TTTT", "right": "AAAA"}},  # Use nested format
-        "probabilities": {"1": {"2": 1.0}, "2": {"9": 1.0}, "9": {"END": 1.0}},
+        "probabilities": {"1": {"2": 1.0}, "2": {"2": 0.5, "9": 0.5}, "9": {"END": 1.0}},
         "length_model": {
             "distribution": "normal",
             "min_repeats": 2,
@@ -278,8 +281,8 @@ class TestSimulateSingleHaplotypeAdvanced:
         assert hr.sequence == expected_seq
         assert hr.sequence.endswith(minimal_config["constants"]["hg38"]["right"])
 
-    def test_simulate_single_haplotype_dead_end_consistency(self, minimal_config: dict):
-        """When simulation hits a dead-end, sequence assembly matches assemble_sequence."""
+    def test_simulate_single_haplotype_dead_end_raises(self, minimal_config: dict):
+        """A Markov dead end raises instead of returning a truncated haplotype (#167)."""
         dead_end_config = {
             "repeats": minimal_config["repeats"],
             "constants": minimal_config["constants"],
@@ -289,14 +292,8 @@ class TestSimulateSingleHaplotypeAdvanced:
                 "2": {},  # Dead end: no next symbol
             },
         }
-        hr = simulate_single_haplotype(dead_end_config, target_length=20)
-        assert [u.symbol for u in hr.chain] == ["1", "2"]
-        expected_seq = assemble_sequence(
-            hr.chain, dead_end_config["repeats"], dead_end_config["constants"]["hg38"]
-        )
-        assert hr.sequence == expected_seq
-        # Right constant omitted because chain does not end in '9'
-        assert not hr.sequence.endswith(minimal_config["constants"]["hg38"]["right"])
+        with pytest.raises(SimulationError, match="No valid next repeat after '2'"):
+            simulate_single_haplotype(dead_end_config, target_length=20)
 
 
 @pytest.mark.unit
@@ -402,3 +399,39 @@ class TestSimulationIntegration:
         # Verify mutations
         assert chain1[2] == RepeatUnit("X", mutated=True)
         assert chain2[3] == RepeatUnit("B", mutated=True)
+
+
+@pytest.mark.unit
+def test_terminal_block_follows_transition_table():
+    """With the shipped config, V precedes 6/6p and 6p->8 occurs (issue #179)."""
+    config = load_config(str(Path(__file__).resolve().parents[1] / "config.json"))
+    results = simulate_diploid(
+        config, num_haplotypes=300, fixed_lengths=[40] * 300, rng=random.Random(179)
+    )
+
+    v_before = six_p_to_8 = 0
+    for hr in results:
+        chain = hr.chain_strs()
+        assert len(chain) == 40
+        assert chain[-2:] == ["8", "9"]
+        idx = next(i for i, sym in enumerate(chain) if sym in ("6", "6p"))
+        v_before += chain[idx - 1] == "V"
+        six_p_to_8 += chain[idx] == "6p" and chain[idx + 1] == "8"
+
+    assert v_before / len(results) >= 0.9
+    assert six_p_to_8 > 0
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("tail_rows", "match"),
+    [
+        ({}, "stuck at '6'.*no transitions"),  # 6 has no row
+        ({"6": {"7": 1.0}, "7": {"7": 1.0}}, "stuck at '7'.*over 8 units"),  # never reaches 9
+    ],
+)
+def test_terminal_block_raises_when_table_cannot_reach_9(minimal_config, tail_rows, match):
+    """A table whose terminal block never reaches 9 raises instead of dropping the flank."""
+    minimal_config["probabilities"] = {"1": {"2": 1.0}, "V": {"6": 1.0}, **tail_rows}
+    with pytest.raises(SimulationError, match=match):
+        simulate_single_haplotype(minimal_config, target_length=20, rng=random.Random(0))

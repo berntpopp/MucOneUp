@@ -312,8 +312,10 @@ def run_split_simulation(
             output_dir = output_fastq.parent
             # NanoSim writes plain-text FASTQ; only claim .gz when it is gzipped
             ext = ".fastq.gz" if str(hap1_fastq).endswith(".gz") else ".fastq"
-            final_hap1_fastq = str(output_dir / f"hap1_reads{ext}")
-            final_hap2_fastq = str(output_dir / f"hap2_reads{ext}")
+            # Prefix with the output stem so samples sharing a directory don't overwrite
+            stem = Path(output_fastq.name.removesuffix(".gz")).stem
+            final_hap1_fastq = str(output_dir / f"{stem}_hap1_reads{ext}")
+            final_hap2_fastq = str(output_dir / f"{stem}_hap2_reads{ext}")
             shutil.copy(hap1_fastq, final_hap1_fastq)
             shutil.copy(hap2_fastq, final_hap2_fastq)
             logging.info("Kept intermediate files: %s, %s", final_hap1_fastq, final_hap2_fastq)

@@ -173,7 +173,7 @@ class TestRunPipelineErrors:
             run_pipeline(
                 [
                     [sys.executable, "-c", "print('data')"],
-                    [sys.executable, "-c", "import sys; sys.exit(2)"],
+                    [sys.executable, "-c", "import sys; sys.stdin.read(); sys.exit(2)"],
                 ],
                 capture=True,
             )

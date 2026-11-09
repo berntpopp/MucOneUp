@@ -39,8 +39,8 @@ Understanding MUC1 VNTR variation requires robust computational tools that gener
 
 Probability-based repeat transitions following biological constraints:
 
-- Configurable repeat distributions (normal/uniform sampling)
-- Canonical terminal block enforcement (6/6p → 7 → 8 → 9)
+- Configurable repeat distributions (normal sampling)
+- Canonical terminal block enforcement (V → 6/6p → 7 → 8 → 9)
 - Diploid haplotype generation with independent alleles
 - Structure file support for reproducible mutations
 

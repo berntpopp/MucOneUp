@@ -457,10 +457,12 @@ class TestIlluminaEndToEnd:
 
         # Parse
         seq_name_to_haplotype = {"haplotype_1": 1, "haplotype_2": 2}
-        origins = parse_illumina_reads(
-            sidecar_path,
-            str(fastq_path),
-            seq_name_to_haplotype,
+        origins = list(
+            parse_illumina_reads(
+                sidecar_path,
+                str(fastq_path),
+                seq_name_to_haplotype,
+            )
         )
         assert len(origins) == 3
 
@@ -520,20 +522,24 @@ class TestIlluminaEndToEnd:
         sidecar_path = str(tmp_path / "fragment_origins.tsv")
         write_fragment_origins(fragments, sidecar_path)
 
-        origins = parse_illumina_reads(
-            sidecar_path,
-            None,  # no FASTQ
-            {"haplotype_1": 1},
+        origins = list(
+            parse_illumina_reads(
+                sidecar_path,
+                None,  # no FASTQ
+                {"haplotype_1": 1},
+            )
         )
         assert len(origins) == 1
         assert origins[0].read_id == "fragment_0"
 
     def test_illumina_missing_sidecar(self, tmp_path):
         """Parser returns empty list when sidecar file is missing."""
-        origins = parse_illumina_reads(
-            str(tmp_path / "nonexistent.tsv"),
-            None,
-            {},
+        origins = list(
+            parse_illumina_reads(
+                str(tmp_path / "nonexistent.tsv"),
+                None,
+                {},
+            )
         )
         assert origins == []
 
@@ -722,7 +728,7 @@ class TestCrossPlatformConsistency:
             ],
             str(sidecar),
         )
-        ill_origins = parse_illumina_reads(str(sidecar), None, {"haplotype_1": 1})
+        ill_origins = list(parse_illumina_reads(str(sidecar), None, {"haplotype_1": 1}))
 
         # All three should produce same region: hap1, 70-90
         assert ont_origins[0].ref_start == pb_origins[0].ref_start == ill_origins[0].ref_start

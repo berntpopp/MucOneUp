@@ -148,7 +148,7 @@ class TestAlignAndRefine:
             penalty_factor=0.39,
             seed=42,
             threads=4,
-            vntr_region=None,
+            vntr_region={"chr": "chr1", "start": 100000, "end": 200000, "name": "VNTR"},
             capture_bed=None,
             flanking_size=10000,
             samtools_cmd="samtools",
@@ -191,6 +191,51 @@ class TestAlignAndRefine:
         )
 
         assert mock_vntr_cls.call_args[1]["seed"] == 42
+
+    @pytest.mark.parametrize(
+        "vntr_config, expected",
+        [
+            # No explicit region: the hg19 assembly region is used, not hg38
+            ({}, {"chr": "chr1", "start": 155160963, "end": 155162030, "name": "VNTR"}),
+            # Explicit override still wins
+            (
+                {"vntr_region": {"chr": "chr2", "start": 1, "end": 9, "name": "X"}},
+                {"chr": "chr2", "start": 1, "end": 9, "name": "X"},
+            ),
+        ],
+    )
+    def test_vntr_region_follows_assembly(self, mocker, tmp_path, tools, vntr_config, expected):
+        """VNTR bias region defaults to the assembly's region (#160)."""
+        mocker.patch(f"{MODULE}.align_reads")
+        mocker.patch("shutil.rmtree")
+        mock_model = mocker.MagicMock()
+        mock_model.apply_efficiency_bias.return_value = {"reads_kept": 100}
+        mock_vntr_cls = mocker.patch(f"{MODULE}.VNTREfficiencyModel", return_value=mock_model)
+
+        align_and_refine(
+            tools=tools,
+            rs_config={
+                "threads": 4,
+                "vntr_capture_efficiency": {
+                    "enabled": True,
+                    "validation": {"report_statistics": False},
+                    **vntr_config,
+                },
+            },
+            r1=str(tmp_path / "r1.fastq.gz"),
+            r2=str(tmp_path / "r2.fastq.gz"),
+            human_ref="/ref/hg19.fa",
+            output_dir=tmp_path,
+            output_base="test_sample",
+            assembly_ctx=AssemblyContext(
+                assembly_name="hg19",
+                left_constant="",
+                right_constant="",
+                vntr_region="chr1:155160963-155162030",
+            ),
+        )
+
+        assert mock_vntr_cls.call_args[1]["vntr_region"] == expected
 
     def test_vntr_failure_propagates_error(self, mocker, tmp_path, tools, assembly_ctx):
         """If VNTR model raises, the error propagates without falling back."""

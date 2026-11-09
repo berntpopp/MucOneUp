@@ -11,7 +11,7 @@ import click
 
 from .._common import require_config
 from ..error_handling import cli_error_handler
-from ..outputs import check_unique_output_bases, generate_output_base
+from ..outputs import batch_output_bases
 
 # ============================================================================
 # ANALYZE Command Group - Pure Analysis Utilities
@@ -93,34 +93,16 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
     left_const = assembly_constants.get("left")
     right_const = assembly_constants.get("right")
 
-    if out_base is not None:
-        from ..config import validate_output_base
-
-        validate_output_base(out_base)
-
-    # Warn if --out-base provided for multiple files
-    if len(input_fastas) > 1 and out_base:
-        logging.warning(
-            "--out-base '%s' will be used for all %d files. "
-            "Consider omitting --out-base for auto-generated names.",
-            out_base,
-            len(input_fastas),
-        )
-
-    if not out_base:
-        check_unique_output_bases(input_fastas, "_orfs")
+    out_bases = batch_output_bases(input_fastas, out_base, "_orfs")
 
     # Process each file (KISS principle - simple iteration)
     total_files = len(input_fastas)
     logging.info("Processing %d FASTA file(s) for ORF prediction", total_files)
 
-    for idx, input_fasta in enumerate(input_fastas, start=1):
+    for idx, (input_fasta, actual_out_base) in enumerate(
+        zip(input_fastas, out_bases, strict=True), start=1
+    ):
         from ..analysis import run_orf_analysis_standalone
-
-        if out_base:
-            actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
-        else:
-            actual_out_base = generate_output_base(Path(input_fasta), "_orfs")
 
         logging.info(
             "[%d/%d] Running ORF prediction: %s -> %s",
@@ -184,57 +166,21 @@ def stats(ctx, input_fastas, out_dir, out_base):
       # Glob pattern (shell expands)
       muconeup analyze stats sample.*.simulated.fa
     """
-    if out_base is not None:
-        from ..config import validate_output_base
+    from ..analysis import read_fasta_records
 
-        validate_output_base(out_base)
-
-    # Warn if --out-base provided for multiple files
-    if len(input_fastas) > 1 and out_base:
-        logging.warning(
-            "--out-base '%s' will be used for all %d files. "
-            "Consider omitting --out-base for auto-generated names.",
-            out_base,
-            len(input_fastas),
-        )
-
-    if not out_base:
-        check_unique_output_bases(input_fastas, "_stats")
+    out_bases = batch_output_bases(input_fastas, out_base, "_stats")
     Path(out_dir).mkdir(parents=True, exist_ok=True)
 
     # Process each file (KISS principle - simple iteration)
     total_files = len(input_fastas)
     logging.info("Processing %d FASTA file(s) for statistics generation", total_files)
 
-    for idx, input_fasta in enumerate(input_fastas, start=1):
-        # Determine output base name
-        if out_base:
-            # User provided: use as-is (or append index for multiple files)
-            actual_out_base = f"{out_base}_{idx:03d}" if total_files > 1 else out_base
-        else:
-            # Auto-generate from input filename
-            actual_out_base = generate_output_base(Path(input_fasta), "_stats")
-
+    for idx, (input_fasta, actual_out_base) in enumerate(
+        zip(input_fastas, out_bases, strict=True), start=1
+    ):
         logging.info("[%d/%d] Generating statistics: %s", idx, total_files, input_fasta)
 
-        # Simple FASTA parsing
-        sequences: list[tuple[str, str]] = []
-        current_header: str | None = None
-        current_seq: list[str] = []
-
-        with Path(input_fasta).open() as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith(">"):
-                    if current_header is not None:
-                        sequences.append((current_header, "".join(current_seq)))
-                    current_header = line[1:]
-                    current_seq = []
-                elif line:
-                    current_seq.append(line)
-
-            if current_header is not None:
-                sequences.append((current_header, "".join(current_seq)))
+        sequences = [(r.description, str(r.seq)) for r in read_fasta_records(Path(input_fasta))]
 
         # Compute stats
         stats_data: dict[str, Any] = {

@@ -415,3 +415,26 @@ def test_keep_intermediate_files_keeps_work_dir(
     work_dir = mock_prep.call_args.kwargs["work_dir"]
     assert work_dir.parent == tmp_path and work_dir.is_dir()
     assert mock_metadata.call_args.kwargs["tools_used"] == ["pbsim3", "samtools"]
+
+
+@pytest.mark.parametrize(("params_coverage", "expected"), [(None, 30), (7, 7)])
+def test_molecule_count_ignores_illumina_coverage(
+    ont_amplicon_config, tmp_path, params_coverage, expected
+):
+    """Molecule count is ont_amplicon_params.coverage, else 30; never read_simulation (#181)."""
+    from muc_one_up.read_simulator.ont_amplicon_pipeline import simulate_ont_amplicon_pipeline
+
+    ont_amplicon_config["read_simulation"]["coverage"] = 150
+    if params_coverage is not None:
+        ont_amplicon_config["ont_amplicon_params"]["coverage"] = params_coverage
+    fasta = tmp_path / "input.fa"
+    fasta.write_text(">seq\nACGT\n")
+    with (
+        patch(
+            "muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons",
+            side_effect=RuntimeError("stop"),
+        ) as prep,
+        pytest.raises(RuntimeError, match="stop"),
+    ):
+        simulate_ont_amplicon_pipeline(ont_amplicon_config, str(fasta))
+    assert prep.call_args.kwargs["total_coverage"] == expected

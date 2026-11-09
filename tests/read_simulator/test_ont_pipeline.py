@@ -150,7 +150,7 @@ class TestOutputPathGeneration:
         mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
-        result = simulate_ont_reads_pipeline(config, str(input_fa))
+        result = simulate_ont_reads_pipeline(config, str(input_fa), human_reference="ref.fa")
 
         # Assert: Check that output prefix was used correctly
         assert mock_nanosim.call_count == 1
@@ -286,38 +286,6 @@ class TestWrapperIntegration:
         assert call_kwargs["threads"] == 16
         assert call_kwargs["output_bam"].endswith("input_ont.bam")
 
-    def test_uses_input_fa_as_reference_when_human_ref_not_provided(self, mocker, tmp_path):
-        """Test that input_fa is used for alignment if human_reference is None."""
-        input_fa = tmp_path / "input.fa"
-        input_fa.write_text(">chr1\nACGT\n")
-
-        config = {
-            "tools": {
-                "nanosim": "nanosim",
-                "minimap2": "minimap2",
-                "samtools": "samtools",
-            },
-            "nanosim_params": {
-                "training_data_path": "model",
-                "coverage": 30,
-            },
-        }
-
-        # Mock wrapper functions
-        mock_nanosim = mocker.patch("muc_one_up.read_simulator.ont_pipeline.run_nanosim_simulation")
-        mock_nanosim.return_value = str(tmp_path / "reads.fastq")
-
-        mock_align = mocker.patch(
-            "muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2"
-        )
-
-        # Act: Don't provide human_reference
-        simulate_ont_reads_pipeline(config, str(input_fa))
-
-        # Assert: input_fa should be used as reference
-        call_kwargs = mock_align.call_args[1]
-        assert call_kwargs["reference"] == str(input_fa)
-
 
 class TestDefaultParameters:
     """Test default parameter handling."""
@@ -349,7 +317,7 @@ class TestDefaultParameters:
         )
 
         # Act
-        simulate_ont_reads_pipeline(config, str(input_fa))
+        simulate_ont_reads_pipeline(config, str(input_fa), human_reference="ref.fa")
 
         # Assert: Default threads = 4
         nanosim_kwargs = mock_nanosim.call_args[1]
@@ -481,7 +449,7 @@ class TestErrorHandling:
 
         # Act & Assert
         with pytest.raises(RuntimeError, match="ONT read alignment failed"):
-            simulate_ont_reads_pipeline(config, str(input_fa))
+            simulate_ont_reads_pipeline(config, str(input_fa), human_reference="ref.fa")
 
 
 class TestReturnValue:
@@ -511,7 +479,7 @@ class TestReturnValue:
         mocker.patch("muc_one_up.read_simulator.ont_pipeline.align_reads_with_minimap2")
 
         # Act
-        result = simulate_ont_reads_pipeline(config, str(input_fa))
+        result = simulate_ont_reads_pipeline(config, str(input_fa), human_reference="ref.fa")
 
         # Assert
         assert result.endswith("sample_ont.bam")
@@ -569,7 +537,7 @@ class TestDiploidSplitSimulation:
         config["read_simulation"] = {"keep_intermediate_files": keep}
 
         # Act
-        result = simulate_ont_reads_pipeline(config, str(input_fa))
+        result = simulate_ont_reads_pipeline(config, str(input_fa), human_reference="ref.fa")
 
         # Assert
         mock_split_sim.assert_called_once()
