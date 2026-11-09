@@ -118,15 +118,26 @@ class TestResolveHumanReference:
 
     def test_explicit_human_reference_wins_over_reference_genomes(self, tmp_path):
         _, config = self._genomes(tmp_path)
-        config["read_simulation"] = {"human_reference": "/explicit.fa"}
+        explicit = tmp_path / "explicit.fa"
+        explicit.write_text(">c\nA\n")
+        config["read_simulation"] = {"human_reference": str(explicit)}
 
-        assert resolve_human_reference(config, _ctx(), "bwa") == "/explicit.fa"
+        assert resolve_human_reference(config, _ctx(), "bwa") == str(explicit)
 
     def test_assembly_keyed_reference_wins(self, tmp_path):
         _, config = self._genomes(tmp_path)
+        asm = tmp_path / "asm.fa"
+        asm.write_text(">c\nA\n")
         config["read_simulation"] = {"human_reference": "/explicit.fa"}
 
-        assert resolve_human_reference(config, _ctx("/asm.fa"), "bwa") == "/asm.fa"
+        assert resolve_human_reference(config, _ctx(str(asm)), "bwa") == str(asm)
+
+    def test_missing_explicit_reference_raises(self, tmp_path):
+        _, config = self._genomes(tmp_path)
+        config["read_simulation"] = {"human_reference": str(tmp_path / "gone.fa")}
+
+        with pytest.raises(ConfigurationError, match=r"not found.*gone\.fa"):
+            resolve_human_reference(config, _ctx(), "bwa")
 
     def test_falls_back_to_reference_genomes(self, tmp_path):
         ref, config = self._genomes(tmp_path)
@@ -179,6 +190,7 @@ class TestCreatePipelineMetadata:
             "Illumina",
             tools_used,
             extra_rows=None,
+            seed=None,
         )
         assert result == str(output_dir / "base_metadata.tsv")
 

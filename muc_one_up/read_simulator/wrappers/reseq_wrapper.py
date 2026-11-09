@@ -98,9 +98,16 @@ RESEQ_MAX_FRAGMENTS = 10_000
 
 
 def _is_legacy_reseq(reseq_cmd: str) -> bool:
-    """True unless the tool reports ReSeq2 (version >= 2); unknown counts as legacy (safe)."""
+    """True only if the tool reports a 1.x version; unknown ("N/A") counts as ReSeq2 (shipped)."""
     version = get_tool_version(reseq_cmd, "reseq")
-    return re.search(r"version\s+([2-9]|\d{2,})", version) is None
+    legacy = version != "N/A" and re.search(r"version\s+([2-9]|\d{2,})", version) is None
+    if version == "N/A":
+        logging.warning("ReSeq version unknown; assuming ReSeq2 (no input chunking)")
+    else:
+        logging.info(
+            "Detected %s; using %s mode", version, "legacy chunked" if legacy else "ReSeq2"
+        )
+    return legacy
 
 
 def _split_fasta(path: str, max_records: int, prefix: str) -> list[str]:
