@@ -32,6 +32,7 @@ def run_single_simulation_iteration(
     mutation_pair,
     structure_mutation_info,
     rng=None,
+    config_fingerprint=None,
 ):
     """Run complete simulation iteration with all processing steps.
 
@@ -51,6 +52,7 @@ def run_single_simulation_iteration(
         mutation_pair: Tuple of (normal_name, mutated_name) for dual mode
         structure_mutation_info: Mutation metadata from structure file comments
         rng: Optional random number generator instance
+        config_fingerprint: Precomputed config fingerprint for provenance
 
     Returns:
         None (all outputs written to files)
@@ -144,4 +146,5 @@ def run_single_simulation_iteration(
         applied_snp_info_mut,
         mutation_positions=mutation_positions,
         mutated_units=mutated_units,
+        config_fingerprint=config_fingerprint,
     )

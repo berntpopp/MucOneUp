@@ -52,6 +52,7 @@ def write_simulation_statistics(
     applied_snp_info_mut,
     mutation_positions=None,
     mutated_units=None,
+    config_fingerprint=None,
 ):
     """Generate and write simulation statistics with provenance metadata.
 
@@ -68,6 +69,7 @@ def write_simulation_statistics(
             config=config,
             start_time=iteration_start,
             end_time=iteration_end,
+            config_fingerprint=config_fingerprint,
         )
     except Exception as e:
         # Graceful degradation: simulation continues even if provenance fails

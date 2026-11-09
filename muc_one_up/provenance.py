@@ -265,6 +265,7 @@ def collect_provenance_metadata(
     config: dict[str, Any],
     start_time: float,
     end_time: float,
+    config_fingerprint: str | None = None,
 ) -> dict[str, Any]:
     """
     Collect comprehensive provenance metadata.
@@ -280,6 +281,7 @@ def collect_provenance_metadata(
         config: Configuration dictionary
         start_time: Simulation start time (Unix timestamp, float)
         end_time: Simulation end time (Unix timestamp, float)
+        config_fingerprint: Precomputed fingerprint (avoids rehashing per iteration)
 
     Returns:
         Provenance metadata dictionary with keys:
@@ -330,7 +332,7 @@ def collect_provenance_metadata(
 
     # Config fingerprint (may fail with complex configs)
     try:
-        provenance["config_fingerprint"] = compute_config_fingerprint(config)
+        provenance["config_fingerprint"] = config_fingerprint or compute_config_fingerprint(config)
     except Exception as e:
         logger.error(f"Failed to compute config fingerprint: {e}")
         provenance["config_fingerprint"] = "error:fingerprint_failed"
