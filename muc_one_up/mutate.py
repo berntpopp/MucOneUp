@@ -42,6 +42,7 @@ See Also:
 import logging
 import random as _random_module
 
+from .simulation_statistics import extract_vntr_region, get_repeat_lengths
 from .type_defs import (
     AssemblyConstants,
     ConfigDict,
@@ -153,21 +154,8 @@ def apply_mutations(
         if hr._repeat_lengths is not None and len(hr._repeat_lengths) == len(hr.chain):
             lengths_by_hap.append(list(hr._repeat_lengths))
         else:
-            lengths = [len(repeats_dict[ru.symbol]) for ru in hr.chain]
-            if sum(1 for ru in hr.chain if ru.mutated) == 1:
-                right_flank_len = (
-                    len(constants.get("right", ""))
-                    if (
-                        not hr.chain
-                        or hr.chain[-1].symbol == "9"
-                        or hr.sequence.endswith(constants.get("right", ""))
-                    )
-                    else 0
-                )
-                delta = len(hr.sequence) - left_len - right_flank_len - sum(lengths)
-                mut_idx = next(i for i, ru in enumerate(hr.chain) if ru.mutated)
-                lengths[mut_idx] += delta
-            lengths_by_hap.append(lengths)
+            vntr_len = len(extract_vntr_region(hr.sequence, config, chain=hr.chain))
+            lengths_by_hap.append(get_repeat_lengths(hr.chain, config, vntr_length=vntr_len))
     mutated_units: dict[
         int, list[tuple[int, str]]
     ] = {}  # key: haplotype (1-based), value: list of (repeat_index, mutated_unit_sequence)

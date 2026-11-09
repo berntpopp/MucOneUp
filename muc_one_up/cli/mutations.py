@@ -143,7 +143,10 @@ def apply_mutation_pipeline(
         try:
             mutated_results, mutated_units = apply_mutations(
                 config=config,
-                results=[HaplotypeResult(hr.sequence, list(hr.chain)) for hr in results],
+                results=[
+                    HaplotypeResult(hr.sequence, list(hr.chain), hr._repeat_lengths)
+                    for hr in results
+                ],
                 mutation_name=mutation_pair[1],
                 targets=mutation_positions,
                 rng=rng,
