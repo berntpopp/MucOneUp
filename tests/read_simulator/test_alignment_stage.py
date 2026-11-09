@@ -95,7 +95,8 @@ class TestAlignAndRefine:
             assembly_ctx=assembly_ctx,
         )
 
-        call_args, _call_kwargs = mock_align.call_args
+        call_args, call_kwargs = mock_align.call_args
+        assert call_kwargs["timeout"] == rs_config_basic.get("alignment_timeout")
         # Positional args: r1, r2, human_ref, output_bam, tools, threads
         assert call_args[0] == r1
         assert call_args[1] == r2

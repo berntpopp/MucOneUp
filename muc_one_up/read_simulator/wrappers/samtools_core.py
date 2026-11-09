@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-Samtools core operations: reference extraction, sorting/indexing, and merging.
+Samtools core operations: reference extraction and merging.
 
 This module provides wrapper functions for fundamental samtools operations:
 - extract_subset_reference: Extract reference sequences from BAM files
-- sort_and_index_bam: Sort and index BAM files
 - merge_bam_files: Merge multiple BAM files into a single BAM
 """
 
@@ -14,7 +13,7 @@ from pathlib import Path
 from ...exceptions import FileOperationError
 from ..command_utils import build_tool_command
 from ..utils import run_command
-from ..utils.samtools import build_merge_args, build_sort_args
+from ..utils.samtools import build_merge_args
 
 
 def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, str]) -> str:
@@ -35,7 +34,7 @@ def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, s
     # Get the base directory and name for intermediate files
     output_path = Path(output_fa)
     output_dir = output_path.parent
-    output_base = output_path.name.replace(".fa", "").replace(".fasta", "")
+    output_base = output_path.name.removesuffix(".fasta").removesuffix(".fa")
 
     # Create intermediate filenames
     collated_bam = str(output_dir / f"{output_base}_collated.bam")
@@ -59,53 +58,6 @@ def extract_subset_reference(sample_bam: str, output_fa: str, tools: dict[str, s
         )
 
     return collated_bam
-
-
-def sort_and_index_bam(
-    samtools_exe: str,
-    input_bam: str,
-    output_bam: str | None = None,
-    threads: int = 4,
-    by_name: bool = False,
-) -> str:
-    """
-    Sort and index a BAM file.
-
-    Args:
-        samtools_exe: Path to the samtools executable.
-        input_bam: Input BAM file to sort.
-        output_bam: Output sorted BAM file. If None, replaces input_bam with sorted version.
-        threads: Number of threads to use.
-        by_name: If True, sort by read name instead of coordinate.
-
-    Returns:
-        Path to the sorted BAM file.
-
-    Raises:
-        SystemExit: If any samtools command fails.
-    """
-    if output_bam is None:
-        output_bam = input_bam
-
-    temp_bam = f"{output_bam}.sorting.bam"
-
-    sort_cmd = build_tool_command(
-        samtools_exe,
-        *build_sort_args(input_bam, temp_bam, threads=threads, by_name=by_name),
-    )
-
-    run_command(sort_cmd, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
-
-    temp_bam_path = Path(temp_bam)
-    output_bam_path = Path(output_bam)
-    if temp_bam_path.exists():
-        temp_bam_path.replace(output_bam_path)
-
-    if not by_name:
-        cmd = build_tool_command(samtools_exe, "index", output_bam)
-        run_command(cmd, timeout=60, stderr_prefix="[samtools] ", stderr_log_level=logging.INFO)
-
-    return output_bam
 
 
 def merge_bam_files(

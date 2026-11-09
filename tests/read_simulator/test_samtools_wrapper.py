@@ -12,6 +12,9 @@ These tests verify that our wrapper correctly:
 4. Validates inputs and outputs appropriately
 """
 
+import shutil
+import subprocess
+from collections import Counter
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -27,7 +30,6 @@ from muc_one_up.read_simulator.wrappers.samtools_wrapper import (
     convert_sam_to_bam,
     downsample_entire_bam,
     extract_subset_reference,
-    sort_and_index_bam,
 )
 
 
@@ -323,103 +325,58 @@ class TestDownsampleBAM:
         assert view_cmd[at_index + 1] == "8"
 
 
+SAMTOOLS = shutil.which("samtools")
+TEST_BAM = Path(__file__).parents[1] / "data" / "sample.001.normal.simulated_vntr_biased.bam"
+
+
+def _primary_counts(bam: Path) -> Counter:
+    """Count primary records per read name for paired reads."""
+    out = subprocess.run(
+        [SAMTOOLS, "view", "-f", "1", "-F", "0x900", str(bam)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return Counter(line.split("\t", 1)[0] for line in out.splitlines())
+
+
+@pytest.mark.skipif(SAMTOOLS is None, reason="samtools not on PATH")
 class TestDownsampleBamRegion:
-    """Test downsample_bam region-specific two-pass downsampling."""
+    """Regression: region downsampling must keep read pairs intact (audit #3)."""
 
-    def test_two_pass_approach_constructs_correct_commands(self, mocker, tmp_path):
-        """Test that downsample_bam uses -L/-U pass then -L/-s pass."""
+    @pytest.mark.parametrize("with_keep_bed", [False, True])
+    def test_no_orphan_mates_after_downsampling(self, tmp_path, with_keep_bed):
+        from muc_one_up.read_simulator.utils.bed import create_region_bed
         from muc_one_up.read_simulator.wrappers.samtools_coverage import downsample_bam
 
+        # Input with complete pairs only (the fixture BAM already has orphans)
+        names = tmp_path / "complete.txt"
+        names.write_text("".join(f"{n}\n" for n, c in _primary_counts(TEST_BAM).items() if c == 2))
         input_bam = tmp_path / "input.bam"
-        output_bam = tmp_path / "output.bam"
-        input_bam.write_bytes(b"BAM_DATA")
+        subprocess.run(
+            [SAMTOOLS, "view", "-b", "-N", str(names), "-o", str(input_bam), str(TEST_BAM)],
+            check=True,
+        )
+        region_bed = create_region_bed(tmp_path / "vntr.bed", "chr1", 155188486, 155192239)
+        keep_bed = None
+        if with_keep_bed:
+            keep_bed = create_region_bed(tmp_path / "flank.bed", "chr1", 155178486, 155188486)
 
-        commands_called = []
+        output_bam = tmp_path / "out.bam"
+        downsample_bam(SAMTOOLS, input_bam, output_bam, region_bed, 0.3, 7, 1, keep_bed)
 
-        def mock_popen_side_effect(cmd, **kwargs):
-            commands_called.append(cmd)
-            mock_proc = Mock()
-            mock_proc.returncode = 0
-            mock_proc.stdout = Mock()
-            mock_proc.stderr = Mock()
-            mock_proc.stdout.readline = Mock(return_value=b"")
-            mock_proc.stderr.readline = Mock(return_value=b"")
-            mock_proc.wait = Mock(return_value=0)
-            mock_proc.pid = 12345
+        counts = _primary_counts(output_bam)
+        assert counts, "downsampling removed every read"
+        assert {n: c for n, c in counts.items() if c != 2} == {}
+        assert sum(counts.values()) < sum(_primary_counts(input_bam).values())
+        assert Path(f"{output_bam}.bai").exists()
+        assert sorted(p.name for p in tmp_path.glob("out*")) == ["out.bam", "out.bam.bai"]
 
-            # Create expected intermediate/output files
-            for c in cmd:
-                if str(c).endswith(".bam") and cmd[0] != "samtools":
-                    pass
-            # Create region_only, other_regions, and output BAMs
-            region_only = str(output_bam).replace(".bam", "_region_only.bam")
-            other_regions = str(output_bam).replace(".bam", "_other_regions.bam")
-            Path(region_only).write_bytes(b"REGION")
-            Path(other_regions).write_bytes(b"OTHER")
-            output_bam.write_bytes(b"MERGED")
-            Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
-
-            return mock_proc
-
-        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
-
-        downsample_bam("samtools", str(input_bam), str(output_bam), "chr1:100-200", 0.5, 42, 4)
-
-        # Should have 4 commands: pass1 (view -L -U), pass2 (view --subsample -L), merge, index
-        assert len(commands_called) == 4
-
-        # Pass 1: -L and -U present, no subsampling
-        pass1 = commands_called[0]
-        assert "-L" in pass1
-        assert "-U" in pass1
-        assert "--subsample" not in pass1
-
-        # Pass 2: --subsample and -L present, no -U, no deprecated -s
-        pass2 = commands_called[1]
-        assert "-s" not in pass2
-        assert "-L" in pass2
-        assert "-U" not in pass2
-        assert pass2[pass2.index("--subsample") + 1] == "0.5"
-        assert pass2[pass2.index("--subsample-seed") + 1] == "42"
-
-        # BED file created and cleaned up (verified in test_creates_and_cleans_up_temp_files)
-
-    def test_creates_and_cleans_up_temp_files(self, mocker, tmp_path):
-        """Test that BED and intermediate BAMs are cleaned up."""
+    def test_rejects_invalid_fraction(self, tmp_path):
         from muc_one_up.read_simulator.wrappers.samtools_coverage import downsample_bam
 
-        input_bam = tmp_path / "input.bam"
-        output_bam = tmp_path / "output.bam"
-        input_bam.write_bytes(b"BAM_DATA")
-
-        def mock_popen_side_effect(cmd, **kwargs):
-            mock_proc = Mock()
-            mock_proc.returncode = 0
-            mock_proc.stdout = Mock()
-            mock_proc.stderr = Mock()
-            mock_proc.stdout.readline = Mock(return_value=b"")
-            mock_proc.stderr.readline = Mock(return_value=b"")
-            mock_proc.wait = Mock(return_value=0)
-            mock_proc.pid = 12345
-
-            # Create all intermediate files that the function expects
-            for suffix in ["_region_only.bam", "_other_regions.bam"]:
-                Path(str(output_bam).replace(".bam", suffix)).write_bytes(b"DATA")
-            output_bam.write_bytes(b"MERGED")
-            Path(str(output_bam) + ".bai").write_bytes(b"INDEX")
-
-            return mock_proc
-
-        mocker.patch("subprocess.Popen", side_effect=mock_popen_side_effect)
-
-        downsample_bam("samtools", str(input_bam), str(output_bam), "chr1:100-200", 0.3, 42, 4)
-
-        # Intermediate files should be cleaned up
-        assert not Path(str(output_bam).replace(".bam", "_region_only.bam")).exists()
-        assert not Path(str(output_bam).replace(".bam", "_other_regions.bam")).exists()
-        assert not Path(str(output_bam).replace(".bam", "_region.bed")).exists()
-        # Output should exist
-        assert output_bam.exists()
+        with pytest.raises(ValueError, match="Fraction"):
+            downsample_bam(SAMTOOLS, "in.bam", tmp_path / "o.bam", "r.bed", 0.0, 1, 1)
 
 
 class TestConvertSamToBam:
@@ -634,153 +591,3 @@ class TestCountFastqReads:
 
         with pytest.raises(ValidationError, match="not found"):
             count_fastq_reads(missing_fastq)
-
-
-class TestSortAndIndexBam:
-    """Test sort_and_index_bam sorting and indexing."""
-
-    def test_constructs_correct_sort_command(self, mocker, tmp_path):
-        """Test that samtools sort command is constructed correctly."""
-        # Arrange
-        input_bam = tmp_path / "input.bam"
-        output_bam = tmp_path / "output.bam"
-        input_bam.write_bytes(b"BAM data")
-
-        commands_called = []
-
-        # Mock run_command to track calls and create outputs
-        def mock_run_cmd(cmd, **kwargs):
-            commands_called.append(cmd)
-            if "sort" in cmd:
-                # Create temporary sorting file
-                temp_bam = tmp_path / "output.bam.sorting.bam"
-                temp_bam.write_bytes(b"SORTED BAM")
-            elif "index" in cmd:
-                # Create index file
-                (tmp_path / "output.bam.bai").write_bytes(b"INDEX")
-
-        mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
-            side_effect=mock_run_cmd,
-        )
-
-        # Act
-        result = sort_and_index_bam(
-            samtools_exe="samtools", input_bam=str(input_bam), output_bam=str(output_bam), threads=8
-        )
-
-        # Assert: Verify sort command
-        sort_calls = [c for c in commands_called if "sort" in c]
-        assert len(sort_calls) >= 1
-        sort_cmd = sort_calls[0]
-
-        assert "samtools" in sort_cmd
-        assert "sort" in sort_cmd
-        assert "-@" in sort_cmd
-        assert "8" in sort_cmd
-        assert str(input_bam) in sort_cmd
-
-        # Verify return value
-        assert result == str(output_bam)
-
-    def test_sorts_by_name_when_requested(self, mocker, tmp_path):
-        """Test that sort by name uses -n flag."""
-        # Arrange
-        input_bam = tmp_path / "input.bam"
-        output_bam = tmp_path / "output.bam"
-        input_bam.write_bytes(b"BAM data")
-
-        commands_called = []
-
-        def mock_run_cmd(cmd, **kwargs):
-            commands_called.append(cmd)
-            if "sort" in cmd:
-                temp_bam = tmp_path / "output.bam.sorting.bam"
-                temp_bam.write_bytes(b"SORTED BAM")
-
-        mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
-            side_effect=mock_run_cmd,
-        )
-
-        # Act
-        sort_and_index_bam(
-            samtools_exe="samtools",
-            input_bam=str(input_bam),
-            output_bam=str(output_bam),
-            by_name=True,
-        )
-
-        # Assert: Verify -n flag is present
-        sort_calls = [c for c in commands_called if "sort" in c]
-        assert len(sort_calls) >= 1
-        sort_cmd = sort_calls[0]
-        assert "-n" in sort_cmd
-
-        # Verify index command was NOT called (name-sorted BAMs aren't indexed)
-        index_calls = [c for c in commands_called if "index" in c]
-        assert len(index_calls) == 0
-
-    def test_creates_index_for_coordinate_sorted(self, mocker, tmp_path):
-        """Test that coordinate-sorted BAMs are indexed."""
-        # Arrange
-        input_bam = tmp_path / "input.bam"
-        output_bam = tmp_path / "output.bam"
-        input_bam.write_bytes(b"BAM data")
-
-        commands_called = []
-
-        def mock_run_cmd(cmd, **kwargs):
-            commands_called.append(cmd)
-            if "sort" in cmd:
-                temp_bam = tmp_path / "output.bam.sorting.bam"
-                temp_bam.write_bytes(b"SORTED BAM")
-            elif "index" in cmd:
-                (tmp_path / "output.bam.bai").write_bytes(b"INDEX")
-
-        mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
-            side_effect=mock_run_cmd,
-        )
-
-        # Act
-        sort_and_index_bam(
-            samtools_exe="samtools",
-            input_bam=str(input_bam),
-            output_bam=str(output_bam),
-            by_name=False,  # Coordinate sort
-        )
-
-        # Assert: Verify index command was called
-        index_calls = [c for c in commands_called if "index" in c]
-        assert len(index_calls) >= 1
-        index_cmd = index_calls[0]
-        assert "samtools" in index_cmd
-        assert "index" in index_cmd
-        assert str(output_bam) in index_cmd
-
-    def test_replaces_input_when_output_is_none(self, mocker, tmp_path):
-        """Test that output_bam=None replaces input file."""
-        # Arrange
-        input_bam = tmp_path / "input.bam"
-        input_bam.write_bytes(b"BAM data")
-
-        def mock_run_cmd(cmd, **kwargs):
-            if "sort" in cmd:
-                temp_bam = tmp_path / "input.bam.sorting.bam"
-                temp_bam.write_bytes(b"SORTED BAM")
-            elif "index" in cmd:
-                (tmp_path / "input.bam.bai").write_bytes(b"INDEX")
-
-        mocker.patch(
-            "muc_one_up.read_simulator.wrappers.samtools_core.run_command",
-            side_effect=mock_run_cmd,
-        )
-
-        # Act
-        result = sort_and_index_bam(
-            samtools_exe="samtools", input_bam=str(input_bam), output_bam=None
-        )
-
-        # Assert: Output should be same as input (in-place sort)
-        assert result == str(input_bam)
