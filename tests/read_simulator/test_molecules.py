@@ -78,6 +78,33 @@ class TestHomopolymerRunCase:
         runs = list(homopolymer_runs("AAcCcGNNNNNTttt", 3))
         assert runs == [(2, 5, "C"), (11, 15, "T")]
 
+    def test_regex_scan_matches_reference_loop(self) -> None:
+        """The regex scan (#188) yields exactly what the old per-character loop did."""
+
+        def reference(seq: str, min_len: int) -> list[tuple[int, int, str]]:
+            upper, out, i = seq.upper(), [], 0
+            while i < len(upper):
+                j = i
+                while j < len(upper) and upper[j] == upper[i]:
+                    j += 1
+                if j - i >= min_len and upper[i] in "ACGT":
+                    out.append((i, j, upper[i]))
+                i = j
+            return out
+
+        rng = random.Random(188)
+        seqs = ["", "A", "N", "a", "AAAA", "NNNN", "aAaA", "ACGT"]
+        seqs += [
+            "".join(rng.choice("AACCGTacgtNn") for _ in range(rng.randint(0, 60)))
+            for _ in range(300)
+        ]
+        for seq in seqs:
+            for min_len in (0, 1, 2, 3, 4, 7):
+                assert list(homopolymer_runs(seq, min_len)) == reference(seq, min_len), (
+                    seq,
+                    min_len,
+                )
+
     def test_stutter_on_lowercase_run_keeps_case(self) -> None:
         shorter = StutterTable.from_dict({"C3|+": {"-1": 1.0}})
         longer = StutterTable.from_dict({"C3|+": {"2": 1.0}})

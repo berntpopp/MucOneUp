@@ -416,6 +416,34 @@ class TestValidatePbsim3Parameters:
                 length_max=30000,
             )
 
+    def test_low_accuracy_mean_with_default_accuracy_min_is_valid(self):
+        """accuracy_min never reaches pbsim3, so it must not reject accuracy_mean < 0.75 (#186)."""
+        validate_pbsim3_parameters(
+            coverage=30,
+            pass_num=3,
+            accuracy_mean=0.7,
+            accuracy_sd=0.05,
+            accuracy_min=0.75,
+            length_mean=15000,
+            length_min=5000,
+            length_max=30000,
+        )
+
+    def test_rejects_negative_length_sd(self):
+        """length_sd must be >= 0 (#186)."""
+        with pytest.raises(ValueError, match="Invalid length_sd"):
+            validate_pbsim3_parameters(
+                coverage=30,
+                pass_num=3,
+                accuracy_mean=0.85,
+                accuracy_sd=0.05,
+                accuracy_min=0.75,
+                length_mean=15000,
+                length_min=5000,
+                length_max=30000,
+                length_sd=-1,
+            )
+
     def test_validates_length_constraints(self):
         """Test length_max >= length_min and length_mean in range."""
         # length_max < length_min
