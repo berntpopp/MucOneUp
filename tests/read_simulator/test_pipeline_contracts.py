@@ -213,7 +213,9 @@ class TestONTOutputNaming:
         input_fa.write_text(">seq1\nACGT\n")
 
         oc = OutputConfig(out_dir=out_dir, out_base="myont")
-        result = simulate_ont_reads_pipeline(_ont_config(), str(input_fa), output_config=oc)
+        result = simulate_ont_reads_pipeline(
+            _ont_config(), str(input_fa), output_config=oc, human_reference="ref.fa"
+        )
 
         assert "myont" in result
         assert "original_name" not in result

@@ -218,6 +218,7 @@ def simulate_ont_amplicon_pipeline(
                 tools_used=["pbsim3", "samtools"]
                 + (["minimap2"] if human_reference is not None else []),
                 extra_rows=[("Read_truth", truth_name)] if model is not None else None,
+                seed=seed,
             )
 
             return final_output

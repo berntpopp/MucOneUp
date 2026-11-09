@@ -155,5 +155,6 @@ def simulate_ont_fragment_pipeline(
         platform="ONT",
         tools_used=["pbsim3", "samtools"] + (["minimap2"] if human_reference else []),
         extra_rows=[("Read_truth", truth.name)],
+        seed=seed,
     )
     return final_output

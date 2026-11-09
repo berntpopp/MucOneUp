@@ -44,8 +44,8 @@ def apply_tracking_and_alignment(
     if track_read_source:
         rs["track_read_source"] = True
     if no_align:
-        # Dropping the reference is not enough: NanoSim falls back to aligning
-        # against the simulated FASTA, so pipelines check skip_alignment (#116).
+        # Pipelines check skip_alignment so --no-align skips alignment even when
+        # a reference_genomes entry would otherwise be resolved (#116).
         rs.pop("human_reference", None)
         rs["skip_alignment"] = True
         logging.info("--no-align: alignment skipped; output is FASTQ")

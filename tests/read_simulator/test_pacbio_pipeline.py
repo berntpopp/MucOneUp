@@ -664,6 +664,52 @@ class TestPacBioHiFiPipeline:
         assert not partial_sam.exists()
         assert not partial_maf.exists()
 
+    def test_failed_alignment_keeps_hifi_fastq(self, mocker, tmp_path):
+        """Issue #176: a minimap2 failure must not delete the final HiFi FASTQ."""
+        input_fa = tmp_path / "input.fa"
+        input_fa.write_text(">chr1\nACGTACGTACGT\n")
+        (tmp_path / "model.model").write_text("model data")
+        config = {
+            "tools": {"pbsim3": "pbsim", "ccs": "ccs", "samtools": "samtools"},
+            "pacbio_params": {
+                "model_type": "qshmm",
+                "model_file": str(tmp_path / "model.model"),
+                "coverage": 30,
+                "pass_num": 3,
+                "min_passes": 3,
+                "min_rq": 0.99,
+            },
+        }
+        hifi_fastq = tmp_path / "input_hifi.fastq"
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_pbsim3_simulation",
+            return_value=[str(tmp_path / "input_clr.bam")],
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.run_ccs_consensus",
+            return_value=str(tmp_path / "input_hifi.bam"),
+        )
+
+        def make_fastq(**kwargs):
+            hifi_fastq.write_text("@r\nACGT\n+\nIIII\n")
+            return str(hifi_fastq)
+
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.convert_bam_to_fastq",
+            side_effect=make_fastq,
+        )
+        mocker.patch(
+            "muc_one_up.read_simulator.pacbio_pipeline.align_reads_with_minimap2",
+            side_effect=RuntimeError("minimap2 failed"),
+        )
+
+        with pytest.raises(RuntimeError, match="minimap2 failed"):
+            simulate_pacbio_hifi_reads(
+                config=config, input_fa=str(input_fa), human_reference=str(input_fa)
+            )
+
+        assert hifi_fastq.exists()
+
     def test_propagates_external_tool_error_directly(self, mocker, tmp_path):
         """Test Issue #150: ExternalToolError propagates directly without RuntimeError wrapping."""
         from muc_one_up.exceptions import ExternalToolError

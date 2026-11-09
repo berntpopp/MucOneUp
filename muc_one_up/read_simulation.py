@@ -114,10 +114,12 @@ def _resolve_alignment_reference(config: dict[str, Any], simulator: str) -> str 
     if rs.get("skip_alignment"):
         return None
     aligner = "bwa" if simulator == "illumina" else "minimap2"
+    ctx = AssemblyContext.from_configs(config, rs)
     try:
-        return resolve_human_reference(config, AssemblyContext.from_configs(config, rs), aligner)
+        return resolve_human_reference(config, ctx, aligner)
     except ConfigurationError as exc:
-        if simulator == "illumina":
+        # An explicitly configured but missing reference is always fatal (#176)
+        if simulator == "illumina" or ctx.human_reference or rs.get("human_reference"):
             raise
         logging.warning("%s: %s", simulator.upper(), exc)
         return None
