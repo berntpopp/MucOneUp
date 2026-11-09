@@ -116,7 +116,6 @@ class LengthModelConfig(TypedDict):
     min_repeats: int
     max_repeats: int
     mean_repeats: int
-    median_repeats: int
 
 
 class AssemblyConstants(TypedDict, total=False):

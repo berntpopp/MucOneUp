@@ -17,7 +17,7 @@ def sample_repeat_count(
 
     Args:
         length_model: Dictionary with keys 'distribution', 'min_repeats', 'max_repeats',
-                     'mean_repeats', 'median_repeats'
+                     'mean_repeats'
         rng: Optional explicit Random instance. Defaults to global random module.
 
     Returns:
