@@ -1718,6 +1718,63 @@ class TestAuditCliFixes:
         assert fa_a == (tmp_path / "b" / "s.001.simulated.fa").read_text()
 
     @pytest.mark.parametrize(
+        "platform, option, value",
+        [
+            ("illumina", "--coverage", "0"),
+            ("illumina", "--coverage", "-5"),
+            ("illumina", "--threads", "0"),
+            ("illumina", "--read-number", "0"),
+            ("ont", "--min-read-length", "0"),
+            ("ont", "--n-reads", "-1"),
+            ("pacbio", "--threads", "0"),
+        ],
+    )
+    def test_reads_rejects_non_positive_values(
+        self, runner, temp_config_file, tmp_path, platform, option, value
+    ):
+        """Zero/negative counts, threads and coverage are rejected at parse time (#169)."""
+        fasta = tmp_path / "in.fa"
+        fasta.write_text(">x\nACGT\n")
+        result = runner.invoke(
+            cli,
+            ["--config", str(temp_config_file), "reads", platform, str(fasta), option, value],
+        )
+        assert result.exit_code == 2, result.output
+        assert "Invalid value" in result.output
+
+    def test_dual_mode_reuses_structure_targets(self, runner, temp_config_file, tmp_path):
+        """Dual mode reuses structure-file targets and keeps normal markers clean (#161)."""
+        chain = ["1", "2"] + ["X"] * 30 + ["6", "7", "8", "9"]
+        chain[24] = "Xm"
+        plain = ["1", "2"] + ["X"] * 30 + ["6", "7", "8", "9"]
+        struct = tmp_path / "struct.txt"
+        struct.write_text(
+            "# Mutation Applied: dupC (Targets: [(1, 25)])\n"
+            f"haplotype_1\t{'-'.join(chain)}\nhaplotype_2\t{'-'.join(plain)}\n"
+        )
+        out = tmp_path / "out"
+        result = self._simulate(
+            runner,
+            temp_config_file,
+            out,
+            "--seed",
+            "1",
+            "--input-structure",
+            str(struct),
+            "--mutation-name",
+            "normal,dupC",
+            "--output-structure",
+        )
+        assert result.exit_code == 0, result.output
+        normal = (out / "s.001.normal.vntr_structure.txt").read_text()
+        mut = (out / "s.001.mut.vntr_structure.txt").read_text()
+        assert "(1, 25)" in mut.splitlines()[0]
+        assert "m" not in normal.split("\n", 1)[1]
+        hap1, hap2 = (line.split("\t")[1] for line in mut.splitlines()[1:3])
+        assert hap1.split("-")[24] == "Xm"
+        assert (hap1 + "-" + hap2).count("m") == 1
+
+    @pytest.mark.parametrize(
         "extra, message",
         [
             (["--fixed-lengths", "25", "--simulate-series", "5"], "--simulate-series requires"),

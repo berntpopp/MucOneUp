@@ -315,7 +315,7 @@ def process_mutation_config(
                 args.mutation_name,
             )
         if not getattr(args, "mutation_targets", None) and (
-            args.mutation_name == structure_mutation_info["name"]
+            args.mutation_name.split(",")[-1].strip() == structure_mutation_info["name"]
         ):
             target_tuples = structure_mutation_info["targets"]
             args.mutation_targets = [f"{hap_idx},{rep_idx}" for hap_idx, rep_idx in target_tuples]
