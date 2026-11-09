@@ -106,7 +106,7 @@ haplotype_2 1-2-3-4-5-C-X-B-X-A-X-B-A-6p-7-8-9
 **Understanding the structure:**
 
 - Dash-separated symbols represent repeat units
-- Terminal block (6/6p → 7 → 8 → 9) is always present
+- Terminal block (V → 6/6p → 7 → 8 → 9) is always present
 - Symbols defined in `config.json` (1, 2, 3, X, A, B, C, 6, 6p, 7, 8, 9)
 
 ---

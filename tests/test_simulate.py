@@ -9,10 +9,12 @@ Following modern testing best practices:
 """
 
 import random
+from pathlib import Path
 
 import pytest
 
 from muc_one_up.assembly import assemble_sequence
+from muc_one_up.config import load_config
 from muc_one_up.mutate import apply_mutations
 from muc_one_up.simulate import (
     pick_next_symbol_no_end,
@@ -402,3 +404,24 @@ class TestSimulationIntegration:
         # Verify mutations
         assert chain1[2] == RepeatUnit("X", mutated=True)
         assert chain2[3] == RepeatUnit("B", mutated=True)
+
+
+@pytest.mark.unit
+def test_terminal_block_follows_transition_table():
+    """With the shipped config, V precedes 6/6p and 6p->8 occurs (issue #179)."""
+    config = load_config(str(Path(__file__).resolve().parents[1] / "config.json"))
+    results = simulate_diploid(
+        config, num_haplotypes=300, fixed_lengths=[40] * 300, rng=random.Random(179)
+    )
+
+    v_before = six_p_to_8 = 0
+    for hr in results:
+        chain = hr.chain_strs()
+        assert len(chain) == 40
+        assert chain[-2:] == ["8", "9"]
+        idx = next(i for i, sym in enumerate(chain) if sym in ("6", "6p"))
+        v_before += chain[idx - 1] == "V"
+        six_p_to_8 += chain[idx] == "6p" and chain[idx + 1] == "8"
+
+    assert v_before / len(results) >= 0.9
+    assert six_p_to_8 > 0

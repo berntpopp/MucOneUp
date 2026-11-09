@@ -12,9 +12,9 @@ Key Functions:
     simulate_from_chains: Simulate haplotypes from predefined repeat chains
 
 Design:
-    All haplotypes enforce canonical terminal block (6/6p → 7 → 8 → 9) to match
-    biological MUC1 structure. Probability transitions prevent premature
-    termination during chain building.
+    All haplotypes end with the terminal block V → 6/6p → 7 → 8 → 9 (6p may skip
+    to 8), drawn from the transition table, to match biological MUC1 structure.
+    Probability transitions prevent premature termination during chain building.
 
 Example:
     Basic diploid simulation::
@@ -34,6 +34,7 @@ See Also:
 
 import logging
 import random as _random_module
+import types
 
 from .assembly import assemble_sequence
 from .distribution import sample_repeat_count
@@ -81,6 +82,31 @@ def pick_next_symbol_no_end(
     chosen = _rng.choices(symbols, weights=weights, k=1)[0]
     logging.debug("Picked next symbol '%s' from '%s'.", chosen, current_symbol)
     return str(chosen) if chosen is not None else None
+
+
+def _draw_terminal_block(
+    probabilities: ProbabilitiesDict,
+    rng: _random_module.Random | types.ModuleType,
+) -> list[str]:
+    """Draw the terminal block V -> 6/6p -> ... -> 9 from the transition table.
+
+    6 vs 6p comes from V's row restricted to {6, 6p}; later units follow the
+    table (END excluded) until 9. Tables without a V -> 6/6p row fall back to
+    the fixed block 6/6p -> 7 -> 8 -> 9.
+    """
+    v_row = probabilities.get("V", {})
+    terminals = {sym: w for sym, w in v_row.items() if sym in ("6", "6p") and w > 0}
+    if not terminals:
+        return [rng.choice(["6", "6p"]), "7", "8", "9"]
+
+    block = ["V", rng.choices(list(terminals), weights=list(terminals.values()), k=1)[0]]
+    # ponytail: stops after 8 units if the table never reaches 9 (malformed config).
+    while block[-1] != "9" and len(block) < 8:
+        row = {sym: w for sym, w in probabilities.get(block[-1], {}).items() if sym != "END"}
+        if not row:
+            break
+        block.append(rng.choices(list(row), weights=list(row.values()), k=1)[0])
+    return block
 
 
 def simulate_from_chains(
@@ -182,7 +208,8 @@ def simulate_single_haplotype(
     """Build single haplotype by chaining repeats probabilistically.
 
     Chains repeats according to configured probabilities to reach target length.
-    Enforces canonical terminal block: 6/6p -> 7 -> 8 -> 9 at the end.
+    Ends with the terminal block V -> 6/6p -> 7 -> 8 -> 9 (or 6p -> 8 -> 9),
+    drawn from the transition table; the block counts toward target_length.
 
     Config sections accessed:
         - config["probabilities"]: state transition weights
@@ -217,20 +244,18 @@ def simulate_single_haplotype(
     repeat_chain: list[RepeatUnit] = []
     current_symbol = "1"
     total_repeats = 0
-    final_block_start = target_length - 4
+    # Drawn up front: its length (6p->8 skips 7) decides where the body must stop.
+    terminal_block = _draw_terminal_block(probabilities, _rng)
+    final_block_start = target_length - len(terminal_block)
 
     while True:
         repeat_chain.append(RepeatUnit(current_symbol))
         total_repeats += 1
 
         if total_repeats == final_block_start:
-            forced_6 = _rng.choice(["6", "6p"])
-            logging.debug("Forcing terminal block: %s, 7, 8, 9", forced_6)
-            repeat_chain.append(RepeatUnit(forced_6))
-            repeat_chain.append(RepeatUnit("7"))
-            repeat_chain.append(RepeatUnit("8"))
-            repeat_chain.append(RepeatUnit("9"))
-            total_repeats += 4
+            logging.debug("Forcing terminal block: %s", ", ".join(terminal_block))
+            repeat_chain.extend(RepeatUnit(sym) for sym in terminal_block)
+            total_repeats += len(terminal_block)
             break
 
         if total_repeats >= target_length:
