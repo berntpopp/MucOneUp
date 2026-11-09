@@ -12,7 +12,7 @@ def test_load_config_valid(tmp_path):
     config_data = {
         "repeats": {"1": "ABC"},
         "constants": {"left": "AAA", "right": "TTT"},
-        "probabilities": {"1": {"2": 1.0}},
+        "probabilities": {"1": {"END": 1.0}},
         "length_model": {
             "distribution": "normal",
             "min_repeats": 10,
@@ -365,15 +365,24 @@ _LM = {"distribution": "normal", "min_repeats": 10, "max_repeats": 50, "mean_rep
         ("length_model", {**_LM, "min_repeats": 10.5}),
         ("mutations", {"m": {"allowed_repeats": ["X"], "changes": [
             {"type": "delete", "start": 1.5, "end": 2}]}}),
+        ("length_model", {**_LM, "distribution": "normall"}),
+        ("mutations", {"m": {"allowed_repeats": ["X"], "changes": [
+            {"type": "insert", "start": 0, "end": 1, "sequence": "A"}]}}),
+        ("mutations", {"m": {"allowed_repeats": ["X"], "changes": [
+            {"type": "delete", "start": 1, "end": 0}]}}),
+        ("probabilities", {"X": {"END": 0}}),
+        ("probabilities", {"X": {"END": -0.5}}),
+        ("probabilities", {"X": {"Y": 1.0}}),
     ],
 )  # fmt: skip
 def test_validate_simulation_config_rejects_values_that_fail_mid_batch(section, value):
-    """min_repeats < 10 and non-integer positions must fail at config load, not mid-run."""
+    """Bad lengths, typos, 0-based positions, non-positive weights and unknown
+    transition targets must fail at config load, not mid-run."""
     from muc_one_up.config import validate_simulation_config
     from muc_one_up.exceptions import ConfigurationError
 
     cfg = {"repeats": {"X": "A"}, "constants": {}, "probabilities": {}, section: value}
-    with pytest.raises(ConfigurationError, match=f"section '{section}'"):
+    with pytest.raises(ConfigurationError, match="Invalid configuration"):
         validate_simulation_config(cfg)
 
 

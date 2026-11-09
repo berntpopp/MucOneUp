@@ -240,27 +240,11 @@ Distribution parameters for sampling VNTR repeat counts.
 - Sample from normal distribution (μ=63.3, σ derived from median)
 - Clip to [42, 85] range
 
-### Uniform Distribution
-
-```json
-{
-  "length_model": {
-    "distribution": "uniform",
-    "min_repeats": 40,
-    "max_repeats": 100
-  }
-}
-```
-
-**Behavior:**
-
-- Sample uniformly from [40, 100]
-
 ### Fields
 
 | Field | Type | Description | Required |
 |-------|------|-------------|----------|
-| `distribution` | string | "normal" or "uniform" | Yes |
+| `distribution` | string | Must be "normal" | Yes |
 | `mean_repeats` | float | Mean for normal distribution | If normal |
 | `median_repeats` | float | Informational only; not used for sampling | No |
 | `min_repeats` | integer | Minimum repeat count (at least 10) | Yes |

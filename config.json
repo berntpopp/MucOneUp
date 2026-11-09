@@ -221,7 +221,7 @@
         }
       ],
       "type": "real",
-      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2025.09.06.673538"
     },
     "insG": {
       "allowed_repeats": [
@@ -365,7 +365,7 @@
         }
       ],
       "type": "real",
-      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2025.09.06.673538"
     },
     "insG_pos58": {
       "allowed_repeats": [
@@ -381,7 +381,7 @@
         }
       ],
       "type": "real",
-      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2025.09.06.673538"
     },
     "insG_pos54": {
       "allowed_repeats": [
@@ -397,7 +397,7 @@
         }
       ],
       "type": "real",
-      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2025.09.06.673538"
     },
     "insA_pos54": {
       "allowed_repeats": [
@@ -413,7 +413,7 @@
         }
       ],
       "type": "real",
-      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2025.09.06.673538"
     },
     "del18_31": {
       "allowed_repeats": [
@@ -427,7 +427,7 @@
         }
       ],
       "type": "real",
-      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2025.09.06.673538"
     },
     "ins16bp": {
       "allowed_repeats": [
@@ -442,7 +442,7 @@
         }
       ],
       "type": "real",
-      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2024.11.14.623419"
+      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2025.09.06.673538"
     },
     "insCCC_benign": {
       "allowed_repeats": [

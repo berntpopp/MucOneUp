@@ -16,7 +16,7 @@ Configuration Sections:
     - repeats: Mapping of repeat symbols (1, 2, X, A, B...) to DNA sequences
     - constants: Left/right flanking sequences for hg19 and hg38 assemblies
     - probabilities: State transition matrix for repeat chain generation
-    - length_model: Distribution parameters (normal/uniform) for VNTR length
+    - length_model: Distribution parameters (normal) for VNTR length
     - mutations: Named mutation definitions with allowed_repeats and changes
     - tools: Command paths for external tools (reseq, bwa, samtools...)
     - read_simulation: Parameters for Illumina pipeline (coverage, threads...)
@@ -233,13 +233,14 @@ CONFIG_SCHEMA: dict[str, Any] = {
             "type": "object",
             "additionalProperties": {
                 "type": "object",
-                "additionalProperties": {"type": "number"},
+                "additionalProperties": {"type": "number", "exclusiveMinimum": 0},
             },
         },
         "length_model": {
             "type": "object",
             "properties": {
-                "distribution": {"type": "string"},
+                # sample_repeat_count only implements "normal"
+                "distribution": {"type": "string", "enum": ["normal"]},
                 # simulate_single_haplotype rejects chains shorter than 10 repeats
                 "min_repeats": {"type": "integer", "minimum": 10},
                 "max_repeats": {"type": "integer", "minimum": 10},
@@ -277,8 +278,9 @@ CONFIG_SCHEMA: dict[str, Any] = {
                                         "delete_insert",
                                     ],
                                 },
-                                "start": {"type": "integer"},
-                                "end": {"type": "integer"},
+                                # 1-based positions (insert at start=1 prepends)
+                                "start": {"type": "integer", "minimum": 1},
+                                "end": {"type": "integer", "minimum": 1},
                                 "sequence": {"type": "string"},
                             },
                             "required": ["type", "start", "end"],
@@ -564,6 +566,19 @@ CONFIG_SCHEMA: dict[str, Any] = {
 }
 
 
+def _check_transition_targets(config: dict[str, Any]) -> None:
+    """Raise ValidationError if a transition targets neither a known repeat nor END."""
+    if "repeats" in config and "probabilities" in config:
+        valid_targets = set(config["repeats"]) | {"END"}
+        for source, targets in config["probabilities"].items():
+            unknown = set(targets) - valid_targets
+            if unknown:
+                raise ValidationError(
+                    f"Transitions from '{source}' target unknown repeats: "
+                    f"{', '.join(sorted(unknown))}"
+                )
+
+
 def load_config(config_path: str) -> dict[str, Any]:
     """Load and validate MucOneUp configuration from JSON file.
 
@@ -639,6 +654,8 @@ def load_config(config_path: str) -> dict[str, Any]:
                     "Config format is outdated. Please add 'reference_genomes' section "
                     "with proper fasta_path values. See documentation for details."
                 )
+
+        _check_transition_targets(config)
 
         # Extra validation for allowed_repeats in mutations
         if "repeats" in config and "mutations" in config:
@@ -758,6 +775,10 @@ def validate_simulation_config(config: dict[str, Any]) -> None:
                     raise ConfigurationError(
                         f"Invalid configuration in section '{section}': {e.message}"
                     ) from e
+    try:
+        _check_transition_targets(config)
+    except ValidationError as e:
+        raise ConfigurationError(f"Invalid configuration: {e.message}") from e
 
 
 # Known path fields organized by config section
