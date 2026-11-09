@@ -19,25 +19,21 @@ from muc_one_up.type_defs import RepeatUnit
 def e2e_config_base() -> dict[str, Any]:
     """Base config with tool paths discovered from PATH."""
     tools: dict[str, str] = {}
-    for tool in [
-        "samtools",
-        "bwa",
-        "minimap2",
-        "reseq",
-        "faToTwoBit",
-        "pblat",
-        "ccs",
-        "nanosim",
-    ]:
-        path = shutil.which(tool)
+    # config key -> real binary name
+    for key, binary in {
+        "samtools": "samtools",
+        "bwa": "bwa",
+        "minimap2": "minimap2",
+        "reseq": "reseq",
+        "faToTwoBit": "faToTwoBit",
+        "pblat": "pblat",
+        "ccs": "ccs",
+        "nanosim": "simulator.py",
+        "pbsim3": "pbsim",
+    }.items():
+        path = shutil.which(binary)
         if path:
-            tools[tool] = path
-    # pbsim3 may be installed as "pbsim"
-    for name in ["pbsim3", "pbsim"]:
-        path = shutil.which(name)
-        if path:
-            tools["pbsim3"] = path
-            break
+            tools[key] = path
     return {"tools": tools}
 
 
