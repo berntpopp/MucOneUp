@@ -11,7 +11,7 @@ import click
 
 from .._common import require_config
 from ..error_handling import cli_error_handler
-from ..outputs import generate_output_base
+from ..outputs import check_unique_output_bases, generate_output_base
 
 # ============================================================================
 # ANALYZE Command Group - Pure Analysis Utilities
@@ -107,6 +107,9 @@ def orfs(ctx, input_fastas, out_dir, out_base, orf_min_aa, orf_aa_prefix):
             len(input_fastas),
         )
 
+    if not out_base:
+        check_unique_output_bases(input_fastas, "_orfs")
+
     # Process each file (KISS principle - simple iteration)
     total_files = len(input_fastas)
     logging.info("Processing %d FASTA file(s) for ORF prediction", total_files)
@@ -194,6 +197,10 @@ def stats(ctx, input_fastas, out_dir, out_base):
             out_base,
             len(input_fastas),
         )
+
+    if not out_base:
+        check_unique_output_bases(input_fastas, "_stats")
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
 
     # Process each file (KISS principle - simple iteration)
     total_files = len(input_fastas)

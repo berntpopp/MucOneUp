@@ -33,7 +33,7 @@ The `reads amplicon` command produces full-length amplicon reads that mimic targ
 # 1. Generate diploid reference with different VNTR lengths
 muconeup --config config.json simulate \
   --fixed-lengths 40 --fixed-lengths 70 \
-  --seed 42 --out-base output/sample
+  --seed 42 --out-dir output --out-base sample
 
 # 2a. PacBio amplicon reads (default)
 muconeup --config config.json reads amplicon \

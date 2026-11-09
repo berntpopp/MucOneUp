@@ -32,7 +32,7 @@ Following Unix philosophy: **one command, one purpose**.
 ### Minimal Command
 
 ```bash
-muconeup --config config.json simulate --out-base output/sample
+muconeup --config config.json simulate --out-dir output --out-base sample
 ```
 
 **Result:** Diploid FASTA with random VNTR lengths sampled from distribution in `config.json`.
@@ -51,7 +51,7 @@ output/
 ```bash
 muconeup --config config.json simulate \
   --output-structure \
-  --out-base output/sample
+  --out-dir output --out-base sample
 ```
 
 **Output:**
@@ -79,7 +79,7 @@ haplotype_2 1-2-3-4-5-C-X-B-X-A-X-B-A-6p-7-8-9
 ```bash
 muconeup --config config.json simulate \
   --output-structure \
-  --out-base output/sample
+  --out-dir output --out-base sample
 ```
 
 Statistics are generated automatically alongside the simulation output.
@@ -114,7 +114,7 @@ Generate haplotypes with exactly N repeats:
 # Both haplotypes: 60 repeats
 muconeup --config config.json simulate \
   --fixed-lengths 60 \
-  --out-base output/fixed_60
+  --out-dir output --out-base fixed_60
 ```
 
 **Use cases:**
@@ -131,7 +131,7 @@ Sample from distribution defined in `config.json`:
 
 ```bash
 muconeup --config config.json simulate \
-  --out-base output/random_length
+  --out-dir output --out-base random_length
 ```
 
 **Distribution configured in config.json:**
@@ -158,26 +158,37 @@ muconeup --config config.json simulate \
 
 ### Series Generation (Parameter Sweeps)
 
-Generate multiple simulations across a length range:
+Generate multiple simulations across a length range. `--simulate-series N` is a
+**step size**: each `--fixed-lengths` range is walked from start to end in steps of
+`N` (the end value is always included). One `--fixed-lengths` value applies to every
+haplotype, and the series runs **every combination** of the per-haplotype values.
+`--simulate-series` requires at least one `--fixed-lengths` range.
 
 ```bash
-# Generate 5 samples: 40, 50, 60, 70, 80 repeats
+# Haplotype 1: 40, 50, 60, 70, 80 repeats; haplotype 2 fixed at 60 -> 5 samples
 muconeup --config config.json simulate \
   --fixed-lengths 40-80 \
-  --simulate-series 5 \
-  --out-base output/series
+  --fixed-lengths 60 \
+  --simulate-series 10 \
+  --out-dir output \
+  --out-base series
 ```
 
 **Output:**
 
 ```
 output/
-├── series.001.simulated.fa    # 40 repeats
-├── series.002.simulated.fa    # 50 repeats
-├── series.003.simulated.fa    # 60 repeats
-├── series.004.simulated.fa    # 70 repeats
-└── series.005.simulated.fa    # 80 repeats
+├── series.001.simulated.fa    # 40 + 60 repeats
+├── series.002.simulated.fa    # 50 + 60 repeats
+├── series.003.simulated.fa    # 60 + 60 repeats
+├── series.004.simulated.fa    # 70 + 60 repeats
+└── series.005.simulated.fa    # 80 + 60 repeats
 ```
+
+!!! warning "Iteration count grows with the product"
+    With a single range, both haplotypes sweep it: `--fixed-lengths 40-80
+    --simulate-series 10` runs 5 × 5 = 25 iterations, and `--simulate-series 5`
+    runs 9 × 9 = 81.
 
 **Progress tracking:**
 
@@ -201,7 +212,7 @@ Choose human genome assembly (hg19 or hg38):
 # Use hg38 (default)
 muconeup --config config.json simulate \
   --reference-assembly hg38 \
-  --out-base output/hg38_sample
+  --out-dir output --out-base hg38_sample
 ```
 
 **Assembly differences:**
@@ -231,7 +242,7 @@ EOF
 # Generate sequences from structure
 muconeup --config config.json simulate \
   --input-structure custom_structure.txt \
-  --out-base output/from_structure
+  --out-dir output --out-base from_structure
 ```
 
 **Use cases:**
@@ -361,14 +372,14 @@ Enable detailed logging:
 
 ```bash
 muconeup --verbose --config config.json simulate \
-  --out-base output/sample
+  --out-dir output --out-base sample
 ```
 
 **Alternative:**
 
 ```bash
 muconeup --log-level DEBUG --config config.json simulate \
-  --out-base output/sample
+  --out-dir output --out-base sample
 ```
 
 ---
@@ -383,7 +394,7 @@ Generate normal and mutated pairs:
 muconeup --config config.json simulate \
   --mutation-name normal,dupC \
   --mutation-targets 1,25 \
-  --out-base output/dual
+  --out-dir output --out-base dual
 ```
 
 **Output:**
@@ -409,9 +420,9 @@ Specify exact positions:
 ```bash
 muconeup --config config.json simulate \
   --mutation-name dupC \
-  --mutation-targets 1,25 2,30 \
+  --mutation-targets 1,25 --mutation-targets 2,30 \
   --output-structure \
-  --out-base output/targeted
+  --out-dir output --out-base targeted
 ```
 
 **Mutation applied:**
@@ -438,7 +449,7 @@ Let MucOneUp select positions:
 ```bash
 muconeup --config config.json simulate \
   --mutation-name dupC \
-  --out-base output/random_mut
+  --out-dir output --out-base random_mut
 ```
 
 **Behavior:**
@@ -459,7 +470,7 @@ Generate random single nucleotide polymorphisms:
 muconeup --config config.json simulate \
   --random-snps \
   --random-snp-density 1.0 \
-  --out-base output/with_snps
+  --out-dir output --out-base with_snps
 ```
 
 **Density:** SNPs per 1000 bp (1.0 = ~1 SNP per kb)
@@ -482,7 +493,7 @@ EOF
 # Apply SNPs
 muconeup --config config.json simulate \
   --snp-input-file snps.tsv \
-  --out-base output/snp_file
+  --out-dir output --out-base snp_file
 ```
 
 **File format:**
@@ -572,7 +583,7 @@ Use non-default configuration:
 
 ```bash
 muconeup --config /path/to/custom_config.json simulate \
-  --out-base output/sample
+  --out-dir output --out-base sample
 ```
 
 ---
@@ -584,15 +595,15 @@ Control verbosity:
 ```bash
 # Minimal output
 muconeup --log-level ERROR --config config.json simulate \
-  --out-base output/sample
+  --out-dir output --out-base sample
 
 # Detailed debug output
 muconeup --log-level DEBUG --config config.json simulate \
-  --out-base output/sample
+  --out-dir output --out-base sample
 
 # No logging
 muconeup --log-level NONE --config config.json simulate \
-  --out-base output/sample
+  --out-dir output --out-base sample
 ```
 
 **Levels:** DEBUG, INFO, WARNING, ERROR, CRITICAL, NONE
@@ -626,7 +637,7 @@ muconeup --config config.json reads illumina \
 for i in {1..100}; do
   muconeup --config config.json simulate \
     --seed ${i} \
-    --out-base training/sample_${i}
+    --out-dir training --out-base sample_${i}
 done
 ```
 
@@ -638,7 +649,7 @@ done
 # Apply targeted mutation
 muconeup --config config.json simulate \
   --mutation-name dupC \
-  --mutation-targets 1,25 2,30 \
+  --mutation-targets 1,25 --mutation-targets 2,30 \
   --output-structure \
   --out-base mutation_test
 
@@ -758,15 +769,16 @@ Options:
 
 VNTR Length:
   --fixed-lengths INT|RANGE    Fixed repeat count (e.g., 60 or 40-80)
-  --simulate-series INT        Number of iterations for series
+  --simulate-series INT        Step size for a series over --fixed-lengths ranges
 
 Mutations:
   --mutation-name TEXT         Mutation name (or "normal,name" for dual)
-  --mutation-targets TEXT      Targets as "hap,pos" (e.g., "1,25 2,30")
+  --mutation-targets TEXT      Target as "hap,pos"; repeat the flag for more
+                               (e.g., --mutation-targets 1,25 --mutation-targets 2,30)
 
 SNPs:
   --random-snps                Generate random SNPs
-  --random-snp-density FLOAT   SNPs per 1000 bp (default: 0.001)
+  --random-snp-density FLOAT   SNPs per 1000 bp (required with --random-snps)
   --snp-input-file PATH        TSV file with SNPs
 
 Structure:

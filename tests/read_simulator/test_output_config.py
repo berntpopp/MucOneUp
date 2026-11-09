@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from muc_one_up.exceptions import ValidationError
 from muc_one_up.read_simulator.output_config import OutputConfig
 
 
@@ -116,5 +117,5 @@ class TestOutputConfigValidation:
         ],
     )
     def test_invalid_out_base_raises(self, invalid_base: str) -> None:
-        with pytest.raises(ValueError, match="out_base"):
+        with pytest.raises(ValidationError, match="out_base"):
             OutputConfig(out_dir=Path("/tmp"), out_base=invalid_base)
