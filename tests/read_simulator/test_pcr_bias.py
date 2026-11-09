@@ -70,34 +70,11 @@ class TestPCRBiasModelPresets:
         assert model.e_max == pytest.approx(0.95)
 
 
-class TestPCRBiasModelFromParams:
-    """Tests for explicit parameter construction."""
-
-    def test_from_params(self):
-        model = PCRBiasModel.from_params(
-            e_max=0.90,
-            alpha=0.0002,
-            cycles=20,
-        )
-        assert model.e_max == pytest.approx(0.90)
-        assert model.alpha == pytest.approx(0.0002)
-        assert model.cycles == 20
-
-    def test_stochastic_flag(self):
-        model = PCRBiasModel.from_params(
-            e_max=0.95,
-            alpha=0.0001,
-            cycles=25,
-            stochastic=True,
-        )
-        assert model.stochastic is True
-
-
 class TestPCRBiasModelStochastic:
     """Tests for stochastic PCR bias mode."""
 
     def test_stochastic_reproducible_with_seed(self):
-        model = PCRBiasModel.from_params(
+        model = PCRBiasModel(
             e_max=0.95,
             alpha=0.0001,
             cycles=25,
@@ -108,7 +85,7 @@ class TestPCRBiasModelStochastic:
         assert r1 == r2
 
     def test_stochastic_different_seeds_differ(self):
-        model = PCRBiasModel.from_params(
+        model = PCRBiasModel(
             e_max=0.95,
             alpha=0.0001,
             cycles=25,
@@ -119,7 +96,7 @@ class TestPCRBiasModelStochastic:
         assert r1 != r2
 
     def test_stochastic_preserves_total(self):
-        model = PCRBiasModel.from_params(
+        model = PCRBiasModel(
             e_max=0.95,
             alpha=0.0001,
             cycles=25,
@@ -130,7 +107,7 @@ class TestPCRBiasModelStochastic:
 
     def test_stochastic_shorter_allele_tends_higher(self):
         """Over many runs, shorter allele should average more reads."""
-        model = PCRBiasModel.from_params(
+        model = PCRBiasModel(
             e_max=0.95,
             alpha=0.0003,
             cycles=25,
@@ -146,7 +123,7 @@ class TestPCRBiasModelStochastic:
     def test_stochastic_cycles_above_54_raises(self):
         """Reject cycles > 54 in stochastic mode to prevent int64 overflow."""
         with pytest.raises(ValueError, match="cycles must be <= 54 in stochastic mode"):
-            PCRBiasModel.from_params(
+            PCRBiasModel(
                 e_max=0.95,
                 alpha=0.0003,
                 cycles=55,

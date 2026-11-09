@@ -86,24 +86,6 @@ class PCRBiasModel:
         return cls(**params)
 
     @classmethod
-    def from_params(
-        cls,
-        e_max: float,
-        alpha: float,
-        cycles: int,
-        denaturation_time: float = 10.0,
-        stochastic: bool = False,
-    ) -> PCRBiasModel:
-        """Construct from explicit parameters."""
-        return cls(
-            e_max=e_max,
-            alpha=alpha,
-            cycles=cycles,
-            denaturation_time=denaturation_time,
-            stochastic=stochastic,
-        )
-
-    @classmethod
     def from_config(cls, config: dict[str, Any]) -> PCRBiasModel:
         """Construct from a config dictionary.
 
