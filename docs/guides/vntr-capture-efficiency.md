@@ -135,12 +135,6 @@ muconeup --config config.json reads illumina sample.fa --seed 42
   "enabled": true,
   "penalty_factor": 0.39,
   "seed": 42,
-  "vntr_region": {
-    "chr": "chr1",
-    "start": 155188487,
-    "end": 155192239,
-    "name": "MUC1_VNTR"
-  },
   "flanking_size": 10000,
   "validation": {
     "check_duplicates": false,
@@ -163,7 +157,7 @@ muconeup --config config.json reads illumina sample.fa --seed 42
 | `enabled` | boolean | `true` | Enable/disable feature |
 | `penalty_factor` | float | `0.39` | Downsampling fraction (empirical) |
 | `seed` | integer | `42` | Random seed for reproducibility |
-| `vntr_region` | object | MUC1 hg38 | Custom VNTR coordinates |
+| `vntr_region` | object | `read_simulation.vntr_region_<assembly>` | Custom VNTR coordinates (overrides the assembly's region) |
 | `capture_bed` | string | `null` | Optional capture target BED file |
 | `flanking_size` | integer | `10000` | Flanking region size (bp) |
 | `report_statistics` | boolean | `true` | Save coverage statistics JSON |

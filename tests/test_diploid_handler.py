@@ -437,8 +437,8 @@ def test_run_split_simulation_keep_intermediate_references_are_none(diploid_fast
     )
 
     # Plain-text FASTQ keeps a plain .fastq name (not a misleading .fastq.gz)
-    assert result.hap1_fastq == str(temp_dir / "hap1_reads.fastq")
-    assert result.hap2_fastq == str(temp_dir / "hap2_reads.fastq")
+    assert result.hap1_fastq == str(temp_dir / "merged_hap1_reads.fastq")
+    assert result.hap2_fastq == str(temp_dir / "merged_hap2_reads.fastq")
     assert Path(result.hap1_fastq).read_text().startswith("@")
     assert result.hap1_reference is None
     assert result.hap2_reference is None

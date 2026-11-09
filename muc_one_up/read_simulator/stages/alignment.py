@@ -104,6 +104,9 @@ def align_and_refine(
         logger.info("10. Applying VNTR capture efficiency bias")
         penalty_factor: float = vntr_config.get("penalty_factor", 0.39)
         vntr_region = vntr_config.get("vntr_region")
+        if vntr_region is None and assembly_ctx.vntr_region:
+            # Default to the chosen assembly's region, not a hard-coded hg38 one
+            vntr_region = bed.parse_region(assembly_ctx.vntr_region)
         capture_bed = vntr_config.get("capture_bed")
         flanking_size: int = vntr_config.get("flanking_size", 10000)
 
