@@ -38,6 +38,7 @@ import types
 
 from .assembly import assemble_sequence
 from .distribution import sample_repeat_count
+from .exceptions import SimulationError
 from .type_defs import (
     AssemblyConstants,
     ConfigDict,
@@ -93,6 +94,9 @@ def _draw_terminal_block(
     6 vs 6p comes from V's row restricted to {6, 6p}; later units follow the
     table (END excluded) until 9. Tables without a V -> 6/6p row fall back to
     the fixed block 6/6p -> 7 -> 8 -> 9.
+
+    Raises:
+        SimulationError: If the table cannot reach 9 within 8 units.
     """
     v_row = probabilities.get("V", {})
     terminals = {sym: w for sym, w in v_row.items() if sym in ("6", "6p") and w > 0}
@@ -100,11 +104,14 @@ def _draw_terminal_block(
         return [rng.choice(["6", "6p"]), "7", "8", "9"]
 
     block = ["V", rng.choices(list(terminals), weights=list(terminals.values()), k=1)[0]]
-    # ponytail: stops after 8 units if the table never reaches 9 (malformed config).
-    while block[-1] != "9" and len(block) < 8:
+    while block[-1] != "9":
         row = {sym: w for sym, w in probabilities.get(block[-1], {}).items() if sym != "END"}
-        if not row:
-            break
+        if not row or len(block) >= 8:
+            raise SimulationError(
+                f"Terminal block {'-'.join(block)} cannot reach '9': stuck at "
+                f"'{block[-1]}' ({'no transitions' if not row else 'over 8 units'}). "
+                "Check config['probabilities']."
+            )
         block.append(rng.choices(list(row), weights=list(row.values()), k=1)[0])
     return block
 
