@@ -133,3 +133,16 @@ def test_quality_empty_and_tiled() -> None:
     q100 = _quality(0.01, 100, MODEL, rng)
     assert len(q100) == 100
     assert q100[:36] == q100[64:100]
+
+
+def test_errors_next_to_protected_runs_do_not_lengthen_them() -> None:
+    """Insertions/mismatches beside a protected C7 made untracked C8+ (#6)."""
+    import re
+
+    seq = "GGGTGCCCCCCCAGTGG"
+    noisy = EmpiricalErrorModel(0.1, 0.1, 0.1, {1: 0.7, 2: 0.3}, {1: 0.7, 2: 0.3}, 0.0)
+    longest = [
+        max(map(len, re.findall("C+", apply_errors(seq, noisy, random.Random(s))[0])))
+        for s in range(3000)
+    ]
+    assert max(longest) == 7

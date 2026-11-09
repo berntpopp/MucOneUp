@@ -137,8 +137,14 @@ def apply_errors(
     """
     events = events if events is not None else Counter()
     protected = bytearray(len(seq))
-    for start, end, _ in homopolymer_runs(seq, model.hp_min_len):
+    # Unprotected neighbours of a run: never deleted, never become (or insert)
+    # the run's base, so channel errors cannot lengthen a run untracked.
+    guard = [""] * len(seq)
+    for start, end, base in homopolymer_runs(seq, model.hp_min_len):
         protected[start:end] = b"\x01" * (end - start)
+        for j in (start - 1, end):
+            if 0 <= j < len(seq):
+                guard[j] += base
     scale = _read_multiplier(model, rng)
     p_del = min(_MAX_RATE, model.deletion_rate * scale)
     p_ins = p_del + min(_MAX_RATE, model.insertion_rate * scale)
@@ -155,22 +161,23 @@ def apply_errors(
             continue
         events["exposed"] += 1
         draw = rng.random()
-        if draw < p_del:
+        allowed = _BASES.translate({ord(b): None for b in guard[i]}) if guard[i] else _BASES
+        if draw < p_del and not guard[i]:
             events["deletion"] += 1
-            # Stop at the next protected base: homopolymer lengths are set by
-            # the stutter table only.
+            # Stop at the next protected or guard base: homopolymer lengths are
+            # set by the stutter table only.
             stop = min(len(seq), i + _draw(del_pmf, rng))
             i += 1
-            while i < stop and not protected[i]:
+            while i < stop and not protected[i] and not guard[i]:
                 i += 1
             continue
-        if draw < p_ins:
+        if p_del <= draw < p_ins:
             events["insertion"] += 1
             out.append(base)
-            out.extend(rng.choice(_BASES) for _ in range(_draw(ins_pmf, rng)))
-        elif draw < p_mm:
+            out.extend(rng.choice(allowed) for _ in range(_draw(ins_pmf, rng)))
+        elif p_ins <= draw < p_mm:
             events["mismatch"] += 1
-            out.append(rng.choice(_BASES.replace(base.upper(), "") or _BASES))
+            out.append(rng.choice(allowed.replace(base.upper(), "") or allowed))
         else:
             out.append(base)
         i += 1
