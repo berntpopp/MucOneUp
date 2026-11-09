@@ -6,7 +6,6 @@ from ._common import (
     CONTEXT_SETTINGS,
     configure_logging,
     print_version_callback,
-    validate_config_callback,
 )
 
 
@@ -22,8 +21,6 @@ from ._common import (
 )
 @click.option(
     "--config",
-    callback=validate_config_callback,
-    is_eager=True,
     type=click.Path(exists=True, dir_okay=False),
     help="Path to JSON configuration file.",
 )

@@ -1644,3 +1644,150 @@ class TestIssue149ReadsFixes:
         import muc_one_up.cli.read_model_setup  # noqa: F401
 
         assert "muc_one_up.read_simulator.read_profiles" not in sys.modules
+
+
+@pytest.mark.cli
+class TestAuditCliFixes:
+    """Regression tests for CLI audit findings (#1, #10, #11, #16, h, i)."""
+
+    def _simulate(self, runner, config, out_dir, *extra):
+        return runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config),
+                "simulate",
+                "--out-dir",
+                str(out_dir),
+                "--out-base",
+                "s",
+                *extra,
+            ],
+        )
+
+    def test_duplicate_mutation_targets_applied_once(self, runner, temp_config_file, tmp_path):
+        base = ["--seed", "7", "--fixed-lengths", "25", "--mutation-name", "dupC"]
+        once = self._simulate(
+            runner, temp_config_file, tmp_path / "a", *base, "--mutation-targets", "1,3"
+        )
+        twice = self._simulate(
+            runner,
+            temp_config_file,
+            tmp_path / "b",
+            *base,
+            "--mutation-targets",
+            "1,3",
+            "--mutation-targets",
+            "1,3",
+        )
+        assert once.exit_code == 0, once.output
+        assert twice.exit_code == 0, twice.output
+        fa_a = (tmp_path / "a" / "s.001.simulated.fa").read_text()
+        assert fa_a == (tmp_path / "b" / "s.001.simulated.fa").read_text()
+
+    @pytest.mark.parametrize(
+        "extra, message",
+        [
+            (["--fixed-lengths", "25", "--simulate-series", "5"], "--simulate-series requires"),
+            (["--mutation-targets", "1,3"], "--mutation-targets requires --mutation-name"),
+            (
+                [
+                    "--snp-input-file",
+                    "SNPS",
+                    "--random-snps",
+                    "--random-snp-density",
+                    "1",
+                    "--random-snp-output-file",
+                    "r.tsv",
+                ],
+                "cannot be used together",
+            ),
+            (
+                ["--input-structure", "STRUCT", "--fixed-lengths", "25"],
+                "cannot be used with --input-structure",
+            ),
+        ],
+    )
+    def test_conflicting_options_rejected(self, runner, temp_config_file, tmp_path, extra, message):
+        snps = tmp_path / "snps.tsv"
+        snps.write_text("haplotype\tposition\tref_base\talt_base\n")
+        struct = tmp_path / "struct.txt"
+        struct.write_text("haplotype_1\t1-2-3-6-7-8-9\n")
+        extra = [str(snps) if a == "SNPS" else str(struct) if a == "STRUCT" else a for a in extra]
+        result = self._simulate(runner, temp_config_file, tmp_path / "out", *extra)
+        assert result.exit_code == 1, result.output
+        assert message in result.output
+
+    def test_unseeded_run_records_reproducible_seed(self, runner, temp_config_file, tmp_path):
+        first = self._simulate(runner, temp_config_file, tmp_path / "u1", "--fixed-lengths", "25")
+        assert first.exit_code == 0, first.output
+        stats = json.loads((tmp_path / "u1" / "s.001.simulation_stats.json").read_text())
+        seed = stats["provenance"]["seed"]
+        assert seed is not None
+        again = self._simulate(
+            runner, temp_config_file, tmp_path / "u2", "--fixed-lengths", "25", "--seed", str(seed)
+        )
+        assert again.exit_code == 0, again.output
+        fa = "s.001.simulated.fa"
+        assert (tmp_path / "u1" / fa).read_text() == (tmp_path / "u2" / fa).read_text()
+
+    def test_bare_random_snp_output_file_goes_to_out_dir(
+        self, runner, temp_config_file, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        result = self._simulate(
+            runner,
+            temp_config_file,
+            tmp_path / "out",
+            "--seed",
+            "3",
+            "--fixed-lengths",
+            "25",
+            "--random-snps",
+            "--random-snp-density",
+            "1",
+            "--random-snp-output-file",
+            "bare.tsv",
+        )
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "out" / "bare.tsv").exists()
+        assert not (tmp_path / "bare.tsv").exists()
+
+    @pytest.mark.parametrize(
+        "command", [["analyze", "stats"], ["analyze", "orfs"], ["reads", "illumina"]]
+    )
+    def test_batch_output_collision_rejected(self, runner, temp_config, tmp_path, mocker, command):
+        mock_sim = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        inputs = []
+        for d in ("r1", "r2"):
+            (tmp_path / d).mkdir()
+            fa = tmp_path / d / "x.fa"
+            fa.write_text(">x\nACGTACGTACGT\n")
+            inputs.append(str(fa))
+        out = tmp_path / "out"
+        result = runner.invoke(
+            cli, ["--config", temp_config, *command, *inputs, "--out-dir", str(out)]
+        )
+        assert result.exit_code == 1, result.output
+        assert not mock_sim.called
+        assert not any(out.glob("*")) if out.exists() else True
+
+    def test_analyze_stats_creates_out_dir(self, runner, temp_config, tmp_path):
+        fa = tmp_path / "x.fa"
+        fa.write_text(">x\nACGT\n")
+        out = tmp_path / "deep" / "nested"
+        result = runner.invoke(
+            cli, ["--config", temp_config, "analyze", "stats", str(fa), "--out-dir", str(out)]
+        )
+        assert result.exit_code == 0, result.output
+        assert (out / "x_stats.basic_stats.json").exists()
+
+    def test_reads_invalid_out_base_exits_1(self, runner, temp_config, tmp_path, mocker):
+        mock_sim = mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        fa = tmp_path / "x.fa"
+        fa.write_text(">x\nACGT\n")
+        result = runner.invoke(
+            cli, ["--config", temp_config, "reads", "illumina", str(fa), "--out-base", "a/b"]
+        )
+        assert result.exit_code == 1, result.output
+        assert not mock_sim.called

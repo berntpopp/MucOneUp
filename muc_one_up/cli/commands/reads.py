@@ -40,6 +40,13 @@ def _run_batch_simulation(
     """
     from ...read_simulation import simulate_reads as simulate_reads_pipeline
     from ...read_simulator.output_config import OutputConfig
+    from ..config import validate_output_base
+    from ..outputs import check_unique_output_bases
+
+    if out_base:
+        validate_output_base(out_base)
+    else:
+        check_unique_output_bases(input_fastas, suffix)
 
     # Warn if --out-base provided for multiple files
     if len(input_fastas) > 1 and out_base:
@@ -260,12 +267,7 @@ def reads():
 
 
 @reads.command()
-@click.option(
-    "--threads",
-    type=int,
-    default=None,
-    help="Thread count (overrides config).",
-)
+@threads_option
 @click.option(
     "--read-number",
     type=int,

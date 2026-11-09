@@ -40,48 +40,6 @@ def configure_logging(level_str: str) -> None:
         logging.info("Logging configured at level: %s", level_str.upper())
 
 
-# ============================================================================
-# Configuration Validation
-# ============================================================================
-
-
-def validate_config_callback(
-    ctx: click.Context, param: click.Parameter, value: str | None
-) -> str | None:
-    """Smart validation callback for --config option.
-
-    This callback intentionally performs NO validation itself. Instead, it
-    serves two purposes:
-    1. Checks ctx.resilient_parsing to skip during --help/--version
-    2. Documents that actual validation happens per-command via require_config()
-
-    The callback is paired with is_eager=True on the --config option to ensure
-    it's processed early in Click's option parsing order. This allows the
-    resilient_parsing check to work correctly during help/version requests.
-
-    Args:
-        ctx: Click context
-        param: Click parameter
-        value: Config file path (or None)
-
-    Returns:
-        Config file path unchanged (no validation performed here)
-
-    Note:
-        Actual config requirement is enforced per-command using require_config().
-        This "soft required" pattern allows help/version to work without config
-        while still requiring it for command execution.
-    """
-    # Skip during resilient parsing (--help, --version invocations)
-    if ctx.resilient_parsing:
-        return value
-
-    # Return value unchanged - validation happens in require_config()
-    # This allows: muconeup analyze --help (no config needed)
-    # But requires: muconeup --config X analyze (config validated in command)
-    return value
-
-
 def require_config(ctx: click.Context) -> None:
     """Ensure config is provided before executing a command.
 

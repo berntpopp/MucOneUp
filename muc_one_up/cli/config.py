@@ -135,11 +135,16 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
                 args.reference_assembly,
             )
 
-        # Record the CLI seed so provenance metadata reports it (extract_seed).
-        if getattr(args, "seed", None) is not None:
-            config["seed"] = args.seed
-        elif config.get("seed") is not None:
-            args.seed = config["seed"]
+        # Record the seed so provenance metadata reports it (extract_seed); draw one
+        # when neither CLI nor config gives one, so every run can be reproduced.
+        if getattr(args, "seed", None) is None:
+            args.seed = config.get("seed")
+        if args.seed is None:
+            args.seed = random.SystemRandom().randrange(2**32)
+            logging.info(
+                "No seed given; using random seed %d (pass --seed to reproduce)", args.seed
+            )
+        config["seed"] = args.seed
     except ConfigurationError:
         raise
     except FileNotFoundError as e:
@@ -151,7 +156,6 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
 
     out_dir = args.out_dir
     out_base = validate_output_base(args.out_base)
-    Path(out_dir).mkdir(parents=True, exist_ok=True)
 
     # Validate random-snps upfront
     if getattr(args, "random_snps", False):
@@ -159,7 +163,29 @@ def setup_configuration(args) -> tuple[dict[str, Any], str, str]:
             raise ValidationError("--random-snp-output-file is required when --random-snps is used")
         if not getattr(args, "random_snp_density", None):
             raise ValidationError("--random-snp-density is required when --random-snps is used")
+        if getattr(args, "snp_input_file", None):
+            raise ValidationError("--snp-input-file and --random-snps cannot be used together")
+        # A bare file name belongs with the other outputs, not in the current directory.
+        snp_out = Path(args.random_snp_output_file)
+        if snp_out.name == args.random_snp_output_file:
+            args.random_snp_output_file = str(Path(out_dir) / snp_out)
 
+    # Reject option combinations that would otherwise be silently ignored
+    if getattr(args, "input_structure", None) and (
+        getattr(args, "fixed_lengths", None) or getattr(args, "simulate_series", None) is not None
+    ):
+        raise ValidationError(
+            "--fixed-lengths and --simulate-series cannot be used with --input-structure "
+            "(the structure file defines the repeat chains)"
+        )
+    if getattr(args, "simulate_series", None) is not None and not any(
+        "-" in v for v in getattr(args, "fixed_lengths", None) or []
+    ):
+        raise ValidationError(
+            "--simulate-series requires a --fixed-lengths range (e.g. --fixed-lengths 40-80)"
+        )
+
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
     return config, out_dir, out_base
 
 
@@ -210,9 +236,6 @@ def determine_simulation_mode(
                     args.num_haplotypes,
                     num_chains,
                 )
-
-            if args.simulate_series is not None:
-                logging.warning("--simulate-series is ignored when using --input-structure")
 
             simulation_configs = ["from_structure"]
             logging.info("Using predefined VNTR chains from structure file.")
@@ -300,6 +323,9 @@ def process_mutation_config(
                 "Using mutation targets from structure file: %s",
                 args.mutation_targets,
             )
+
+    if args.mutation_targets and not args.mutation_name:
+        raise ValidationError("--mutation-targets requires --mutation-name")
 
     # Process standard mutation args
     if args.mutation_name:
