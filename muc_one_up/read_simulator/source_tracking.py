@@ -25,7 +25,7 @@ import gzip
 import json
 import logging
 from bisect import bisect_left, bisect_right
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -345,88 +345,6 @@ class ReadSourceTracker:
                 snp_info=hap_snps,
                 repeat_lengths=hap_lengths,
             )
-
-    @classmethod
-    def from_simulation_results(
-        cls,
-        results: list,
-        config: dict,
-        mutation_positions: list | None = None,
-        mutation_name: str | None = None,
-        applied_snp_info: Mapping[int, list] | Sequence[list] | None = None,
-        reference_assembly: str | None = None,
-        mutated_units: dict[int, list[tuple[int, str]]] | None = None,
-    ) -> ReadSourceTracker:
-        """Build a tracker from simulation results and config.
-
-        Extracts repeat chains, constants, and SNP info from simulation
-        outputs so callers don't need to reshape the data themselves.
-
-        Args:
-            results: List of HaplotypeResult objects.
-            config: Configuration dict with 'repeats', 'constants', 'reference_assembly'.
-            mutation_positions: List of MutationTarget objects (or None).
-            mutation_name: Mutation name string (e.g. "dupC"), or None.
-            applied_snp_info: SNP info per 0-based haplotype index, as the mapping returned
-                by ``integrate_snps_unified`` or a list indexed by haplotype.
-            reference_assembly: Override for reference assembly (defaults to config value).
-            mutated_units: Mapping of 1-based haplotype index to mutated repeat unit tuples.
-
-        Returns:
-            Configured ReadSourceTracker instance.
-        """
-        # Build repeat chains dict (1-based haplotype keys)
-        repeat_chains: dict[int, list[RepeatUnit]] = {}
-        for i, hr in enumerate(results):
-            repeat_chains[i + 1] = hr.chain
-
-        # Get left constant length
-        ref_assembly = reference_assembly or config.get("reference_assembly", "hg38")
-        left_const = config.get("constants", {}).get(ref_assembly, {}).get("left", "")
-
-        # Get repeats dict
-        repeats_dict = config.get("repeats", {})
-
-        # Convert MutationTarget objects to tuples
-        mut_positions: list[tuple[int, int]] = []
-        mut_name: str | None = None
-        if mutation_positions:
-            mut_positions = [(mt.haplotype_index, mt.repeat_index) for mt in mutation_positions]
-            if mutation_name and mutation_name != "normal":
-                # Extract non-"normal" mutation name from comma-separated string
-                for part in mutation_name.split(","):
-                    if part != "normal":
-                        mut_name = part
-                        break
-
-        # Build SNP info dict (0-based haplotype indices)
-        snp_info_dict: dict[int, list[dict[str, object]]] = {}
-        if applied_snp_info:
-            items = (
-                applied_snp_info.items()
-                if isinstance(applied_snp_info, Mapping)
-                else enumerate(applied_snp_info)
-            )
-            for i, snp_list in items:
-                if snp_list:
-                    snp_info_dict[int(i)] = list(snp_list)
-
-        repeat_lengths = _compute_repeat_lengths(
-            results,
-            config,
-            mutated_units=mutated_units,
-            reference_assembly=ref_assembly,
-        )
-
-        return cls(
-            repeat_chains=repeat_chains,
-            repeats_dict=repeats_dict,
-            left_const_len=len(left_const),
-            mutation_positions=mut_positions,
-            mutation_name=mut_name,
-            snp_info=snp_info_dict if snp_info_dict else None,
-            repeat_lengths=repeat_lengths,
-        )
 
     def annotate_reads(self, origins: Iterable[ReadOrigin]) -> Iterator[AnnotatedRead]:
         """Annotate reads with VNTR overlap, repeat units, and mutation status.

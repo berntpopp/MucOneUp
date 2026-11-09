@@ -393,3 +393,25 @@ class TestOntAmpliconErrorProfileConfig:
         for call in mock_pbsim3.call_args_list:
             assert call.kwargs["difference_ratio"] == expected
             assert "accuracy_sd" not in call.kwargs  # pbsim3 has no --accuracy-sd (#115)
+
+
+@patch("muc_one_up.read_simulator.ont_amplicon_pipeline.extract_and_prepare_amplicons")
+@patch("muc_one_up.read_simulator.ont_amplicon_pipeline._simulate_legacy_allele_fastqs")
+@patch("muc_one_up.read_simulator.ont_amplicon_pipeline.create_pipeline_metadata")
+def test_keep_intermediate_files_keeps_work_dir(
+    mock_metadata, mock_legacy, mock_prep, ont_amplicon_config, tmp_path
+):
+    """keep_intermediate_files keeps the amplicon work dir under the output dir (#17)."""
+    ont_amplicon_config["read_simulation"]["keep_intermediate_files"] = True
+    mock_prep.return_value = _make_prep(tmp_path)
+    mock_legacy.return_value = []
+    fasta = tmp_path / "input.fa"
+    fasta.write_text(">seq\nACGT\n")
+
+    from muc_one_up.read_simulator.ont_amplicon_pipeline import simulate_ont_amplicon_pipeline
+
+    simulate_ont_amplicon_pipeline(ont_amplicon_config, str(fasta))
+
+    work_dir = mock_prep.call_args.kwargs["work_dir"]
+    assert work_dir.parent == tmp_path and work_dir.is_dir()
+    assert mock_metadata.call_args.kwargs["tools_used"] == ["pbsim3", "samtools"]

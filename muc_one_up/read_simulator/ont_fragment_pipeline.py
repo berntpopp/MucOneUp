@@ -17,9 +17,7 @@ from __future__ import annotations
 import logging
 import math
 import random
-import tempfile
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from Bio import SeqIO
@@ -27,7 +25,11 @@ from Bio import SeqIO
 from .constants import MINIMAP2_PRESET_ONT
 from .molecule_pipeline import PbsimRun, sequencer_for, simulate_molecule_reads
 from .molecules import MoleculeModel, build_fragment_molecules
-from .pipeline_utils import create_pipeline_metadata, resolve_pipeline_outputs
+from .pipeline_utils import (
+    create_pipeline_metadata,
+    intermediate_work_dir,
+    resolve_pipeline_outputs,
+)
 from .read_profiles import FragmentModel, active_read_profile
 from .wrappers.minimap2_wrapper import align_reads_with_minimap2
 
@@ -129,9 +131,9 @@ def simulate_ont_fragment_pipeline(
         molecules_model,
         random.Random(seed),
     )
-    with tempfile.TemporaryDirectory(prefix="ont_fragment_sim_") as tmp:
+    with intermediate_work_dir(config, output_dir, "ont_fragment_sim_") as tmp:
         simulate_molecule_reads(
-            molecules, sequencer_for(config, run), Path(tmp), fastq, truth, output_base, seed
+            molecules, sequencer_for(config, run), tmp, fastq, truth, output_base, seed
         )
     final_output = str(fastq)
     if human_reference:
@@ -151,7 +153,7 @@ def simulate_ont_fragment_pipeline(
         start_time=start,
         end_time=datetime.now(),
         platform="ONT",
-        tools_used=["pbsim3", "minimap2", "samtools"],
+        tools_used=["pbsim3", "samtools"] + (["minimap2"] if human_reference else []),
         extra_rows=[("Read_truth", truth.name)],
     )
     return final_output

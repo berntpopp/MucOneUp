@@ -81,7 +81,7 @@ class TestCoverageDownsamplingIntegration:
             with contextlib.suppress(Exception):
                 from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
 
-                simulate_reads_pipeline(config, str(input_fa))
+                simulate_reads_pipeline(config, str(input_fa), human_reference="/ref/hg38.fa")
 
             # align_and_refine should have been called
             assert mock_align.called
@@ -162,7 +162,7 @@ class TestCoverageDownsamplingIntegration:
             with contextlib.suppress(Exception):
                 from muc_one_up.read_simulator.pipeline import simulate_reads_pipeline
 
-                simulate_reads_pipeline(config, str(input_fa))
+                simulate_reads_pipeline(config, str(input_fa), human_reference="/ref/hg38.fa")
 
             # align_and_refine should have been called
             assert mock_align.called

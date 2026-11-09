@@ -52,7 +52,7 @@ def _normalize_read_id(read_id: str | None) -> str:
 
 def generate_read_manifest(
     sidecar_path: str | None,
-    final_bam: str,
+    final_bam: str | None,
     input_fa: str,
     source_tracker: Any | None,
     output_dir: Path,
@@ -67,7 +67,7 @@ def generate_read_manifest(
     Args:
         sidecar_path: Path to the fragment origins TSV sidecar file, or None.
         final_bam: Path to the final aligned BAM file (used to filter
-            surviving reads).
+            surviving reads), or None when alignment was skipped.
         input_fa: Path to the per-haplotype FASTA (used to build
             seq_name → haplotype index mapping from FASTA headers).
         source_tracker: A :class:`ReadSourceTracker` instance, or None.
@@ -115,7 +115,7 @@ def generate_read_manifest(
     # ------------------------------------------------------------------
     # Filter to reads that survived alignment (pysam optional)
     # ------------------------------------------------------------------
-    if pysam is not None:
+    if pysam is not None and final_bam is not None:
         try:
             surviving_read_ids: set[str] = set()
             with pysam.AlignmentFile(final_bam, "rb") as bam:
