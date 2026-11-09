@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Resolves the 2026-11-09 codebase audit
+(`.planning/reports/2026-11-09-codebase-audit.md`) in six workstreams.
+
+**Seeded outputs change.** Repeat counts are now rounded instead of
+truncated. Random SNP counts use stochastic rounding, so low densities no
+longer give 0 SNPs every time. ONT `pbsim3-fragments` now treats `--coverage`
+as the total over both haplotypes (it used to give about 2.3x the request)
+and weights haplotypes by length. The empirical error model no longer
+lengthens protected homopolymers without recording it. Unseeded runs now
+draw a seed and record it in provenance.
+
+### Fixed
+- Illumina simulation works again with real tools:
+  - Gapped pblat matches no longer make insert-length sampling impossible.
+  - Input to reseq `seqToIllumina` is chunked into batches of at most 10,000
+    fragments, working around a reseq 1.1 hang on larger inputs. The old
+    600 s cap on that step is gone.
+- All pipelines now resolve the alignment reference once, in one order:
+  `human_reference_<asm>`, then `human_reference`, then
+  `reference_genomes.<asm>.fasta_path`.
+- VNTR downsampling and the VNTR capture model now keep read pairs together
+  (no orphan mates). The VNTR BED is now correctly 0-based.
+- Truth manifests:
+  - ONT read end coordinates come from the aligned length.
+  - Illumina reads are matched to fragments by name.
+  - A HiFi read takes the strand of its first subread.
+- CLI:
+  - A duplicate `--mutation-targets` is no longer applied twice.
+  - Conflicting or ignored option combinations now exit 1.
+  - Batch output-name collisions are rejected.
+  - `--random-snp-output-file` is written under `--out-dir`.
+- `keep_intermediate_files` now works in the amplicon and ONT pipelines.
+  Illumina `--no-align --track-read-source` now writes a manifest.
+- Config:
+  - The fingerprint no longer depends on the working directory and is
+    computed once per run.
+  - The schema rejects repeat counts below 10 and non-integer mutation
+    positions.
+- Subprocesses:
+  - Timeouts now kill the whole process group.
+  - The failing pipeline stage's stderr is kept.
+  - The bwa and reseq timeouts default to none; the new
+    `read_simulation.alignment_timeout` sets one.
+- The minimap2 index check now matches the index the aligner actually reuses.
+- Reference helpers:
+  - Downloads and extractions are atomic and MD5-checked.
+  - Existing verified downloads are skipped.
+  - The GATK `.dict` file name is correct.
+
+### Changed
+- CI installs from `uv.lock`, installs samtools, and pins mypy and setup-uv.
+- The sdist shrank from 41 MB to 1.6 MB.
+- The snapshot integration tests now run on simulated data instead of
+  skipping.
+- pysam is a new optional `tracking` extra.
+
+### Removed
+- About 1,800 lines of dead or duplicated code: unused type aliases, a
+  test-only ORF pipeline, duplicate samtools and `reverse_complement`
+  helpers, unused constants and helpers, and no-op tests.
+
 ## [0.48.0] - 2026-10-19
 
 Resolves 11 codebase audit issues (#127 and #147-#156) across PacBio/ONT

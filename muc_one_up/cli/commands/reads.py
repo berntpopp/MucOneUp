@@ -110,6 +110,7 @@ def _run_batch_simulation(
                     f"read source tracker from {stats_path}"
                 )
             coord_map_path = output_config.derive_path_str("_repeat_coordinates.tsv")
+            output_config.ensure_dir()
             source_tracker.write_coordinate_map(coord_map_path)
             logging.info("Repeat coordinate map written: %s", coord_map_path)
 

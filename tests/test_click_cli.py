@@ -307,6 +307,38 @@ class TestSimulateCommand:
         assert set(tracker.coordinate_maps) == {1, 2}
         assert tracker.coordinate_maps[2].regions[2].is_mutated is True
 
+    def test_reads_track_read_source_creates_missing_out_dir(
+        self, runner, minimal_config, tmp_path, mocker
+    ):
+        """The coordinate map is written before the pipeline, so out-dir must exist first."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(minimal_config))
+        sim_dir = tmp_path / "sim"
+        self._run_seeded_simulate(runner, config_file, sim_dir, "--track-read-source")
+        mocker.patch("muc_one_up.read_simulation.simulate_reads")
+        reads_dir = tmp_path / "new" / "reads"
+
+        result = runner.invoke(
+            cli,
+            [
+                "--config",
+                str(config_file),
+                "reads",
+                "pacbio",
+                str(sim_dir / "tracked.001.simulated.fa"),
+                "--out-dir",
+                str(reads_dir),
+                "--model-type",
+                "errhmm",
+                "--model-file",
+                str(config_file),
+                "--track-read-source",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert list(reads_dir.glob("*_repeat_coordinates.tsv"))
+
     def test_simulate_without_tracking_omits_companion_keys(
         self, runner, temp_config_file, tmp_path
     ):
