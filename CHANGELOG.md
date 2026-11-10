@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dupA` (60dupA) is also allowed on repeat C, where Vrbacká et al. 2025
   report it (C:60dupA). Random `dupA` targets can now land on C (#201).
 
+### Tests
+- The real-tool e2e golden checksums are re-measured for the new seed-42
+  haplotype (#179, #201). Reads from the same FASTA are byte-identical to
+  0.49.0. The read-tracking e2e test sets its molecule count in
+  `ont_amplicon_params` (#181).
+
 ## [0.50.0] - 2026-11-10
 
 Resolves the 2026-11-09 follow-up audit (issues #159–#201).
