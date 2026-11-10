@@ -295,6 +295,44 @@ def test_v3_amplicon_profile_adds_only_unit_stutter_to_v2() -> None:
     assert v3.provenance["unit_stutter_fit"]["n_alleles"] == 18
 
 
+def test_v4_amplicon_profile_refits_only_strand_rates_and_unit_stutter() -> None:
+    """v4 refits strand rates and unit stutter (#131); everything else is v3."""
+    v3, v4 = (load_read_profile(f"ont_r10_sup_amplicon_{v}") for v in ("v3", "v4"))
+    assert v4.name == "ont_r10_sup_amplicon_v4"
+    assert v3.errors is not None and v4.errors is not None
+    assert v4.errors.strand_rates != v3.errors.strand_rates
+    assert replace(v4.errors, strand_rates=None) == replace(v3.errors, strand_rates=None)
+    assert 0 < v4.molecules.unit_stutter_rate < v3.molecules.unit_stutter_rate
+    no_slip = {"unit_stutter_rate": 0.0, "unit_stutter_pmf": ()}
+    assert replace(v4.molecules, **no_slip) == replace(v3.molecules, **no_slip)
+    assert v4.fragments == v3.fragments and v4.config_overrides == v3.config_overrides
+    assert v4.provenance["unit_stutter_fit"]["refit"]["template_vntr_units"] == 73
+
+
+@pytest.mark.parametrize(
+    ("name", "sha256"),
+    [
+        (
+            "ont_r10_sup_amplicon_v1",
+            "e5374a78e40cad8aa824dd35c1b93db2793b443c72f1b5e9522d733cfbe7b243",
+        ),
+        (
+            "ont_r10_sup_amplicon_v2",
+            "856c4ed0858035dcee9617f646b906482ca50bded395ffd1bfbc62288c1ef80f",
+        ),
+        (
+            "ont_r10_sup_amplicon_v3",
+            "15b5949cd9c544a799c29a21a1475192ee7308d98fed972742d9220371710a3e",
+        ),
+        ("ont_r10_genomic_v1", "5d2965cced8103997f8836808ffc2408108790be4d7742ad68dba6c9c74aff77"),
+        ("ont_r10_genomic_v2", "ed5aa7249b8a713784391df7d20c54c37fea1f92ab3cbcce501c512fe2da009a"),
+    ],
+)
+def test_released_profiles_are_byte_identical(name: str, sha256: str) -> None:
+    """Released profiles never change, so runs made with them reproduce."""
+    assert load_read_profile(name).sha256 == sha256
+
+
 def test_amplicon_profile_fits_dupc_c8_on_both_strands() -> None:
     table = load_read_profile("ont_r10_sup_amplicon_v1").molecules.stutter
     assert {"C8|+", "C8|-"} <= set(table.pmfs)

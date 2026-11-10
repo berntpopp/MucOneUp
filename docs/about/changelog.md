@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- Read profile `ont_r10_sup_amplicon_v4`: `_v3` with `errors.strand_rates`
+  and the whole-unit stutter refitted (#131). On the MucSim-Bench standard set
+  (30 cases, MucOneSpan's symmetric realism scoring from MucOneSpan #93) the
+  span-offset Jensen-Shannon distance falls from 0.086 / 0.107 to
+  0.075 / 0.076 (< 55 / ≥ 55 units; limit 0.1), and every per-strand error
+  rate is within 2% of its target (`_v3`: `+` deletions +7%). `_v1`–`_v3`
+  are unchanged.
+- `helpers/calibrate_read_profile.py --fit-unit-stutter ROUNDS --vntr START END`
+  refits the unit stutter by simulation, so that simulated reads measured with
+  the real profiler's anchor rule reproduce its per-allele stutter ratios
+  (`provenance.unit_stutter_fit.refit`). `calibration_report.strand_fit`
+  records the template's homopolymer runs against the target's
+  (`runs_per_60bp`) (#131).
+
+### Fixed
+- The `_v2`/`_v3` per-strand rates were fitted on a template with fewer C7
+  runs than real alleles (0.54 against 0.62 per 60 bp), so `+` reads lost too
+  many bases on real-like alleles; `_v4` fits on a template with real-like
+  runs. The `_v3` unit stutter read the real profiler's −1 unit ratio, which
+  also counts the main peak's left edge, as pure slippage; `_v4` fits
+  0.0016 instead of 0.0024 per unit (#131).
+
 ## [0.52.0] - 2026-11-10
 
 ### Added
