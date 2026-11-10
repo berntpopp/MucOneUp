@@ -410,7 +410,7 @@ def ont(
         ns["coverage"] = config["read_simulation"]["coverage"]
 
     if simulator == "pbsim3-fragments":
-        config = apply_cli_read_model(config, read_profile, "ont")
+        config = apply_cli_read_model(config, read_profile, "ont-fragments")
         config["read_simulation"]["simulator"] = "ont-fragments"
         fragment_seed = seed
         if fragment_seed is None and config.get("ont_fragment_params", {}).get("seed") is None:
@@ -689,7 +689,9 @@ def amplicon(
 
     config = load_config_raw(str(ctx.obj["config_path"]))
     platform = resolve_amplicon_platform(config, platform, read_profile)
-    config = apply_cli_read_model(config, read_profile, platform)
+    config = apply_cli_read_model(
+        config, read_profile, "ont-amplicon" if platform == "ont" else "amplicon"
+    )
     coverage_int = round(coverage) if coverage is not None else None
     _setup_read_config(config, "amplicon", coverage_int, seed_config_key=None)
     apply_tracking_and_alignment(config, track_read_source, no_align)
