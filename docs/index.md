@@ -61,6 +61,7 @@ Generate sequencing reads with platform-specific error profiles:
 - **Oxford Nanopore** - NanoSim with diploid split-simulation
 - **PacBio HiFi** - pbsim3 with CCS consensus accuracy
 - **Amplicon** - pbsim3 template mode with PCR length bias modeling (PacBio and ONT platforms)
+- **[Realistic read profiles](guides/realistic-read-simulation.md)** - ONT R10 amplicon and genomic profiles calibrated to public PRJEB92208 data: per-strand errors, homopolymer and whole-unit PCR stutter, PCR artefacts and a per-read truth manifest (`--read-profile`)
 - Seed-based reproducibility across all platforms
 
 ### Comprehensive Analysis

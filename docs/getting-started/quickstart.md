@@ -370,7 +370,16 @@ muconeup --config config.json reads ont \
 # PacBio HiFi reads
 muconeup --config config.json reads pacbio \
   sample.fa --coverage 30 --out-dir output --out-base reads
+
+# Realistic ONT R10 amplicon reads with per-read truth (calibrated profile)
+muconeup --config config.json reads profiles   # list built-in profiles
+muconeup --config config.json reads amplicon sample.fa --platform ont \
+  --read-profile ont_r10_sup_amplicon_v3 --coverage 1000 \
+  --out-dir output --out-base reads
 ```
+
+See [Realistic Truth-Tracked Reads](../guides/realistic-read-simulation.md) for
+the profiles, what each one models and how close each is to real data.
 
 ### Analysis
 
