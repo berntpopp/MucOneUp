@@ -225,8 +225,9 @@ class TestTruthTrackedPbsim3E2E:
             )
         )
         config["tools"] = e2e_config_base["tools"]
-        config["read_simulation"] = {"coverage": 50, "track_read_source": True}
+        config["read_simulation"] = {"track_read_source": True}
         config["ont_amplicon_params"] = {
+            "coverage": 50,  # amplicon modes read their own coverage (#181)
             "model_file": str(repo / "reference/pbsim3/QSHMM-ONT-HQ.model"),
             "seed": 3,
         }
