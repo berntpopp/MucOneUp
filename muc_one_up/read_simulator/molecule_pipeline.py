@@ -171,9 +171,10 @@ class EmpiricalSequencer:
     ) -> tuple[list[Path], dict[str, str]]:
         rng = random.Random(stage_seed(seed, "errors"))
         fastq = work_dir / "empirical.fastq"
+        models = {strand: self.model.for_strand(strand) for strand in ("+", "-")}
         with open(fastq, "w") as handle:
             for molecule in molecules:
-                read, qual = apply_errors(molecule.seq, self.model, rng)
+                read, qual = apply_errors(molecule.seq, models[molecule.strand], rng)
                 handle.write(f"@{template_id(molecule.id)}\n{read}\n+\n{qual}\n")
         names = {template_id(m.id): template_id(m.id) for m in molecules}
         return [fastq], names

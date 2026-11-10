@@ -1,0 +1,560 @@
+{
+  "schema_version": 1,
+  "name": "ont_r10_sup_amplicon_v2",
+  "platform": "ont",
+  "calibration": "empirical",
+  "description": "ONT R10.4.1 sup MUC1 PCR amplicons (PRJEB92208-like): strand mix, strand-specific error rates, PCR smear/chimeras/concatemers, off-target shorts, strand-aware homopolymer stutter, calibrated PCR length bias",
+  "provenance": {
+    "source": "Aggregate statistics from 9 public ONT R10.4.1 MUC1 amplicon libraries, ENA PRJEB92208 (Madritsch et al. 2025, Sci Rep, doi:10.1038/s41598-025-30441-3). No reads or sequences are included.",
+    "derived_by": "MucOneSpan deep review 2026-09-23 (read-level profiling against per-sample POA consensus); errors and stutter derived and validated with helpers/calibrate_read_profile.py --engine empirical; stutter refit for every per-strand target key with n >= 500 (adds C8, the dupC run) and stutter_fallback added for unfitted runs (MucOneUp #132), validated on a dupC amplicon template with 4000 molecules; v2 (MucOneUp #131): errors.strand_rates fitted per read strand with helpers/calibrate_read_profile.py --engine empirical --fit-strand-rates 3 against error_rates_per_ref_base['<strand>:<type>'] (MucOneSpan benchsim targets prjeb92208_v1.json, which reproduce v1's errors and stutter exactly), on a 4.05 kb simulated MUC1 amplicon template (MucSim-Bench v4 standard case dev-standard-ont_amplicon_r10-0001, haplotype 1 of its *.simulated.fa, slice [9994:14044]); everything else is unchanged from ont_r10_sup_amplicon_v1",
+    "targets": {
+      "vntr_error_per_base_median": {
+        "mismatch": 0.00701,
+        "insertion": 0.0067,
+        "deletion": 0.00767,
+        "total": 0.02138
+      },
+      "smear_fraction_of_spanning_median": 0.2361,
+      "smear_deletion_start_rel_pos": {
+        "p25": 0.15,
+        "p50": 0.25,
+        "p75": 0.45,
+        "mean": 0.334
+      },
+      "between_allele_fraction_median": 0.0229,
+      "multi_anchor_fraction_median": 0.024,
+      "off_target_fraction_median": 0.3002,
+      "off_target_read_len_median": 367,
+      "pcr_ln_long_short_per_unit": -0.056
+    },
+    "calibration_report": {
+      "engine": "empirical",
+      "target_total_error": 0.02138,
+      "strand_fit": {
+        "exposed_frac": 0.683,
+        "target": {
+          "+:del": 0.01138,
+          "+:ins": 0.00723,
+          "+:mismatch": 0.00811,
+          "-:del": 0.00485,
+          "-:ins": 0.00629,
+          "-:mismatch": 0.00606
+        },
+        "simulated_per_round": [
+          {
+            "+:del": 0.01145,
+            "+:ins": 0.00794,
+            "+:mismatch": 0.00587,
+            "-:del": 0.00676,
+            "-:ins": 0.00601,
+            "-:mismatch": 0.00564
+          },
+          {
+            "+:del": 0.0112,
+            "+:ins": 0.00708,
+            "+:mismatch": 0.00799,
+            "-:del": 0.00485,
+            "-:ins": 0.00637,
+            "-:mismatch": 0.00602
+          },
+          {
+            "+:del": 0.01142,
+            "+:ins": 0.00711,
+            "+:mismatch": 0.00789,
+            "-:del": 0.0049,
+            "-:ins": 0.00641,
+            "-:mismatch": 0.00628
+          },
+          {
+            "+:del": 0.01135,
+            "+:ins": 0.00737,
+            "+:mismatch": 0.00829,
+            "-:del": 0.0048,
+            "-:ins": 0.00609,
+            "-:mismatch": 0.00581
+          }
+        ]
+      },
+      "validation_round1": {
+        "total_error": 0.02179,
+        "template": "mucsim_v4_dev0001_hap1_amplicon.fa",
+        "n_molecules": 4000,
+        "tolerance": 0.03,
+        "keys_within_tolerance": "22/22",
+        "per_key": {
+          "A2|+": {
+            "n_target": 88280,
+            "n_sim": 26247,
+            "p_correct_target": 0.9735,
+            "status": "compared",
+            "p_correct_sim": 0.9527,
+            "max_abs_residual": 0.0208,
+            "within_tolerance": true
+          },
+          "A2|-": {
+            "n_target": 104241,
+            "n_sim": 25753,
+            "p_correct_target": 0.9605,
+            "status": "compared",
+            "p_correct_sim": 0.9655,
+            "max_abs_residual": 0.005,
+            "within_tolerance": true
+          },
+          "C2|+": {
+            "n_target": 1959936,
+            "n_sim": 603681,
+            "p_correct_target": 0.9538,
+            "status": "compared",
+            "p_correct_sim": 0.949,
+            "max_abs_residual": 0.0184,
+            "within_tolerance": true
+          },
+          "C2|-": {
+            "n_target": 2322601,
+            "n_sim": 592319,
+            "p_correct_target": 0.9656,
+            "status": "compared",
+            "p_correct_sim": 0.9648,
+            "max_abs_residual": 0.01,
+            "within_tolerance": true
+          },
+          "C3|+": {
+            "n_target": 522521,
+            "n_sim": 191805,
+            "p_correct_target": 0.9609,
+            "status": "compared",
+            "p_correct_sim": 0.961,
+            "max_abs_residual": 0.0004,
+            "within_tolerance": true
+          },
+          "C3|-": {
+            "n_target": 618556,
+            "n_sim": 188195,
+            "p_correct_target": 0.953,
+            "status": "compared",
+            "p_correct_sim": 0.954,
+            "max_abs_residual": 0.001,
+            "within_tolerance": true
+          },
+          "C4|+": {
+            "n_target": 807317,
+            "n_sim": 258432,
+            "p_correct_target": 0.9166,
+            "status": "compared",
+            "p_correct_sim": 0.9174,
+            "max_abs_residual": 0.0008,
+            "within_tolerance": true
+          },
+          "C4|-": {
+            "n_target": 956553,
+            "n_sim": 253568,
+            "p_correct_target": 0.9607,
+            "status": "compared",
+            "p_correct_sim": 0.9613,
+            "max_abs_residual": 0.0005,
+            "within_tolerance": true
+          },
+          "C5|+": {
+            "n_target": 16076,
+            "n_sim": 2019,
+            "p_correct_target": 0.8558,
+            "status": "compared",
+            "p_correct_sim": 0.8678,
+            "max_abs_residual": 0.012,
+            "within_tolerance": true
+          },
+          "C5|-": {
+            "n_target": 18716,
+            "n_sim": 1981,
+            "p_correct_target": 0.9721,
+            "status": "compared",
+            "p_correct_sim": 0.9768,
+            "max_abs_residual": 0.0047,
+            "within_tolerance": true
+          },
+          "C6|+": {
+            "n_target": 23968,
+            "n_sim": 8076,
+            "p_correct_target": 0.7855,
+            "status": "compared",
+            "p_correct_sim": 0.786,
+            "max_abs_residual": 0.0023,
+            "within_tolerance": true
+          },
+          "C6|-": {
+            "n_target": 28137,
+            "n_sim": 7924,
+            "p_correct_target": 0.9305,
+            "status": "compared",
+            "p_correct_sim": 0.9329,
+            "max_abs_residual": 0.0023,
+            "within_tolerance": true
+          },
+          "C7|+": {
+            "n_target": 263510,
+            "n_sim": 72684,
+            "p_correct_target": 0.5174,
+            "status": "compared",
+            "p_correct_sim": 0.5188,
+            "max_abs_residual": 0.0015,
+            "within_tolerance": true
+          },
+          "C7|-": {
+            "n_target": 312725,
+            "n_sim": 71316,
+            "p_correct_target": 0.8877,
+            "status": "compared",
+            "p_correct_sim": 0.8893,
+            "max_abs_residual": 0.0016,
+            "within_tolerance": true
+          },
+          "C8|+": {
+            "n_target": 854,
+            "n_sim": 0,
+            "p_correct_target": 0.3618,
+            "status": "not_in_template",
+            "within_tolerance": null
+          },
+          "C8|-": {
+            "n_target": 1144,
+            "n_sim": 0,
+            "p_correct_target": 0.7465,
+            "status": "not_in_template",
+            "within_tolerance": null
+          },
+          "G2|+": {
+            "n_target": 1970388,
+            "n_sim": 635985,
+            "p_correct_target": 0.9548,
+            "status": "compared",
+            "p_correct_sim": 0.9564,
+            "max_abs_residual": 0.0091,
+            "within_tolerance": true
+          },
+          "G2|-": {
+            "n_target": 2335112,
+            "n_sim": 624015,
+            "p_correct_target": 0.969,
+            "status": "compared",
+            "p_correct_sim": 0.9682,
+            "max_abs_residual": 0.0116,
+            "within_tolerance": true
+          },
+          "G3|+": {
+            "n_target": 410593,
+            "n_sim": 133254,
+            "p_correct_target": 0.9493,
+            "status": "compared",
+            "p_correct_sim": 0.9494,
+            "max_abs_residual": 0.0008,
+            "within_tolerance": true
+          },
+          "G3|-": {
+            "n_target": 486484,
+            "n_sim": 130746,
+            "p_correct_target": 0.9268,
+            "status": "compared",
+            "p_correct_sim": 0.9275,
+            "max_abs_residual": 0.0013,
+            "within_tolerance": true
+          },
+          "G4|+": {
+            "n_target": 8039,
+            "n_sim": 2019,
+            "p_correct_target": 0.9621,
+            "status": "compared",
+            "p_correct_sim": 0.9599,
+            "max_abs_residual": 0.0022,
+            "within_tolerance": true
+          },
+          "G4|-": {
+            "n_target": 9513,
+            "n_sim": 1981,
+            "p_correct_target": 0.8792,
+            "status": "compared",
+            "p_correct_sim": 0.8794,
+            "max_abs_residual": 0.005,
+            "within_tolerance": true
+          },
+          "T2|+": {
+            "n_target": 48234,
+            "n_sim": 14133,
+            "p_correct_target": 0.9302,
+            "status": "compared",
+            "p_correct_sim": 0.9549,
+            "max_abs_residual": 0.0247,
+            "within_tolerance": true
+          },
+          "T2|-": {
+            "n_target": 57078,
+            "n_sim": 13867,
+            "p_correct_target": 0.9826,
+            "status": "compared",
+            "p_correct_sim": 0.9648,
+            "max_abs_residual": 0.0178,
+            "within_tolerance": true
+          }
+        }
+      }
+    },
+    "stutter_fit": {
+      "method": "empirical engine: fitted entry = measured hp_P_obs_given_true pmf truncated to |delta| <= max_delta (and >= -run length) and renormalised",
+      "min_target_n": 500,
+      "max_extrapolation_bases": "3: the log-odds slope is only extrapolated this many bases beyond the fitted range; longer runs are treated like the capped length",
+      "min_run_len": 3,
+      "max_delta": 6,
+      "fitted_keys": [
+        "C3|+",
+        "C3|-",
+        "C4|+",
+        "C4|-",
+        "C5|+",
+        "C5|-",
+        "C6|+",
+        "C6|-",
+        "C7|+",
+        "C7|-",
+        "C8|+",
+        "C8|-",
+        "G3|+",
+        "G3|-",
+        "G4|+",
+        "G4|-"
+      ],
+      "excluded_keys": {},
+      "rule": "log_odds_interpolate: runs without a fitted entry of the same base and strand (strand 'both' if no strand-specific entry) interpolate the error log-odds and error shape linearly between the nearest fitted lengths on both sides; beyond the longest (or below the shortest) fitted length the error odds of that entry are scaled by exp(log_odds_slope_per_base * length difference), with the difference capped at max_extrapolation_bases; bases without fitted entries, or references without a usable error delta, use the generic pmf",
+      "slope": "median least-squares slope of error log-odds vs length over base/strand groups with >= 3 fitted lengths, clamped at 0",
+      "generic": "n-weighted pool of fitted entries at length 3; used with a warning for bases without any fitted entry",
+      "target_key": "ont_amplicon_PRJEB92208"
+    }
+  },
+  "config_overrides": {
+    "amplicon_params": {
+      "pcr_bias": {
+        "preset": "madritsch2025_r10"
+      }
+    }
+  },
+  "molecules": {
+    "forward_frac": 0.5,
+    "smear_rate": 0.24,
+    "smear_junction_beta": [
+      1.8,
+      3.6
+    ],
+    "smear_min_keep": 0.2,
+    "chimera_rate": 0.023,
+    "concatemer_rate": 0.024,
+    "offtarget_frac": 0.3,
+    "offtarget_median_bp": 367,
+    "offtarget_sigma": 0.3,
+    "stutter": {
+      "C3|+": {
+        "-2": 0.00246,
+        "-1": 0.013,
+        "0": 0.9614,
+        "1": 0.0163,
+        "2": 0.00588,
+        "3": 0.00096
+      },
+      "C3|-": {
+        "-3": 0.00116,
+        "-2": 0.00348,
+        "-1": 0.03304,
+        "0": 0.95362,
+        "1": 0.00757,
+        "2": 0.00113
+      },
+      "C4|+": {
+        "-3": 0.00055,
+        "-2": 0.01378,
+        "-1": 0.04361,
+        "0": 0.91688,
+        "1": 0.02362,
+        "2": 0.00097,
+        "3": 0.00059
+      },
+      "C4|-": {
+        "-3": 0.00064,
+        "-2": 0.00304,
+        "-1": 0.02771,
+        "0": 0.96151,
+        "1": 0.0071
+      },
+      "C5|+": {
+        "-3": 0.00498,
+        "-2": 0.0279,
+        "-1": 0.06638,
+        "0": 0.85659,
+        "1": 0.033,
+        "2": 0.00735,
+        "3": 0.00305,
+        "4": 0.00075
+      },
+      "C5|-": {
+        "-2": 0.00134,
+        "-1": 0.01428,
+        "0": 0.97304,
+        "1": 0.00856,
+        "2": 0.00278
+      },
+      "C6|+": {
+        "-4": 0.00275,
+        "-3": 0.01236,
+        "-2": 0.01265,
+        "-1": 0.10799,
+        "0": 0.78616,
+        "1": 0.06381,
+        "2": 0.00952,
+        "3": 0.00238,
+        "4": 0.00188,
+        "5": 0.0005
+      },
+      "C6|-": {
+        "-2": 0.00213,
+        "-1": 0.04647,
+        "0": 0.93158,
+        "1": 0.01761,
+        "2": 0.00139,
+        "3": 0.00082
+      },
+      "C7|+": {
+        "-5": 0.00182,
+        "-4": 0.00836,
+        "-3": 0.01556,
+        "-2": 0.09074,
+        "-1": 0.26621,
+        "0": 0.51794,
+        "1": 0.0753,
+        "2": 0.00991,
+        "3": 0.00779,
+        "4": 0.00442,
+        "5": 0.00129,
+        "6": 0.00066
+      },
+      "C7|-": {
+        "-3": 0.00098,
+        "-2": 0.00575,
+        "-1": 0.06978,
+        "0": 0.88848,
+        "1": 0.02997,
+        "2": 0.00269,
+        "3": 0.00101,
+        "4": 0.00079,
+        "5": 0.00055
+      },
+      "C8|+": {
+        "-6": 0.00117,
+        "-5": 0.01993,
+        "-4": 0.02813,
+        "-3": 0.10668,
+        "-2": 0.1313,
+        "-1": 0.26963,
+        "0": 0.36226,
+        "1": 0.04572,
+        "2": 0.01876,
+        "3": 0.00704,
+        "4": 0.00704,
+        "5": 0.00234
+      },
+      "C8|-": {
+        "-3": 0.0035,
+        "-2": 0.01487,
+        "-1": 0.13299,
+        "0": 0.74715,
+        "1": 0.07086,
+        "2": 0.01838,
+        "3": 0.00788,
+        "5": 0.00437
+      },
+      "G3|+": {
+        "-3": 0.00076,
+        "-2": 0.00604,
+        "-1": 0.02234,
+        "0": 0.94941,
+        "1": 0.0208,
+        "2": 0.00065
+      },
+      "G3|-": {
+        "-3": 0.0009,
+        "-2": 0.00208,
+        "-1": 0.03893,
+        "0": 0.92692,
+        "1": 0.02835,
+        "2": 0.00282
+      },
+      "G4|+": {
+        "-2": 0.00174,
+        "-1": 0.02265,
+        "0": 0.96266,
+        "1": 0.01295
+      },
+      "G4|-": {
+        "-3": 0.00252,
+        "-2": 0.01084,
+        "-1": 0.04817,
+        "0": 0.87968,
+        "1": 0.04711,
+        "2": 0.01168
+      }
+    },
+    "stutter_fallback": {
+      "rule": "log_odds_interpolate",
+      "log_odds_slope_per_base": 0.57825,
+      "max_extrapolation_bases": 3,
+      "generic": {
+        "ref_len": 3,
+        "pmf": {
+          "-3": 0.00072,
+          "-2": 0.0034,
+          "-1": 0.02715,
+          "0": 0.94838,
+          "1": 0.01744,
+          "2": 0.00266,
+          "3": 0.00025
+        }
+      }
+    }
+  },
+  "errors": {
+    "mismatch_rate": 0.008272,
+    "insertion_rate": 0.005619,
+    "deletion_rate": 0.004558,
+    "insertion_len_pmf": {
+      "1": 0.8563,
+      "10": 0.0002,
+      "2": 0.1022,
+      "3": 0.0282,
+      "4": 0.0083,
+      "5": 0.003,
+      "6": 0.001,
+      "7": 0.0005,
+      "8": 0.0002,
+      "9": 0.0001
+    },
+    "deletion_len_pmf": {
+      "1": 0.80352,
+      "10": 0.0003,
+      "2": 0.15368,
+      "3": 0.0254,
+      "4": 0.0122,
+      "5": 0.0033,
+      "6": 0.001,
+      "7": 0.0004,
+      "8": 0.0002
+    },
+    "read_error_sigma": 0.499,
+    "strand_rates": {
+      "+": {
+        "mismatch_rate": 0.012059,
+        "insertion_rate": 0.004968,
+        "deletion_rate": 0.004669
+      },
+      "-": {
+        "mismatch_rate": 0.008619,
+        "insertion_rate": 0.00574,
+        "deletion_rate": 0.001691
+      }
+    }
+  }
+}

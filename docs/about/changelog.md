@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Read profiles `ont_r10_sup_amplicon_v2` and `ont_r10_genomic_v2` with
+  per-strand error rates (#131). Real R10.4.1 errors are strand-asymmetric
+  (amplicon deletions 1.14% on `+`, 0.49% on `-`), but the `_v1` error
+  channel was symmetric: on the MucSim-Bench standard set (30 cases each),
+  `_v1` missed `+` mismatches by -30% and `-` deletions by +39% (genomic:
+  `-` mismatches -27%, `-` insertions +40%). With `_v2`, every per-strand
+  mismatch, insertion and deletion rate is within 11% of its target. The
+  `_v1` profiles are unchanged, so runs made with them reproduce. Use `_v2`
+  for new work.
+- `errors.strand_rates` in read profiles: optional `+`/`-` overrides of the
+  empirical channel's mismatch, insertion and deletion rates (#131).
+- `helpers/calibrate_read_profile.py --fit-strand-rates ROUNDS` fits
+  `errors.strand_rates` against `error_rates_per_ref_base["<strand>:<type>"]`
+  and records the rounds in `calibration_report.strand_fit` (#131).
+
+### Documentation
+- The genomic profiles' read lengths are a generic default, not a fit, so
+  their VNTR-spanning fraction is not calibrated (#131).
+
 ## [0.50.1] - 2026-11-10
 
 **Seeded outputs change** for haplotypes that contain L or R repeats.

@@ -146,3 +146,20 @@ def test_errors_next_to_protected_runs_do_not_lengthen_them() -> None:
         for s in range(3000)
     ]
     assert max(longest) == 7
+
+
+def test_strand_rates_override_per_strand_and_validate() -> None:
+    """Real R10 errors are strand-asymmetric; strand_rates select per-strand rates (#131)."""
+    from dataclasses import replace
+
+    model = EmpiricalErrorModel(
+        0.01, 0.01, 0.01, {1: 1.0}, {1: 1.0}, strand_rates={"-": {"deletion_rate": 0.0}}
+    )
+    assert model.for_strand("+") == replace(model, strand_rates=None)
+    assert model.for_strand("-").deletion_rate == 0.0
+    assert model.for_strand("-").mismatch_rate == 0.01
+    assert MODEL.for_strand("-") is MODEL  # no strand_rates: same model, same outputs
+    assert hash(model) != hash(replace(model, strand_rates=None))
+    for bad in ({"x": {}}, {"+": {"q_scale": 0.5}}, {"+": {"mismatch_rate": 0.5}}):
+        with pytest.raises(ValueError):
+            EmpiricalErrorModel(0.01, 0.01, 0.01, {1: 1.0}, {1: 1.0}, strand_rates=bad)

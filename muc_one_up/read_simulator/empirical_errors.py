@@ -8,6 +8,8 @@ per strand). This channel reproduces measured rates directly:
   runs (runs >= ``hp_min_len`` are left to the molecule model's stutter table,
   so the table equals the measured homopolymer spectrum without deconvolution);
 * indel lengths from measured distributions;
+* optional per-strand rates (``strand_rates``), because real R10 errors are
+  strand-asymmetric (#131); the read strand selects them;
 * per-read error variation as a log-normal multiplier (mean 1);
 * Phred qualities from the read's error rate, scaled by ``q_scale`` because
   basecaller qualities over-promise (observed error ~1.4x Q-predicted).
@@ -21,13 +23,15 @@ import math
 import random
 from collections import Counter
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
+from typing import Any
 
 from .molecules import homopolymer_runs
 from .stutter import MIN_RUN_LEN
 
 _BASES = "ACGT"
 _MAX_RATE = 0.2
+_RATES = ("mismatch_rate", "insertion_rate", "deletion_rate")
 
 
 def _pmf(
@@ -64,9 +68,11 @@ class EmpiricalErrorModel:
     read_error_sigma: float = 0.45
     q_scale: float = 0.7
     hp_min_len: int = MIN_RUN_LEN
+    # {"+"|"-": {rate name: value}}; overrides the rates above for reads of that strand
+    strand_rates: Mapping[str, Mapping[str, float]] | None = None
 
     def __post_init__(self) -> None:
-        for name in ("mismatch_rate", "insertion_rate", "deletion_rate"):
+        for name in _RATES:
             value = getattr(self, name)
             if not 0.0 <= value <= _MAX_RATE:
                 raise ValueError(f"{name} must be in [0, {_MAX_RATE}], got {value}")
@@ -80,6 +86,20 @@ class EmpiricalErrorModel:
         object.__setattr__(
             self, "deletion_len_pmf", dict(_pmf(self.deletion_len_pmf, "deletion_len_pmf"))
         )
+        if self.strand_rates is not None:
+            rates = {s: dict(r) for s, r in self.strand_rates.items()}
+            if set(rates) - {"+", "-"} or any(set(r) - set(_RATES) for r in rates.values()):
+                raise ValueError(f"strand_rates must map '+'/'-' to a subset of {_RATES}")
+            object.__setattr__(self, "strand_rates", rates)
+            for strand in rates:
+                self.for_strand(strand)  # validates the per-strand rates
+
+    def for_strand(self, strand: str) -> EmpiricalErrorModel:
+        """The model for reads of ``strand``: its ``strand_rates`` applied, if any."""
+        if not self.strand_rates:
+            return self
+        rates: dict[str, Any] = dict(self.strand_rates.get(strand, {}))
+        return replace(self, **rates, strand_rates=None)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> EmpiricalErrorModel:
@@ -103,6 +123,11 @@ class EmpiricalErrorModel:
                 self.read_error_sigma,
                 self.q_scale,
                 self.hp_min_len,
+                tuple(
+                    sorted(
+                        (k, tuple(sorted(v.items()))) for k, v in (self.strand_rates or {}).items()
+                    )
+                ),
             )
         )
 
