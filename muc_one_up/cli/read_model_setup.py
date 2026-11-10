@@ -9,29 +9,17 @@ import click
 
 
 def apply_cli_read_model(
-    config: dict[str, Any], read_profile: str | None, platform: str
+    config: dict[str, Any], read_profile: str | None, simulator: str
 ) -> dict[str, Any]:
     """Overlay ``--read-profile`` (or a profile named in the config) onto ``config``.
 
     Precedence: config file < read profile < explicit CLI flags applied afterwards.
-    The profile platform must match the command platform ("ont" or "pacbio").
+    See :func:`resolve_read_model` for the platform and fragment-mode checks.
     """
-    ref = read_profile or (config.get("read_model") or {}).get("profile")
-    if not ref:
-        return config
-    from ..read_simulator.read_profiles import apply_read_profile, load_read_profile
+    from ..read_simulator.read_profiles import resolve_read_model
 
     try:
-        profile = load_read_profile(str(ref))
-    except ValueError as exc:
-        raise click.ClickException(str(exc)) from exc
-    if profile.platform != platform:
-        raise click.ClickException(
-            f"Read profile '{profile.name}' is for platform '{profile.platform}', not '{platform}'."
-        )
-    logging.info("Using read profile %s (sha256 %s)", profile.name, profile.sha256[:12])
-    try:
-        return apply_read_profile(config, profile)
+        return resolve_read_model(config, simulator, read_profile)
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
 

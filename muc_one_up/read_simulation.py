@@ -197,6 +197,11 @@ def simulate_reads(
 
     # Get the pipeline function for the selected simulator (lazy import)
     simulator_func = _get_simulator(simulator)
+    from muc_one_up.read_simulator.read_profiles import SIMULATOR_PLATFORMS, resolve_read_model
+
+    if simulator in SIMULATOR_PLATFORMS and "sha256" not in (config.get("read_model") or {}):
+        # A read_model named in an API config is applied as the CLI applies it (#128).
+        config = resolve_read_model(config, simulator)
     human_reference = _resolve_alignment_reference(config, simulator)
 
     # Log which simulator is being used

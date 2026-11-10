@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `non_vntr` setting gave a 697.5x VNTR against 150.7x on the capture BED;
   `vntr` gives 204.2x against 150.7x (#88).
 
+### Fixed
+- A read profile is now loaded once per run and checked against the
+  `read_model.sha256` recorded when it was applied; a profile edited on disk
+  mid-run raises an error instead of being used silently (#128).
+- A `read_model` in a config passed to `simulate_reads()` (library API) now
+  gets the same platform check and `config_overrides` as the CLI (#128).
+- `reads ont --simulator pbsim3-fragments` rejects a profile with amplicon-only
+  molecule rates (smear, chimera, concatemer, off-target), which fragment mode
+  would ignore (#128).
+
 ### Documentation
 - The Illumina downsampling keys (`downsample_mode`, `sample_target_bed`,
   `vntr_to_flanking_ratio`, `downsample_seed`) are documented, with measured
