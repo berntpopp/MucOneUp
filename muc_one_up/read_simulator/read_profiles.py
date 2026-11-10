@@ -20,6 +20,7 @@ config stays JSON-serialisable and pipelines can resolve the profile again.
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import json
 import logging
@@ -38,6 +39,9 @@ from .molecules import MoleculeModel
 BUILTIN_DIR = Path(__file__).resolve().parent.parent / "data" / "read_profiles"
 OVERRIDABLE_SECTIONS = ("ont_amplicon_params", "pacbio_params", "amplicon_params")
 PLATFORMS = ("ont", "pacbio")
+# Simulators that consume a read profile, and the platform each one requires.
+SIMULATOR_PLATFORMS = {"amplicon": "pacbio", "ont-amplicon": "ont", "ont-fragments": "ont"}
+_AMPLICON_ONLY_RATES = ("smear_rate", "chimera_rate", "concatemer_rate", "offtarget_frac")
 _T = TypeVar("_T")
 _KEYS = {
     "schema_version",
@@ -246,9 +250,51 @@ def apply_read_profile(config: Mapping[str, Any], profile: ReadProfile) -> dict[
     return merged
 
 
+def resolve_read_model(
+    config: dict[str, Any], simulator: str, ref: str | None = None
+) -> dict[str, Any]:
+    """Apply ``ref`` (or ``read_model.profile``) for ``simulator``; the one path for CLI and API.
+
+    Checks the profile platform, rejects amplicon-only settings in fragment mode,
+    overlays ``config_overrides`` and records the profile sha256. Returns
+    ``config`` unchanged when no profile is named.
+    """
+    ref = ref or (config.get("read_model") or {}).get("profile")
+    if not ref:
+        return config
+    profile = load_read_profile(str(ref))
+    platform = SIMULATOR_PLATFORMS[simulator]
+    if profile.platform != platform:
+        raise ValueError(
+            f"Read profile '{profile.name}' is for platform '{profile.platform}', not '{platform}'."
+        )
+    if simulator == "ont-fragments":
+        ignored = [r for r in _AMPLICON_ONLY_RATES if getattr(profile.molecules, r)]
+        if ignored:
+            raise ValueError(
+                f"Read profile '{profile.name}' sets amplicon-only molecule rates "
+                f"({', '.join(ignored)}) that fragment simulation ignores; "
+                "use an amplicon simulator or a genomic profile."
+            )
+    logging.info("Using read profile %s (sha256 %s)", profile.name, profile.sha256[:12])
+    return apply_read_profile(config, profile)
+
+
 def active_read_profile(config: Mapping[str, Any]) -> ReadProfile | None:
     """The profile recorded in ``config['read_model']``, or None for legacy simulation."""
     read_model = config.get("read_model")
     if not read_model:
         return None
-    return load_read_profile(str(read_model["profile"]))
+    return _recorded_profile(str(read_model["profile"]), read_model.get("sha256"))
+
+
+@functools.cache
+def _recorded_profile(ref: str, sha256: str | None) -> ReadProfile:
+    """Load a recorded profile once per process and check it is the version recorded."""
+    profile = load_read_profile(ref)
+    if sha256 and profile.sha256 != sha256:
+        raise ValueError(
+            f"Read profile '{ref}' changed on disk since it was applied "
+            f"(sha256 {profile.sha256[:12]}, recorded {sha256[:12]}); re-run to use the new version."
+        )
+    return profile

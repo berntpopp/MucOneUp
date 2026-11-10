@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A read profile is now loaded once per run and checked against the
+  `read_model.sha256` recorded when it was applied; a profile edited on disk
+  mid-run raises an error instead of being used silently (#128).
+- A `read_model` in a config passed to `simulate_reads()` (library API) now
+  gets the same platform check and `config_overrides` as the CLI (#128).
+- `reads ont --simulator pbsim3-fragments` rejects a profile with amplicon-only
+  molecule rates (smear, chimera, concatemer, off-target), which fragment mode
+  would ignore (#128).
+
 ## [0.50.1] - 2026-11-10
 
 **Seeded outputs change** for haplotypes that contain L or R repeats.
