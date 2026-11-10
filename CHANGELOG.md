@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Read profiles `ont_r10_sup_amplicon_v2` and `ont_r10_genomic_v2` with
+  per-strand error rates (#131). Real R10.4.1 errors are strand-asymmetric
+  (amplicon deletions 1.14% on `+`, 0.49% on `-`), but the `_v1` error
+  channel was symmetric: on the MucSim-Bench standard set (30 cases each),
+  `_v1` missed `+` mismatches by -30% and `-` deletions by +39% (genomic:
+  `-` mismatches -27%, `-` insertions +40%). With `_v2`, every per-strand
+  mismatch, insertion and deletion rate is within 11% of its target. The
+  `_v1` profiles are unchanged, so runs made with them reproduce. Use `_v2`
+  for new work.
+- `errors.strand_rates` in read profiles: optional `+`/`-` overrides of the
+  empirical channel's mismatch, insertion and deletion rates (#131).
+- `helpers/calibrate_read_profile.py --fit-strand-rates ROUNDS` fits
+  `errors.strand_rates` against `error_rates_per_ref_base["<strand>:<type>"]`
+  and records the rounds in `calibration_report.strand_fit` (#131).
+
 ### Changed
 - `config.json` uses `downsample_mode: "vntr"`, the code default. Its
   `non_vntr` setting gave a 697.5x VNTR against 150.7x on the capture BED;
@@ -23,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would ignore (#128).
 
 ### Documentation
+- The genomic profiles' read lengths are a generic default, not a fit, so
+  their VNTR-spanning fraction is not calibrated (#131).
 - The Illumina downsampling keys (`downsample_mode`, `sample_target_bed`,
   `vntr_to_flanking_ratio`, `downsample_seed`) are documented, with measured
   depths and the settings that match real Twist v2 exomes. There are still

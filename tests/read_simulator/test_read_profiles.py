@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -258,13 +259,28 @@ def test_protected_runs_shorter_than_stutter_min_len_rejected(tmp_path: Path) ->
         load_read_profile(str(_write(tmp_path, data)))
 
 
-@pytest.mark.parametrize("name", ["ont_r10_sup_amplicon_v1", "ont_r10_genomic_v1"])
+ONT_PROFILES = [f"ont_r10_{kind}_{v}" for kind in ("sup_amplicon", "genomic") for v in ("v1", "v2")]
+
+
+@pytest.mark.parametrize("name", ONT_PROFILES)
 def test_ont_profiles_record_stutter_fit_provenance(name: str) -> None:
     profile = load_read_profile(name)
     fit = profile.provenance["stutter_fit"]
     assert fit["min_target_n"] >= 1
     assert set(fit["fitted_keys"]) == set(profile.molecules.stutter.pmfs)
     assert "rule" in fit and "generic" in fit
+
+
+@pytest.mark.parametrize("kind", ["sup_amplicon", "genomic"])
+def test_v2_profiles_add_only_strand_rates_to_v1(kind: str) -> None:
+    """v2 refits per-strand rates (#131); v1 stays unchanged so its outputs reproduce."""
+    v1, v2 = (load_read_profile(f"ont_r10_{kind}_{v}") for v in ("v1", "v2"))
+    assert v1.errors is not None and v2.errors is not None
+    assert v1.errors.strand_rates is None and set(v2.errors.strand_rates or {}) == {"+", "-"}
+    assert v2.errors.for_strand("+") != v2.errors.for_strand("-")
+    assert replace(v2.errors, strand_rates=None) == v1.errors
+    assert v2.molecules == v1.molecules and v2.fragments == v1.fragments
+    assert v2.config_overrides == v1.config_overrides
 
 
 def test_amplicon_profile_fits_dupc_c8_on_both_strands() -> None:

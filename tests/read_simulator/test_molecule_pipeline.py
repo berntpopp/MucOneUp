@@ -108,6 +108,23 @@ def test_empirical_sequencer_end_to_end_without_external_tools(tmp_path: Path) -
     assert names[:2] == ["@e_h2_m0000001", "@e_h1_m0000002"]
 
 
+def test_empirical_sequencer_uses_the_molecule_strand_rates(tmp_path: Path) -> None:
+    """Minus-strand reads get the '-' entry of errors.strand_rates (#131)."""
+    from muc_one_up.read_simulator.empirical_errors import EmpiricalErrorModel
+    from muc_one_up.read_simulator.molecule_pipeline import EmpiricalSequencer
+
+    clean_minus = {
+        **ERRORS,
+        "strand_rates": {"-": {"mismatch_rate": 0.0, "insertion_rate": 0.0, "deletion_rate": 0.0}},
+    }
+    seq = "ACGTTGCA" * 50
+    mols = [Molecule(i, 1, "full", "+-"[i % 2], seq, 0, 400) for i in range(1, 9)]
+    EmpiricalSequencer(EmpiricalErrorModel.from_dict(clean_minus)).sequence(mols, tmp_path, 3)
+    reads = (tmp_path / "empirical.fastq").read_text().splitlines()[1::4]
+    assert all(r == seq for r, m in zip(reads, mols, strict=True) if m.strand == "-")
+    assert any(r != seq for r, m in zip(reads, mols, strict=True) if m.strand == "+")
+
+
 def test_sequencer_for_selects_engine(tmp_path: Path) -> None:
     import json
 

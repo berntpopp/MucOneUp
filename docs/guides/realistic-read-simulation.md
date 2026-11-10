@@ -10,11 +10,11 @@ frameshift detection.
 ```bash
 # Realistic ONT R10.4.1 PCR amplicons with per-read truth, FASTQ only
 muconeup --config config.json reads amplicon --platform ont sample.001.simulated.fa \
-  --read-profile ont_r10_sup_amplicon_v1 --coverage 3000 --seed 7 --no-align
+  --read-profile ont_r10_sup_amplicon_v2 --coverage 3000 --seed 7 --no-align
 
 # Genomic / targeted ONT reads from sampled fragments
 muconeup --config config.json reads ont --simulator pbsim3-fragments sample.001.simulated.fa \
-  --read-profile ont_r10_genomic_v1 --n-reads 800 --seed 7 --no-align
+  --read-profile ont_r10_genomic_v2 --n-reads 800 --seed 7 --no-align
 
 # List built-in profiles
 muconeup reads profiles
@@ -51,7 +51,18 @@ be named in the config file as `"read_model": {"profile": "<name or path>"}`.
 | --- | --- | --- | --- |
 | `ont_r10_sup_amplicon_v1` | empirical | 9 public R10.4.1 MUC1 amplicon libraries (ENA PRJEB92208) | total error 2.27% vs 2.14%; fitted keys C3–C8 and G3–G4 on both strands within 0.015 (dupC C8: p_correct 0.36/0.73 on +/− vs 0.36/0.75) |
 | `ont_r10_genomic_v1` | empirical | 2 public R10.4.1 WGS runs (PRJEB92208) | total error 0.46% vs 0.40%; fitted keys C3, C4, C7 and G3 within 0.003; C5, C6 and C8 extrapolated |
+| `ont_r10_sup_amplicon_v2` | empirical | as `_v1`, plus per-strand error rates | `_v1` plus `errors.strand_rates`: every per-strand mismatch, insertion and deletion rate within 11% of the target on the MucSim-Bench standard set (30 cases; `_v1`: −30% to +39%) |
+| `ont_r10_genomic_v2` | empirical | as `_v1`, plus per-strand error rates | `_v1` plus `errors.strand_rates`: every per-strand rate within 10% (30 cases; `_v1`: −27% to +40%). Read lengths are not fitted, so the spanning fraction is not calibrated |
 | `hifi_amplicon_v1` | pbsim3 + ccs | none (generic) | strand mix only; not calibrated to real HiFi data |
+
+Use the `_v2` profiles for new work. The `_v1` profiles are kept unchanged so
+that runs made with them reproduce; they differ only in the error channel's
+strand symmetry (#131).
+
+The genomic profiles' read lengths are a generic default (median 6 kb,
+sigma 0.5), not a fit: the two public WGS runs have read-length medians of
+about 107 kb and 0.9 kb, which no single log-normal fits. Set
+`--read-length-median`/`--read-length-sigma` for your library.
 
 The amplicon profile reproduces the measured library composition:
 
@@ -73,7 +84,10 @@ MUC1 amplicons show about 2.1% error, with C7 read correctly 52% (+ strand) and
 Injected stutter can add noise but cannot remove pbsim3's own, so realistic ONT
 profiles use the empirical channel:
 
-- mismatch, insertion and deletion rates outside homopolymer runs;
+- mismatch, insertion and deletion rates outside homopolymer runs, optionally
+  per read strand (`errors.strand_rates`, keys `+`/`-`), because R10.4.1
+  errors are strand-asymmetric (for example deletions 1.14% on `+` and 0.49%
+  on `−` in the amplicon target);
 - measured indel lengths;
 - a log-normal per-read error spread;
 - Phred qualities scaled for basecaller over-confidence.
@@ -185,6 +199,13 @@ p_correct, the largest absolute residual and a pass/fail against
 `--tolerance` (default 0.03). Keys whose run is not in the template are marked
 `not_in_template`, so validate with a template that contains the runs you care
 about (for MUC1, the amplicon of a dupC haplotype for C8).
+
+`--fit-strand-rates ROUNDS` (empirical engine) then fits `errors.strand_rates`:
+each round simulates the template, measures the per-strand mismatch, insertion
+and deletion rates (stutter included) and moves each channel rate by the gap to
+`error_rates_per_ref_base["<strand>:<type>"]` divided by the template's
+non-homopolymer fraction. The rounds are stored in
+`calibration_report.strand_fit`.
 
 For `--engine pbsim3`, it deconvolves the stutter table against pbsim3's own
 homopolymer errors instead.

@@ -1,0 +1,390 @@
+{
+  "schema_version": 1,
+  "name": "ont_r10_genomic_v2",
+  "platform": "ont",
+  "calibration": "empirical",
+  "description": "ONT R10.4.1 genomic/targeted reads around MUC1 (use with 'reads ont --simulator pbsim3-fragments'): strand mix, strand-specific error rates, empirical error channel and strand-aware homopolymer stutter from public WGS reads; no PCR artefacts",
+  "provenance": {
+    "source": "Aggregate statistics from the public ONT R10.4.1 WGS runs of ENA PRJEB92208 (ERR15277552, ERR15277553; Madritsch et al. 2025, Sci Rep). No reads or sequences are included. Small sample (tens of VNTR-spanning reads): treat homopolymer spectra as approximate.",
+    "derived_by": "MucOneSpan deep review 2026-09-23 read-level profiling; errors and stutter derived and validated with helpers/calibrate_read_profile.py --engine empirical; stutter refit for every per-strand key of the WGS target with n >= 300 and stutter_fallback added for unfitted runs (MucOneUp #132). The WGS target has no C8 key (C5/C6 have n < 300), so C5, C6 and C8 are extrapolated by the fallback rule; v2 (MucOneUp #131): errors.strand_rates fitted per read strand with helpers/calibrate_read_profile.py --engine empirical --fit-strand-rates 3 against error_rates_per_ref_base['<strand>:<type>'] (MucOneSpan benchsim targets prjeb92208_v1.json, which reproduce v1's errors and stutter exactly), on a 4.05 kb simulated MUC1 amplicon template (MucSim-Bench v4 standard case dev-standard-ont_amplicon_r10-0001, haplotype 1 of its *.simulated.fa, slice [9994:14044]); everything else is unchanged from ont_r10_genomic_v1",
+    "fragments_note": "Read-length model is a generic targeted/adaptive-sampling default (median 6 kb, sigma 0.5), not fitted to a specific library. The spanning fraction is therefore not calibrated: the two public WGS runs have read-length medians of about 107 kb and 0.9 kb, which no single log-normal fits (#131).",
+    "calibration_report": {
+      "engine": "empirical",
+      "target_total_error": 0.00398,
+      "strand_fit": {
+        "exposed_frac": 0.683,
+        "target": {
+          "+:del": 0.00229,
+          "+:ins": 0.00135,
+          "+:mismatch": 0.00061,
+          "-:del": 0.0017,
+          "-:ins": 0.00089,
+          "-:mismatch": 0.00098
+        },
+        "simulated_per_round": [
+          {
+            "+:del": 0.00248,
+            "+:ins": 0.00154,
+            "+:mismatch": 0.00071,
+            "-:del": 0.00171,
+            "-:ins": 0.00119,
+            "-:mismatch": 0.00065
+          },
+          {
+            "+:del": 0.00217,
+            "+:ins": 0.00128,
+            "+:mismatch": 0.00058,
+            "-:del": 0.00173,
+            "-:ins": 0.00084,
+            "-:mismatch": 0.001
+          },
+          {
+            "+:del": 0.00236,
+            "+:ins": 0.00139,
+            "+:mismatch": 0.00063,
+            "-:del": 0.00176,
+            "-:ins": 0.00094,
+            "-:mismatch": 0.00104
+          },
+          {
+            "+:del": 0.00231,
+            "+:ins": 0.00137,
+            "+:mismatch": 0.00065,
+            "-:del": 0.00168,
+            "-:ins": 0.00086,
+            "-:mismatch": 0.00091
+          }
+        ]
+      },
+      "validation_round1": {
+        "total_error": 0.00397,
+        "template": "mucsim_v4_dev0001_hap1_amplicon.fa",
+        "n_molecules": 4000,
+        "tolerance": 0.03,
+        "keys_within_tolerance": "16/20",
+        "per_key": {
+          "A2|+": {
+            "n_target": 289,
+            "n_sim": 26247,
+            "p_correct_target": 0.9827,
+            "status": "compared",
+            "p_correct_sim": 0.9929,
+            "max_abs_residual": 0.0102,
+            "within_tolerance": true
+          },
+          "A2|-": {
+            "n_target": 318,
+            "n_sim": 25753,
+            "p_correct_target": 0.9434,
+            "status": "compared",
+            "p_correct_sim": 0.9912,
+            "max_abs_residual": 0.0478,
+            "within_tolerance": false
+          },
+          "C2|+": {
+            "n_target": 7120,
+            "n_sim": 603681,
+            "p_correct_target": 0.9979,
+            "status": "compared",
+            "p_correct_sim": 0.9922,
+            "max_abs_residual": 0.0057,
+            "within_tolerance": true
+          },
+          "C2|-": {
+            "n_target": 8090,
+            "n_sim": 592319,
+            "p_correct_target": 0.9942,
+            "status": "compared",
+            "p_correct_sim": 0.9909,
+            "max_abs_residual": 0.0046,
+            "within_tolerance": true
+          },
+          "C3|+": {
+            "n_target": 1904,
+            "n_sim": 191805,
+            "p_correct_target": 0.9885,
+            "status": "compared",
+            "p_correct_sim": 0.9882,
+            "max_abs_residual": 0.0003,
+            "within_tolerance": true
+          },
+          "C3|-": {
+            "n_target": 2173,
+            "n_sim": 188195,
+            "p_correct_target": 0.9945,
+            "status": "compared",
+            "p_correct_sim": 0.9955,
+            "max_abs_residual": 0.001,
+            "within_tolerance": true
+          },
+          "C4|+": {
+            "n_target": 2946,
+            "n_sim": 258432,
+            "p_correct_target": 0.997,
+            "status": "compared",
+            "p_correct_sim": 0.9976,
+            "max_abs_residual": 0.0007,
+            "within_tolerance": true
+          },
+          "C4|-": {
+            "n_target": 3358,
+            "n_sim": 253568,
+            "p_correct_target": 0.9929,
+            "status": "compared",
+            "p_correct_sim": 0.993,
+            "max_abs_residual": 0.0002,
+            "within_tolerance": true
+          },
+          "C5|+": {
+            "n_target": 60,
+            "n_sim": 2019,
+            "p_correct_target": 0.9333,
+            "status": "compared",
+            "p_correct_sim": 0.9886,
+            "max_abs_residual": 0.0553,
+            "within_tolerance": false
+          },
+          "C5|-": {
+            "n_target": 70,
+            "n_sim": 1981,
+            "p_correct_target": 0.9857,
+            "status": "compared",
+            "p_correct_sim": 0.9924,
+            "max_abs_residual": 0.0108,
+            "within_tolerance": true
+          },
+          "C6|+": {
+            "n_target": 97,
+            "n_sim": 8076,
+            "p_correct_target": 0.8969,
+            "status": "compared",
+            "p_correct_sim": 0.9607,
+            "max_abs_residual": 0.0638,
+            "within_tolerance": false
+          },
+          "C6|-": {
+            "n_target": 110,
+            "n_sim": 7924,
+            "p_correct_target": 0.9636,
+            "status": "compared",
+            "p_correct_sim": 0.9797,
+            "max_abs_residual": 0.0206,
+            "within_tolerance": true
+          },
+          "C7|+": {
+            "n_target": 964,
+            "n_sim": 72684,
+            "p_correct_target": 0.8651,
+            "status": "compared",
+            "p_correct_sim": 0.8679,
+            "max_abs_residual": 0.0028,
+            "within_tolerance": true
+          },
+          "C7|-": {
+            "n_target": 1098,
+            "n_sim": 71316,
+            "p_correct_target": 0.9663,
+            "status": "compared",
+            "p_correct_sim": 0.9677,
+            "max_abs_residual": 0.0014,
+            "within_tolerance": true
+          },
+          "G2|+": {
+            "n_target": 7151,
+            "n_sim": 635985,
+            "p_correct_target": 0.9972,
+            "status": "compared",
+            "p_correct_sim": 0.9941,
+            "max_abs_residual": 0.0031,
+            "within_tolerance": true
+          },
+          "G2|-": {
+            "n_target": 8141,
+            "n_sim": 624015,
+            "p_correct_target": 0.9957,
+            "status": "compared",
+            "p_correct_sim": 0.9924,
+            "max_abs_residual": 0.0038,
+            "within_tolerance": true
+          },
+          "G3|+": {
+            "n_target": 1498,
+            "n_sim": 133254,
+            "p_correct_target": 0.994,
+            "status": "compared",
+            "p_correct_sim": 0.9939,
+            "max_abs_residual": 0.0002,
+            "within_tolerance": true
+          },
+          "G3|-": {
+            "n_target": 1706,
+            "n_sim": 130746,
+            "p_correct_target": 0.9824,
+            "status": "compared",
+            "p_correct_sim": 0.9816,
+            "max_abs_residual": 0.0008,
+            "within_tolerance": true
+          },
+          "T2|+": {
+            "n_target": 144,
+            "n_sim": 14133,
+            "p_correct_target": 0.9722,
+            "status": "compared",
+            "p_correct_sim": 0.9933,
+            "max_abs_residual": 0.0211,
+            "within_tolerance": true
+          },
+          "T2|-": {
+            "n_target": 156,
+            "n_sim": 13867,
+            "p_correct_target": 0.9551,
+            "status": "compared",
+            "p_correct_sim": 0.992,
+            "max_abs_residual": 0.0369,
+            "within_tolerance": false
+          }
+        }
+      }
+    },
+    "stutter_fit": {
+      "method": "empirical engine: fitted entry = measured hp_P_obs_given_true pmf truncated to |delta| <= max_delta (and >= -run length) and renormalised",
+      "min_target_n": 300,
+      "max_extrapolation_bases": "3: the log-odds slope is only extrapolated this many bases beyond the fitted range; longer runs are treated like the capped length",
+      "min_run_len": 3,
+      "max_delta": 6,
+      "fitted_keys": [
+        "C3|+",
+        "C3|-",
+        "C4|+",
+        "C4|-",
+        "C7|+",
+        "C7|-",
+        "G3|+",
+        "G3|-"
+      ],
+      "excluded_keys": {
+        "C5|+": "n=60",
+        "C5|-": "n=70",
+        "C6|+": "n=97",
+        "C6|-": "n=110"
+      },
+      "rule": "log_odds_interpolate: runs without a fitted entry of the same base and strand (strand 'both' if no strand-specific entry) interpolate the error log-odds and error shape linearly between the nearest fitted lengths on both sides; beyond the longest (or below the shortest) fitted length the error odds of that entry are scaled by exp(log_odds_slope_per_base * length difference), with the difference capped at max_extrapolation_bases; bases without fitted entries, or references without a usable error delta, use the generic pmf",
+      "slope": "median least-squares slope of error log-odds vs length over base/strand groups with >= 3 fitted lengths, clamped at 0",
+      "generic": "n-weighted pool of fitted entries at length 3; used with a warning for bases without any fitted entry",
+      "target_key": "ont_wgs_PRJEB92208"
+    }
+  },
+  "molecules": {
+    "forward_frac": 0.5,
+    "stutter": {
+      "C3|+": {
+        "-1": 0.0021,
+        "0": 0.98844,
+        "1": 0.00683,
+        "2": 0.0021,
+        "3": 0.00053
+      },
+      "C3|-": {
+        "-1": 0.00276,
+        "0": 0.9954,
+        "1": 0.00184
+      },
+      "C4|+": {
+        "-1": 0.00068,
+        "0": 0.99762,
+        "1": 0.0017
+      },
+      "C4|-": {
+        "-4": 0.0006,
+        "-2": 0.0006,
+        "-1": 0.00357,
+        "0": 0.99285,
+        "1": 0.00238
+      },
+      "C7|+": {
+        "-3": 0.00104,
+        "-2": 0.0166,
+        "-1": 0.10062,
+        "0": 0.86514,
+        "1": 0.01245,
+        "2": 0.00104,
+        "3": 0.00311
+      },
+      "C7|-": {
+        "-4": 0.00091,
+        "-2": 0.00273,
+        "-1": 0.01732,
+        "0": 0.96719,
+        "1": 0.01185
+      },
+      "G3|+": {
+        "-2": 0.00067,
+        "-1": 0.00334,
+        "0": 0.99398,
+        "1": 0.00067,
+        "2": 0.00134
+      },
+      "G3|-": {
+        "-2": 0.00059,
+        "-1": 0.01114,
+        "0": 0.98241,
+        "1": 0.00586
+      }
+    },
+    "stutter_fallback": {
+      "rule": "log_odds_interpolate",
+      "log_odds_slope_per_base": 0.66095,
+      "max_extrapolation_bases": 3,
+      "generic": {
+        "ref_len": 3,
+        "pmf": {
+          "-2": 0.00028,
+          "-1": 0.00467,
+          "0": 0.99024,
+          "1": 0.00385,
+          "2": 0.00082,
+          "3": 0.00014
+        }
+      }
+    }
+  },
+  "fragments": {
+    "length_median": 6000,
+    "length_sigma": 0.5
+  },
+  "errors": {
+    "mismatch_rate": 0.001038,
+    "insertion_rate": 0.00106,
+    "deletion_rate": 0.001475,
+    "insertion_len_pmf": {
+      "1": 0.83651,
+      "2": 0.10889,
+      "3": 0.0347,
+      "4": 0.005,
+      "5": 0.005,
+      "7": 0.0099
+    },
+    "deletion_len_pmf": {
+      "1": 0.79059,
+      "10": 0.0034,
+      "2": 0.13511,
+      "3": 0.0338,
+      "4": 0.0236,
+      "5": 0.0101,
+      "7": 0.0034
+    },
+    "read_error_sigma": 1.202,
+    "strand_rates": {
+      "+": {
+        "mismatch_rate": 0.000903,
+        "insertion_rate": 0.000834,
+        "deletion_rate": 0.001276
+      },
+      "-": {
+        "mismatch_rate": 0.001408,
+        "insertion_rate": 0.000614,
+        "deletion_rate": 0.001322
+      }
+    }
+  }
+}

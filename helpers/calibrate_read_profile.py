@@ -11,7 +11,10 @@ Two engines:
   key with ``n >= --min-target-n`` is fitted (``|delta| <= --max-delta``), and
   ``molecules.stutter_fallback`` is derived for runs without a fitted entry
   (see ``muc_one_up/read_simulator/stutter_fit.py``); the fit is recorded in
-  ``provenance.stutter_fit``.
+  ``provenance.stutter_fit``. With ``--fit-strand-rates`` the channel's
+  mismatch/insertion/deletion rates are then fitted per read strand
+  (``errors.strand_rates``) so the simulated per-strand totals, stutter
+  included, match ``error_rates_per_ref_base["<strand>:<type>"]`` (#131).
 * ``--engine pbsim3``: pbsim3 adds its own context-free homopolymer errors, so
   the injected table is *deconvolved* (Richardson-Lucy against a stutter-free
   pbsim3 run, then multiplicative fixed-point corrections). The output profile
@@ -74,10 +77,11 @@ from muc_one_up.read_simulator.stutter_fit import (
     stutter_profile_section,
 )
 
+_TYPES = {"X": "mismatch", "I": "ins", "D": "del"}
 
-def _t2q(read: str, template: str) -> list[int]:
-    """Template position -> read position map from a global alignment."""
-    cigar = edlib.align(read, template, mode="NW", task="path")["cigar"]
+
+def _t2q(cigar: str, template: str, types: Counter | None = None) -> list[int]:
+    """Template position -> read position map from a global alignment's CIGAR."""
     t2q, ti, qi, num = [0] * (len(template) + 1), 0, 0, ""
     for ch in cigar:
         if ch.isdigit():
@@ -85,6 +89,8 @@ def _t2q(read: str, template: str) -> list[int]:
             continue
         n = int(num)
         num = ""
+        if types is not None and ch in _TYPES:
+            types[_TYPES[ch]] += n
         if ch in "=X":
             for _ in range(n):
                 t2q[ti] = qi
@@ -114,8 +120,8 @@ def _observed_run(read: str, t2q: list[int], start: int, end: int, base: str) ->
 
 def measure(
     fastq: Path, truth: Path, template: str, max_reads: int, max_len: int
-) -> tuple[dict[str, Counter], float]:
-    """Observed homopolymer deltas per key and the total edit rate, from truth-tracked reads."""
+) -> tuple[dict[str, Counter], float, dict[str, float]]:
+    """Homopolymer deltas per key, total edit rate and ``"<strand>:<type>"`` rates per base."""
     strands = {}
     with gzip.open(truth, "rt") as handle:
         next(handle)
@@ -126,6 +132,7 @@ def measure(
     runs = [(s, e, b) for s, e, b in homopolymer_runs(template, 2) if e - s <= max_len]
     spectra: dict[str, Counter] = defaultdict(Counter)
     edits = bases = 0
+    types: dict[str, Counter] = {"+": Counter(), "-": Counter()}
     lines = fastq.read_text().splitlines()
     for i in range(0, min(len(lines), 4 * max_reads), 4):
         name, seq = lines[i][1:], lines[i + 1]
@@ -133,13 +140,20 @@ def measure(
             continue
         strand = strands[name]
         forward = seq if strand == "+" else reverse_complement(seq)
-        edits += edlib.align(forward, template, mode="NW")["editDistance"]
+        aln = edlib.align(forward, template, mode="NW", task="path")
+        edits += aln["editDistance"]
         bases += len(template)
-        t2q = _t2q(forward, template)
+        types[strand]["bases"] += len(template)
+        t2q = _t2q(aln["cigar"], template, types[strand])
         for start, end, base in runs:
             delta = _observed_run(forward, t2q, start, end, base) - (end - start)
             spectra[f"{base}{end - start}|{strand}"][delta] += 1
-    return spectra, edits / max(bases, 1)
+    rates = {
+        f"{strand}:{kind}": c[kind] / max(c["bases"], 1)
+        for strand, c in types.items()
+        for kind in _TYPES.values()
+    }
+    return spectra, edits / max(bases, 1), rates
 
 
 def _pmf(counter: Counter) -> dict[int, float]:
@@ -174,7 +188,7 @@ def richardson_lucy(
 
 def simulate(
     template: str, n: int, model: MoleculeModel, run: Sequencer, seed: int, max_len: int
-) -> tuple[dict[str, Counter], float]:
+) -> tuple[dict[str, Counter], float, dict[str, float]]:
     molecules = build_amplicon_molecules([template], [n], model, random.Random(seed))
     with tempfile.TemporaryDirectory(prefix="calibrate_") as tmp:
         work = Path(tmp)
@@ -205,6 +219,47 @@ def empirical_errors_from_targets(targets: dict, sigma: float) -> dict:
     for pmf in pmfs.values():  # absorb rounding drift into length 1
         pmf["1"] = round(pmf["1"] + 1.0 - sum(pmf.values()), 5)
     return {**{k: round(v, 6) for k, v in median.items()}, **pmfs, "read_error_sigma": sigma}
+
+
+def fit_strand_rates(
+    errors: dict,
+    targets: dict,
+    template: str,
+    model: MoleculeModel,
+    n: int,
+    seed: int,
+    max_len: int,
+    rounds: int,
+) -> dict:
+    """Fit ``errors.strand_rates`` so simulated per-strand type rates hit the targets.
+
+    Stutter adds homopolymer indels on top of the channel, and the channel never
+    touches protected runs, so each round moves a channel rate by the remaining
+    per-base gap divided by the exposed (non-homopolymer) fraction of the template.
+    """
+    min_len = EmpiricalErrorModel.from_dict(errors).hp_min_len
+    exposed = 1.0 - sum(e - s for s, e, _ in homopolymer_runs(template, min_len)) / len(template)
+    target = {k: v["median"] for k, v in targets["error_rates_per_ref_base"].items()}
+    names = {"mismatch": "mismatch_rate", "ins": "insertion_rate", "del": "deletion_rate"}
+    rates = {s: {name: errors[name] for name in names.values()} for s in ("+", "-")}
+    history = []
+    for rnd in range(rounds + 1):
+        run = EmpiricalSequencer(EmpiricalErrorModel.from_dict({**errors, "strand_rates": rates}))
+        _, _, sim = simulate(template, n, model, run, seed + 100 + rnd, max_len)
+        history.append({k: round(v, 5) for k, v in sorted(sim.items())})
+        if rnd == rounds:
+            break
+        for key, value in sim.items():
+            strand, kind = key.split(":")
+            name = names[kind]
+            step = (target[key] - value) / exposed
+            rates[strand][name] = round(min(0.2, max(0.0, rates[strand][name] + step)), 6)
+    report = {
+        "exposed_frac": round(exposed, 4),
+        "target": {k: target[k] for k in sorted(history[-1])},
+        "simulated_per_round": history,
+    }
+    return {"strand_rates": rates, "report": report}
 
 
 def read_error_sigma(targets: dict) -> float:
@@ -272,11 +327,20 @@ def _parse_args() -> argparse.Namespace:
         help="per-key pass threshold on the max absolute pmf residual",
     )
     ap.add_argument("--rounds", type=int, default=2)
+    ap.add_argument(
+        "--fit-strand-rates",
+        type=int,
+        default=0,
+        metavar="ROUNDS",
+        help="empirical engine: fit errors.strand_rates in this many rounds (0 = off)",
+    )
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
     if args.engine == "pbsim3" and not args.model_file:
         ap.error("--engine pbsim3 requires --model-file")
+    if args.engine == "pbsim3" and args.fit_strand_rates:
+        ap.error("--fit-strand-rates needs --engine empirical")
     return args
 
 
@@ -298,6 +362,7 @@ def main() -> None:
     if args.engine == "empirical":
         derived = empirical_errors_from_targets(targets, read_error_sigma(targets))
         profile["errors"] = {**profile.get("errors", {}), **derived}
+        profile["errors"].pop("strand_rates", None)  # fitted for the old rates; refit below
         error_model = EmpiricalErrorModel.from_dict(profile["errors"])
         if error_model.hp_min_len != MIN_RUN_LEN:
             # Runs >= hp_min_len are protected, runs >= MIN_RUN_LEN are stuttered;
@@ -322,6 +387,21 @@ def main() -> None:
         stutter = {k: {int(d): p for d, p in v.items()} for k, v in section["stutter"].items()}
         fallback = StutterFallback.from_dict(section["stutter_fallback"])
         rounds = 1
+        if args.fit_strand_rates:
+            table = StutterTable.from_dict(section["stutter"], fallback=fallback)
+            fit = fit_strand_rates(
+                profile["errors"],
+                targets,
+                template,
+                MoleculeModel(forward_frac=0.5, stutter=table),
+                args.n_molecules,
+                args.seed,
+                max_len,
+                args.fit_strand_rates,
+            )
+            profile["errors"]["strand_rates"] = fit["strand_rates"]
+            report["strand_fit"] = fit["report"]
+            sequencer = EmpiricalSequencer(EmpiricalErrorModel.from_dict(profile["errors"]))
     else:
         ont = profile.get("config_overrides", {}).get("ont_amplicon_params", {})
         sequencer = PbsimRun(
@@ -338,7 +418,7 @@ def main() -> None:
             min_len=MIN_RUN_LEN,
             max_delta=args.max_delta,
         )
-        pbsim_spectra, pbsim_err = simulate(
+        pbsim_spectra, pbsim_err, _ = simulate(
             template,
             args.n_molecules,
             MoleculeModel(forward_frac=0.5),
@@ -360,7 +440,7 @@ def main() -> None:
             {k: {str(d): p for d, p in q.items()} for k, q in stutter.items()}, fallback=fallback
         )
         model = MoleculeModel(forward_frac=0.5, stutter=table)
-        observed, total_err = simulate(
+        observed, total_err, _ = simulate(
             template, args.n_molecules, model, sequencer, args.seed + rnd, max_len
         )
         per_key = compare_to_targets(
