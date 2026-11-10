@@ -18,7 +18,12 @@ Two engines:
   With ``--fit-unit-stutter`` (either engine) ``molecules.unit_stutter_rate`` and
   ``unit_stutter_pmf`` (whole-repeat-unit PCR slippage) are fitted from the
   per-allele ``per_allele_stutter_and_length_noise`` ratios and recorded in
-  ``provenance.unit_stutter_fit`` (#131).
+  ``provenance.unit_stutter_fit`` (#131). With ``--fit-unit-stutter ROUNDS --vntr START END``
+  they are then refitted by simulation, so that reads of the template measured
+  with the real profiler's anchor-span rule reproduce those ratios
+  (``provenance.unit_stutter_fit.refit``). ``strand_fit.runs_per_60bp`` records
+  the template's homopolymer runs against the target's: per-strand rates fitted
+  on a template with fewer long runs than real alleles come out too high.
 * ``--engine pbsim3``: pbsim3 adds its own context-free homopolymer errors, so
   the injected table is *deconvolved* (Richardson-Lucy against a stutter-free
   pbsim3 run, then multiplicative fixed-point corrections). The output profile
@@ -122,17 +127,23 @@ def _observed_run(read: str, t2q: list[int], start: int, end: int, base: str) ->
     )
 
 
-def measure(
-    fastq: Path, truth: Path, template: str, max_reads: int, max_len: int
-) -> tuple[dict[str, Counter], float, dict[str, float]]:
-    """Homopolymer deltas per key, total edit rate and ``"<strand>:<type>"`` rates per base."""
+def _strands(truth: Path, kinds: tuple[str, ...]) -> dict[str, str]:
+    """Read id -> strand of the truth rows of the given kinds."""
     strands = {}
     with gzip.open(truth, "rt") as handle:
         next(handle)
         for line in handle:
             fields = line.rstrip("\n").split("\t")
-            if fields[3] == "full":
+            if fields[3] in kinds:
                 strands[fields[0]] = fields[4]
+    return strands
+
+
+def measure(
+    fastq: Path, truth: Path, template: str, max_reads: int, max_len: int
+) -> tuple[dict[str, Counter], float, dict[str, float]]:
+    """Homopolymer deltas per key, total edit rate and ``"<strand>:<type>"`` rates per base."""
+    strands = _strands(truth, ("full",))
     runs = [(s, e, b) for s, e, b in homopolymer_runs(template, 2) if e - s <= max_len]
     spectra: dict[str, Counter] = defaultdict(Counter)
     edits = bases = 0
@@ -190,15 +201,28 @@ def richardson_lucy(
     return q
 
 
-def simulate(
-    template: str, n: int, model: MoleculeModel, run: Sequencer, seed: int, max_len: int
-) -> tuple[dict[str, Counter], float, dict[str, float]]:
-    molecules = build_amplicon_molecules([template], [n], model, random.Random(seed))
+def _simulated(template, n, model, run, seed, measure_fn, unit_bounds=()):
+    """Simulate ``n`` molecules of ``template`` and return ``measure_fn(fastq, truth)``."""
+    molecules = build_amplicon_molecules(
+        [template],
+        [n],
+        model,
+        random.Random(seed),
+        unit_bounds=[list(unit_bounds)] if unit_bounds else (),
+    )
     with tempfile.TemporaryDirectory(prefix="calibrate_") as tmp:
         work = Path(tmp)
         fastq, truth = work / "r.fastq", work / "t.tsv.gz"
         simulate_molecule_reads(molecules, run, work / "sim", fastq, truth, "cal", seed)
-        return measure(fastq, truth, template, n, max_len)
+        return measure_fn(fastq, truth)
+
+
+def simulate(
+    template: str, n: int, model: MoleculeModel, run: Sequencer, seed: int, max_len: int
+) -> tuple[dict[str, Counter], float, dict[str, float]]:
+    return _simulated(
+        template, n, model, run, seed, lambda f, t: measure(f, t, template, n, max_len)
+    )
 
 
 def empirical_errors_from_targets(targets: dict, sigma: float) -> dict:
@@ -299,6 +323,149 @@ def fit_unit_stutter(targets: dict) -> tuple[dict, dict]:
     return section, record
 
 
+UNIT = 60  # MUC1 repeat unit (bp); the real profiler's anchors are one unit long
+ANCHOR_MAX_EDITS, ANCHOR_MAX_HITS = 12, 6  # real profiler anchor search (edlib infix)
+
+
+def _anchor_hits(anchor: str, read: str) -> list[tuple[int, int]]:
+    """Sorted non-overlapping ``[start, end)`` hits of an anchor, as the real profiler finds them."""
+    hits = []
+    for _ in range(ANCHOR_MAX_HITS):
+        found = edlib.align(anchor, read, mode="HW", task="locations", k=ANCHOR_MAX_EDITS)
+        if found["editDistance"] < 0:
+            break
+        s, e = found["locations"][0]
+        hits.append((s, e + 1))
+        read = read[:s] + "N" * (e + 1 - s) + read[e + 1 :]
+    return sorted(hits)
+
+
+def unit_offsets(fastq: Path, truth: Path, template: str, vntr: tuple[int, int]) -> dict:
+    """The real profiler's per-allele stutter statistic on simulated reads of one template.
+
+    Span = first left anchor (the VNTR's first unit) to the first right anchor (its
+    last unit) after it; ``dist`` = span - VNTR length. On-peak: ``|dist| <=
+    max(30, 0.012 * length)``; a read is k units off if ``round(dist / UNIT) == k``.
+    """
+    lo, hi = vntr
+    left, right, allele = template[lo : lo + UNIT], template[hi - UNIT : hi], hi - lo
+    strands = _strands(truth, ("full", "smear", "concatemer"))
+    on: list[int] = []
+    off: Counter = Counter()
+    lines = fastq.read_text().splitlines()
+    for i in range(0, len(lines), 4):
+        name, seq = lines[i][1:], lines[i + 1]
+        if name not in strands:
+            continue
+        read = seq if strands[name] == "+" else reverse_complement(seq)
+        first_left = _anchor_hits(left, read)[:1]
+        ends = [e for s, e in _anchor_hits(right, read) if first_left and s >= first_left[0][1]]
+        if not ends:
+            continue
+        dist = ends[0] - first_left[0][0] - allele
+        if abs(dist) <= max(30.0, 0.012 * allele):
+            on.append(dist)
+        off[round(dist / UNIT)] += 1
+    n = max(len(on), 1)
+    return {
+        "n_on_peak": len(on),
+        "per_onpeak": {k: off[k] / n for k in UNIT_STUTTER_KEYS},
+        "on_peak_median_bp": sorted(on)[len(on) // 2] if on else None,
+    }
+
+
+def refit_unit_stutter(
+    section: dict,
+    molecules: dict,
+    targets: dict,
+    template: str,
+    vntr: tuple[int, int],
+    run: Sequencer,
+    n: int,
+    seed: int,
+    rounds: int,
+) -> tuple[dict, dict]:
+    """Refit ``unit_stutter_rate``/``pmf`` so simulated reads reproduce the target statistic.
+
+    The profiler counts a read -1 unit off when ``dist`` lies in [-90, -30] bp, which
+    overlaps the on-peak window, so the target ratios also count the peak's own
+    indel tail and short smears; `fit_unit_stutter` reads them as pure slippage.
+    Here the target is the pooled ratio per allele unit times the template's units,
+    measured on reads simulated with the profile's full molecule model. Each round
+    moves the per-unit slip rate of each k by the remaining gap per unit.
+    """
+    lo, hi = vntr
+    if (hi - lo) % UNIT or hi - lo < 2 * UNIT:
+        raise SystemExit(f"--vntr {lo} {hi}: the VNTR must be whole {UNIT} bp units")
+    units = (hi - lo) // UNIT
+    rows = targets["per_allele_stutter_and_length_noise"]
+    exposure = sum(r["n_on_peak"] * r["units"] for r in rows)
+    target = {
+        k: units * sum(r["n_on_peak"] * r[key] for r in rows) / exposure
+        for k, key in UNIT_STUTTER_KEYS.items()
+    }
+    slip = {
+        int(k): section["unit_stutter_rate"] * p for k, p in section["unit_stutter_pmf"].items()
+    }
+    history = []
+    for rnd in range(rounds + 1):
+        rate = sum(slip.values())
+        if not rate:
+            raise SystemExit(
+                "unit-stutter refit: the template's reads already exceed every target ratio"
+            )
+        pmf = {str(k): round(v / rate, 5) for k, v in sorted(slip.items())}
+        pmf["-1"] = round(pmf["-1"] + 1.0 - sum(pmf.values()), 5)  # absorb rounding drift
+        section = {"unit_stutter_rate": round(rate, 6), "unit_stutter_pmf": pmf}
+        model = MoleculeModel.from_dict({**molecules, **section, "offtarget_frac": 0.0})
+        stats = _simulated(
+            template,
+            n,
+            model,
+            run,
+            seed + 200 + rnd,
+            lambda f, t: unit_offsets(f, t, template, vntr),
+            range(lo, hi + 1, UNIT),
+        )
+        history.append(
+            {
+                **section,
+                "per_onpeak": {str(k): round(v, 4) for k, v in stats["per_onpeak"].items()},
+                "on_peak_median_bp": stats["on_peak_median_bp"],
+            }
+        )
+        if rnd == rounds:
+            break
+        for k in slip:
+            slip[k] = max(0.0, slip[k] + (target[k] - stats["per_onpeak"][k]) / units)
+    record = {
+        "method": "simulation refit: per-unit slip rate of each k moved by (target - "
+        "simulated) / units per round, where target = pooled per_allele ratio per unit "
+        "x template units and simulated = the real profiler's anchor-span rule "
+        "(round(dist / 60) == k, per on-peak read) on reads of the template",
+        "template_vntr_units": units,
+        "target_per_onpeak": {str(k): round(v, 4) for k, v in target.items()},
+        "rounds": history,
+    }
+    return section, record
+
+
+def run_density(template: str, targets: dict, min_len: int) -> dict[str, list[float]]:
+    """Homopolymer runs per 60 bp, ``[template, target]``, for every '+' target key.
+
+    Stutter indels scale with these counts: a template with fewer long runs than the
+    real alleles makes `fit_strand_rates` raise the channel rates to compensate.
+    """
+    bases = sum(lib["+"]["n_ref_bases"] for lib in targets["error_rates_per_lib"].values())
+    found = Counter(f"{b}{e - s}" for s, e, b in homopolymer_runs(template, min_len))
+    return {
+        run: [round(UNIT * found[run] / len(template), 3), round(UNIT * row["n"] / bases, 3)]
+        for key, row in sorted(targets["hp_P_obs_given_true"].items())
+        for run in [key.partition("|")[0]]
+        if key.endswith("|+") and int(run[1:]) >= min_len
+    }
+
+
 def read_error_sigma(targets: dict) -> float:
     """Log-normal sigma of per-read error from the median library's p5/p95 spread."""
     spreads = sorted(
@@ -373,8 +540,20 @@ def _parse_args() -> argparse.Namespace:
     )
     ap.add_argument(
         "--fit-unit-stutter",
-        action="store_true",
-        help="fit molecules.unit_stutter_rate/pmf from per_allele_stutter_and_length_noise",
+        type=int,
+        nargs="?",
+        const=0,
+        default=None,
+        metavar="ROUNDS",
+        help="fit molecules.unit_stutter_rate/pmf from per_allele_stutter_and_length_noise; "
+        "with ROUNDS > 0, then refit it in that many simulation rounds (needs --vntr)",
+    )
+    ap.add_argument(
+        "--vntr",
+        type=int,
+        nargs=2,
+        metavar=("START", "END"),
+        help="the template's VNTR [START, END) (whole repeat units), for unit-stutter rounds",
     )
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", type=Path, required=True)
@@ -383,6 +562,8 @@ def _parse_args() -> argparse.Namespace:
         ap.error("--engine pbsim3 requires --model-file")
     if args.engine == "pbsim3" and args.fit_strand_rates:
         ap.error("--fit-strand-rates needs --engine empirical")
+    if args.fit_unit_stutter and not args.vntr:
+        ap.error("--fit-unit-stutter ROUNDS needs --vntr")
     return args
 
 
@@ -443,6 +624,9 @@ def main() -> None:
             )
             profile["errors"]["strand_rates"] = fit["strand_rates"]
             report["strand_fit"] = fit["report"]
+            report["strand_fit"]["runs_per_60bp"] = run_density(
+                template, targets, error_model.hp_min_len
+            )
             sequencer = EmpiricalSequencer(EmpiricalErrorModel.from_dict(profile["errors"]))
     else:
         ont = profile.get("config_overrides", {}).get("ont_amplicon_params", {})
@@ -515,9 +699,21 @@ def main() -> None:
         molecules.pop("stutter_fallback", None)
         profile.pop("errors", None)
         provenance.pop("stutter_fit", None)
-    if args.fit_unit_stutter:
+    if args.fit_unit_stutter is not None:
         section, provenance["unit_stutter_fit"] = fit_unit_stutter(targets)
         provenance["unit_stutter_fit"]["target_key"] = args.target_key
+        if args.fit_unit_stutter:
+            section, provenance["unit_stutter_fit"]["refit"] = refit_unit_stutter(
+                section,
+                molecules,
+                targets,
+                template,
+                tuple(args.vntr),
+                sequencer,
+                args.n_molecules,
+                args.seed,
+                args.fit_unit_stutter,
+            )
         molecules.update(section)
     provenance["calibration_report"] = report
     args.out.write_text(json.dumps(profile, indent=2) + "\n")
