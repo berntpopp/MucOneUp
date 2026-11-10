@@ -700,7 +700,8 @@ def test_shipped_benign_mutations_keep_frame():
         ("insC_pos23", "E", lambda s: s[:23] + "C" + s[23:]),
         ("ins16bp", "C", lambda s: s[:57] + s[41:57] + s[57:]),  # C:42_57dup16
         ("del18_31", "X", lambda s: s[:17] + s[31:]),  # X:18_31del
-        ("dupA_C", "C", lambda s: s + "A"),  # C:60dupA
+        ("dupA", "X", lambda s: s + "A"),  # X:60dupA (Olinger 2020)
+        ("dupA", "C", lambda s: s + "A"),  # C:60dupA
     ],
 )
 def test_shipped_published_variants_match_hgvs(name, unit, expected):

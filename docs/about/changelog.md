@@ -18,9 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (pristanna/muc1repeats). They came from the VNtyper motif set and each
   differed by 1 bp (#201).
 
-### Added
-- `dupA_C`: the published C:60dupA frameshift (Vrbacká et al. 2025)
-  (#201).
+### Changed
+- `dupA` (60dupA) is also allowed on repeat C, where Vrbacká et al. 2025
+  report it (C:60dupA). Random `dupA` targets can now land on C (#201).
 
 ## [0.50.0] - 2026-11-10
 

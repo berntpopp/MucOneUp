@@ -242,21 +242,7 @@
     },
     "dupA": {
       "allowed_repeats": [
-        "X"
-      ],
-      "changes": [
-        {
-          "type": "insert",
-          "start": 60,
-          "end": 61,
-          "sequence": "A"
-        }
-      ],
-      "type": "real",
-      "citation": "Olinger et al. 2020, PMID:32647000, 10.1016/j.kint.2020.04.038"
-    },
-    "dupA_C": {
-      "allowed_repeats": [
+        "X",
         "C"
       ],
       "changes": [
@@ -268,7 +254,7 @@
         }
       ],
       "type": "real",
-      "citation": "Vrback\u00e1 et al. 2025, 10.1101/2025.09.06.673538"
+      "citation": "Olinger et al. 2020, PMID:32647000, 10.1016/j.kint.2020.04.038; Vrback\u00e1 et al. 2025 (C:60dupA), 10.1101/2025.09.06.673538"
     },
     "delinsAT": {
       "allowed_repeats": [
