@@ -159,6 +159,7 @@ def simulate_ont_amplicon_pipeline(
                     output_dir / truth_name,
                     output_base,
                     seed,
+                    config,
                 )
             else:
                 intermediate_files.extend(

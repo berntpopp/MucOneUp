@@ -283,6 +283,18 @@ def test_v2_profiles_add_only_strand_rates_to_v1(kind: str) -> None:
     assert v2.config_overrides == v1.config_overrides
 
 
+def test_v3_amplicon_profile_adds_only_unit_stutter_to_v2() -> None:
+    """v3 adds fitted whole-unit PCR stutter (#131); v2 stays unchanged so its outputs reproduce."""
+    v2, v3 = (load_read_profile(f"ont_r10_sup_amplicon_{v}") for v in ("v2", "v3"))
+    assert v3.name == "ont_r10_sup_amplicon_v3"
+    assert 0 < v3.molecules.unit_stutter_rate < 0.01
+    assert {k for k, _ in v3.molecules.unit_stutter_pmf} == {-2, -1, 1}
+    assert replace(v3.molecules, unit_stutter_rate=0.0, unit_stutter_pmf=()) == v2.molecules
+    assert v3.errors == v2.errors and v3.fragments == v2.fragments
+    assert v3.config_overrides == v2.config_overrides
+    assert v3.provenance["unit_stutter_fit"]["n_alleles"] == 18
+
+
 def test_amplicon_profile_fits_dupc_c8_on_both_strands() -> None:
     table = load_read_profile("ont_r10_sup_amplicon_v1").molecules.stutter
     assert {"C8|+", "C8|-"} <= set(table.pmfs)

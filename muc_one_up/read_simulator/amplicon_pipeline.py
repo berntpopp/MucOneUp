@@ -210,6 +210,7 @@ def simulate_amplicon_reads_pipeline(
                     output_dir / truth_name,
                     output_base,
                     seed,
+                    config,
                 )
             else:
                 hifi_fastq, legacy_files = _simulate_legacy_hifi_fastq(

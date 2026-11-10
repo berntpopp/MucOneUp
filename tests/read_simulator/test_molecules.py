@@ -243,6 +243,43 @@ class TestAmpliconMolecules:
         b = build_amplicon_molecules([AMP_A, AMP_B], [100, 60], model, random.Random(9))
         assert a == b
 
+    def test_unit_stutter_slips_whole_units_at_rate_and_pmf(self) -> None:
+        """#131: a full product slips by k whole VNTR units, recorded as a smear product."""
+        amplicon = "TTTTTGGGGG" + AMP_A + "GGGGGTTTTT"
+        bounds = list(range(10, 10 + len(AMP_A) + 1, 60))  # 30 units
+        model = MoleculeModel.from_dict(
+            {"unit_stutter_rate": 0.01, "unit_stutter_pmf": {"-1": 0.75, "2": 0.25}}
+        )
+        with pytest.raises(ValueError, match="unit_bounds"):
+            build_amplicon_molecules([amplicon], [10], model, random.Random(1))
+        mols = build_amplicon_molecules(
+            [amplicon], [6000], model, random.Random(5), unit_bounds=[bounds]
+        )
+        slipped = [m for m in mols if m.detail.startswith("unit_stutter:")]
+        assert all(m.seq == amplicon and m.kind == "full" for m in mols if m not in slipped)
+        assert abs(len(slipped) / len(mols) - 0.01 * 30) < 0.02
+        ks = []
+        for m in slipped:
+            k, span = m.detail.split(":")[1:]
+            k, (a, b) = int(k), map(int, span.split("-"))
+            assert m.kind == "smear" and a in bounds and b - a == 60 * abs(k)
+            expected = amplicon[:a] + amplicon[b:] if k < 0 else amplicon[:b] + amplicon[a:]
+            assert m.seq == expected
+            ks.append(k)
+        assert set(ks) == {-1, 2} and abs(ks.count(-1) / len(ks) - 0.75) < 0.04
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            {"unit_stutter_rate": 0.01},
+            {"unit_stutter_rate": 0.01, "unit_stutter_pmf": {"0": 1.0}},
+            {"unit_stutter_rate": 0.01, "unit_stutter_pmf": {"-1": 0.5}},
+        ],
+    )
+    def test_unit_stutter_pmf_is_validated(self, data: dict) -> None:
+        with pytest.raises(ValueError, match="unit_stutter"):
+            MoleculeModel.from_dict(data)
+
 
 class TestFragmentMolecules:
     def test_lengths_haplotype_balance_and_bounds(self) -> None:

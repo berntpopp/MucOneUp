@@ -41,7 +41,13 @@ OVERRIDABLE_SECTIONS = ("ont_amplicon_params", "pacbio_params", "amplicon_params
 PLATFORMS = ("ont", "pacbio")
 # Simulators that consume a read profile, and the platform each one requires.
 SIMULATOR_PLATFORMS = {"amplicon": "pacbio", "ont-amplicon": "ont", "ont-fragments": "ont"}
-_AMPLICON_ONLY_RATES = ("smear_rate", "chimera_rate", "concatemer_rate", "offtarget_frac")
+_AMPLICON_ONLY_RATES = (
+    "smear_rate",
+    "chimera_rate",
+    "concatemer_rate",
+    "offtarget_frac",
+    "unit_stutter_rate",
+)
 _T = TypeVar("_T")
 _KEYS = {
     "schema_version",

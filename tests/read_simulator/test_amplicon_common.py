@@ -216,6 +216,16 @@ class TestTruthTrackedHelpers:
         with pytest.raises(ValueError, match="no flanking sequence"):
             offtarget_intervals(["CCCCGGGG"], ["CCCCGGGG"])
 
+    def test_vntr_unit_bounds_keep_a_mutated_unit_whole(self):
+        from muc_one_up.read_simulator.amplicon_common import vntr_unit_bounds
+
+        a, b = "A" * 59 + "C", "G" * 59 + "T"
+        config = {"repeats": {"a": a, "b": b}, "constants": {"left": "TTT", "right": "TTT"}}
+        hap = "TTT" + a + b + b[:-2] + a + b + "TTT"  # third unit lost 2 bp
+        assert vntr_unit_bounds([hap], [hap[1:-1]], config) == [[2, 62, 122, 180, 240, 300]]
+        with pytest.raises(ValueError, match="not inside"):
+            vntr_unit_bounds([hap], [hap[10:-1]], config)
+
     def test_offtarget_intervals_per_haplotype(self):
         from muc_one_up.read_simulator.amplicon_common import offtarget_intervals
 

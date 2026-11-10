@@ -23,7 +23,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from typing import NamedTuple
 
-from .stutter import StutterFallback, StutterTable
+from .stutter import Pmf, StutterFallback, StutterTable, parse_pmf
 from .utils.sequence_utils import reverse_complement
 
 __all__ = [
@@ -77,6 +77,7 @@ class Molecule:
     src_start: int
     src_end: int
     hp_edits: tuple[HpEdit, ...] = ()
+    # smear "deletion:a-b", unit stutter "unit_stutter:-1:a-b", chimera "junction:a|b"
     detail: str = ""
 
 
@@ -94,6 +95,10 @@ class MoleculeModel:
     offtarget_median_bp: int = 370
     offtarget_sigma: float = 0.5
     stutter: StutterTable | None = field(default=None)
+    # Whole-unit PCR slippage of full products: P(slip) = rate * VNTR units (capped at 1),
+    # slip size drawn from the signed-units pmf ({-1: ..., 1: ...}).
+    unit_stutter_rate: float = 0.0
+    unit_stutter_pmf: Pmf = ()
 
     def __post_init__(self) -> None:
         for name in (
@@ -102,6 +107,7 @@ class MoleculeModel:
             "smear_min_keep",
             "chimera_rate",
             "concatemer_rate",
+            "unit_stutter_rate",
         ):
             value = getattr(self, name)
             if not 0.0 <= value <= 1.0:
@@ -122,6 +128,12 @@ class MoleculeModel:
             raise ValueError(
                 "smear_junction_beta, offtarget_median_bp and offtarget_sigma must be positive"
             )
+        if self.unit_stutter_rate and not self.unit_stutter_pmf:
+            raise ValueError("unit_stutter_rate > 0 requires unit_stutter_pmf")
+        if self.unit_stutter_pmf:  # any |k| is allowed; a slip needs more than |k| units
+            parse_pmf(dict(self.unit_stutter_pmf), "unit_stutter_pmf", run_len=10**9)
+            if any(k == 0 for k, _ in self.unit_stutter_pmf):
+                raise ValueError("unit_stutter_pmf must not contain 0 units")
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> MoleculeModel:
@@ -147,6 +159,12 @@ class MoleculeModel:
             kwargs["stutter"] = StutterTable.from_dict(
                 kwargs["stutter"],  # type: ignore[arg-type]
                 fallback=fallback,
+            )
+        if "unit_stutter_pmf" in kwargs:
+            kwargs["unit_stutter_pmf"] = parse_pmf(
+                kwargs["unit_stutter_pmf"],  # type: ignore[arg-type]
+                "unit_stutter_pmf",
+                run_len=10**9,
             )
         if "smear_junction_beta" in kwargs:
             kwargs["smear_junction_beta"] = tuple(kwargs["smear_junction_beta"])  # type: ignore[arg-type]
@@ -245,6 +263,23 @@ def _choose_product(
     return "full", amplicon, ""
 
 
+def _unit_stutter(
+    seq: str, bounds: Sequence[int], model: MoleculeModel, rng: random.Random
+) -> tuple[str, str] | None:
+    """Delete or duplicate k whole VNTR units (``bounds``: unit starts plus the VNTR end)."""
+    n_units = len(bounds) - 1
+    if rng.random() >= model.unit_stutter_rate * n_units:
+        return None
+    units, weights = zip(*model.unit_stutter_pmf, strict=True)
+    k = rng.choices(units, weights=weights)[0]
+    if abs(k) >= n_units:  # keep at least one unit
+        return None
+    i = rng.randrange(n_units - abs(k) + 1)
+    a, b = bounds[i], bounds[i + abs(k)]
+    seq = seq[:a] + seq[b:] if k < 0 else seq[:b] + seq[a:b] + seq[b:]
+    return seq, f"unit_stutter:{k:+d}:{a}-{b}"
+
+
 def _lognormal_length(median: float, sigma: float, rng: random.Random) -> int:
     return max(1, round(rng.lognormvariate(math.log(median), sigma)))
 
@@ -256,11 +291,17 @@ def build_amplicon_molecules(
     rng: random.Random,
     *,
     offtarget_sources: Sequence[SourceInterval] = (),
+    unit_bounds: Sequence[Sequence[int]] = (),
 ) -> list[Molecule]:
     """Build PCR amplicon molecules: ``counts[i]`` per haplotype plus artefacts.
 
     Each full-length slot becomes a smear, chimera (only with two haplotypes) or
-    concatemer product with the configured probabilities. Off-target products
+    concatemer product with the configured probabilities. A slot left full-length
+    then slips by whole repeat units with ``unit_stutter_rate`` per unit; it needs
+    ``unit_bounds[i]``, the VNTR unit boundaries of amplicon ``i``. Stutter products
+    have kind ``smear`` (an off-peak product of one parent) and detail
+    ``unit_stutter:<k>:<a>-<b>``: units ``[a, b)`` deleted (k < 0) or duplicated
+    (k > 0) in amplicon coordinates. Off-target products
     are added on top (``offtarget_frac`` of the final total). Each is cut from
     one of ``offtarget_sources`` (chosen weighted by length), so it never
     crosses an interval end, and records that haplotype and its coordinates.
@@ -270,12 +311,18 @@ def build_amplicon_molecules(
     sources = [s for s in offtarget_sources if s.seq]
     if model.offtarget_frac and not sources:
         raise ValueError("offtarget_sources are required when offtarget_frac > 0")
+    if model.unit_stutter_rate and len(unit_bounds) != len(amplicons):
+        raise ValueError("unit_bounds are required per amplicon when unit_stutter_rate > 0")
     molecules: list[Molecule] = []
     for hap_index, (amplicon, count) in enumerate(zip(amplicons, counts, strict=True), start=1):
         partner = amplicons[1 - (hap_index - 1)] if len(amplicons) == 2 else None
         for _ in range(count):
             mol_id = len(molecules) + 1
             kind, seq, detail = _choose_product(amplicon, partner, model, rng)
+            if kind == "full" and model.unit_stutter_rate:
+                slipped = _unit_stutter(amplicon, unit_bounds[hap_index - 1], model, rng)
+                if slipped:
+                    kind, (seq, detail) = "smear", slipped
             molecules.append(
                 _finish(mol_id, hap_index, kind, seq, (0, len(amplicon)), model, rng, detail)
             )

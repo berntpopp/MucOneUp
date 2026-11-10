@@ -10,7 +10,7 @@ frameshift detection.
 ```bash
 # Realistic ONT R10.4.1 PCR amplicons with per-read truth, FASTQ only
 muconeup --config config.json reads amplicon --platform ont sample.001.simulated.fa \
-  --read-profile ont_r10_sup_amplicon_v2 --coverage 3000 --seed 7 --no-align
+  --read-profile ont_r10_sup_amplicon_v3 --coverage 3000 --seed 7 --no-align
 
 # Genomic / targeted ONT reads from sampled fragments
 muconeup --config config.json reads ont --simulator pbsim3-fragments sample.001.simulated.fa \
@@ -31,7 +31,7 @@ optional in the examples above.
 | Part | Effect |
 | --- | --- |
 | `config_overrides` | Values merged into `ont_amplicon_params`, `pacbio_params`, `amplicon_params` (for example the PCR preset), validated against the config schema |
-| `molecules` | Molecule model: strand mix, PCR smear (single-junction deletion products), between-allele chimeras, concatemers, off-target short products, a strand-aware homopolymer stutter table and its `stutter_fallback` for runs without a fitted entry |
+| `molecules` | Molecule model: strand mix, PCR smear (single-junction deletion products), whole-repeat-unit PCR stutter, between-allele chimeras, concatemers, off-target short products, a strand-aware homopolymer stutter table and its `stutter_fallback` for runs without a fitted entry |
 | `errors` (optional) | Empirical error channel used instead of pbsim3 |
 | `fragments` | Log-normal read-length model for `--simulator pbsim3-fragments` |
 | `provenance` | Data source, derivation method, the stutter fit (`stutter_fit`: fitted and excluded keys, minimum n, fallback rule) and the validation report |
@@ -52,12 +52,16 @@ be named in the config file as `"read_model": {"profile": "<name or path>"}`.
 | `ont_r10_sup_amplicon_v1` | empirical | 9 public R10.4.1 MUC1 amplicon libraries (ENA PRJEB92208) | total error 2.27% vs 2.14%; fitted keys C3–C8 and G3–G4 on both strands within 0.015 (dupC C8: p_correct 0.36/0.73 on +/− vs 0.36/0.75) |
 | `ont_r10_genomic_v1` | empirical | 2 public R10.4.1 WGS runs (PRJEB92208) | total error 0.46% vs 0.40%; fitted keys C3, C4, C7 and G3 within 0.003; C5, C6 and C8 extrapolated |
 | `ont_r10_sup_amplicon_v2` | empirical | as `_v1`, plus per-strand error rates | `_v1` plus `errors.strand_rates`: every per-strand mismatch, insertion and deletion rate within 11% of the target on the MucSim-Bench standard set (30 cases; `_v1`: −30% to +39%) |
+| `ont_r10_sup_amplicon_v3` | empirical | as `_v2`, plus whole-unit PCR stutter | `_v2` plus `molecules.unit_stutter_rate`/`unit_stutter_pmf`: span-offset Jensen-Shannon distance 0.162 / 0.181 (< 55 / ≥ 55 units; `_v2`: 0.186 / 0.187; target ≤ 0.1); per-strand error rates unchanged (30 cases) |
 | `ont_r10_genomic_v2` | empirical | as `_v1`, plus per-strand error rates | `_v1` plus `errors.strand_rates`: every per-strand rate within 10% (30 cases; `_v1`: −27% to +40%). Read lengths are not fitted, so the spanning fraction is not calibrated |
 | `hifi_amplicon_v1` | pbsim3 + ccs | none (generic) | strand mix only; not calibrated to real HiFi data |
 
-Use the `_v2` profiles for new work. The `_v1` profiles are kept unchanged so
-that runs made with them reproduce; they differ only in the error channel's
-strand symmetry (#131).
+Use `ont_r10_sup_amplicon_v3` and `ont_r10_genomic_v2` for new work. Older
+profiles are kept unchanged so that runs made with them reproduce: `_v2`
+differs from `_v1` only in the error channel's strand symmetry, and the
+amplicon `_v3` differs from `_v2` only in the unit stutter (#131). There is no
+genomic `_v3`: WGS libraries have no PCR, and the public WGS target has a
+single allele with 27 on-peak reads, too few to fit a stutter rate.
 
 The genomic profiles' read lengths are a generic default (median 6 kb,
 sigma 0.5), not a fit: the two public WGS runs have read-length medians of
@@ -68,6 +72,9 @@ The amplicon profile reproduces the measured library composition:
 
 - smear products in about 24% of amplicon slots;
 - chimeras 2.3% and concatemers 2.4%;
+- (`_v3`) whole-unit PCR stutter: a full product loses or gains whole repeat
+  units with probability 0.0024 per VNTR unit (about 14% of a 60-unit allele),
+  −1 / −2 / +1 units in 78 / 16 / 6% of cases;
 - about 30% off-target reads (median ~367 bp);
 - the measured PCR length bias (`madritsch2025_r10`: ln(long/short) ≈ −0.056 per repeat unit).
 
@@ -168,11 +175,11 @@ then get no extra stutter, because pbsim3 adds its own homopolymer errors.
 | `read_id` | `{base}_h{hap}_m{molecule}` (unique) |
 | `hap` | 1-based haplotype of origin (off-target products: the haplotype whose flank they were cut from) |
 | `molecule` | Molecule id |
-| `kind` | `full`, `smear`, `chimera`, `concatemer`, `offtarget` or `fragment` |
+| `kind` | `full`, `smear`, `chimera`, `concatemer`, `offtarget` or `fragment`. Unit-stutter products are `smear` (an off-peak product of one parent, so they never count as correct-length `full` reads); `detail` tells them apart |
 | `strand` | `+`: read in haplotype orientation (MUC1 C-runs read as C); `-`: reverse complement |
 | `src_start`, `src_end` | 0-based, end-exclusive source interval: amplicon products use amplicon coordinates, off-target products haplotype coordinates, fragments coordinates in the fragment source (left flank + haplotype + right flank, so haplotype position = `src_start` − left flank length when `--flank-fasta` is used) |
 | `n_hp_edits`, `hp_edits` | Injected homopolymer changes as `pos:base:true>new`; `pos` is 0-based in the product before strand orientation (after a smear deletion, chimera junction or concatemer join), not in amplicon coordinates |
-| `detail` | Smear deletion interval or chimera junction |
+| `detail` | Smear deletion interval (`deletion:a-b`), unit stutter (`unit_stutter:k:a-b`: whole units `[a, b)` deleted for k < 0 or duplicated for k > 0, amplicon coordinates) or chimera junction (`junction:a|b`) |
 
 The run's `*_metadata.tsv` records `Read_profile`, `Read_profile_sha256` and
 `Read_truth` (the manifest file name). Fragment runs record `Fragment_reads`
@@ -206,6 +213,17 @@ and deletion rates (stutter included) and moves each channel rate by the gap to
 `error_rates_per_ref_base["<strand>:<type>"]` divided by the template's
 non-homopolymer fraction. The rounds are stored in
 `calibration_report.strand_fit`.
+
+`--fit-unit-stutter` (either engine) fits whole-repeat-unit PCR stutter from
+`per_allele_stutter_and_length_noise`, the per-allele −2, −1 and +1 unit
+products per on-peak read. A full product slips with probability
+`unit_stutter_rate` × VNTR units, so the rate is the pooled number of slipped
+products over the pooled molecule units, and `unit_stutter_pmf` is the pooled
+share of each k. The fit is stored in `provenance.unit_stutter_fit`. Slips
+delete or duplicate whole units at boundaries read from the haplotype: the
+VNTR lies between the config's left and right constants, and units are matched
+against the config repeats from both ends, so a mutated unit is never cut.
+The real alleles span 40–83 units; longer alleles use the same per-unit rate.
 
 For `--engine pbsim3`, it deconvolves the stutter table against pbsim3's own
 homopolymer errors instead.

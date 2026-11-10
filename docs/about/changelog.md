@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- Whole-repeat-unit PCR stutter in the molecule model (#131):
+  `molecules.unit_stutter_rate` (per VNTR unit) and `unit_stutter_pmf`
+  (signed units). A full amplicon product deletes or duplicates whole repeat
+  units at the haplotype's real unit boundaries. Stutter products have truth
+  kind `smear` and detail `unit_stutter:k:a-b`. Off by default, so seeded
+  outputs without it are unchanged.
+- Read profile `ont_r10_sup_amplicon_v3`: `_v2` plus unit stutter fitted from
+  the PRJEB92208 per-allele stutter ratios (0.0024 per unit; −1/−2/+1 units
+  78/16/6%). On the MucSim-Bench standard set (30 cases) the span-offset
+  Jensen-Shannon distance falls from 0.186 / 0.187 to 0.162 / 0.181
+  (< 55 / ≥ 55 units; target ≤ 0.1); per-strand error rates are unchanged.
+  `_v1` and `_v2` are unchanged. There is no genomic `_v3`: WGS has no PCR and
+  its target has 27 on-peak reads.
+- `helpers/calibrate_read_profile.py --fit-unit-stutter` fits the unit stutter
+  from `per_allele_stutter_and_length_noise` and records it in
+  `provenance.unit_stutter_fit` (#131).
+
 ## [0.51.0] - 2026-11-10
 
 ### Added
