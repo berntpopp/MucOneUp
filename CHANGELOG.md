@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.51.0] - 2026-11-10
 
 ### Added
 - Read profiles `ont_r10_sup_amplicon_v2` and `ont_r10_genomic_v2` with
@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `config.json` uses `downsample_mode: "vntr"`, the code default. Its
   `non_vntr` setting gave a 697.5x VNTR against 150.7x on the capture BED;
   `vntr` gives 204.2x against 150.7x (#88).
+- Library API: `simulate_reads()` now applies a `read_model` profile's
+  `config_overrides` and platform check, as the CLI does. Configs that
+  relied on these being skipped give different reads (#128).
 
 ### Fixed
 - A read profile is now loaded once per run and checked against the
