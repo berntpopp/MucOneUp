@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `config.json` uses `downsample_mode: "vntr"`, the code default. Its
+  `non_vntr` setting gave a 697.5x VNTR against 150.7x on the capture BED;
+  `vntr` gives 204.2x against 150.7x (#88).
+
 ### Fixed
 - A read profile is now loaded once per run and checked against the
   `read_model.sha256` recorded when it was applied; a profile edited on disk
@@ -18,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `reads ont --simulator pbsim3-fragments` rejects a profile with amplicon-only
   molecule rates (smear, chimera, concatemer, off-target), which fragment mode
   would ignore (#128).
+
+### Documentation
+- The Illumina downsampling keys (`downsample_mode`, `sample_target_bed`,
+  `vntr_to_flanking_ratio`, `downsample_seed`) are documented, with measured
+  depths and the settings that match real Twist v2 exomes. There are still
+  no off-target reads, so the read count stays about 5x lower (#88).
 
 ## [0.50.1] - 2026-11-10
 
