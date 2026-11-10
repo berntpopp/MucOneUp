@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.53.0] - 2026-11-10
 
 ### Added
 - Read profile `ont_r10_sup_amplicon_v4`: `_v3` with `errors.strand_rates`
@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs. The `_v3` unit stutter read the real profiler's −1 unit ratio, which
   also counts the main peak's left edge, as pure slippage; `_v4` fits
   0.0016 instead of 0.0024 per unit (#131).
+
+### Documentation
+- The quick start, home page and README point at the read profiles; the
+  realistic-reads guide has a calibration-status table for every profile
+  (#212, #213).
 
 ## [0.52.0] - 2026-11-10
 
