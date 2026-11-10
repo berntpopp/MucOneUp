@@ -18,6 +18,7 @@ from typing import Any
 
 from Bio import SeqIO
 
+from ..simulation_statistics import get_haplotype_vntr_bounds
 from .molecule_pipeline import Sequencer, simulate_molecule_reads
 from .molecules import MoleculeModel, SourceInterval, build_amplicon_molecules
 from .pcr_bias import PCRBiasModel
@@ -222,6 +223,39 @@ def offtarget_intervals(haplotypes: list[str], amplicons: list[str]) -> list[Sou
     return intervals
 
 
+def vntr_unit_bounds(
+    haplotypes: list[str], amplicons: list[str], config: dict[str, Any]
+) -> list[list[int]]:
+    """VNTR repeat-unit boundaries (unit starts plus VNTR end) per amplicon, amplicon frame.
+
+    The VNTR is the haplotype minus the config's left/right constants, as in the
+    simulation statistics. Units are read off the sequence: known config repeats
+    from the VNTR start, then from its end; whatever lies between (a mutated or
+    SNP-carrying stretch) stays one block, so no unit is ever cut.
+    """
+    repeats = {s.upper() for s in config.get("repeats", {}).values()}
+    unit_lens = {len(s) for s in repeats}
+    if len(unit_lens) != 1:
+        raise ValueError("unit stutter needs config repeats of one common length")
+    unit = unit_lens.pop()
+    bounds = []
+    for hap, (seq, amplicon) in enumerate(zip(haplotypes, amplicons, strict=True), start=1):
+        pos = seq.find(amplicon)
+        start, end = get_haplotype_vntr_bounds(seq, config)
+        if pos < 0 or start < pos or end > pos + len(amplicon) or end - start < unit:
+            raise ValueError(f"haplotype {hap}: the VNTR is not inside the amplicon")
+        vntr = seq[start:end].upper()
+        left = [0]
+        while left[-1] + unit <= len(vntr) and vntr[left[-1] : left[-1] + unit] in repeats:
+            left.append(left[-1] + unit)
+        right = [len(vntr)]
+        while right[-1] - unit >= left[-1] and vntr[right[-1] - unit : right[-1]] in repeats:
+            right.append(right[-1] - unit)
+        units = sorted(set(left) | set(right))
+        bounds.append([start - pos + b for b in units])
+    return bounds
+
+
 def simulate_truth_tracked_amplicons(
     prep: AmpliconPrep,
     model: MoleculeModel,
@@ -231,8 +265,12 @@ def simulate_truth_tracked_amplicons(
     truth_tsv: Path,
     base: str,
     seed: int | None,
+    config: dict[str, Any] | None = None,
 ) -> int:
-    """Build amplicon molecules for ``prep`` and simulate reads with per-read truth."""
+    """Build amplicon molecules for ``prep`` and simulate reads with per-read truth.
+
+    ``config`` locates the VNTR repeat units; it is required for unit stutter.
+    """
     molecules = build_amplicon_molecules(
         prep.amplicon_sequences,
         prep.allele_coverages,
@@ -241,6 +279,11 @@ def simulate_truth_tracked_amplicons(
         offtarget_sources=(
             offtarget_intervals(prep.haplotype_sequences, prep.amplicon_sequences)
             if model.offtarget_frac
+            else ()
+        ),
+        unit_bounds=(
+            vntr_unit_bounds(prep.haplotype_sequences, prep.amplicon_sequences, config or {})
+            if model.unit_stutter_rate
             else ()
         ),
     )

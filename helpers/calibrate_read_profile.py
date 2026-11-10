@@ -15,6 +15,10 @@ Two engines:
   mismatch/insertion/deletion rates are then fitted per read strand
   (``errors.strand_rates``) so the simulated per-strand totals, stutter
   included, match ``error_rates_per_ref_base["<strand>:<type>"]`` (#131).
+  With ``--fit-unit-stutter`` (either engine) ``molecules.unit_stutter_rate`` and
+  ``unit_stutter_pmf`` (whole-repeat-unit PCR slippage) are fitted from the
+  per-allele ``per_allele_stutter_and_length_noise`` ratios and recorded in
+  ``provenance.unit_stutter_fit`` (#131).
 * ``--engine pbsim3``: pbsim3 adds its own context-free homopolymer errors, so
   the injected table is *deconvolved* (Richardson-Lucy against a stutter-free
   pbsim3 run, then multiplicative fixed-point corrections). The output profile
@@ -262,6 +266,39 @@ def fit_strand_rates(
     return {"strand_rates": rates, "report": report}
 
 
+UNIT_STUTTER_KEYS = {-2: "minus2_per_onpeak", -1: "minus1_per_onpeak", 1: "plus1_per_onpeak"}
+
+
+def fit_unit_stutter(targets: dict) -> tuple[dict, dict]:
+    """Whole-unit PCR stutter (``molecules`` keys and a fit record) from per-allele ratios.
+
+    A full product slips with probability ``rate * units``. Per allele the target
+    gives slipped products per on-peak read ``r_k`` for k = -2, -1, +1 units, so
+    ``n_on_peak * sum(r_k)`` products slipped out of ``n_on_peak * (1 + sum(r_k))``
+    molecules. ``rate`` pools them over alleles per molecule unit; the pmf is the
+    pooled share of each k.
+    """
+    rows = targets["per_allele_stutter_and_length_noise"]
+    mass = {k: sum(r["n_on_peak"] * r[key] for r in rows) for k, key in UNIT_STUTTER_KEYS.items()}
+    slipped = sum(mass.values())
+    exposure = sum(r["n_on_peak"] * r["units"] for r in rows) + sum(
+        r["n_on_peak"] * r[key] * r["units"] for r in rows for key in UNIT_STUTTER_KEYS.values()
+    )
+    pmf = {str(k): round(v / slipped, 5) for k, v in mass.items()}
+    pmf["-1"] = round(pmf["-1"] + 1.0 - sum(pmf.values()), 5)  # absorb rounding drift
+    section = {"unit_stutter_rate": round(slipped / exposure, 6), "unit_stutter_pmf": pmf}
+    record = {
+        "method": "P(slip) of a full product = unit_stutter_rate * VNTR units; rate = "
+        "pooled slipped products / pooled molecule units, pmf = pooled share of each k, "
+        "over per_allele_stutter_and_length_noise (k = -2, -1, +1 units)",
+        "n_alleles": len(rows),
+        "n_libraries": len({r["lib"] for r in rows}),
+        "n_on_peak": sum(r["n_on_peak"] for r in rows),
+        "units_range": [min(r["units"] for r in rows), max(r["units"] for r in rows)],
+    }
+    return section, record
+
+
 def read_error_sigma(targets: dict) -> float:
     """Log-normal sigma of per-read error from the median library's p5/p95 spread."""
     spreads = sorted(
@@ -333,6 +370,11 @@ def _parse_args() -> argparse.Namespace:
         default=0,
         metavar="ROUNDS",
         help="empirical engine: fit errors.strand_rates in this many rounds (0 = off)",
+    )
+    ap.add_argument(
+        "--fit-unit-stutter",
+        action="store_true",
+        help="fit molecules.unit_stutter_rate/pmf from per_allele_stutter_and_length_noise",
     )
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", type=Path, required=True)
@@ -473,6 +515,10 @@ def main() -> None:
         molecules.pop("stutter_fallback", None)
         profile.pop("errors", None)
         provenance.pop("stutter_fit", None)
+    if args.fit_unit_stutter:
+        section, provenance["unit_stutter_fit"] = fit_unit_stutter(targets)
+        provenance["unit_stutter_fit"]["target_key"] = args.target_key
+        molecules.update(section)
     provenance["calibration_report"] = report
     args.out.write_text(json.dumps(profile, indent=2) + "\n")
     print(json.dumps(report, indent=2))
