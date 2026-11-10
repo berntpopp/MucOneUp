@@ -6,6 +6,7 @@ import json
 import re
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -83,6 +84,35 @@ def test_apply_overlays_config_and_marks_active(tmp_path: Path) -> None:
     assert config["ont_amplicon_params"]["accuracy_mean"] == 0.95  # input not mutated
     assert active_read_profile(merged).name == "test_ont"
     assert active_read_profile(config) is None
+
+
+def test_active_profile_rejects_profile_edited_after_apply(tmp_path: Path) -> None:
+    """A profile edited during a batch was used silently (#128)."""
+    path = _write(tmp_path, MINIMAL)
+    merged = apply_read_profile({}, load_read_profile(str(path)))
+    _write(tmp_path, {**MINIMAL, "description": "edited"})
+    with pytest.raises(ValueError, match="changed on disk"):
+        active_read_profile(merged)
+
+
+def test_api_simulate_reads_applies_profile_like_cli(tmp_path: Path) -> None:
+    """A read_model in an API config skipped config_overrides and the platform check (#128)."""
+    from muc_one_up.read_simulation import simulate_reads
+
+    path = str(_write(tmp_path, MINIMAL))
+    config = {"read_simulation": {"simulator": "amplicon"}, "read_model": {"profile": path}}
+    with pytest.raises(ValueError, match="platform 'ont', not 'pacbio'"):
+        simulate_reads(config, "in.fa")
+
+    captured: dict = {}
+    config["read_simulation"] = {"simulator": "ont-amplicon", "skip_alignment": True}
+    with patch(
+        "muc_one_up.read_simulator.ont_amplicon_pipeline.simulate_ont_amplicon_pipeline",
+        side_effect=lambda cfg, *a, **k: captured.setdefault("config", cfg),
+    ):
+        simulate_reads(config, "in.fa")
+    assert captured["config"]["ont_amplicon_params"]["accuracy_mean"] == 0.985
+    assert captured["config"]["read_model"]["sha256"] == load_read_profile(path).sha256
 
 
 def test_apply_rejects_overlay_that_breaks_section_schema(tmp_path: Path) -> None:

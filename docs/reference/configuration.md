@@ -492,6 +492,31 @@ Parameters for Illumina read simulation (Wessim2-style fragment simulation with 
 | `coverage` | integer | Target coverage depth | 100 |
 | `threads` | integer | Parallel threads | Required |
 | `seed` | integer | Random seed (null = random) | null |
+| `downsample_mode` | string | `"vntr"`: downsample so `sample_target_bed` hits `coverage`, then thin the VNTR to `coverage` × `vntr_to_flanking_ratio`. `"non_vntr"`: only the first step, so the VNTR keeps whatever depth the capture model gives it | `"vntr"` |
+| `sample_target_bed` | string | Capture targets next to the VNTR (VNTR excluded) that `coverage` is measured on | Required when `coverage` is set |
+| `vntr_to_flanking_ratio` | number | VNTR mean / `sample_target_bed` mean in `vntr` mode | 1.4 |
+| `downsample_seed` | integer | Seed for downsampling | VNTR capture seed + 1 |
+
+### Coverage realism (Illumina)
+
+MucOneUp only simulates reads from the MUC1 haplotypes. There are no
+off-target or exome background reads, so set the depth with `coverage`
+and `downsample_mode: "vntr"`, not with `read_number` (#88).
+
+Measured with `samtools depth -a` on the final BAM (seed 42, one simulated
+diploid, `read_number` 100000, twist_v2 BED, hg38 VNTR
+chr1:155188487-155192239):
+
+| Settings | VNTR mean | BED mean | Ratio | Mapped reads |
+|----------|----------:|---------:|------:|-------------:|
+| `non_vntr`, coverage 150 | 697.5x | 150.7x | 4.6 | 20,815 |
+| `vntr`, coverage 150 (default) | 204.2x | 150.7x | 1.4 | 8,177 |
+| `vntr`, coverage 107, ratio 1.6 | 169.1x | 108.2x | 1.6 | 6,459 |
+
+The medians in 1,043 real Twist v2 exomes (validation for PR #90) were VNTR 169x, BED 107x,
+ratio 1.6, and about 30,000 reads in the MUC1 slice. To match them, use
+`--coverage 107` with `"vntr_to_flanking_ratio": 1.6`. The read count
+still stays about 5x lower than in a real exome slice.
 
 ---
 

@@ -202,3 +202,12 @@ def test_profile_does_not_hide_missing_primers(tmp_path):
     )
     assert result.exit_code != 0
     assert "forward_primer" in result.output and "KeyError" not in result.output
+
+
+def test_ont_fragments_rejects_amplicon_profile(tmp_path):
+    """Smear/chimera/off-target rates were silently ignored in fragment mode (#128)."""
+    profile = _profile(tmp_path, molecules={"forward_frac": 0.5, "smear_rate": 0.2})
+    result, _ = _invoke(
+        tmp_path, ["ont", "--simulator", "pbsim3-fragments", "--read-profile", profile]
+    )
+    assert result.exit_code != 0 and "smear_rate" in result.output
