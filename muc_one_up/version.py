@@ -1,3 +1,3 @@
 # muc_one_up/version.py
 
-__version__ = "0.52.0"
+__version__ = "0.53.0"
