@@ -10,8 +10,8 @@ authors:
 repository-code: "https://github.com/vntyper-org/MucOneUp"
 url: "https://vntyper-org.github.io/MucOneUp/"
 license: MIT
-version: "0.53.0"
-date-released: "2026-11-10"
+version: "0.53.1"
+date-released: "2026-11-13"
 doi: "10.5281/zenodo.19740405"
 identifiers:
   - type: doi

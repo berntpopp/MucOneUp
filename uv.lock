@@ -716,7 +716,7 @@ wheels = [
 
 [[package]]
 name = "muc-one-up"
-version = "0.53.0"
+version = "0.53.1"
 source = { editable = "." }
 dependencies = [
     { name = "biopython" },
