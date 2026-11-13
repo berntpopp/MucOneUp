@@ -8,6 +8,26 @@ How to cite MucOneUp in your research publications and acknowledge contributors.
 
 If you use MucOneUp in your research, please cite:
 
+### Archived Releases (Zenodo)
+
+Releases are archived on Zenodo. Cite the archived release when possible:
+
+- **Concept DOI (always resolves to the latest version):** [10.5281/zenodo.19740405](https://doi.org/10.5281/zenodo.19740405)
+- **v0.44.4:** [10.5281/zenodo.19740406](https://doi.org/10.5281/zenodo.19740406)
+
+```bibtex
+@software{muconeup_v0_44_4,
+  author  = {Popp, Bernt},
+  title   = {MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit},
+  version = {v0.44.4},
+  year    = {2026},
+  doi     = {10.5281/zenodo.19740406},
+  url     = {https://doi.org/10.5281/zenodo.19740406}
+}
+```
+
+Machine-readable metadata is in [`CITATION.cff`](https://github.com/vntyper-org/MucOneUp/blob/main/CITATION.cff); GitHub's "Cite this repository" button generates formatted citations from it.
+
 ### BibTeX Format
 
 ```bibtex
