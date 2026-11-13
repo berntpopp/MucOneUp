@@ -47,6 +47,16 @@ muconeup --version
 
 **Does NOT include:** External tools for read simulation (install separately via conda).
 
+### Install with pip from GitHub
+
+MucOneUp is not published on PyPI. To install it into an existing Python 3.10+ environment without cloning:
+
+```bash
+pip install git+https://github.com/vntyper-org/MucOneUp.git
+```
+
+External tools for read simulation (BWA, samtools, ReSeq2, NanoSim, pbsim3) are still installed separately.
+
 ---
 
 ## Docker Installation (Easiest)
