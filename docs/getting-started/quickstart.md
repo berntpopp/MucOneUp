@@ -446,6 +446,6 @@ muconeup --config config.json analyze vntr-stats \
 
 ## Getting Help
 
-- **Documentation:** [Full Documentation](https://berntpopp.github.io/MucOneUp/)
-- **Issues:** [GitHub Issue Tracker](https://github.com/berntpopp/MucOneUp/issues)
+- **Documentation:** [Full Documentation](https://vntyper-org.github.io/MucOneUp/)
+- **Issues:** [GitHub Issue Tracker](https://github.com/vntyper-org/MucOneUp/issues)
 - **Examples:** `data/examples/` directory in repository

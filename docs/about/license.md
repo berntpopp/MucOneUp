@@ -48,7 +48,7 @@ If you use MucOneUp in your research, please cite:
   author = {Popp, Bernt},
   title = {MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit},
   year = {2025},
-  url = {https://github.com/berntpopp/MucOneUp}
+  url = {https://github.com/vntyper-org/MucOneUp}
 }
 ```
 

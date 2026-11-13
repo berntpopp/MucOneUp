@@ -676,7 +676,7 @@ muconeup --config config.json reads pacbio \\
   title = {{MucOneUp: MUC1 VNTR Simulation Toolkit}},
   version = {{{version}}},
   year = {{2025}},
-  url = {{https://github.com/berntpopp/MucOneUp}}
+  url = {{https://github.com/vntyper-org/MucOneUp}}
 }}
 ```
 
@@ -686,8 +686,8 @@ GPL-3.0 (same as MucOneUp)
 
 ## Support
 
-- Documentation: https://berntpopp.github.io/MucOneUp/
-- Issues: https://github.com/berntpopp/MucOneUp/issues
+- Documentation: https://vntyper-org.github.io/MucOneUp/
+- Issues: https://github.com/vntyper-org/MucOneUp/issues
 """
 
     readme_path = dataset_dir / "README.md"

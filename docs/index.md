@@ -100,7 +100,7 @@ ls *.fa | parallel muconeup --config config.json reads ont {} --coverage 50
 
     ```bash
     # Clone repository
-    git clone https://github.com/berntpopp/MucOneUp.git
+    git clone https://github.com/vntyper-org/MucOneUp.git
     cd MucOneUp
 
     # Install
@@ -371,8 +371,8 @@ If you use MucOneUp in your research, please cite:
   author = {Popp, Bernt},
   title = {MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit},
   year = {2025},
-  url = {https://github.com/berntpopp/MucOneUp},
-  note = {Software version available at https://github.com/berntpopp/MucOneUp/releases}
+  url = {https://github.com/vntyper-org/MucOneUp},
+  note = {Software version available at https://github.com/vntyper-org/MucOneUp/releases}
 }
 ```
 
@@ -384,14 +384,14 @@ See [Citation Guide](about/citation.md)
 
 ## Community
 
-**GitHub Repository:** [berntpopp/MucOneUp](https://github.com/berntpopp/MucOneUp)
-**Docker Images:** [GitHub Container Registry](https://github.com/berntpopp/MucOneUp/pkgs/container/muconeup%2Fmuconeup)
-**Issue Tracker:** [Report bugs or request features](https://github.com/berntpopp/MucOneUp/issues)
+**GitHub Repository:** [vntyper-org/MucOneUp](https://github.com/vntyper-org/MucOneUp)
+**Docker Images:** [GitHub Container Registry](https://github.com/vntyper-org/MucOneUp/pkgs/container/muconeup%2Fmuconeup)
+**Issue Tracker:** [Report bugs or request features](https://github.com/vntyper-org/MucOneUp/issues)
 **Discussions:** Questions and community support
 
-[![GitHub Stars](https://img.shields.io/github/stars/berntpopp/MucOneUp?style=social)](https://github.com/berntpopp/MucOneUp)
-[![Tests](https://github.com/berntpopp/MucOneUp/workflows/Test%20%26%20Quality/badge.svg)](https://github.com/berntpopp/MucOneUp/actions)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue.svg)](https://github.com/berntpopp/MucOneUp/pkgs/container/muconeup%2Fmuconeup)
+[![GitHub Stars](https://img.shields.io/github/stars/vntyper-org/MucOneUp?style=social)](https://github.com/vntyper-org/MucOneUp)
+[![Tests](https://github.com/vntyper-org/MucOneUp/workflows/Test%20%26%20Quality/badge.svg)](https://github.com/vntyper-org/MucOneUp/actions)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue.svg)](https://github.com/vntyper-org/MucOneUp/pkgs/container/muconeup%2Fmuconeup)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
