@@ -6,10 +6,10 @@ All-in-one Docker image with MucOneUp + Illumina/ONT/PacBio simulators.
 
 ```bash
 # Pull from GitHub Container Registry
-docker pull ghcr.io/berntpopp/muconeup/muconeup:latest
+docker pull ghcr.io/vntyper-org/muconeup/muconeup:latest
 
 # Verify
-docker run --rm ghcr.io/berntpopp/muconeup/muconeup:latest --version
+docker run --rm ghcr.io/vntyper-org/muconeup/muconeup:latest --version
 ```
 
 ## Usage
@@ -20,7 +20,7 @@ docker run --rm ghcr.io/berntpopp/muconeup/muconeup:latest --version
 docker run --rm \
   -v $(pwd)/data:/data \
   -v $(pwd)/config.json:/app/config.json:ro \
-  ghcr.io/berntpopp/muconeup/muconeup:latest \
+  ghcr.io/vntyper-org/muconeup/muconeup:latest \
   --config /app/config.json \
   simulate --out-base /data/sample
 ```
@@ -43,7 +43,7 @@ docker run --rm \
   -v $(pwd)/input:/data \
   -v $(pwd)/output:/output \
   -v $(pwd)/config.json:/app/config.json:ro \
-  ghcr.io/berntpopp/muconeup/muconeup:latest \
+  ghcr.io/vntyper-org/muconeup/muconeup:latest \
   --config /app/config.json \
   simulate --out-base /output/result
 ```
