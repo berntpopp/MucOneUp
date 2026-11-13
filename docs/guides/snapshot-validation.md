@@ -14,7 +14,7 @@ In-silico validation of SNaPshot assay for detecting MUC1 VNTR mutations. Simula
 - **Fluorescent ddNTPs** - Each base (A, C, G, T) labeled with different fluorophore
 - **Capillary electrophoresis** - Detects fluorescent peak at specific size
 
-### Clinical Application
+### Assay Principle
 
 **ADTKD-MUC1 Detection:**
 - **Challenge:** MUC1 VNTR region (GC-rich repetitive structure) difficult to sequence

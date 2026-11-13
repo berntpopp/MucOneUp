@@ -11,7 +11,7 @@ MucOneUp generates realistic MUC1 Variable Number Tandem Repeat (VNTR) sequences
 ### Why MucOneUp?
 
 **Benchmark variant callers** with known ground truth mutations
-**Test clinical pipelines** before diagnostic deployment
+**Test genotyping pipelines** on samples with known mutations
 **Generate training data** for machine learning models
 **Explore VNTR diversity** in population genetics studies
 **Validate workflows** with reproducible synthetic datasets
@@ -22,12 +22,12 @@ MucOneUp generates realistic MUC1 Variable Number Tandem Repeat (VNTR) sequences
 
 The **MUC1 gene** (chr1:155,185,824-155,192,916, hg38) encodes a transmembrane glycoprotein containing a Variable Number Tandem Repeat (VNTR) region. This polymorphic region exhibits significant copy number variation (20-125 repeats) and structural complexity across human populations.
 
-**Clinical Significance:**
+**Biological Relevance:**
 
 - **Cancer susceptibility** - Associated with gastric, breast, and ovarian cancer risk
 - **Immunological function** - Modulates innate and adaptive immune responses
 - **Disease stratification** - VNTR length and mutation status correlate with disease outcomes
-- **Diagnostic challenges** - Complex structure complicates accurate variant detection
+- **Sequencing challenges** - Complex structure complicates accurate variant detection
 
 Understanding MUC1 VNTR variation requires robust computational tools that generate realistic test data for algorithm development and validation.
 
@@ -219,7 +219,7 @@ gatk HaplotypeCaller -R reference.fa \
 jq '.mutations' benchmark.001.mut.simulation_stats.json
 ```
 
-**Use case:** Validate clinical pipelines before diagnostic deployment.
+**Use case:** Check a variant-calling pipeline against known ground truth before running it on real data.
 
 ---
 
