@@ -5,7 +5,7 @@ services:
     # Image: Pull from GHCR for production use
     # Build: Allows local development/testing without publishing
     # Use 'docker compose up' to build, or 'docker compose pull' for latest GHCR image
-    image: ghcr.io/berntpopp/muconeup/muconeup:latest
+    image: ghcr.io/vntyper-org/muconeup/muconeup:latest
     build:
       context: .
       dockerfile: docker/Dockerfile

@@ -67,10 +67,10 @@ Pre-built Docker images include **all dependencies** (MucOneUp + Illumina/ONT/Pa
 
 ```bash
 # Pull latest image
-docker pull ghcr.io/berntpopp/muconeup/muconeup:latest
+docker pull ghcr.io/vntyper-org/muconeup/muconeup:latest
 
 # Verify installation
-docker run --rm ghcr.io/berntpopp/muconeup/muconeup:latest --version
+docker run --rm ghcr.io/vntyper-org/muconeup/muconeup:latest --version
 ```
 
 ### Run Simulation
@@ -82,7 +82,7 @@ mkdir -p data output
 # Run simulation (mount output directory)
 docker run --rm \
   -v $(pwd)/output:/data \
-  ghcr.io/berntpopp/muconeup/muconeup:latest \
+  ghcr.io/vntyper-org/muconeup/muconeup:latest \
   --config /app/config.json \
   simulate --out-dir /data --out-base sample
 ```
@@ -96,7 +96,7 @@ version: '3.8'
 
 services:
   muconeup:
-    image: ghcr.io/berntpopp/muconeup/muconeup:latest
+    image: ghcr.io/vntyper-org/muconeup/muconeup:latest
     volumes:
       - ./data:/data
     command: --config /app/config.json simulate --out-dir /data --out-base sample

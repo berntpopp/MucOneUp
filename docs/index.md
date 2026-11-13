@@ -114,12 +114,12 @@ ls *.fa | parallel muconeup --config config.json reads ont {} --coverage 50
 
     ```bash
     # Pull pre-built image (includes all simulators)
-    docker pull ghcr.io/berntpopp/muconeup/muconeup:latest
+    docker pull ghcr.io/vntyper-org/muconeup/muconeup:latest
 
     # Run simulation
     docker run --rm \
       -v $(pwd)/data:/data \
-      ghcr.io/berntpopp/muconeup/muconeup:latest \
+      ghcr.io/vntyper-org/muconeup/muconeup:latest \
       --config /app/config.json \
       simulate --out-dir /data --out-base sample
     ```
