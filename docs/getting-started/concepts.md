@@ -25,11 +25,11 @@ The MUC1 gene contains a **polymorphic VNTR region** consisting of tandem repeat
 - **Length polymorphism:** Different alleles vary in repeat count
 - **Sequence variation:** Individual repeats show nucleotide polymorphisms
 
-**Clinical Significance:**
+**Biological Relevance:**
 
 - **Cancer association** - Altered VNTR length correlates with cancer risk (gastric, breast, ovarian)
 - **Immune function** - VNTR structure affects antigen presentation
-- **Diagnostic challenges** - Complex structure complicates accurate sequencing and variant calling
+- **Sequencing challenges** - Complex structure complicates accurate sequencing and variant calling
 
 ### Why Simulate MUC1 VNTR?
 
