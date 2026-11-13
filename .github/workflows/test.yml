@@ -3,16 +3,27 @@ name: Test & Quality
 on:
   push:
     branches: [main, dev, dev/*]
+    paths-ignore: &docs_only
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+      - '**.md'
   pull_request:
     branches: [main, dev]
+    paths-ignore: *docs_only
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
     name: Code Quality Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6
@@ -31,21 +42,14 @@ jobs:
         run: |
           uv sync --locked --extra dev --python "3.10"
 
-      - name: Run ruff linter
-        run: |
-          uv run ruff check muc_one_up/ tests/ helpers/
-
-      - name: Run ruff formatter check
-        run: |
-          uv run ruff format --check muc_one_up/ tests/ helpers/
-
-      - name: Check types with mypy
-        run: |
-          uv run mypy muc_one_up/
+      # Same Makefile targets as local `make ci-check`.
+      - name: Ruff lint, format check, mypy
+        run: make lint format-check type-check
 
   test:
     name: Test Suite
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -75,14 +79,13 @@ jobs:
           uv sync --locked --extra dev --python ${{ matrix.python-version }}
 
       - name: Run tests with coverage
-        run: |
-          uv run pytest --cov=muc_one_up --cov-report=xml --cov-report=term-missing --cov-fail-under=80
+        run: make test-ci
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6
         if: matrix.python-version == '3.10'
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           flags: unittests
           name: codecov-${{ matrix.os }}-py${{ matrix.python-version }}
           fail_ci_if_error: false

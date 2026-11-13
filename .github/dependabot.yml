@@ -1,0 +1,20 @@
+version: 2
+# Security updates only, grouped: one PR per ecosystem instead of one per package.
+# open-pull-requests-limit: 0 turns off routine version updates; security updates still open.
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      uv-security:
+        applies-to: security-updates
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns: ["*"]
