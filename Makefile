@@ -1,4 +1,4 @@
-.PHONY: help init install-uv install dev conda-setup test test-fast test-cov lint lint-fix format format-check type-check check clean clean-conda lock sync update generate-testdata generate-testdata-illumina generate-testdata-ont generate-testdata-pacbio generate-testdata-debug publish-testdata all
+.PHONY: help init install-uv install dev conda-setup test test-fast test-ci test-cov ci-check lint lint-fix format format-check type-check check clean clean-conda lock sync update generate-testdata generate-testdata-illumina generate-testdata-ont generate-testdata-pacbio generate-testdata-debug publish-testdata all
 
 help:  ## Show this help message
 	@echo "Usage: make [target]"
@@ -52,36 +52,28 @@ test-cov:  ## Run tests and open coverage report in browser
 
 # ==================== CODE QUALITY ====================
 
+# Single source of truth: CI (.github/workflows/test.yml) calls these same targets.
+PY_SRC := muc_one_up/ tests/ helpers/
+
 lint:  ## Run ruff linter
-	uv run ruff check muc_one_up/ tests/
+	uv run ruff check $(PY_SRC)
 
 lint-fix:  ## Run ruff linter and auto-fix issues
-	uv run ruff check --fix muc_one_up/ tests/
+	uv run ruff check --fix $(PY_SRC)
 
 format:  ## Format code with ruff
-	uv run ruff format muc_one_up/ tests/
+	uv run ruff format $(PY_SRC)
 
 format-check:  ## Check if code is formatted (no changes)
-	uv run ruff format --check muc_one_up/ tests/
+	uv run ruff format --check $(PY_SRC)
 
 type-check:  ## Run mypy type checker
 	uv run mypy muc_one_up/
 
-ci-check:  ## Run EXACT same checks as GitHub Actions CI (run before committing!)
-	@echo "Running CI checks locally (same as GitHub Actions)..."
-	@echo ""
-	@echo "=== JOB: Code Quality Checks ==="
-	@echo "1. Ruff linter..."
-	uv run ruff check muc_one_up/ tests/ helpers/
-	@echo "2. Ruff formatter check..."
-	uv run ruff format --check muc_one_up/ tests/ helpers/
-	@echo "3. Mypy type checker..."
-	uv run mypy muc_one_up/
-	@echo ""
-	@echo "=== JOB: Test Suite ==="
-	@echo "4. Running pytest with coverage..."
-	uv run pytest --cov=muc_one_up --cov-report=term-missing --cov-fail-under=80
-	@echo ""
+test-ci:  ## Run tests with the coverage floor CI enforces
+	uv run pytest --cov-fail-under=80
+
+ci-check: lint format-check type-check test-ci  ## Run EXACT same checks as GitHub Actions CI (run before committing!)
 	@echo "✅ All CI checks passed!"
 
 check: lint format-check type-check test  ## Run all quality checks
