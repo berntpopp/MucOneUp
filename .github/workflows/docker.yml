@@ -34,7 +34,7 @@ jobs:
     env:
       TRIVY_SKIP_JAVA_DB_UPDATE: "true"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Extract version and normalize repository name
       - name: Get version
@@ -91,7 +91,7 @@ jobs:
       # Vulnerabilities are visible in GitHub Security tab
       # Note: ignore-unfixed=true excludes unfixable base image vulnerabilities
       - name: Run Trivy security scan
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         if: github.event_name != 'pull_request'
         with:
           image-ref: ghcr.io/${{ steps.repo.outputs.repo_lc }}/muconeup:${{ steps.meta.outputs.version }}
