@@ -4,7 +4,7 @@
 [![Python 3.10 to 3.12](https://img.shields.io/badge/python-3.10%E2%80%933.12-blue)](https://github.com/vntyper-org/MucOneUp/blob/main/pyproject.toml)
 [![Documentation](https://img.shields.io/badge/docs-vntyper--org.github.io-blue)](https://vntyper-org.github.io/MucOneUp/)
 [![Container image on ghcr.io](https://img.shields.io/badge/container-ghcr.io-blue)](https://github.com/users/berntpopp/packages/container/package/muconeup%2Fmuconeup)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://vntyper-org.github.io/MucOneUp/about/license/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Zenodo DOI 10.5281/zenodo.19740405](https://zenodo.org/badge/DOI/10.5281/zenodo.19740405.svg)](https://doi.org/10.5281/zenodo.19740405)
 
 MucOneUp simulates diploid MUC1 VNTR haplotypes with known mutations and generates
@@ -108,5 +108,5 @@ specific versions and citations for the bundled simulators.
 
 ## License
 
-MIT. See the [license page](https://vntyper-org.github.io/MucOneUp/about/license/).
+MIT. See [LICENSE](LICENSE).
 Maintained by [Bernt Popp](https://github.com/berntpopp).
