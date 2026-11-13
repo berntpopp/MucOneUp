@@ -79,4 +79,4 @@ docker run --memory=8g --rm ...
 - `0.16.0` - Specific version (recommended for production)
 - `edge` - Development (unstable)
 
-**Support:** https://github.com/berntpopp/MucOneUp/issues
+**Support:** https://github.com/vntyper-org/MucOneUp/issues

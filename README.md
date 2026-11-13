@@ -1,9 +1,9 @@
 # MucOneUp
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://github.com/berntpopp/MucOneUp/workflows/Test%20%26%20Quality/badge.svg)](https://github.com/berntpopp/MucOneUp/actions)
-[![Documentation](https://img.shields.io/badge/docs-MkDocs%20Material-blue)](https://berntpopp.github.io/MucOneUp/)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue.svg)](https://github.com/berntpopp/MucOneUp/pkgs/container/muconeup%2Fmuconeup)
+[![Tests](https://github.com/vntyper-org/MucOneUp/workflows/Test%20%26%20Quality/badge.svg)](https://github.com/vntyper-org/MucOneUp/actions)
+[![Documentation](https://img.shields.io/badge/docs-MkDocs%20Material-blue)](https://vntyper-org.github.io/MucOneUp/)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue.svg)](https://github.com/vntyper-org/MucOneUp/pkgs/container/muconeup%2Fmuconeup)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19740405.svg)](https://doi.org/10.5281/zenodo.19740405)
 
@@ -51,7 +51,7 @@ muconeup --config config.json reads illumina \
   --coverage 100
 ```
 
-**Documentation:** https://berntpopp.github.io/MucOneUp/
+**Documentation:** https://vntyper-org.github.io/MucOneUp/
 
 ---
 
@@ -60,7 +60,7 @@ muconeup --config config.json reads illumina \
 ### Option 1: pip (Recommended for Users)
 
 ```bash
-pip install git+https://github.com/berntpopp/MucOneUp.git
+pip install git+https://github.com/vntyper-org/MucOneUp.git
 ```
 
 **Requirements:**
@@ -87,7 +87,7 @@ docker run --rm \
 
 ```bash
 # Clone repository
-git clone https://github.com/berntpopp/MucOneUp.git
+git clone https://github.com/vntyper-org/MucOneUp.git
 cd MucOneUp
 
 # Install with uv (modern Python package manager)

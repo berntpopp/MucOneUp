@@ -4,13 +4,13 @@ Standardized test datasets for validating MucOneUp workflows and benchmarking pe
 
 ## Download
 
-Test datasets are published as [GitHub Releases](https://github.com/berntpopp/MucOneUp/releases?q=testdata) tagged `testdata-<version>`, separate from the code releases.
+Test datasets are published as [GitHub Releases](https://github.com/vntyper-org/MucOneUp/releases?q=testdata) tagged `testdata-<version>`, separate from the code releases.
 
-**Current dataset**: [`testdata-v0.25.0`](https://github.com/berntpopp/MucOneUp/releases/tag/testdata-v0.25.0)
+**Current dataset**: [`testdata-v0.25.0`](https://github.com/vntyper-org/MucOneUp/releases/tag/testdata-v0.25.0)
 
 ```bash
-curl -LO https://github.com/berntpopp/MucOneUp/releases/download/testdata-v0.25.0/testdata_40-70_v0.25.0.tar.gz
-curl -LO https://github.com/berntpopp/MucOneUp/releases/download/testdata-v0.25.0/testdata_40-70_v0.25.0.tar.gz.sha256
+curl -LO https://github.com/vntyper-org/MucOneUp/releases/download/testdata-v0.25.0/testdata_40-70_v0.25.0.tar.gz
+curl -LO https://github.com/vntyper-org/MucOneUp/releases/download/testdata-v0.25.0/testdata_40-70_v0.25.0.tar.gz.sha256
 sha256sum -c testdata_40-70_v0.25.0.tar.gz.sha256
 tar -xzf testdata_40-70_v0.25.0.tar.gz
 ```

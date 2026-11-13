@@ -16,14 +16,14 @@ If you use MucOneUp in your research, please cite:
   title = {MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit},
   year = {2025},
   publisher = {GitHub},
-  url = {https://github.com/berntpopp/MucOneUp},
-  note = {Software version available at https://github.com/berntpopp/MucOneUp/releases}
+  url = {https://github.com/vntyper-org/MucOneUp},
+  note = {Software version available at https://github.com/vntyper-org/MucOneUp/releases}
 }
 ```
 
 ### Text Format
 
-> Popp, B. (2025). *MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit*. Available at: https://github.com/berntpopp/MucOneUp
+> Popp, B. (2025). *MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit*. Available at: https://github.com/vntyper-org/MucOneUp
 
 ### Version-Specific Citation
 
@@ -35,9 +35,9 @@ Include the specific version used in your research:
   title = {MucOneUp: MUC1 VNTR Simulation and Analysis Toolkit},
   year = {2025},
   publisher = {GitHub},
-  url = {https://github.com/berntpopp/MucOneUp},
+  url = {https://github.com/vntyper-org/MucOneUp},
   version = {0.40.0},
-  note = {Version 0.40.0, https://github.com/berntpopp/MucOneUp/releases/tag/v0.40.0}
+  note = {Version 0.40.0, https://github.com/vntyper-org/MucOneUp/releases/tag/v0.40.0}
 }
 ```
 
@@ -60,7 +60,7 @@ If you publish results using MucOneUp before the manuscript is available, please
 1. Use the software citation (BibTeX above)
 2. Reference the GitHub repository URL
 3. Specify the version number used
-4. [Open an issue](https://github.com/berntpopp/MucOneUp/issues) to let us know about your publication
+4. [Open an issue](https://github.com/vntyper-org/MucOneUp/issues) to let us know about your publication
 
 ---
 
@@ -70,11 +70,11 @@ Use this template when describing MucOneUp in your methods:
 
 ### Synthetic Data Generation
 
-> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.40.0 (Popp, 2025; https://github.com/berntpopp/MucOneUp). Diploid haplotypes were simulated with \[specify: fixed/random\] VNTR repeat counts (\[specify range/distribution\]) using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). \[If applicable: Mutations were applied at positions \[specify\] using the \[mutation name\] mutation definition.\] \[If applicable: SNPs were integrated with a density of \[X\] per kb.\] Sequencing reads were simulated using \[Illumina/Oxford Nanopore/PacBio\] parameters with \[X\]× coverage. All simulations used seed \[number\] for reproducibility.
+> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.40.0 (Popp, 2025; https://github.com/vntyper-org/MucOneUp). Diploid haplotypes were simulated with \[specify: fixed/random\] VNTR repeat counts (\[specify range/distribution\]) using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). \[If applicable: Mutations were applied at positions \[specify\] using the \[mutation name\] mutation definition.\] \[If applicable: SNPs were integrated with a density of \[X\] per kb.\] Sequencing reads were simulated using \[Illumina/Oxford Nanopore/PacBio\] parameters with \[X\]× coverage. All simulations used seed \[number\] for reproducibility.
 
 ### Example (Filled)
 
-> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.40.0 (Popp, 2025; https://github.com/berntpopp/MucOneUp). Diploid haplotypes were simulated with fixed VNTR repeat counts of 60 repeats per haplotype using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). The dupC mutation was applied at haplotype 1, position 25, to generate a mutated reference for variant caller benchmarking. Illumina paired-end reads (150 bp) were simulated with 100× coverage using the Illumina read simulation pipeline integrated in MucOneUp, which combines Wessim2-style fragment simulation with ReSeq error modeling and BWA alignment. All simulations used seed 42 for reproducibility.
+> Synthetic MUC1 VNTR sequences were generated using MucOneUp v0.40.0 (Popp, 2025; https://github.com/vntyper-org/MucOneUp). Diploid haplotypes were simulated with fixed VNTR repeat counts of 60 repeats per haplotype using probability-based repeat transitions defined in the configuration file (provided in supplementary materials). The dupC mutation was applied at haplotype 1, position 25, to generate a mutated reference for variant caller benchmarking. Illumina paired-end reads (150 bp) were simulated with 100× coverage using the Illumina read simulation pipeline integrated in MucOneUp, which combines Wessim2-style fragment simulation with ReSeq error modeling and BWA alignment. All simulations used seed 42 for reproducibility.
 
 ---
 
@@ -248,7 +248,7 @@ If MucOneUp enabled your research, we'd love to hear about it!
 
 **Please:**
 
-1. [Open an issue](https://github.com/berntpopp/MucOneUp/issues/new) with:
+1. [Open an issue](https://github.com/vntyper-org/MucOneUp/issues/new) with:
    - Publication title and journal
    - DOI or preprint link
    - Brief description of how you used MucOneUp
@@ -308,11 +308,11 @@ SOFTWARE.
 
 **GitHub:** [@berntpopp](https://github.com/berntpopp)
 
-**Repository:** [berntpopp/MucOneUp](https://github.com/berntpopp/MucOneUp)
+**Repository:** [vntyper-org/MucOneUp](https://github.com/vntyper-org/MucOneUp)
 
-**Issues:** [GitHub Issue Tracker](https://github.com/berntpopp/MucOneUp/issues)
+**Issues:** [GitHub Issue Tracker](https://github.com/vntyper-org/MucOneUp/issues)
 
-**Discussions:** [GitHub Discussions](https://github.com/berntpopp/MucOneUp/discussions)
+**Discussions:** [GitHub Discussions](https://github.com/vntyper-org/MucOneUp/discussions)
 
 ---
 
@@ -344,7 +344,7 @@ Include the version number in your citation:
 @software{muconeup2025,
   ...
   version = {0.40.0},
-  note = {Version 0.40.0, https://github.com/berntpopp/MucOneUp/releases/tag/v0.40.0}
+  note = {Version 0.40.0, https://github.com/vntyper-org/MucOneUp/releases/tag/v0.40.0}
 }
 ```
 

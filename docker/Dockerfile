@@ -80,7 +80,7 @@ USER $MAMBA_USER
 WORKDIR /data
 
 # Metadata
-LABEL org.opencontainers.image.source="https://github.com/berntpopp/MucOneUp" \
+LABEL org.opencontainers.image.source="https://github.com/vntyper-org/MucOneUp" \
       org.opencontainers.image.description="MucOneUp VNTR simulator - All-in-one image" \
       org.opencontainers.image.licenses="MIT"
 

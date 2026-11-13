@@ -64,10 +64,10 @@ docs = [
 muconeup = "muc_one_up.cli.click_main:main"
 
 [project.urls]
-Homepage = "https://github.com/berntpopp/MucOneUp"
-Repository = "https://github.com/berntpopp/MucOneUp"
-Issues = "https://github.com/berntpopp/MucOneUp/issues"
-Documentation = "https://berntpopp.github.io/MucOneUp/"
+Homepage = "https://github.com/vntyper-org/MucOneUp"
+Repository = "https://github.com/vntyper-org/MucOneUp"
+Issues = "https://github.com/vntyper-org/MucOneUp/issues"
+Documentation = "https://vntyper-org.github.io/MucOneUp/"
 
 [tool.hatch.build.targets.sdist]
 # Keep planning notes, release tarballs and large example BAMs out of the sdist

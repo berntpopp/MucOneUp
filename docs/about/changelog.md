@@ -587,7 +587,7 @@ An independent review of the release branch found and fixed:
 - Comprehensive user guides (simulation, toxic protein detection, SNaPshot validation)
 - Auto-generated CLI documentation via mkdocs-click
 - Dark/light mode toggle, instant search, mobile responsive design
-- Professional documentation at https://berntpopp.github.io/MucOneUp/
+- Professional documentation at https://vntyper-org.github.io/MucOneUp/
 
 ---
 
@@ -618,13 +618,13 @@ An independent review of the release branch found and fixed:
 
 ## Earlier Versions
 
-See [GitHub Releases](https://github.com/berntpopp/MucOneUp/releases) for earlier version history.
+See [GitHub Releases](https://github.com/vntyper-org/MucOneUp/releases) for earlier version history.
 
 ---
 
-[Unreleased]: https://github.com/berntpopp/MucOneUp/compare/v0.40.0...HEAD
-[0.40.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.40.0
-[0.19.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.19.0
-[0.15.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.15.0
-[0.14.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.14.0
-[0.13.0]: https://github.com/berntpopp/MucOneUp/releases/tag/v0.13.0
+[Unreleased]: https://github.com/vntyper-org/MucOneUp/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/vntyper-org/MucOneUp/releases/tag/v0.40.0
+[0.19.0]: https://github.com/vntyper-org/MucOneUp/releases/tag/v0.19.0
+[0.15.0]: https://github.com/vntyper-org/MucOneUp/releases/tag/v0.15.0
+[0.14.0]: https://github.com/vntyper-org/MucOneUp/releases/tag/v0.14.0
+[0.13.0]: https://github.com/vntyper-org/MucOneUp/releases/tag/v0.13.0

@@ -4,10 +4,10 @@
 site_name: MucOneUp
 site_description: MUC1 VNTR simulation and analysis toolkit for genomics research
 site_author: Bernt Popp
-site_url: https://berntpopp.github.io/MucOneUp/
+site_url: https://vntyper-org.github.io/MucOneUp/
 
-repo_name: berntpopp/MucOneUp
-repo_url: https://github.com/berntpopp/MucOneUp
+repo_name: vntyper-org/MucOneUp
+repo_url: https://github.com/vntyper-org/MucOneUp
 edit_uri: edit/main/docs/
 
 copyright: Copyright &copy; 2025 Bernt Popp
@@ -186,11 +186,11 @@ extra:
 
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/berntpopp/MucOneUp
+      link: https://github.com/vntyper-org/MucOneUp
       name: MucOneUp on GitHub
 
     - icon: fontawesome/brands/docker
-      link: https://github.com/berntpopp/MucOneUp/pkgs/container/muconeup%2Fmuconeup
+      link: https://github.com/vntyper-org/MucOneUp/pkgs/container/muconeup%2Fmuconeup
       name: MucOneUp on Docker
 
   generator: false  # Remove "Made with Material for MkDocs"

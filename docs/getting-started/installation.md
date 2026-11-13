@@ -29,7 +29,7 @@ Install MucOneUp and core dependencies:
 
 ```bash
 # Clone repository
-git clone https://github.com/berntpopp/MucOneUp.git
+git clone https://github.com/vntyper-org/MucOneUp.git
 cd MucOneUp
 
 # Install package
@@ -468,6 +468,6 @@ sudo usermod -aG docker $USER
 
 ## Support
 
-- **Issues:** [GitHub Issue Tracker](https://github.com/berntpopp/MucOneUp/issues)
-- **Documentation:** [Full Documentation](https://berntpopp.github.io/MucOneUp/)
-- **Discussions:** [GitHub Discussions](https://github.com/berntpopp/MucOneUp/discussions)
+- **Issues:** [GitHub Issue Tracker](https://github.com/vntyper-org/MucOneUp/issues)
+- **Documentation:** [Full Documentation](https://vntyper-org.github.io/MucOneUp/)
+- **Discussions:** [GitHub Discussions](https://github.com/vntyper-org/MucOneUp/discussions)
